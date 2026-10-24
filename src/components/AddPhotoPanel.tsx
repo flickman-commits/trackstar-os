@@ -50,7 +50,7 @@ export default function AddPhotoPanel({
     try {
       // What goes up is the 1:1 crop, the same as a customer's upload on the site.
       const cropped = !custom && cropExport.current ? await cropExport.current() : file
-      const slot = await post({ action: 'upload-url', filename: cropped.name })
+      const slot = await post({ action: 'upload-url', filename: cropped.name, orderId: currentId })
       const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': cropped.type || 'application/octet-stream', 'x-upsert': 'false' }, body: cropped })
       if (!put.ok) throw new Error('The photo did not upload')
       if (replace) {

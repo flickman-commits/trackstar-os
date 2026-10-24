@@ -27,6 +27,17 @@ import { storage } from '../../server/lib/storage.js'
 const BUCKET = 'personalization-photos'
 const EXTS = new Set(['jpg', 'jpeg', 'png', 'heic', 'heif', 'webp'])
 
+const DESIGN_ROLES = ['head_designer', 'designer']
+
+/** A designer adding or replacing the photo on custom orders only: the actor, else null. */
+async function customPhotoByDesigner(body, actor) {
+  if (!DESIGN_ROLES.includes(actor?.role) || !['upload-url', 'attach', 'replace'].includes(body.action)) return null
+  const ids = (body.action === 'attach' ? (Array.isArray(body.orderIds) ? body.orderIds : []) : [body.orderId]).map(String).filter(Boolean).slice(0, 20)
+  if (!ids.length) return null
+  const rows = await prisma.order.findMany({ where: { id: { in: ids } }, select: { trackstarOrderType: true } })
+  return rows.length === ids.length && rows.every(r => r.trackstarOrderType === 'custom') ? actor : null
+}
+
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'POST, OPTIONS' })) return
   const actor = (await requireAdmin(req, res))
@@ -35,10 +46,12 @@ export default async function handler(req, res) {
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})
   // Re-cropping the photo already on a print (upload, then replace) is design
   // work, open to anyone who renders designs. Adding a photo bills the
-  // customer, so attach stays with admins.
-  const admin = ['upload-url', 'replace', 'remove'].includes(body.action)
-    ? await requireCapability(req, res, 'orders.render')
-    : await requireAdminRole(req, res, actor)
+  // customer, so attach stays with admins. The exception: a photo a customer
+  // emails for a custom order is free, so designers add and replace those.
+  const admin = await customPhotoByDesigner(body, actor)
+    || (['upload-url', 'replace', 'remove'].includes(body.action)
+      ? await requireCapability(req, res, 'orders.render')
+      : await requireAdminRole(req, res, actor))
   if (!admin) return
 
   try {

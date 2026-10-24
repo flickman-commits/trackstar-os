@@ -93,7 +93,7 @@ export default function OrderDetail({
   nav: { inline: inlineDetail, index: currentOrderIndex, total: navTotal, go: navigateOrder, close: closeModal },
   actions: { setOrders, setSelectedOrder, fetchOrders, loadTeam, setToast, markAsCompleted, assignOrder, emailCustomer: setEmailingOrder },
 }: OrderDetailProps) {
-  const { isAdmin, can } = useAuth()
+  const { isAdmin, can, user } = useAuth()
   const generateFilename = (o: Order) => filenameFor(o, raceShorthands)
   const getOrderItemCount = (parentOrderNumber: string) => orderItemCount(orders, parentOrderNumber)
   const getOrderItemPosition = (o: Order) => orderItemPosition(orders, o)
@@ -1481,7 +1481,7 @@ Thank you!`
                         </button>
                       )}
                       {/* A customer emails a photo after ordering: it goes on the order for the designer. */}
-                      {selectedOrder.trackstarOrderType === 'custom' && isAdmin && !isProductionStage && (
+                      {selectedOrder.trackstarOrderType === 'custom' && (isAdmin || user?.role === 'head_designer' || user?.role === 'designer') && !isProductionStage && (
                         <AddPhotoPanel
                           custom
                           replace={!!selectedOrder.photoPath}
