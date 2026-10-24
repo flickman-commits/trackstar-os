@@ -795,7 +795,8 @@ export default function OrderDetail({
       const response = await apiFetch(`/api/orders/research-runner`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderNumber })
+        // Always a fresh search with what is on the order now, even over a saved result.
+        body: JSON.stringify({ orderNumber, force: true })
       })
 
       if (!response.ok) {
@@ -838,7 +839,7 @@ export default function OrderDetail({
         }
       } else {
         setToast({
-          message: 'Runner not found in race results',
+          message: data.kept ? 'No match this time. The result already on the order was kept.' : 'Runner not found in race results',
           type: 'error'
         })
       }

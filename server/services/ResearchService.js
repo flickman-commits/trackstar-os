@@ -164,7 +164,12 @@ export class ResearchService {
    * @param {string} orderNumber - The orderNumber (parentOrderNumber-lineItemIndex format)
    * @returns {Promise<Object>} Combined race and runner research results
    */
-  async researchOrder(orderNumber) {
+  /**
+   * @param {string} orderNumber
+   * @param {{ force?: boolean }} [opts]  force: search again even when a result
+   *   is saved (a person clicked Research runner after editing the order).
+   */
+  async researchOrder(orderNumber, { force = false } = {}) {
     const order = await prisma.order.findFirst({
       where: { orderNumber }
     })
@@ -244,7 +249,7 @@ export class ResearchService {
       effectiveRaceName,
       effectiveRaceYear,
       effectiveRunnerName
-    })
+    }, { force })
 
     return {
       race,
@@ -714,9 +719,10 @@ export class ResearchService {
    * @param {Object} order - Order with runnerName, raceName, raceYear
    * @param {Object} race - Race record
    * @param {Object} effectiveValues - Override values to use for search
+   * @param {{ force?: boolean }} [opts] - force: skip the saved result and search again
    * @returns {Promise<Object>} RunnerResearch record
    */
-  async getOrFetchRunnerData(order, race, effectiveValues = {}) {
+  async getOrFetchRunnerData(order, race, effectiveValues = {}, { force = false } = {}) {
     // Use effective values if provided, otherwise fall back to order values
     const raceName = effectiveValues.effectiveRaceName ?? order.raceName
     const raceYear = effectiveValues.effectiveRaceYear ?? order.raceYear
@@ -753,8 +759,9 @@ export class ResearchService {
       }
     })
 
-    // If we already found the runner, return cached data
-    if (existingResearch && existingResearch.researchStatus === 'found') {
+    // If we already found the runner, return cached data. Not when a person
+    // asked for research again: they usually just corrected the name or bib.
+    if (existingResearch && existingResearch.researchStatus === 'found' && !force) {
       // A result found before the finish time was posted (race morning: the
       // runner's bib is listed, the time is not yet) used to stay timeless
       // forever. Look again, and fill in only what is missing: the time, pace,
@@ -825,6 +832,7 @@ export class ResearchService {
     // missing the one link that makes them actionable. Missing URL means
     // re-scrape once, capture it, and settle from then on.
     if (
+      !force &&
       existingResearch &&
       existingResearch.researchStatus === 'time_unavailable' &&
       existingResearch.runnerName === runnerName &&
@@ -839,7 +847,10 @@ export class ResearchService {
     // research fall back to a bib lookup when the name finds nobody.
     // A time_unavailable row's bib came from a scrape of the name it was
     // searched under, which is being replaced here, so it does not count.
+    // A bib scraped for a different name belongs to that other runner: it is
+    // only a hint when a person typed it or it was found under this name.
     const handBib = existingResearch && existingResearch.researchStatus !== 'time_unavailable'
+      && (existingResearch.source === 'manual_entry' || existingResearch.runnerName === runnerName)
       ? existingResearch.bibNumber || null
       : null
     const knownBib = handBib || order.customerBib || null
@@ -888,6 +899,24 @@ export class ResearchService {
         orderNumber: order.orderNumber,
         runner: runnerName,
       }).catch(err => console.warn('[ResearchService] Slack notify failed:', err.message))
+    }
+
+    // A search again that finds nothing does not wipe a result that still
+    // describes this runner (same name, or typed in by a person): a timing
+    // site having a bad day should not undo a good answer. The caller hears
+    // what the search said; the saved result stays.
+    if (force && existingResearch?.researchStatus === 'found' && researchData.researchStatus !== 'found'
+      && (existingResearch.source === 'manual_entry' || existingResearch.runnerName === runnerName)) {
+      console.log(`[ResearchService] ${order.orderNumber}: search again came back ${researchData.researchStatus}; kept the saved result`)
+      return {
+        ...existingResearch,
+        researchStatus: researchData.researchStatus,
+        researchNotes: `${researchData.researchNotes || 'No match this time.'} The result already on the order was kept.`,
+        found: false,
+        ambiguous: results.ambiguous || false,
+        kept: true,
+        possibleMatches: results.possibleMatches || null,
+      }
     }
 
     let research
@@ -947,17 +976,21 @@ export class ResearchService {
           continue
         }
 
-        const cacheKey = `${order.raceName}_${order.raceYear}`
+        // What a person corrected on the order (race, year, runner) is what gets searched.
+        const effectiveRaceName = order.raceNameOverride ?? order.raceName
+        const effectiveRaceYear = order.yearOverride ?? order.raceYear
+        const effectiveRunnerName = order.runnerNameOverride ?? order.runnerName
+        const cacheKey = `${effectiveRaceName}_${effectiveRaceYear}`
 
         // Get race from cache or fetch
         let race = raceCache.get(cacheKey)
         if (!race) {
-          race = await this.getOrFetchRaceData(order.raceName, order.raceYear)
+          race = await this.getOrFetchRaceData(effectiveRaceName, effectiveRaceYear)
           raceCache.set(cacheKey, race)
         }
 
         // Get runner data
-        const runnerResearch = await this.getOrFetchRunnerData(order, race)
+        const runnerResearch = await this.getOrFetchRunnerData(order, race, { effectiveRaceName, effectiveRaceYear, effectiveRunnerName })
 
         results.push({
           orderNumber,

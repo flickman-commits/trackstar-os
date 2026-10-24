@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { orderNumber, orderNumbers } = req.body
+    const { orderNumber, orderNumbers, force } = req.body
 
     // Batch mode - research multiple orders
     if (orderNumbers && Array.isArray(orderNumbers)) {
@@ -43,7 +43,8 @@ export default async function handler(req, res) {
 
     console.log(`[API] Research request for order: ${orderNumber}`)
 
-    const { race, runnerResearch, order } = await researchService.researchOrder(orderNumber)
+    // A person's Research runner click searches again even over a saved result.
+    const { race, runnerResearch, order } = await researchService.researchOrder(orderNumber, { force: force === true })
 
     // Also try to fetch weather if not already done
     const raceWithWeather = await researchService.fetchWeatherForRace(race.id)
@@ -73,6 +74,8 @@ export default async function handler(req, res) {
         researchNotes: runnerResearch.researchNotes
       },
       research: runnerResearch,
+      // Searched again, found nothing, and left the saved result alone.
+      kept: Boolean(runnerResearch.kept),
       possibleMatches: runnerResearch.possibleMatches || null
     })
 
