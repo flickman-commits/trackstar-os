@@ -652,7 +652,7 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
               <span className="flex-1" />
               {statusActions}
               <button onClick={() => { setNote(''); setMentionIds([]); setMode('reply') }} className={btnGhost}><X className="w-3.5 h-3.5" /> Cancel</button>
-              <button onClick={addNote} disabled={!note.trim() || sending} className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+              <button onClick={addNote} disabled={!note.trim() || sending} className="shrink-0 whitespace-nowrap inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                 {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <StickyNote className="w-3.5 h-3.5" />} Add note
               </button>
             </div>

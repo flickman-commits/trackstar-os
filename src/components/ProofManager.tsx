@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Linkify from '@/components/Linkify'
-import { Upload, Copy, Loader2, Check, ImagePlus, RefreshCw, Link2, CheckCircle2, AlertTriangle, X, Send, RotateCcw, MessageSquare, ExternalLink, ChevronDown } from 'lucide-react'
+import { Upload, Copy, Loader2, Check, ImagePlus, RefreshCw, CheckCircle2, AlertTriangle, X, Send, RotateCcw, MessageSquare, ExternalLink, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { useIsAdmin } from '@/lib/auth'
@@ -137,6 +137,7 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
   const [isAsking, setIsAsking] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [dragging, setDragging] = useState(false)
   // Applies to everything in this upload. Uploading two half-marathon options
   // then two marathon options is two uploads with two labels, which is how the
   // designer already works.
@@ -715,14 +716,18 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-2">
-          <label className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-off-black/70 bg-white border border-border-gray rounded-md hover:bg-subtle-gray transition-colors">
-            <ImagePlus className="w-3.5 h-3.5" />
-            {pendingCount > 0 ? 'Add proofs to this batch' : 'Add proofs'}
-            <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileSelect} className="hidden" />
-          </label>
-          <span className="text-[10px] text-off-black/35">or paste from the clipboard</span>
-        </div>
+        // One big target: click to pick, drag files in, or paste.
+        <label
+          onDragOver={e => { e.preventDefault(); setDragging(true) }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={e => { e.preventDefault(); setDragging(false); addFiles(Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('image/'))) }}
+          className={`cursor-pointer flex flex-col items-center justify-center gap-1.5 w-full rounded-lg border-2 border-dashed text-center transition-colors ${proofs.length ? 'py-5' : 'py-10'} ${dragging ? 'border-[#4600D6] bg-[#4600D6]/[0.04]' : 'border-border-gray bg-subtle-gray/40 hover:border-off-black/25 hover:bg-subtle-gray'}`}
+        >
+          <ImagePlus className={`w-6 h-6 ${dragging ? 'text-[#4600D6]' : 'text-off-black/35'}`} />
+          <span className="text-sm font-medium text-off-black/75">{pendingCount > 0 ? 'Add proofs to this batch' : 'Upload proofs'}</span>
+          <span className="text-xs text-off-black/40">Click to choose, drag them in, or paste from the clipboard</span>
+          <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFileSelect} className="hidden" />
+        </label>
       )}
 
       {/* Note for customer — visible when uploading or ready to send */}
@@ -807,15 +812,7 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
             <RefreshCw className="w-3 h-3" />
           </button>
         </div>
-      ) : (
-        <button
-          onClick={generateToken}
-          className="w-full px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-colors flex items-center justify-center gap-1.5"
-        >
-          <Link2 className="w-3 h-3" />
-          Generate Approval Link
-        </button>
-      )}
+      ) : null /* Sending the proofs makes the link; there is nothing to generate by hand. */}
 
       {/* Proof History — thumbnail grid grouped by batch */}
       {(() => {
