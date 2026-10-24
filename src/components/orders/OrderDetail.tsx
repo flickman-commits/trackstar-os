@@ -1480,6 +1480,18 @@ Thank you!`
                           <Mail className="w-3.5 h-3.5" /> Email customer from Support
                         </button>
                       )}
+                      {/* A customer emails a photo after ordering: it goes on the order for the designer. */}
+                      {selectedOrder.trackstarOrderType === 'custom' && isAdmin && !isProductionStage && (
+                        <AddPhotoPanel
+                          custom
+                          replace={!!selectedOrder.photoPath}
+                          key={`custom-photo-${selectedOrder.id}-${selectedOrder.photoPath ? 'r' : 'a'}`}
+                          currentId={selectedOrder.id}
+                          isShopify={false}
+                          prints={[{ id: selectedOrder.id, label: selectedOrder.displayOrderNumber, hasPhoto: !!selectedOrder.photoPath }]}
+                          onDone={() => { fetchOrders(); setToast({ message: selectedOrder.photoPath ? 'Photo replaced.' : 'Photo added. It shows at the top of the order.', type: 'success' }) }}
+                        />
+                      )}
                       {/* Emergency delay notice: findable, not the main action. */}
                       {selectedOrder.trackstarOrderType === 'custom' && selectedOrder.customerEmail && !isProductionStage && (
                         <button onClick={openDelayDialog} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2">

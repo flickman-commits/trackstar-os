@@ -49,7 +49,7 @@ export async function completeOrder({ orderId, orderNumber, actor = null, via = 
     if (!photoByRender) throw new CompleteError('photo_not_confirmed', 'This print includes a customer photo and was not made by the script. Confirm the photo is placed before completing the order.')
   }
   if (existing.photoAddedManually) {
-    const siblings = await prisma.order.findMany({ where: { parentOrderNumber: existing.parentOrderNumber }, select: { id: true, photoPath: true, photoAddedManually: true } })
+    const siblings = await prisma.order.findMany({ where: { parentOrderNumber: existing.parentOrderNumber }, select: { id: true, photoPath: true, photoAddedManually: true, trackstarOrderType: true } })
     if (unpaidPhotoRows(siblings, existing.shopifyOrderData).has(existing.id)) {
       throw new CompleteError('photo_not_paid', 'The customer has not paid for the photo yet. Wait for the Shopify order to read paid before completing.')
     }

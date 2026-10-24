@@ -211,7 +211,7 @@ export async function sendOne(job) {
 
     // A photo added after purchase is printed only once it is paid for.
     if (order.photoAddedManually) {
-      const sibs = await prisma.order.findMany({ where: { parentOrderNumber: order.parentOrderNumber }, select: { id: true, photoPath: true, photoAddedManually: true } })
+      const sibs = await prisma.order.findMany({ where: { parentOrderNumber: order.parentOrderNumber }, select: { id: true, photoPath: true, photoAddedManually: true, trackstarOrderType: true } })
       if (unpaidPhotoRows(sibs, order.shopifyOrderData).has(order.id)) return outcome(job, { error: 'The customer has not paid for the photo yet', retryIn: 30 })
     }
 

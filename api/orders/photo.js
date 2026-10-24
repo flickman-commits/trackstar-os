@@ -77,7 +77,7 @@ export default async function handler(req, res) {
       if (!/^\d{4}-\d{2}-\d{2}\/[0-9a-f-]{36}\.[a-z]+$/.test(path)) return res.status(400).json({ error: 'Not an uploaded photo path' })
       const ids = (Array.isArray(body.orderIds) ? body.orderIds : []).map(String).slice(0, 20)
       if (!ids.length) return res.status(400).json({ error: 'Pick at least one print' })
-      const rows = await prisma.order.findMany({ where: { id: { in: ids } }, select: { id: true, orderNumber: true, parentOrderNumber: true, source: true } })
+      const rows = await prisma.order.findMany({ where: { id: { in: ids } }, select: { id: true, orderNumber: true, parentOrderNumber: true, source: true, trackstarOrderType: true } })
       if (rows.length !== ids.length || new Set(rows.map(r => r.parentOrderNumber)).size !== 1) {
         return res.status(400).json({ error: 'Those prints are not all on one order' })
       }
@@ -85,7 +85,8 @@ export default async function handler(req, res) {
 
       // Bill for it: one Photo Add-On per print, on the same Shopify order.
       let charged = false, chargeError = null
-      if (body.charge && rows[0].source === 'shopify') {
+      // A custom order's photo is part of the design it paid for: never billed.
+      if (body.charge && rows[0].source === 'shopify' && !rows.some(r => r.trackstarOrderType === 'custom')) {
         try {
           await addVariantToOrder(rows[0].parentOrderNumber, PHOTO_ADDON_VARIANT_ID, ids.length,
             `Photo Add-On x${ids.length} added from TrackstarOS by ${admin.firstName || 'an admin'}`)

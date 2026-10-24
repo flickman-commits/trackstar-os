@@ -22,11 +22,13 @@ async function post(body: Record<string, unknown>) {
 }
 
 export default function AddPhotoPanel({
-  prints, currentId, isShopify, onDone, replace = false,
+  prints, currentId, isShopify, onDone, replace = false, custom = false,
 }: {
   prints: Print[]
   currentId: string
   isShopify: boolean
+  /** A custom order: the designer uses the photo as it is (no square crop) and it is never billed. */
+  custom?: boolean
   /** Swap this print's existing photo for another one the customer sent. Never bills. */
   replace?: boolean
   onDone: (result: { charged: boolean; chargeError: string | null }) => void
@@ -36,7 +38,7 @@ export default function AddPhotoPanel({
   // The crop stage hands back the square to upload.
   const cropExport = useRef<(() => Promise<File>) | null>(null)
   const [picked, setPicked] = useState<Set<string>>(() => new Set(prints.filter(p => !p.hasPhoto).map(p => p.id).length ? prints.filter(p => !p.hasPhoto).map(p => p.id) : [currentId]))
-  const [charge, setCharge] = useState(isShopify)
+  const [charge, setCharge] = useState(isShopify && !custom)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -47,7 +49,7 @@ export default function AddPhotoPanel({
     setBusy(true); setErr(null)
     try {
       // What goes up is the 1:1 crop, the same as a customer's upload on the site.
-      const cropped = cropExport.current ? await cropExport.current() : file
+      const cropped = !custom && cropExport.current ? await cropExport.current() : file
       const slot = await post({ action: 'upload-url', filename: cropped.name })
       const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': cropped.type || 'application/octet-stream', 'x-upsert': 'false' }, body: cropped })
       if (!put.ok) throw new Error('The photo did not upload')
@@ -68,7 +70,7 @@ export default function AddPhotoPanel({
   if (!open) {
     return (
       <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2">
-        <ImagePlus className="w-3.5 h-3.5" /> {replace ? 'Replace the customer photo' : 'Add a customer photo'}
+        <ImagePlus className="w-3.5 h-3.5" /> {replace ? 'Replace the customer photo' : custom ? 'Add customer photo' : 'Add a customer photo'}
       </button>
     )
   }
@@ -83,7 +85,9 @@ export default function AddPhotoPanel({
 
       {file && (
         <div>
-          <PhotoCropper file={file} exportRef={cropExport} className="max-w-[280px]" />
+          {custom
+            ? <img src={URL.createObjectURL(file)} alt="" className="max-w-[280px] max-h-64 rounded border border-border-gray object-contain bg-white" />
+            : <PhotoCropper file={file} exportRef={cropExport} className="max-w-[280px]" />}
           <label className="mt-1 inline-block text-[11px] font-medium text-[#4600D6] hover:underline cursor-pointer">
             Choose a different photo
             <input type="file" accept="image/*" className="hidden" onChange={e => choose(e.target.files?.[0] || null)} />
@@ -99,6 +103,8 @@ export default function AddPhotoPanel({
         )}
         {replace ? (
           <p className="flex-1 text-xs text-off-black/60">The new photo replaces the one on this print. Nothing is billed. It has to be placed on the artwork again, and a design made with the old photo needs a re-render.</p>
+        ) : custom && prints.length <= 1 ? (
+          <p className="flex-1 text-xs text-off-black/60">The photo the customer emailed. It shows at the top of this order for the designer, and the order gets the Photo on print tag. Nothing is billed.</p>
         ) : (
         <div className="flex-1 min-w-0 space-y-1">
           <div className="text-xs font-semibold text-off-black/60">Put it on</div>
@@ -112,7 +118,7 @@ export default function AddPhotoPanel({
         )}
       </div>
 
-      {isShopify && !replace && (
+      {isShopify && !replace && !custom && (
         <label className="flex items-start gap-2 text-sm text-off-black">
           <input type="checkbox" className="mt-0.5" checked={charge} onChange={e => setCharge(e.target.checked)} />
           <span>
@@ -120,11 +126,11 @@ export default function AddPhotoPanel({
           </span>
         </label>
       )}
-      {!replace && <p className="text-[11px] text-off-black/50">The photo shows as not paid until the order reads paid in Shopify, and those prints cannot be completed before then.</p>}
+      {!replace && !custom && <p className="text-[11px] text-off-black/50">The photo shows as not paid until the order reads paid in Shopify, and those prints cannot be completed before then.</p>}
       {err && <p className="text-sm text-red-600">{err}</p>}
       <div className="flex gap-2">
         <button onClick={submit} disabled={!file || !count || busy} className={btnPrimary}>
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : replace ? 'Replace photo' : `Add photo${charge && isShopify ? ' and bill' : ''}`}
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : replace ? 'Replace photo' : `Add photo${charge && isShopify && !custom ? ' and bill' : ''}`}
         </button>
         <button onClick={() => setOpen(false)} className={btnGhost}>Cancel</button>
       </div>
