@@ -20,6 +20,7 @@ import { stripQuoted } from './mailbox.js'
 import { getPlaybook } from './playbook.js'
 import { listMacros } from './macros.js'
 import { UserError } from './errors.js'
+import { getDraftModel } from './draftModel.js'
 
 /** The quick actions a draft may point at, by the name the Actions list shows. */
 export const ACTION_NAMES = [
@@ -31,11 +32,9 @@ export const ACTION_NAMES = [
 /** What a draft may still point at when the order is not verified: nothing that reads or changes it. */
 const SAFE_UNVERIFIED = ['Create discount code', 'Slack Matt']
 
-const DEFAULT_MODEL = 'claude-haiku-5-5'
-
-function supportModel() {
+async function supportModel() {
   // Only an Anthropic backend takes a Claude model name; an OpenAI-compatible one uses LLM_MODEL.
-  return llmInfo().provider === 'anthropic' ? (process.env.SUPPORT_LLM_MODEL || DEFAULT_MODEL) : undefined
+  return llmInfo().provider === 'anthropic' ? getDraftModel() : undefined
 }
 
 /** No em dashes in anything a customer sees. */
@@ -310,9 +309,12 @@ export async function draftThread(threadId, { instruction = '', actor = null, dr
     system: SYSTEM(playbook, macroText, thread.channel === 'instagram' ? 'instagram' : 'email'),
     prompt,
     json: true,
-    maxTokens: 3000,
-    effort: 'low',
-    model: supportModel(),
+    // Room for medium effort's thinking on top of the reply and its JSON.
+    maxTokens: 8000,
+    effort: 'medium',
+    model: await supportModel(),
+    // The playbook and saved replies are the same on every draft.
+    cacheSystem: true,
     purpose: 'support.draft',
   })
   const j = out.json || {}

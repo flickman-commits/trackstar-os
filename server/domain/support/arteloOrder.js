@@ -14,6 +14,8 @@
  * every hand-made print is saved as "<number>_..." ("<number>-2_..." for a
  * second item). That PDF is uploaded to the Artelo library when the order is
  * sent. An item with none of these cannot be copied; the form says so.
+ * A rep can also upload a new design file for an item (the old one had a
+ * mistake); it goes into the Artelo library and is used instead.
  *
  * Price and shipping are 0: this is a replacement, not a sale. The order id
  * reads "<number>-R1", "-R2", and so on. `test` makes an Artelo test order
@@ -27,6 +29,7 @@ import { driveClients, ORDERS_FOLDER_ID } from '../render/deliver.js'
 import { uploadPdfToLibrary } from '../render/artelo.js'
 import { storage } from '../../lib/storage.js'
 import { BUCKET } from '../render/jobs.js'
+import { readUpload } from './uploads.js'
 
 const BASE = 'https://www.artelo.com/api/open/'
 
@@ -242,7 +245,7 @@ async function nextOrderId(number, rowIds) {
 
 const US_STATES = /^[A-Z]{2}$/
 
-export async function createReorder({ thread, shopifyOrderId, orderIds, changes, address, email, instructions, test, actor }) {
+export async function createReorder({ thread, shopifyOrderId, orderIds, changes, files, address, email, instructions, test, actor }) {
   const id = String(shopifyOrderId || '').trim()
   if (!/^\d+$/.test(id)) throw new UserError('That order has no Shopify id')
   const a = {}
@@ -256,6 +259,17 @@ export async function createReorder({ thread, shopifyOrderId, orderIds, changes,
   const { rows, items, stored, number } = await itemsFor(id)
   const picked = items.filter(i => (orderIds || []).includes(i.orderId))
   if (!picked.length) throw new UserError('Pick at least one item to send')
+  // A new design file a rep uploaded for an item (the old one had a mistake) replaces its design.
+  for (const i of picked) {
+    const ref = String(files?.[i.orderId] || '')
+    if (!ref) continue
+    if (!ref.startsWith('upload:')) throw new UserError('That design file was not uploaded here')
+    const up = await readUpload(ref.slice('upload:'.length))
+    try { i.designs = [{ imageId: await uploadPdfToLibrary(up.url, `${i.orderId}_new_${up.filename}`) }] }
+    catch (err) { throw new UserError(`Artelo did not take ${up.filename}: ${String(err.message).slice(0, 160)}`) }
+    i.driveFile = null
+    i.designFrom = `the new file ${up.filename}`
+  }
   const blocked = picked.find(i => !copyable(i))
   if (blocked) throw new UserError(`${blocked.label} has no design to copy: no approved render and no PDF named for it in the Drive Orders folder. Build that one in Artelo.`)
   // The size and frame the customer asked for, else the original's.

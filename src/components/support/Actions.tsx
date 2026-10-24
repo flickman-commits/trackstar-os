@@ -344,6 +344,22 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: { o: Customer
   const [picked, setPicked] = useState<string[]>([])
   // Size and frame per print, starting as the original; a customer may want something new on the replacement.
   const [changes, setChanges] = useState<Record<string, { size: string; frame: string }>>({})
+  // A new design file per print, for when the old one had a mistake.
+  const [files, setFiles] = useState<Record<string, { ref: string; name: string }>>({})
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null)
+  const uploadFor = async (orderId: string, f: File | undefined) => {
+    if (!f) return
+    if (!/^(application\/pdf|image\/(png|jpeg))$/.test(f.type)) { toast.error('A design file is a PDF, PNG or JPG'); return }
+    setUploadingFor(orderId)
+    try {
+      const slot = await supportApi.uploadSlot(f.name, f.type, f.size)
+      const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': f.type, 'x-upsert': 'false' }, body: f })
+      if (!put.ok) throw new Error(`${f.name} did not upload`)
+      setFiles(prev => ({ ...prev, [orderId]: { ref: slot.ref, name: slot.filename } }))
+      setPicked(p => p.includes(orderId) ? p : [...p, orderId])
+    } catch (e) { toast.error((e as Error).message) }
+    finally { setUploadingFor(null) }
+  }
   const [a, setA] = useState<Address>(o.shipTo || o.arteloAddress || { name: thread.customerName || '', address1: '', address2: '', city: '', province: '', zip: '', country: 'US', phone: '' })
   const [email, setEmail] = useState(thread.customerEmail || '')
   const [instructions, setInstructions] = useState('')
@@ -362,7 +378,7 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: { o: Customer
     if (!confirming) { setConfirming(true); setPressKey(newIdempotencyKey()); return }
     setBusy(true)
     try {
-      const out = await supportApi.arteloOrder<{ orderId: string; url: string | null; test: boolean }>({ action: 'create', id: thread.id, shopifyOrderId: o.shopifyOrderId, orderIds: picked, changes, address: a, email, instructions, test: isAdmin && test, idempotencyKey: pressKey })
+      const out = await supportApi.arteloOrder<{ orderId: string; url: string | null; test: boolean }>({ action: 'create', id: thread.id, shopifyOrderId: o.shopifyOrderId, orderIds: picked, changes, files: Object.fromEntries(Object.entries(files).filter(([id]) => picked.includes(id)).map(([id, f]) => [id, f.ref])), address: a, email, instructions, test: isAdmin && test, idempotencyKey: pressKey })
       setDone(out)
       toast.success(`${out.test ? 'Test order' : 'Artelo order'} ${out.orderId} created`)
       onDone()
@@ -387,10 +403,27 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: { o: Customer
         <>
           <div className="text-off-black/70">New order <b>{prep.nextOrderId}</b> in Artelo, $0, the same design:</div>
           {prep.items.map(i => (
-            <label key={i.orderId} className={`flex items-start gap-1.5 ${i.copyable ? 'cursor-pointer text-off-black/80' : 'text-off-black/40'}`} title={i.copyable ? `Design from ${i.designFrom}` : 'No approved render and no PDF named for this print in the Drive Orders folder. Build this one in Artelo.'}>
-              <input type="checkbox" disabled={!i.copyable} checked={picked.includes(i.orderId)} onChange={e => setPicked(p => e.target.checked ? [...p, i.orderId] : p.filter(x => x !== i.orderId))} className="mt-0.5 accent-[#4600D6]" />
-              <span>{i.label} <span className="text-off-black/45">· {i.productLabel}{i.copyable ? '' : ' · no design to copy'}</span>{i.copyable && i.designFrom && <span className="block text-[11px] text-off-black/45">Design: {i.designFrom}</span>}</span>
-            </label>
+            <div key={i.orderId}>
+              <label className={`flex items-start gap-1.5 ${i.copyable || files[i.orderId] ? 'cursor-pointer text-off-black/80' : 'text-off-black/40'}`} title={i.copyable ? `Design from ${i.designFrom}` : 'No approved render and no PDF named for this print in the Drive Orders folder. Upload a new file, or build this one in Artelo.'}>
+                <input type="checkbox" disabled={!i.copyable && !files[i.orderId]} checked={picked.includes(i.orderId)} onChange={e => setPicked(p => e.target.checked ? [...p, i.orderId] : p.filter(x => x !== i.orderId))} className="mt-0.5 accent-[#4600D6]" />
+                <span>{i.label} <span className="text-off-black/45">· {i.productLabel}{i.copyable || files[i.orderId] ? '' : ' · no design to copy'}</span>
+                  {files[i.orderId]
+                    ? <span className="block text-[11px] text-[#4600D6]">Design: new file {files[i.orderId].name}</span>
+                    : i.copyable && i.designFrom && <span className="block text-[11px] text-off-black/45">Design: {i.designFrom}</span>}
+                </span>
+              </label>
+              <div className="pl-5 mt-0.5 flex items-center gap-2 text-[11px]">
+                {uploadingFor === i.orderId
+                  ? <span className="inline-flex items-center gap-1 text-off-black/50"><Loader2 className="w-3 h-3 animate-spin" />Uploading</span>
+                  : (
+                    <label className="cursor-pointer text-[#4600D6] hover:underline underline-offset-2">
+                      {files[i.orderId] ? 'Use a different file' : 'Use a new design file'}
+                      <input type="file" accept="application/pdf,image/png,image/jpeg" className="hidden" onChange={e => { void uploadFor(i.orderId, e.target.files?.[0]); e.target.value = '' }} />
+                    </label>
+                  )}
+                {files[i.orderId] && <button type="button" onClick={() => setFiles(({ [i.orderId]: _gone, ...rest }) => rest)} className="text-off-black/45 hover:text-off-black">Keep the original</button>}
+              </div>
+            </div>
           ))}
           {/* What each picked print is made as: the original unless the customer wants something new. */}
           {prep.items.filter(i => picked.includes(i.orderId)).map(i => {

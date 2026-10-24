@@ -6,6 +6,7 @@ import RoutingRules from './RoutingRules'
 import { FilterList } from './SenderFilter'
 import PlaybookEditor from './PlaybookEditor'
 import ForwardersCard from './ForwardersCard'
+import DraftModelCard from './DraftModelCard'
 import type { InstagramStatus, MailboxStatus, SenderFilter, Teammate } from '@/types/support'
 
 /**
@@ -31,7 +32,7 @@ export default function SettingsModal({ team, unassignedCount, status, instagram
         <div className="px-5 py-3.5 border-b border-border-gray flex items-center justify-between">
           <div>
             <div className="text-base font-semibold text-off-black">Support settings</div>
-            <div className="text-xs text-off-black/50">Routing, filtered senders, the mailbox and Instagram.</div>
+            <div className="text-xs text-off-black/50">Routing, filtered senders, drafting, the mailbox and Instagram.</div>
           </div>
           <button onClick={onClose} className={btnGhost}><X className="w-4 h-4" /></button>
         </div>
@@ -39,6 +40,7 @@ export default function SettingsModal({ team, unassignedCount, status, instagram
           {isAdmin && <RoutingRules team={team} unassignedCount={unassignedCount} onChanged={onChanged} />}
           <FilterList filters={filters} onChanged={onChanged} />
           <ForwardersCard isAdmin={isAdmin} />
+          <DraftModelCard isAdmin={isAdmin} />
           <PlaybookEditor isAdmin={isAdmin} />
           <MailboxCard status={status} isAdmin={isAdmin} onChanged={onChanged} />
           <InstagramCard status={instagram} isAdmin={isAdmin} onChanged={onChanged} />

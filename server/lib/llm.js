@@ -144,6 +144,7 @@ export function extractJson(text) {
  * @param {string}  [opts.purpose]    Short label for logs, e.g. "sales.draft".
  * @param {boolean} [opts.webSearch]   Let the model search the live web (Anthropic only).
  * @param {number}  [opts.maxSearches] Cap on searches per call. Default 5.
+ * @param {boolean} [opts.cacheSystem] Cache the system prompt (Anthropic only): for one that is the same on every call.
  * @returns {Promise<{ text: string, json?: any, provider: string, model: string,
  *   usage: { input: number, output: number, searches: number }, ms: number,
  *   sources: string[] }>}
@@ -159,6 +160,7 @@ export async function complete({
   purpose = 'llm',
   webSearch = false,
   maxSearches = 5,
+  cacheSystem = false,
 }) {
   await requireConnection('claude')
   const provider = pickProvider()
@@ -188,12 +190,14 @@ export async function complete({
       response = await client.messages.create({
         model: usedModel,
         max_tokens: maxTokens,
-        system,
+        system: cacheSystem && system ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] : system,
         output_config: { effort },
         ...(tools ? { tools } : {}),
         messages,
       })
-      usage.input += response.usage?.input_tokens || 0
+      // Cached tokens are billed apart from input_tokens; counted in so usage is the whole prompt.
+      usage.input += (response.usage?.input_tokens || 0) + (response.usage?.cache_read_input_tokens || 0) + (response.usage?.cache_creation_input_tokens || 0)
+      usage.cached = (usage.cached || 0) + (response.usage?.cache_read_input_tokens || 0)
       usage.output += response.usage?.output_tokens || 0
       usage.searches += response.usage?.server_tool_use?.web_search_requests || 0
 
