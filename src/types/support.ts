@@ -162,6 +162,8 @@ export interface CustomerOrder {
   mockups: Mockup[]
   /** Here only because a teammate linked it to this customer by number (they ordered under another email). */
   linked?: boolean
+  /** A replacement made in Artelo (never in Shopify): of the order numbered `of`. by: 'artelo' when Artelo made it (free), 'us' from New Artelo order. */
+  replacement?: { of: string; stage: string; free: boolean; by: 'artelo' | 'us'; instructions: string | null }
 }
 
 /** A mockup a rep can attach: the page holds only the reference; the server sends the file. */

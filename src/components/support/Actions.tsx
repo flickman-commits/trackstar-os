@@ -599,7 +599,8 @@ export default function Actions({ thread, onInsert, onAttach, onChanged }: { thr
     catch (e) { toast.error((e as Error).message) }
     finally { setBusy(null) }
   }
-  const orders = thread.context.orders
+  // Replacements exist only in Artelo: the actions work on the orders customers placed.
+  const orders = thread.context.orders.filter(o => !o.replacement)
   const [codeOpen, setCodeOpen] = useState(false)
   const [pct, setPct] = useState('15')
   // The code's prefix: the first name by default, anything the rep types instead (VIP, BOSTON).

@@ -19,6 +19,7 @@ import { can } from '../../../api/_lib/roles.js'
 import { replyWindow } from './instagram.js'
 import { UserError } from './errors.js'
 import { getOrderTotalUsd, BIG_SPENDER_THRESHOLD_USD } from '../../lib/orderValue.js'
+import { replacementsFor } from './replacements.js'
 
 export const STATUSES = ['open', 'waiting', 'escalated', 'closed']
 export const SORTS = ['waiting', 'newest', 'oldest', 'priority']
@@ -566,6 +567,11 @@ export async function customerContext(email, { linked = [] } = {}) {
   for (const o of orders) {
     const ids = new Set(o.items.map(it => it.orderId))
     o.mockups = mockups.filter(m => ids.has(m.orderId))
+  }
+  // Replacements live only in Artelo: each goes just above the order it replaces.
+  for (const r of await replacementsFor(orders).catch(() => [])) {
+    const at = orders.findIndex(o => o.source !== 'replacement' && o.number === r.replacement.of)
+    orders.splice(at < 0 ? orders.length : at, 0, r)
   }
   // What they have spent with us across these orders, refunds left out: the
   // same Big Spender line the order view uses.

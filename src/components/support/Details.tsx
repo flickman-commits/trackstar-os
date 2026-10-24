@@ -52,6 +52,10 @@ function itemStage(it: OrderItem): { label: string; cls: string } {
  * or waiting. With several prints, the one furthest behind sets it.
  */
 function stage(o: CustomerOrder): { label: string; cls: string } | null {
+  if (o.replacement) {
+    const st = o.replacement.stage
+    return { label: st, cls: st === 'Canceled' ? 'bg-red-50 border-red-200 text-red-700' : st === 'Delivered' || st === 'Shipped' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-800' }
+  }
   if (o.financialStatus === 'REFUNDED') return { label: 'Refunded', cls: 'bg-red-50 border-red-200 text-red-700' }
   if (o.fulfillmentStatus === 'FULFILLED' || o.tracking.length) return { label: 'Shipped', cls: 'bg-emerald-50 border-emerald-200 text-emerald-700' }
   if (!o.items.length) return o.imported ? null : { label: 'Not imported yet', cls: 'bg-white border-border-gray text-off-black/55' }
@@ -110,7 +114,7 @@ function OrderCard({ o, onUnlink }: { o: CustomerOrder; onUnlink?: () => void })
   const placed = new Date(o.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   // A print gets its own chip only when the prints are not all in the same place.
   const stages = new Set(o.items.map(it => itemStage(it)?.label))
-  const mixed = !o.tracking.length && o.financialStatus !== 'REFUNDED' && stages.size > 1
+  const mixed = !o.replacement && !o.tracking.length && o.financialStatus !== 'REFUNDED' && stages.size > 1
   const first = o.items[0]
   const fulfillmentUrl = o.imported && first ? `/orders/${o.number}${first.item > 1 ? `-${first.item}` : ''}` : null
   return (
@@ -119,6 +123,12 @@ function OrderCard({ o, onUnlink }: { o: CustomerOrder; onUnlink?: () => void })
         <div className="text-xs leading-snug">
           <div className="flex items-baseline gap-1.5 min-w-0">
             <span className="font-semibold text-off-black shrink-0">#{o.number}</span>
+            {o.replacement && (
+              <span className="shrink-0 inline-flex items-center px-1.5 py-px rounded border border-[#4600D6]/25 bg-[#4600D6]/[0.05] text-[10px] font-medium text-[#4600D6]"
+                title={o.replacement.by === 'artelo' ? `Replacement for #${o.replacement.of}, made by Artelo${o.replacement.free ? ' at no charge' : ''}. It never goes through Shopify.` : `Replacement for #${o.replacement.of}, sent from Support${o.replacement.free ? '' : ' (we pay Artelo for it)'}. It never goes through Shopify.`}>
+                Replacement{o.replacement.by === 'artelo' && o.replacement.free ? ' · free' : ''}
+              </span>
+            )}
             {o.items.length > 1 && <span className="text-off-black/50 shrink-0">{o.items.length} prints</span>}
             {!o.items.length && <span className="text-off-black truncate">{o.lineItems[0]?.title || 'Order'}</span>}
             {o.linked && (
@@ -130,7 +140,7 @@ function OrderCard({ o, onUnlink }: { o: CustomerOrder; onUnlink?: () => void })
           </div>
           <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
             {st && !mixed && <span className={`inline-flex items-center px-1.5 py-px border rounded text-[11px] font-medium ${st.cls}`}>{st.label}</span>}
-            <span className={`text-[11px] ${ageCls}`} title={new Date(o.createdAt).toLocaleString()}>Ordered {placed}{age > 0 ? `, ${age}d ago` : ', today'}</span>
+            <span className={`text-[11px] ${ageCls}`} title={new Date(o.createdAt).toLocaleString()}>{o.replacement ? 'Made' : 'Ordered'} {placed}{age > 0 ? `, ${age}d ago` : ', today'}</span>
           </div>
           {tracking && (
             <div className="mt-1 flex items-center gap-1 min-w-0 text-[11px] text-off-black/60" title={`${tracking.company || 'Tracking'} ${tracking.number || ''}`}>
@@ -138,6 +148,7 @@ function OrderCard({ o, onUnlink }: { o: CustomerOrder; onUnlink?: () => void })
               {tracking.url ? <a href={tracking.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700 truncate">{tracking.company || 'Tracking'} {tracking.number}</a> : <span className="truncate">{tracking.company || 'Tracking'} {tracking.number}</span>}
             </div>
           )}
+          {o.replacement?.instructions && <div className="mt-0.5 text-[11px] text-off-black/55 line-clamp-2" title={o.replacement.instructions}>Note to Artelo: {o.replacement.instructions}</div>}
           {o.discountCodes.length > 0 && <div className="mt-0.5 text-[11px] text-yellow-900/70 truncate" title={o.discountCodes.join(', ')}>Code: {o.discountCodes.join(', ')}</div>}
         </div>
         {o.items.length > 0 ? (
