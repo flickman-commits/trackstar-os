@@ -247,6 +247,87 @@ function CancelForm({ o, thread, onDone, onCancel }: { o: CustomerOrder; thread:
 }
 
 type Choice = { value: string; label: string }
+type ClaimPrep = { number: string; arteloOrderId: string | null; to: string; photos: { messageId: string; index: number; filename: string; at: string }[] }
+
+/**
+ * Damaged in shipping: the customer's photos to Artelo support, who file a
+ * report and make a free "-R" replacement (a New Artelo order is billed).
+ * Their replacement then shows under Orders on its own.
+ */
+function DamageClaimForm({ o, thread, onDone, onCancel }: { o: CustomerOrder; thread: ThreadDetail; onDone: () => void; onCancel: () => void }) {
+  const [prep, setPrep] = useState<ClaimPrep | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const [picked, setPicked] = useState<string[]>([])
+  const [note, setNote] = useState('')
+  const [confirming, setConfirming] = useState(false)
+  const [pressKey, setPressKey] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [sent, setSent] = useState<number | null>(null)
+  const key = (p: { messageId: string; index: number }) => `${p.messageId}:${p.index}`
+  useEffect(() => {
+    supportApi.arteloOrder<ClaimPrep>({ action: 'claimPrep', id: thread.id, shopifyOrderId: o.shopifyOrderId })
+      .then(r => { setPrep(r); setPicked(r.photos.slice(0, 8).map(key)) })
+      .catch(e => setErr((e as Error).message))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const send = async () => {
+    if (!confirming) { setConfirming(true); setPressKey(newIdempotencyKey()); setErr(null); return }
+    setBusy(true)
+    try {
+      const photos = (prep?.photos || []).filter(p => picked.includes(key(p))).map(p => ({ messageId: p.messageId, index: p.index }))
+      const out = await supportApi.arteloOrder<{ photos: number }>({ action: 'claim', id: thread.id, shopifyOrderId: o.shopifyOrderId, photos, note, idempotencyKey: pressKey })
+      setSent(out.photos)
+      toast.success(`Damage claim sent to Artelo support with ${out.photos} photo${out.photos === 1 ? '' : 's'}`)
+      onDone()
+    } catch (e) { setErr((e as Error).message); toast.error((e as Error).message) }
+    finally { setBusy(false); setConfirming(false) }
+  }
+  if (sent != null) {
+    return (
+      <div className={formBox}>
+        <div className="inline-flex items-center gap-1.5 text-emerald-700 font-medium"><Check className="w-3.5 h-3.5" />Claim sent to {prep?.to} with {sent} photo{sent === 1 ? '' : 's'}.</div>
+        <div className="text-off-black/55">Their answer comes into Support as its own conversation. The free replacement shows under Orders once Artelo makes it.</div>
+        <div className="flex"><button onClick={onCancel} className="ml-auto text-off-black/45 hover:text-off-black">Done</button></div>
+      </div>
+    )
+  }
+  return (
+    <div className={formBox}>
+      {!prep && !err && <div className="text-off-black/50 inline-flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" />Finding the customer's photos</div>}
+      {prep && (
+        <>
+          <div className="text-off-black/70">Emails the photos to <b>{prep.to}</b> from the support inbox. Artelo files a report and makes a free replacement of #{prep.number}.</div>
+          {prep.photos.length === 0
+            ? <div className="text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">No photos from the customer in this conversation yet. Ask them for photos of the damage and the box first.</div>
+            : (
+              <div className="grid grid-cols-4 gap-1.5">
+                {prep.photos.map(p => {
+                  const on = picked.includes(key(p))
+                  return (
+                    <button key={key(p)} type="button" onClick={() => setPicked(prev => on ? prev.filter(x => x !== key(p)) : [...prev, key(p)])} title={p.filename}
+                      className={`relative aspect-square rounded border-2 overflow-hidden bg-white ${on ? 'border-[#4600D6]' : 'border-transparent opacity-50 hover:opacity-80'}`}>
+                      <img src={`/api/support/attachment?message=${encodeURIComponent(p.messageId)}&i=${p.index}`} alt={p.filename} className="w-full h-full object-cover" />
+                      {on && <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-[#4600D6] text-white flex items-center justify-center"><Check className="w-3 h-3" /></span>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="What is damaged, e.g. Frame cracked at the corner, glass shattered" className={field} />
+          {err && <div className="text-red-700">{err}</div>}
+          <div className="flex items-center gap-3">
+            <button onClick={send} disabled={busy || !picked.length || !note.trim()} className={`${linkCls} ${confirming ? 'text-red-700' : ''}`}>
+              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquareWarning className="w-3.5 h-3.5" />}
+              {confirming ? `Send ${picked.length} photo${picked.length === 1 ? '' : 's'} to Artelo support?` : 'Send claim to Artelo'}
+            </button>
+            <button onClick={onCancel} className="ml-auto text-off-black/45 hover:text-off-black">Cancel</button>
+          </div>
+        </>
+      )}
+      {!prep && err && <div className="flex items-center gap-3"><span className="text-red-700">{err}</span><button onClick={onCancel} className="ml-auto text-off-black/45 hover:text-off-black">Close</button></div>}
+    </div>
+  )
+}
+
 type ReorderPrep = {
   number: string; nextOrderId: string; sizes: Choice[]; frames: Choice[]
   items: { orderId: string; label: string; productLabel: string; designFrom: string | null; copyable: boolean; size: string | null; frame: string | null }[]
@@ -428,6 +509,7 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
   const [busy, setBusy] = useState<string | null>(null)
   const [editingAddress, setEditingAddress] = useState(false)
   const [reordering, setReordering] = useState(false)
+  const [claiming, setClaiming] = useState(false)
   const [converting, setConverting] = useState<string | null>(null)
   const [pickingConvert, setPickingConvert] = useState(false)
   const { can } = useAuth()
@@ -541,10 +623,14 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
             </>
           )
         })()}
+        {/* Damaged in shipping: Artelo replaces it free once its support has the photos. */}
+        {o.shopifyOrderId && o.items.length > 0 && shipped && (claiming
+          ? <DamageClaimForm o={o} thread={thread} onDone={onChanged} onCancel={() => setClaiming(false)} />
+          : <ActionLink icon={MessageSquareWarning} onClick={() => setClaiming(true)} title="Emails the customer's photos to Artelo support. Artelo files a report and makes a free replacement.">Damaged: claim with Artelo</ActionLink>)}
         {/* A reprint or replacement: the same print to this customer, built in Artelo from here. */}
         {o.shopifyOrderId && o.items.length > 0 && (reordering
           ? <ArteloOrderForm o={o} thread={thread} isAdmin={isAdmin} onDone={onChanged} onCancel={() => setReordering(false)} />
-          : <ActionLink icon={Repeat} onClick={() => setReordering(true)} title="The same print to this customer at $0: a reprint or a replacement">New Artelo order</ActionLink>)}
+          : <ActionLink icon={Repeat} onClick={() => setReordering(true)} title="The same print to this customer: a reprint or a replacement. Artelo bills us for it, so damage goes through the claim instead.">New Artelo order</ActionLink>)}
         {o.shopifyOrderId && o.financialStatus !== 'REFUNDED' && (money === 'refund'
           ? <RefundForm o={o} thread={thread} onDone={onChanged} onCancel={() => setMoney(null)} />
           : <ActionLink icon={Receipt} onClick={() => setMoney('refund')} title="All or part, to the card they paid with. Over $150 is Matt's call.">Refund</ActionLink>)}

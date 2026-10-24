@@ -701,11 +701,11 @@ export async function sendReply({ userId, thread, html, text, attachments = [] }
  * and stored like any sent mail, so the conversation is in Support at once,
  * waiting on the customer, and their reply lands in it.
  */
-export async function sendNew({ userId, to, subject, html, text }) {
+export async function sendNew({ userId, to, subject, html, text, attachments = [] }) {
   const gmail = await client()
   const mailbox = mailboxEmail()
   const messageId = newMessageId()
-  const raw = base64url(buildMime({ to, subject, html, messageId, attachments: [] }))
+  const raw = base64url(buildMime({ to, subject, html, messageId, attachments }))
   let sent
   try {
     sent = await gmail.users.messages.send({ userId: 'me', requestBody: { raw } })
