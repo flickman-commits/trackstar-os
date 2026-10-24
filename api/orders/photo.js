@@ -85,7 +85,7 @@ export default async function handler(req, res) {
 
       // Bill for it: one Photo Add-On per print, on the same Shopify order.
       let charged = false, chargeError = null
-      // A custom order's photo is part of the design it paid for: never billed.
+      // A photo emailed after a custom order is added free (one bought at checkout was charged then).
       if (body.charge && rows[0].source === 'shopify' && !rows.some(r => r.trackstarOrderType === 'custom')) {
         try {
           await addVariantToOrder(rows[0].parentOrderNumber, PHOTO_ADDON_VARIANT_ID, ids.length,

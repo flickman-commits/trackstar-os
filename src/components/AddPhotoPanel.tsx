@@ -27,7 +27,7 @@ export default function AddPhotoPanel({
   prints: Print[]
   currentId: string
   isShopify: boolean
-  /** A custom order: the designer uses the photo as it is (no square crop) and it is never billed. */
+  /** A custom order: the designer uses the photo as it is (no square crop), and a photo emailed after ordering is free. */
   custom?: boolean
   /** Swap this print's existing photo for another one the customer sent. Never bills. */
   replace?: boolean

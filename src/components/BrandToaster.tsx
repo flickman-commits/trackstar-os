@@ -1,4 +1,5 @@
 import { Toaster } from 'sonner'
+import { useLocation } from 'react-router-dom'
 import { toastCard, toastStyle } from '@/lib/ui'
 
 /**
@@ -14,9 +15,11 @@ export function ToastDot({ type }: { type: keyof typeof DOT }) {
 }
 
 export default function BrandToaster() {
+  // Support's reply buttons sit along the bottom middle; its toasts go to the corner instead.
+  const { pathname } = useLocation()
   return (
     <Toaster
-      position="bottom-center"
+      position={pathname.startsWith('/support') ? 'bottom-right' : 'bottom-center'}
       icons={{ success: <ToastDot type="success" />, error: <ToastDot type="error" />, info: <ToastDot type="info" />, warning: <ToastDot type="warning" /> }}
       toastOptions={{
         unstyled: true,

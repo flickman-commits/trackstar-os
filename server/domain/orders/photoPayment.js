@@ -22,12 +22,13 @@ export function paidPhotoAddons(shopifyOrderData) {
 /**
  * For the prints of one Shopify order: which hand-attached photos are unpaid.
  * Photos from checkout are always treated as paid (the theme charged them).
- * A custom order's photo is part of the design it paid for: never billed, never unpaid.
+ * A custom order's photo bought at checkout counts like any other; one the
+ * customer emails afterwards is added free, so it is never unpaid.
  * @param {{ id: string, photoPath: string|null, photoAddedManually: boolean, trackstarOrderType?: string|null }[]} rows
  * @returns {Set<string>} ids of rows whose photo is not paid
  */
 export function unpaidPhotoRows(rows, shopifyOrderData) {
-  const withPhoto = rows.filter(r => r.photoPath && r.trackstarOrderType !== 'custom')
+  const withPhoto = rows.filter(r => r.photoPath && !(r.photoAddedManually && r.trackstarOrderType === 'custom'))
   const manual = withPhoto.filter(r => r.photoAddedManually)
   if (!manual.length) return new Set()
   const covered = Math.max(0, paidPhotoAddons(shopifyOrderData) - (withPhoto.length - manual.length))
