@@ -8,6 +8,7 @@ export const REVIEW_PRODUCTS: { name: string; link: string }[] = [
   { name: 'Austin Marathon', link: 'https://yotpo.com/go/eLj6ln1g' },
   { name: 'Baltimore Marathon', link: 'https://yotpo.com/go/eLj6ln1g' },
   { name: 'Berlin Marathon', link: 'https://yotpo.com/go/llWZcm1S' },
+  { name: 'Charlotte Marathon', link: 'https://yotpo.com/go/37ERxS4X' },
   { name: 'Chicago Marathon', link: 'https://yotpo.com/go/mgtsCHbm' },
   { name: 'CIM (California International Marathon)', link: 'https://yotpo.com/go/llWZcm1S' },
   { name: 'Cowtown Marathon', link: 'https://yotpo.com/go/llWZcm1S' },
