@@ -8,12 +8,13 @@
  *
  * Races that have not happened yet, or ran in the last two days (results are
  * usually not posted yet), are left alone on arrival. autoResearchAfterRace
- * picks those orders up once results should be up, so a pre-race order is
- * not stamped "not found" and then never looked at again.
+ * picks those orders up from race day on, and keeps retrying the ones whose
+ * results are not up yet, so a pre-race order is not stamped "not found" and
+ * then never looked at again.
  */
 import prisma from '../../db.js'
 import { researchService } from '../../services/ResearchService.js'
-import { hasScraperForRace } from '../../scrapers/index.js'
+import { hasScraperForRace, getCanonicalRaceName } from '../../scrapers/index.js'
 import { ensureOverridesLoaded } from '../../scrapers/scraperOverrides.js'
 
 const DAY = 24 * 60 * 60 * 1000
@@ -66,40 +67,68 @@ export async function autoResearchNew({ since, limit = 20 } = {}) {
 }
 
 /**
- * The orders that came in before their race: once the race is two days past
- * (results posted), research every open order for it that has none yet, or
- * that has a result with no finish time (a bib looked up before race day, or
- * on race morning before the time was posted). Research fills only the
- * missing time on those (ResearchService.getOrFetchRunnerData).
- * Runs on each import; only races from the last three weeks are looked at.
+ * The orders that came in before their race, from race day on. Every open
+ * order for a race in the last three weeks is looked up again when it has:
+ *   - no research yet, or "race not run yet" (researched before race day),
+ *   - a result with no finish time (a bib found before the runner finished),
+ *   - "not found" or a site error in the first two days, while results are
+ *     still going up.
+ * Research fills only the missing time on a timeless result
+ * (ResearchService.getOrFetchRunnerData). Retries are spaced out
+ * (researchedAt) so runners still on course do not starve the rest, and the
+ * least recently tried go first. Runs on each import.
  */
+const MIN = 60 * 1000
+function retryAfter(status, raceDate, now) {
+  const fresh = now - raceDate.getTime() < RESULTS_AFTER_DAYS * DAY
+  if (status === 'found') return fresh ? 30 * MIN : 12 * 60 * MIN
+  if (status === 'not_found' || status === 'upstream_error') return fresh ? 2 * 60 * MIN : null
+  return 0 // never researched, or researched before race day
+}
+
 export async function autoResearchAfterRace({ limit = 10 } = {}) {
   await ensureOverridesLoaded()
   const now = Date.now()
   const races = await prisma.race.findMany({
-    where: { raceDate: { gte: new Date(now - CATCH_UP_DAYS * DAY), lte: new Date(now - RESULTS_AFTER_DAYS * DAY) } },
-    select: { raceName: true, year: true },
+    where: { raceDate: { gte: new Date(now - CATCH_UP_DAYS * DAY), lte: new Date(now) } },
+    select: { raceName: true, year: true, raceDate: true },
   })
   const out = { researched: 0, found: 0, failed: 0, skipped: 0, orders: [] }
   if (!races.length) return out
-  const keys = new Set(races.map(r => `${r.raceName}|${r.year}`))
+  // Race rows and orders do not always spell a race the same way ("NYC
+  // Marathon", "New York City Marathon"), so match on the canonical name.
+  const dates = new Map(races.map(r => [`${getCanonicalRaceName(r.raceName)}|${r.year}`, r.raceDate]))
+  const years = [...new Set(races.map(r => r.year))]
   const orders = await prisma.order.findMany({
     where: {
       trackstarOrderType: 'standard',
       status: { notIn: ['completed', 'flagged'] },
       hadNoTime: false,
-      AND: [
-        { OR: [{ runnerResearch: { none: {} } }, { runnerResearch: { some: { researchStatus: 'found', officialTime: null } } }] },
-        { OR: races.flatMap(r => [{ raceName: r.raceName, raceYear: r.year }, { raceNameOverride: r.raceName, yearOverride: r.year }]) },
-      ],
+      OR: [{ raceYear: { in: years } }, { yearOverride: { in: years } }],
+      AND: [{ OR: [
+        { runnerResearch: { none: {} } },
+        { runnerResearch: { some: { researchStatus: 'race_not_run' } } },
+        { runnerResearch: { some: { researchStatus: 'found', officialTime: null } } },
+        { runnerResearch: { some: { researchStatus: { in: ['not_found', 'upstream_error'] }, source: 'scraper' } } },
+      ] }],
     },
-    orderBy: { createdAt: 'asc' },
-    take: 200,
-    select: { orderNumber: true, raceName: true, raceNameOverride: true, raceYear: true, yearOverride: true },
+    take: 500,
+    select: { id: true, orderNumber: true, raceName: true, raceNameOverride: true, raceYear: true, yearOverride: true, researchedAt: true, runnerResearch: { select: { researchStatus: true } } },
   })
-  const ready = orders.filter(o => {
+  const ready = []
+  for (const o of orders) {
     const race = o.raceNameOverride ?? o.raceName, year = o.yearOverride ?? o.raceYear
-    return keys.has(`${race}|${year}`) && hasScraperForRace(race)
-  })
-  return researchEach(ready, limit, out)
+    const raceDate = race && dates.get(`${getCanonicalRaceName(race)}|${year}`)
+    if (!raceDate || !hasScraperForRace(race)) continue
+    const status = o.runnerResearch.find(r => r.researchStatus !== 'race_not_run')?.researchStatus || 'none'
+    const wait = retryAfter(status, raceDate, now)
+    if (wait === null || (wait && o.researchedAt && now - o.researchedAt.getTime() < wait)) { out.skipped++; continue }
+    ready.push(o)
+  }
+  ready.sort((a, b) => (a.researchedAt?.getTime() || 0) - (b.researchedAt?.getTime() || 0))
+  const res = await researchEach(ready, limit, out)
+  // Stamp every attempt, found or not, so the next run tries someone else.
+  const tried = ready.slice(0, out.researched + out.failed).map(o => o.id)
+  if (tried.length) await prisma.order.updateMany({ where: { id: { in: tried } }, data: { researchedAt: new Date() } })
+  return res
 }
