@@ -56,7 +56,8 @@ export async function deliverApproved(job) {
 
     const folder = ORDERS_FOLDER_ID()
     const base = String(job.spec?.file || job.orderId)
-    let created = null, lastError = null
+    let created = null
+    const errors = []
     for (const { name: who, client: d } of await driveClients()) {
       try {
         let name = `${base}.pdf`
@@ -71,10 +72,12 @@ export async function deliverApproved(job) {
         })
         break
       } catch (e) {
-        lastError = new Error(`${who}: ${/not found/i.test(e.message) ? 'cannot see the Orders folder (share it as Editor)' : /invalid_grant/i.test(e.message) ? 'its Google connection has expired (reconnect Gmail in Settings)' : e.message}`)
+        errors.push(`${who}: ${/not found/i.test(e.message) ? 'cannot see the Orders folder (share it as Editor)' : /invalid_grant/i.test(e.message) ? 'its Google connection has expired (reconnect Gmail in Sales)' : /storage quota/i.test(e.message) ? 'a service account cannot own files in a My Drive folder' : e.message}`)
       }
     }
-    if (!created) throw lastError
+    // Every account's reason, the person's first: the service account's quota
+    // error alone hid an expired personal connection for three days.
+    if (!created) throw new Error(errors.join(' · '))
     const link = created.data.webViewLink || `https://drive.google.com/file/d/${created.data.id}/view`
     console.log(`[render.deliver] Saved ${created.data.name} to the Orders folder (${created.data.id})`)
     return prisma.renderJob.update({ where: { id: job.id }, data: { deliveredAt: new Date(), deliveredPath: link, deliveryError: null } })
