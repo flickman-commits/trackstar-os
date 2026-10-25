@@ -36,7 +36,7 @@ interface TimeSummary {
   withinGoalPct: number | null
   overFiveDays: number
   orderedBeforeRace: number
-  weekly: { from: string; count: number; medianHours: number | null; withinGoalPct: number | null }[]
+  weekly: { from: string; count: number; meanHours: number | null; medianHours: number | null; withinGoalPct: number | null }[]
   leftOut: Record<string, number>
 }
 
@@ -45,6 +45,7 @@ interface Fulfillment {
   custom: TimeSummary
   openStandard: { workable: number; pastGoal: number }
   goalHours: number
+  goalMeanHours: number
 }
 
 interface StatsPayload {
@@ -170,14 +171,19 @@ const fmtHours = (h: number | null) => {
   return `${d < 10 ? d.toFixed(1) : Math.round(d)} days`
 }
 const pctTone = (p: number | null) => p === null ? 'text-off-black' : p >= 90 ? 'text-green-700' : p >= 75 ? 'text-amber-600' : 'text-red-600'
+// The average against its goal: met is green, within half a day of it amber.
+const meanTone = (h: number | null, goal: number) => h === null ? 'text-off-black' : h <= goal ? 'text-green-700' : h <= goal + 12 ? 'text-amber-600' : 'text-red-600'
+const fmtDays = (h: number | null) => h === null ? '–' : `${(h / 24).toFixed(1)} days`
 
 /**
- * Our handling time, said plainly: the share that got out within the goal,
- * what a typical order took, the slowest tenth, and the last three weeks.
+ * Our handling time, said plainly: the average against the goal (1.5 days),
+ * the share that made the two-day deadline, what a typical order took, the
+ * slowest tenth, and the last three weeks.
  * Standard prints and custom designs are different jobs and get their own card.
  */
 function FulfillmentTime({ f, rangeLabel }: { f: Fulfillment; rangeLabel: string }) {
   const goalDays = f.goalHours / 24
+  const goalMean = f.goalMeanHours ?? 36
   const Card = ({ label, t, how, backlog }: { label: string; t: TimeSummary; how: string; backlog?: { workable: number; pastGoal: number } }) => {
     const weeks = t.weekly.filter(w => w.count > 0).slice(-3).reverse()
     const weekWords = ['This week', 'last week', 'the week before']
@@ -189,17 +195,18 @@ function FulfillmentTime({ f, rangeLabel }: { f: Fulfillment; rangeLabel: string
         ) : (
           <>
             <p className="text-off-black leading-snug">
-              <span className={`text-3xl font-semibold tabular-nums ${pctTone(t.withinGoalPct)}`}>{t.withinGoalPct}%</span>
-              <span className="text-sm text-off-black/70"> got out within {goalDays} days. The goal is all of them.</span>
+              <span className={`text-3xl font-semibold tabular-nums ${meanTone(t.meanHours, goalMean)}`}>{fmtDays(t.meanHours)}</span>
+              <span className="text-sm text-off-black/70"> on average. The goal is {goalMean / 24} days.</span>
             </p>
             <p className="text-sm text-off-black/70">
+              <span className={`font-semibold ${pctTone(t.withinGoalPct)}`}>{t.withinGoalPct}%</span> got out within {goalDays} days.
               A typical order took <span className="font-semibold text-off-black">{fmtHours(t.medianHours)}</span>.
               The slowest 1 in 10 took <span className="font-semibold text-off-black">{fmtHours(t.p90Hours)}</span> or more.
             </p>
             {weeks.length > 1 && (
               <p className="text-sm text-off-black/70">
                 {weeks.map((w, i) => (
-                  <span key={w.from}>{i > 0 ? ', ' : ''}{weekWords[i]} <span className={`font-semibold ${pctTone(w.withinGoalPct)}`}>{w.withinGoalPct}%</span></span>
+                  <span key={w.from}>{i > 0 ? ', ' : ''}{weekWords[i]} <span className={`font-semibold ${meanTone(w.meanHours, goalMean)}`}>{fmtDays(w.meanHours)}</span></span>
                 ))}.
               </p>
             )}
@@ -218,7 +225,7 @@ function FulfillmentTime({ f, rangeLabel }: { f: Fulfillment; rangeLabel: string
     <div className="space-y-3">
       <p className="text-xs font-semibold text-off-black/50">How fast we get orders out</p>
       <Card label="Standard prints" t={f.standard} backlog={f.openStandard}
-        how={`Counted from when we could start on the order (the order itself, or race day if the race had not happened yet) to when someone on the team marked it complete here.`} />
+        how={`Counted from when we could start on the order (the order itself, or race day if the race had not happened yet) to when it went to production at Artelo (sent automatically, or marked complete here by someone on the team).`} />
       <Card label="Custom designs" t={f.custom}
         how="Counted from the order to when the design was sent to production." />
     </div>

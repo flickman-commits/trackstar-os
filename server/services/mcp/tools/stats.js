@@ -14,7 +14,7 @@ export const statsTools = [
   {
     name: 'handling_time',
     title: 'Handling time',
-    description: 'How long orders took from workable to completed in a range (today, 7d, 30d, 90d), standard and custom apart, against the 48-hour goal, plus open standard orders already past it.',
+    description: 'How long orders took from workable to sent to production at Artelo in a range (today, 7d, 30d, 90d), standard and custom apart: the average against the 36-hour goal, the share within the 48-hour deadline, plus open standard orders already past it.',
     scope: 'read',
     cap: 'settings.stats',
     readOnly: true,
@@ -23,7 +23,7 @@ export const statsTools = [
       const w = rangeWindow(range)
       const t = await computeFulfillmentTime(w)
       return {
-        range, since: w.since, until: w.until, goalHours: t.goalHours,
+        range, since: w.since, until: w.until, goalHours: t.goalHours, goalMeanHours: t.goalMeanHours,
         standard: shape(t.standard), custom: shape(t.custom),
         openStandard: t.openStandard,
       }

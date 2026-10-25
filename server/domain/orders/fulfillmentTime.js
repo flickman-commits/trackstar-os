@@ -1,13 +1,18 @@
 /**
  * How long an order sits with us: from the moment we can work it to the
  * moment a person marks it complete. Shipping is Artelo's; this measures the
- * personalization and handling the team controls. The goal is two days.
+ * personalization and handling the team controls. The goal (since Oct 25,
+ * 2026) is an average of a day and a half (GOAL_MEAN_HOURS); each order still
+ * has two days before it counts as late (GOAL_HOURS, the header's on-time).
  *
  * The clock starts at the order, or at race day for an order placed before
- * the race (nothing can happen until the runner has run). It stops at the
- * completion:
- *   standard  the first "order.complete" line in the Activity Log for the
- *             order: a person's click, or an approval. Orders the Artelo sync
+ * the race (nothing can happen until the runner has run). It stops when the
+ * order went to production at Artelo (Artelo's "received"):
+ *   standard  the first "artelo.sent" line for it (the automatic send, since
+ *             Oct 23, 2026: an approval completes the order first and the
+ *             print goes to Artelo after the hold), else the first
+ *             "order.complete" line: a person's click, which attached the
+ *             designs and sent it. Orders the Artelo sync
  *             completed on its own (shipped without anyone marking them) have
  *             no line and are left out, since that time is shipping, not ours.
  *   custom    the same log line (written by Sent to Production since Oct 17,
@@ -24,6 +29,7 @@ import prisma from '../../db.js'
 
 const HOUR = 3600e3
 export const GOAL_HOURS = 48
+export const GOAL_MEAN_HOURS = 36
 
 function quantile(sorted, p) {
   if (!sorted.length) return null
@@ -73,8 +79,9 @@ async function computeFulfillmentTimeFresh({ since, until }) {
   // every completion event and every completed order ever, a little more
   // each day, on every poll.
   const floor = new Date(Math.min(new Date(since).getTime(), new Date(until).getTime() - 8 * 7 * 24 * HOUR))
-  const [events, races] = await Promise.all([
+  const [events, sends, races] = await Promise.all([
     prisma.auditEvent.findMany({ where: { action: 'order.complete', createdAt: { gte: floor } }, orderBy: { createdAt: 'asc' }, select: { createdAt: true, detail: true } }),
+    prisma.auditEvent.findMany({ where: { action: 'artelo.sent', createdAt: { gte: floor } }, orderBy: { createdAt: 'asc' }, select: { createdAt: true, detail: true } }),
     prisma.race.findMany({ select: { raceName: true, year: true, raceDate: true } }),
   ])
   const loggedNumbers = [...new Set(events.map(e => e.detail?.orderNumber).filter(Boolean))]
@@ -83,21 +90,24 @@ async function computeFulfillmentTimeFresh({ since, until }) {
       status: 'completed',
       OR: [
         { trackstarOrderType: { in: ['standard', 'custom'] }, orderNumber: { in: loggedNumbers } },
+        { trackstarOrderType: 'standard', id: { in: [...new Set(sends.map(e => e.detail?.orderId).filter(Boolean))] } },
         { trackstarOrderType: 'custom', OR: [{ designCompletedAt: { gte: floor } }, { researchedAt: { gte: floor } }] },
       ],
     },
-    select: { orderNumber: true, trackstarOrderType: true, createdAt: true, researchedAt: true, designCompletedAt: true, raceName: true, raceNameOverride: true, raceYear: true, yearOverride: true, customerEmail: true },
+    select: { id: true, orderNumber: true, trackstarOrderType: true, createdAt: true, researchedAt: true, designCompletedAt: true, raceName: true, raceNameOverride: true, raceYear: true, yearOverride: true, customerEmail: true },
   })
   const waits = await customerWaits(orders.map(o => o.customerEmail))
   const completedAt = new Map()
   for (const e of events) { const n = e.detail?.orderNumber; if (n && !completedAt.has(n)) completedAt.set(n, e.createdAt) }
+  const sentAt = new Map()
+  for (const e of sends) { const id = e.detail?.orderId; if (id && !sentAt.has(id)) sentAt.set(id, e.createdAt) }
   const raceDate = new Map(races.map(r => [`${r.raceName}|${r.year}`, r.raceDate]))
 
   const rows = { standard: [], custom: [] }
   const leftOut = { standard: { noLogLine: 0, doneBeforeRace: 0 }, custom: { noTimestamp: 0, doneBeforeRace: 0 } }
   for (const o of orders) {
     const type = o.trackstarOrderType
-    const done = completedAt.get(o.orderNumber) || (type === 'custom' ? (o.designCompletedAt || o.researchedAt) : null)
+    const done = (type === 'standard' && sentAt.get(o.id)) || completedAt.get(o.orderNumber) || (type === 'custom' ? (o.designCompletedAt || o.researchedAt) : null)
     if (!done) { leftOut[type][type === 'standard' ? 'noLogLine' : 'noTimestamp']++; continue }
     if (done < since || done >= until) continue
     const rd = raceDate.get(`${o.raceNameOverride ?? o.raceName}|${o.yearOverride ?? o.raceYear}`) || null
@@ -115,7 +125,7 @@ async function computeFulfillmentTimeFresh({ since, until }) {
       const from = new Date(end.getTime() - (i + 1) * 7 * 24 * HOUR), to = new Date(end.getTime() - i * 7 * 24 * HOUR)
       const inWeek = list.filter(r => r.done >= from && r.done < to).map(r => r.hours)
       const s = summarize(inWeek)
-      weeks.push({ from: from.toISOString().slice(0, 10), count: s.count, medianHours: s.medianHours, withinGoalPct: s.withinGoalPct })
+      weeks.push({ from: from.toISOString().slice(0, 10), count: s.count, meanHours: s.meanHours, medianHours: s.medianHours, withinGoalPct: s.withinGoalPct })
     }
     return weeks
   }
@@ -147,6 +157,7 @@ async function computeFulfillmentTimeFresh({ since, until }) {
   }
   out.openStandard = { workable, pastGoal }
   out.goalHours = GOAL_HOURS
+  out.goalMeanHours = GOAL_MEAN_HOURS
   return out
 }
 
