@@ -769,9 +769,14 @@ export class ResearchService {
       // already on the record is overwritten, including what a person entered.
       if (!existingResearch.officialTime && !order.hadNoTime) {
         try {
-          const fresh = await this.findRunner(raceName, raceYear, runnerName, {
-            bib: existingResearch.bibNumber || order.customerBib || null,
-          })
+          const wantBib = String(existingResearch.bibNumber || order.customerBib || '').trim()
+          let fresh = await this.findRunner(raceName, raceYear, runnerName, { bib: wantBib || null })
+          // Two finishers share the name (MCM 2026 had two Michael Andersons):
+          // the search comes back ambiguous, but the bib on the record says which.
+          if (fresh && !fresh.found && wantBib) {
+            const m = (fresh.possibleMatches || []).find(c => String(c?.bib || '').trim() === wantBib)
+            if (m) fresh = { found: true, bibNumber: m.bib, officialTime: m.time, officialPace: m.pace, eventType: m.eventType, resultsUrl: fresh.resultsUrl }
+          }
           const sameRunner = !existingResearch.bibNumber || String(fresh?.bibNumber || '') === String(existingResearch.bibNumber)
           if (fresh?.found && fresh.officialTime && sameRunner) {
             console.log(`[ResearchService] Filled the missing time for order ${order.orderNumber}: ${fresh.officialTime}`)
