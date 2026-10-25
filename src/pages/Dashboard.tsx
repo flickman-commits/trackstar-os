@@ -248,10 +248,11 @@ export default function Dashboard() {
   // Fetch orders from database (filtered by activeView type)
   // Completed standard orders are fetched only while someone is looking at them.
   const [completedCount, setCompletedCount] = useState<number | null>(null)
-  const includeCompleted = (showCompleted && activeView !== 'standard') || searchQuery.trim().length > 0
+  // Standard's completed orders are too many to load whole (searchDone below asks the server).
+  const includeCompleted = activeView !== 'standard' && (showCompleted || searchQuery.trim().length > 0)
   const fetchOrders = useCallback(async () => {
     try {
-      // Standard orders: completed ones load only when the completed list or a search needs them.
+      // Standard orders: completed ones come from their own requests (the pages below, or a search).
       const openOnly = activeView === 'standard' && !includeCompleted
       const response = await apiFetch(`/api/orders?type=${activeView}${openOnly ? '&scope=open' : ''}`)
       if (!response.ok) throw new Error('Failed to fetch orders')
@@ -334,6 +335,21 @@ export default function Dashboard() {
     }
   }, [completedPage.length])
   const showStandardDone = activeView === 'standard' && stageFilter === '' && !searchQuery.trim()
+  // A search in the standard queue: the completed orders it matches, found on
+  // the server, a short pause after the last key.
+  const [searchDone, setSearchDone] = useState<Order[]>([])
+  useEffect(() => {
+    const term = searchQuery.trim()
+    if (activeView !== 'standard' || term.replace(/^#/, '').length < 2) { setSearchDone([]); return }
+    let stale = false
+    const t = setTimeout(() => {
+      apiFetch(`/api/orders?type=standard&scope=completed&take=100&q=${encodeURIComponent(term)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (!stale && d) setSearchDone((d.orders || []).map((o: Record<string, unknown>) => mapOrder(o))) })
+        .catch(() => {})
+    }, 250)
+    return () => { stale = true; clearTimeout(t) }
+  }, [searchQuery, activeView])
   useEffect(() => { if (showStandardDone && !completedPage.length) loadCompleted(true) }, [showStandardDone]) // eslint-disable-line react-hooks/exhaustive-deps
   // An order left the open list (completed here or by someone else): read the newest completed page again.
   const openIds = useRef<Set<string>>(new Set())
@@ -728,13 +744,13 @@ export default function Dashboard() {
     if (activeView === 'custom') {
       return typeFiltered.filter(o => o.designStatus === 'sent_to_production')
     }
-    // Standard: the search loads every order; otherwise the completed pages.
+    // Standard: the search's matches from the server; otherwise the completed pages.
     const done = typeFiltered.filter(o => o.status === 'completed')
-    if (searchQuery.trim()) return done
+    if (searchQuery.trim()) return [...done, ...searchDone.filter(o => !done.some(d => d.id === o.id)).filter(byPerson)]
     // Just completed here (still in the open list until the refresh) goes on top.
     const paged = completedPage.filter(o => (o.trackstarOrderType || 'standard') === 'standard').filter(byPerson)
     return [...done.filter(o => !paged.some(p => p.id === o.id)), ...paged]
-  }, [orders, activeView, byPerson, completedPage, searchQuery])
+  }, [orders, activeView, byPerson, completedPage, searchQuery, searchDone])
 
   const matchesSearch = useCallback((o: Order, query: string) =>
     o.orderNumber.toLowerCase().includes(query) ||

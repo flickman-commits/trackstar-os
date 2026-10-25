@@ -192,6 +192,23 @@ export default async function handler(req, res) {
     // first, for the bottom of the standard queue's All (loaded as you scroll).
     const completedPage = req.query.scope === 'completed' && !number
     if (completedPage) whereClause.status = 'completed'
+    // ?scope=completed&q=jane@example.com: the completed orders a search in the
+    // queue matches, found here. Loading every completed order to search them
+    // in the browser came to ~16MB, over Vercel's response limit, so the
+    // search quietly showed open orders only.
+    const q = completedPage ? String(req.query.q || '').trim().replace(/^#/, '').slice(0, 100) : ''
+    if (q) {
+      const text = { contains: q, mode: 'insensitive' }
+      whereClause.OR = [
+        { customerEmail: text }, { customerName: text },
+        { runnerName: text }, { runnerNameOverride: text },
+        { raceName: text }, { raceNameOverride: text },
+        { parentOrderNumber: { contains: q } },
+        { shopifyOrderData: { path: ['name'], string_contains: q } },
+        { bibNumberCustomer: { equals: q, mode: 'insensitive' } },
+        { runnerResearch: { some: { bibNumber: { equals: q, mode: 'insensitive' } } } },
+      ]
+    }
     const page = completedPage
       ? { take: Math.min(200, Math.max(1, Number(req.query.take) || 100)), skip: Math.max(0, Number(req.query.skip) || 0) }
       : {}
