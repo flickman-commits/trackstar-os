@@ -1373,6 +1373,26 @@ Thank you!`
                         )}
                       </div>
                     )}
+                    {/* Admins jump to the order where it lives, as on a standard order. */}
+                    {isAdmin && selectedOrder.trackstarOrderType === 'custom' && (selectedOrder.shopifyAdminUrl || selectedOrder.etsyOrderUrl || selectedOrder.arteloUrl) && (
+                      <div className="mt-3 pt-3 border-t border-border-gray flex gap-2">
+                        {selectedOrder.shopifyAdminUrl && (
+                          <a href={selectedOrder.shopifyAdminUrl} target="_blank" rel="noopener noreferrer" className="flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-md border border-border-gray bg-white text-sm font-medium text-off-black hover:border-off-black/30 transition-colors" title="Open this order in Shopify">
+                            <img src="/shopify-icon.png" alt="" className="w-4 h-4" /> Shopify <ArrowUpRight className="w-3.5 h-3.5 flex-shrink-0 opacity-40" />
+                          </a>
+                        )}
+                        {selectedOrder.etsyOrderUrl && (
+                          <a href={selectedOrder.etsyOrderUrl} target="_blank" rel="noopener noreferrer" className="flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-md border border-border-gray bg-white text-sm font-medium text-off-black hover:border-off-black/30 transition-colors" title="Open this order in Etsy">
+                            <span className="w-4 h-4 inline-flex items-center justify-center rounded-[3px] bg-[#F1641E] text-white text-[10px] font-bold leading-none">E</span> Etsy <ArrowUpRight className="w-3.5 h-3.5 flex-shrink-0 opacity-40" />
+                          </a>
+                        )}
+                        {selectedOrder.arteloUrl && (
+                          <a href={selectedOrder.arteloUrl} target="_blank" rel="noopener noreferrer" className="flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-md border border-border-gray bg-white text-sm font-medium text-off-black hover:border-off-black/30 transition-colors" title="Open this order in Artelo">
+                            <img src="/artelo-icon.png" alt="" className="w-4 h-4 rounded-[3px]" /> Artelo <ArrowUpRight className="w-3.5 h-3.5 flex-shrink-0 opacity-40" />
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Due, ordered, sent and rush, as tags. */}
