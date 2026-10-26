@@ -115,6 +115,34 @@ partial sweep is not a clean one.
    skill when budget allows (it counts toward the 5 repairs), else list it under
    "Coming up" work, not `needsMatt`: Eli researches those orders by hand.
 
+10. **The Action queue** — once the scraper and race-data work above is done
+    (those clear many Action orders on their own), call `backlog_by_reason` and
+    work the `action` stage. It is the team's to-do list, so you take only what
+    the tools can finish and the facts settle; a person works the rest in the
+    morning. Up to **40** `rerun_research` a night, inside the per-host limits.
+
+    | Reason | What you do |
+    |---|---|
+    | Timing site down | `rerun_research`. Still down: leave it, it is not a bug. |
+    | Needs a scraper (a year from 2020 on) | Step 4 (`save_event_id`), then `rerun_research` its orders. |
+    | Needs race date, Needs race data, Confirm race date | Step 6 (`verify_race_date` with a source). |
+    | Runner not found | Once a night per order: `rerun_research`. Still not found: `trace_scraper` the name. If the results show exactly one finisher whose full name matches (a spelling or a middle name the customer left out) in that year, and nothing on the order contradicts it, `accept_match` it. Anything less certain stays. |
+    | Pick a match | `accept_match` only when the customer gave a bib or a time and exactly one candidate matches it. Otherwise it stays. |
+    | Render failed | Read the error. If it was data you have since fixed, `rerender_order`. Otherwise it stays. |
+    | Needs a scraper (no scraper at all) | Step 9. |
+
+    Leave to people, always: Confirm weather (a person checking it is the whole
+    point), Year missing, Unknown race, Flagged, Design rejected, every Artelo
+    reason, Make by hand, Needs a production file, Needs NO TIME layer, Enter
+    the time, No bib, No time, Research by hand (before 2020) and triathlons.
+    Never change an order's name, year or race, never approve or reject a
+    design, never message a customer. A wrong result goes on a print a customer
+    paid for; when in doubt, leave it.
+
+    In `finish_sweep` notes give the count you cleared ("cleared 14 Action
+    orders: 9 re-researched, 3 matches accepted, 2 race dates"). What is left is
+    the team's normal work, not `needsMatt`.
+
 These findings used to ping Matt in Slack one by one (Instant Lookup errors,
 "year not configured", "no scraper"). Since 2026-10-26 they come only to you,
 so working them is the whole point; Matt hears about them from your report.
