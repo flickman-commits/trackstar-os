@@ -14,7 +14,7 @@ export const statsTools = [
   {
     name: 'handling_time',
     title: 'Handling time',
-    description: 'How long orders took from workable to sent to production at Artelo in a range (today, 7d, 30d, 90d), standard and custom apart: the average against the 36-hour goal, the share within the 48-hour deadline, plus open standard orders already past it.',
+    description: 'How long orders took from workable to sent to production at Artelo in a range (today, 7d, 30d, 90d), standard and custom apart: the average against the 36-hour goal, the share within the 36-hour deadline, plus open standard orders already past it; and custom designs against the 14-day promise (final to production, and first proofs to the customer, by the due date) with the time from first proofs to production.',
     scope: 'read',
     cap: 'settings.stats',
     readOnly: true,
@@ -25,7 +25,7 @@ export const statsTools = [
       return {
         range, since: w.since, until: w.until, goalHours: t.goalHours, goalMeanHours: t.goalMeanHours,
         standard: shape(t.standard), custom: shape(t.custom),
-        openStandard: t.openStandard,
+        openStandard: t.openStandard, customPromise: t.customPromise,
       }
     },
   },

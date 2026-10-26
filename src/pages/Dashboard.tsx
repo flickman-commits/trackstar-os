@@ -89,21 +89,22 @@ function LoadMore({ loading, onMore }: { loading: boolean; onMore: () => void })
 // does not answer, results not up), and the pauses do not catch all of them.
 const GOAL_PCT = 90
 
-type OnTime = { pct: number; due: number; onTime: number; lateNow: number; oldestLateDays: number | null; lateOrders: string[] }
+type OnTime = { pct: number; goalHours: number; due: number; onTime: number; lateNow: number; oldestLateDays: number | null; lateOrders: string[] }
 
 /**
- * The pulse on getting orders out: of the standard orders whose two-day
- * deadline came up in the past week, the share out before it (open ones count
+ * The pulse on getting orders out: of the standard orders whose deadline
+ * (a day and a half since Oct 26, 2026) came up in the past week, the share out before it (open ones count
  * as late), and beside it the open orders already past their deadline, which
  * filters the list to them. See server/domain/orders/onTime.js.
  */
 function OnTimeStat({ stat, lateActive, onLate }: { stat: OnTime; lateActive: boolean; onLate: () => void }) {
   const { pct } = stat
+  const days = `${stat.goalHours / 24}-day`
   const color = pct >= GOAL_PCT ? 'bg-green-500' : pct >= 75 ? 'bg-amber-400' : 'bg-red-400'
   return (
     <div className="ml-5 flex items-end gap-5">
-      <div className="flex flex-col gap-1" title={`Past 7 days: ${stat.onTime} of the ${stat.due} standard orders whose 2-day deadline came up went out in time. The clock starts at the order, or race day if it was ordered before the race, and pauses while results are not up yet (up to 3 days) and while we wait on the customer's reply.`}>
-        <span className="text-xs text-off-black/60 whitespace-nowrap">Out within 2 days</span>
+      <div className="flex flex-col gap-1" title={`Past 7 days: ${stat.onTime} of the ${stat.due} standard orders whose ${days} deadline came up went out in time. The clock starts at the order, or race day if it was ordered before the race, and pauses while results are not up yet (up to 3 days) and while we wait on the customer's reply.`}>
+        <span className="text-xs text-off-black/60 whitespace-nowrap">Out within {stat.goalHours / 24} days</span>
         <div className="flex items-start gap-2.5">
           <div className="flex flex-col gap-1 pt-1.5">
             <div className="relative w-32 h-2 rounded-full bg-off-black/10 overflow-hidden">
@@ -122,7 +123,7 @@ function OnTimeStat({ stat, lateActive, onLate }: { stat: OnTime; lateActive: bo
       <button
         onClick={onLate}
         disabled={!stat.lateNow}
-        title={stat.lateNow ? (lateActive ? 'Show every order again' : 'Show only the open orders past their 2-day deadline') : 'Nothing is past its deadline'}
+        title={stat.lateNow ? (lateActive ? 'Show every order again' : `Show only the open orders past their ${days} deadline`) : 'Nothing is past its deadline'}
         className={`flex flex-col items-start gap-0.5 rounded-md px-2 py-1 -mb-1 text-left transition-colors ${lateActive ? 'bg-red-50 ring-1 ring-red-200' : 'hover:bg-off-black/5'} disabled:cursor-default disabled:hover:bg-transparent`}
       >
         <span className="text-xs text-off-black/60 whitespace-nowrap">Late now</span>
@@ -183,7 +184,7 @@ export default function Dashboard() {
   // Team member and race pickers sit behind a Filters toggle, closed by default.
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [showCompleted, setShowCompleted] = useState(false)
-  // Header stat: share of standard orders out by their 2-day deadline, past 7 days (goal 90%), and the ones late now.
+  // Header stat: share of standard orders out by their deadline (1.5 days), past 7 days (goal 90%), and the ones late now.
   const [onTime, setOnTime] = useState<OnTime | null>(null)
   // And standard orders sent to production in the last 24 hours. Read again
   // every five minutes while the tab is visible.
@@ -192,7 +193,7 @@ export default function Dashboard() {
     if (!can('settings.stats')) return
     const read = () => apiFetch('/api/admin/stats?range=7d&only=fulfillment').then(r => r.ok ? r.json() : null)
       .then(d => {
-        const t = d?.onTime; if (t?.due) setOnTime({ pct: t.onTimePct, due: t.due, onTime: t.onTime, lateNow: t.lateNow, oldestLateDays: t.oldestLateDays, lateOrders: t.lateOrders || [] })
+        const t = d?.onTime; if (t?.due) setOnTime({ pct: t.onTimePct, goalHours: t.goalHours || 36, due: t.due, onTime: t.onTime, lateNow: t.lateNow, oldestLateDays: t.oldestLateDays, lateOrders: t.lateOrders || [] })
         if (typeof d?.sentToday?.count === 'number') setSentToday({ count: d.sentToday.count, byPerson: d.sentToday.byPerson || [] })
       }).catch(() => {})
     read()

@@ -2,8 +2,9 @@
  * How long an order sits with us: from the moment we can work it to the
  * moment a person marks it complete. Shipping is Artelo's; this measures the
  * personalization and handling the team controls. The goal (since Oct 25,
- * 2026) is an average of a day and a half (GOAL_MEAN_HOURS); each order still
- * has two days before it counts as late (GOAL_HOURS, the header's on-time).
+ * 2026) is an average of a day and a half (GOAL_MEAN_HOURS), and since Oct
+ * 26 each order also counts as late past a day and a half (GOAL_HOURS, the
+ * header's on-time; it was two days).
  *
  * The clock starts at the order, or at race day for an order placed before
  * the race (nothing can happen until the runner has run). It stops when the
@@ -28,7 +29,7 @@
 import prisma from '../../db.js'
 
 const HOUR = 3600e3
-export const GOAL_HOURS = 48
+export const GOAL_HOURS = 36
 export const GOAL_MEAN_HOURS = 36
 
 function quantile(sorted, p) {
@@ -156,9 +157,68 @@ async function computeFulfillmentTimeFresh({ since, until }) {
     if ((now - start.getTime()) / HOUR > GOAL_HOURS) pastGoal++
   }
   out.openStandard = { workable, pastGoal }
+  out.customPromise = await customPromise({ since, until, completedAt })
   out.goalHours = GOAL_HOURS
   out.goalMeanHours = GOAL_MEAN_HOURS
   return out
+}
+
+/**
+ * Custom designs against what the customer was told: the design in 14 days
+ * (4 with the rush fee; the order's dueDate). Two clocks, both raw (the
+ * customer's review time is part of the second, since that is what they
+ * wait through):
+ *   first look   order to the first proofs reaching the customer: the first
+ *                "proof.send" line (logged since Oct 20, 2026), else the
+ *                first proof uploaded, which is when they were sent before.
+ *   to final     those first proofs to production: the first "order.complete"
+ *                line, else designCompletedAt or researchedAt.
+ * Counted over custom orders that went to production in the window, plus
+ * the open ones past their promised date right now.
+ */
+async function customPromise({ since, until, completedAt }) {
+  const orders = await prisma.order.findMany({
+    where: { trackstarOrderType: 'custom', status: { not: 'flagged' } },
+    select: { id: true, orderNumber: true, status: true, createdAt: true, dueDate: true, isRushOrder: true, designCompletedAt: true, researchedAt: true, proofs: { select: { batch: true, createdAt: true } } },
+  })
+  const sends = await prisma.auditEvent.findMany({ where: { action: 'proof.send' }, orderBy: { createdAt: 'asc' }, select: { createdAt: true, detail: true } })
+  const firstSend = new Map()
+  for (const e of sends) { const id = e.detail?.orderId; if (id && !firstSend.has(id)) firstSend.set(id, e.createdAt) }
+  const DAY = 24 * HOUR
+  const days = list => { const s = [...list].sort((a, b) => a - b); return s.length ? { meanDays: s.reduce((a, b) => a + b, 0) / s.length, medianDays: quantile(s, 0.5), p90Days: quantile(s, 0.9) } : { meanDays: null, medianDays: null, p90Days: null } }
+  const firstLook = [], toFinal = [], rounds = []
+  let count = 0, finalOnTime = 0, firstLookOnTime = 0, noProofs = 0
+  let openPastDue = 0, openNoProofsPastDue = 0
+  const now = new Date()
+  for (const o of orders) {
+    const due = o.dueDate || new Date(o.createdAt.getTime() + (o.isRushOrder ? 4 : 14) * DAY)
+    const v1 = firstSend.get(o.id) || (o.proofs.length ? new Date(Math.min(...o.proofs.map(p => p.createdAt.getTime()))) : null)
+    if (o.status !== 'completed') {
+      if (due < now) { openPastDue++; if (!v1) openNoProofsPastDue++ }
+      continue
+    }
+    const done = completedAt.get(o.orderNumber) || o.designCompletedAt || o.researchedAt
+    if (!done || done < since || done >= until) continue
+    count++
+    if (done <= due) finalOnTime++
+    if (!v1 || v1 > done) { noProofs++; continue }
+    if (v1 <= due) firstLookOnTime++
+    firstLook.push((v1 - o.createdAt) / DAY)
+    toFinal.push((done - v1) / DAY)
+    rounds.push(Math.max(1, ...o.proofs.map(p => p.batch)))
+  }
+  const pct = (n, d) => d ? Math.round((100 * n) / d) : null
+  return {
+    count,
+    finalOnTime, finalOnTimePct: pct(finalOnTime, count),
+    withProofs: firstLook.length,
+    firstLookOnTime, firstLookOnTimePct: pct(firstLookOnTime, firstLook.length),
+    firstLook: days(firstLook),
+    toFinal: days(toFinal),
+    meanRounds: rounds.length ? rounds.reduce((a, b) => a + b, 0) / rounds.length : null,
+    noProofs,
+    openPastDue, openNoProofsPastDue,
+  }
 }
 
 /**

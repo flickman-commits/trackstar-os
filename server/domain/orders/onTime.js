@@ -1,6 +1,7 @@
 /**
  * The header's pulse on getting standard orders out on time. Each order has
- * its own deadline, two days after we could start on it, and the questions
+ * its own deadline, a day and a half after we could start on it (two days
+ * until Oct 26, 2026), and the questions
  * are: of the orders whose deadline passed in the window, how many were out
  * before it; and which open orders are past theirs right now.
  *
@@ -41,7 +42,7 @@ async function computeOnTimeFresh(days) {
   const now = new Date()
   const since = new Date(now.getTime() - days * DAY)
   // A deadline in the window belongs to an order started within the window
-  // plus the two days and the longest pauses; a month back covers it. Open
+  // plus the deadline and the longest pauses; a month back covers it. Open
   // orders are read whatever their age, for the late list.
   const floor = new Date(since.getTime() - 30 * DAY)
   const orders = await prisma.order.findMany({
