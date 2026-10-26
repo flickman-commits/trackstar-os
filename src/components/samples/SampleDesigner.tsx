@@ -9,6 +9,7 @@ import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, RefreshCw, Search, 
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { btnPrimary, btnSecondary, textLink } from '@/lib/ui'
+import PrintPicker from '@/components/PrintPicker'
 
 const field = 'w-full px-3 py-2 text-sm border border-border-gray rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-off-black/10'
 
@@ -25,6 +26,9 @@ type State = {
   fileUrl: string | null
 }
 
+/** A store print, for the race's picture in the picker. */
+export type DesignPrint = { race: string; edition: string | null; image: string | null }
+
 async function post<T>(body: Record<string, unknown>): Promise<T> {
   const r = await apiFetch('/api/samples', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const d = await r.json().catch(() => ({}))
@@ -40,7 +44,7 @@ const STATUS: Record<string, string> = {
   ambiguous: 'More than one possible match',
 }
 
-export default function SampleDesigner({ onUse }: { onUse: (file: { name: string; url: string }, title: string) => void }) {
+export default function SampleDesigner({ prints, onUse }: { prints: DesignPrint[] | null; onUse: (file: { name: string; url: string }, title: string) => void }) {
   const [races, setRaces] = useState<{ raceName: string; years: number[] | null }[] | null>(null)
   const [workersOnline, setWorkersOnline] = useState(0)
   const [raceName, setRaceName] = useState('')
@@ -81,6 +85,11 @@ export default function SampleDesigner({ onUse }: { onUse: (file: { name: string
   }
 
   const years = races?.find(r => r.raceName === raceName)?.years
+  // The races a worker can design, with the store print's picture (the race's own print over a World Majors one).
+  const raceOptions = races && races.map(x => {
+    const own = prints?.filter(p => p.race === x.raceName).sort((a, b) => Number(Boolean(a.edition)) - Number(Boolean(b.edition)))[0]
+    return { title: x.raceName, label: x.raceName, image: own?.image || null }
+  })
   const r = state?.result
   const found = r?.status === 'found'
   // What the render still needs, past the result itself (shown above it).
@@ -93,10 +102,7 @@ export default function SampleDesigner({ onUse }: { onUse: (file: { name: string
         <p className="text-sm text-off-black/60">No race can be designed right now: no render worker with templates has checked in. Upload a PDF instead.</p>
       ) : (
         <>
-          <select value={raceName} onChange={e => setRaceName(e.target.value)} className={field} disabled={!races}>
-            <option value="">{races ? 'Pick the race' : 'Loading races...'}</option>
-            {races?.map(x => <option key={x.raceName} value={x.raceName}>{x.raceName}</option>)}
-          </select>
+          <PrintPicker value={raceName || null} options={raceOptions} onChange={o => setRaceName(o.title)} placeholder="Pick the race" />
           <div className="grid grid-cols-[1fr_96px] gap-2">
             <input value={runnerName} onChange={e => setRunnerName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && canFind) find() }} placeholder="Runner's name, as on the results" className={field} />
             {years?.length ? (

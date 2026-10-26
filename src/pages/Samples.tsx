@@ -14,7 +14,7 @@ import GelatoSample from '@/components/samples/GelatoSample'
 import { btnSecondary, pageShell, sectionLabel, infoCard, cardLabel } from '@/lib/ui'
 
 interface Variant { variantId: string; size: string; frame: string | null; price: number }
-interface Product { productId: string; title: string; label: string; image: string | null; variants: Variant[] }
+interface Product { productId: string; title: string; label: string; race: string; edition: string | null; image: string | null; variants: Variant[] }
 interface Line { key: number; product: Product | null; size: string; frame: string; quantity: number; runnerName: string; raceYear: string; bib: string; time: string; unitPrice: string }
 
 const field = 'w-full px-3 py-2 text-sm border border-border-gray rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-off-black/10'
@@ -30,7 +30,7 @@ export default function Samples() {
   const [products, setProducts] = useState<Product[] | null>(null)
   // Artelo ships from the US through Shopify; Gelato prints overseas from a finished PDF.
   const [provider, setProvider] = useState<'artelo' | 'gelato'>('artelo')
-  const [gelatoProducts, setGelatoProducts] = useState<{ uid: string; label: string }[]>([])
+  const [gelatoProducts, setGelatoProducts] = useState<{ uid: string; label: string; size: string; frame: string }[]>([])
   const [loadErr, setLoadErr] = useState<string | null>(null)
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
@@ -122,7 +122,7 @@ export default function Samples() {
             ))}
           </div>
           {provider === 'gelato' ? (
-            <GelatoSample products={gelatoProducts} onSent={loadSpend} />
+            <GelatoSample products={gelatoProducts} prints={products} onSent={loadSpend} />
           ) : sent ? (
             <div className="bg-white border border-border-gray rounded-lg p-6 max-w-xl">
               <div className="text-lg font-semibold text-off-black">Sample {sent.name} is in Shopify</div>

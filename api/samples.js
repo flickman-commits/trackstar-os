@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       if (req.query?.view === 'spend') return res.status(200).json(await sampleSpend())
       if (req.query?.view === 'design-races') return res.status(200).json(await designRaces())
-      return res.status(200).json({ products: await sampleCatalog(), gelatoProducts: GELATO_PRODUCTS.map(({ uid, label }) => ({ uid, label })) })
+      return res.status(200).json({ products: await sampleCatalog(), gelatoProducts: GELATO_PRODUCTS.map(({ uid, label, size, frame }) => ({ uid, label, size, frame })) })
     }
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
     const b = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})

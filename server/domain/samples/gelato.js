@@ -6,7 +6,9 @@
  *
  * The standard sample is the one Matt sent to Germany (Gelato order
  * G-260917144809): a 12x18 premium wooden mounted framed poster, black frame,
- * premium matte paper. Shipping defaults to the cheapest method Gelato quotes.
+ * premium matte paper. The same frame comes in natural wood (Gelato's
+ * natural-wood_wood, a little dearer: $44.18 against $41.78 to London).
+ * Shipping defaults to the cheapest method Gelato quotes.
  */
 import { createHash } from 'crypto'
 import prisma from '../../db.js'
@@ -16,6 +18,7 @@ import { recordSampleCostSafely } from './costs.js'
 
 export const GELATO_PRODUCTS = [
   { uid: 'framed_poster_mounted_premium_300x450-mm-12x18-inch_black_wood_w20xt20-mm_plexiglass_300x450-mm-12x18-inch_200-gsm-80lb-uncoated_4-0_ver', label: '12x18, black wood frame, matte paper', size: '12x18', frame: 'Black Premium Oak' },
+  { uid: 'framed_poster_mounted_premium_300x450-mm-12x18-inch_natural-wood_wood_w20xt20-mm_plexiglass_300x450-mm-12x18-inch_200-gsm-80lb-uncoated_4-0_ver', label: '12x18, natural wood frame, matte paper', size: '12x18', frame: 'Natural Premium Oak' },
 ]
 
 // Public, because Gelato fetches the file by URL (the bulk print files live here too).

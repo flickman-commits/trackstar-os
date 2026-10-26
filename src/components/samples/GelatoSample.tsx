@@ -10,7 +10,7 @@ import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { parseAddress } from '@/lib/parseAddress'
 import { btnPrimary, btnSecondary, sectionLabel, infoCard, segment, segmentGroup } from '@/lib/ui'
-import SampleDesigner from './SampleDesigner'
+import SampleDesigner, { type DesignPrint } from './SampleDesigner'
 
 const field = 'w-full px-3 py-2 text-sm border border-border-gray rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-off-black/10'
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`
@@ -24,8 +24,14 @@ async function post<T>(body: Record<string, unknown>): Promise<T> {
   return d as T
 }
 
-export default function GelatoSample({ products, onSent }: { products: { uid: string; label: string }[]; onSent: () => void }) {
-  const [productUid, setProductUid] = useState(products[0]?.uid || '')
+type GelatoProduct = { uid: string; label: string; size: string; frame: string }
+
+export default function GelatoSample({ products, prints, onSent }: { products: GelatoProduct[]; prints: DesignPrint[] | null; onSent: () => void }) {
+  const [size, setSize] = useState('12x18')
+  const [frame, setFrame] = useState('Black Premium Oak')
+  const sizes = [...new Set(products.map(p => p.size))]
+  const frames = products.filter(p => p.size === size).map(p => p.frame)
+  const productUid = (products.find(p => p.size === size && p.frame === frame) || products.find(p => p.size === size) || products[0])?.uid || ''
   const [source, setSource] = useState<'design' | 'upload'>('design')
   // A new key starts the designer over after a send.
   const [round, setRound] = useState(0)
@@ -85,9 +91,6 @@ export default function GelatoSample({ products, onSent }: { products: { uid: st
       <div className="space-y-4 min-w-0">
         <h2 className={sectionLabel}>The print</h2>
         <div className={`${infoCard} space-y-3`}>
-          <select value={productUid} onChange={e => { setProductUid(e.target.value); setQuote(null) }} className={field}>
-            {products.map(p => <option key={p.uid} value={p.uid}>{p.label}</option>)}
-          </select>
           <div className={segmentGroup}>
             {([['design', 'Make the design'], ['upload', 'Upload a PDF']] as const).map(([k, l]) => (
               <button key={k} onClick={() => setSource(k)} className={segment(source === k)}>{l}</button>
@@ -97,7 +100,7 @@ export default function GelatoSample({ products, onSent }: { products: { uid: st
             <div className="flex items-center gap-2 text-sm"><FileText className="w-4 h-4 text-emerald-700" /><span className="font-medium text-off-black truncate">{file.name}</span><span className="text-off-black/50 shrink-0">is the print</span></div>
           )}
           <div className={source === 'design' ? '' : 'hidden'}>
-            <SampleDesigner key={round} onUse={(f, t) => { setFile(f); setQuote(null); setTitle(t) }} />
+            <SampleDesigner key={round} prints={prints} onUse={(f, t) => { setFile(f); setQuote(null); setTitle(t) }} />
           </div>
           {source === 'upload' && (
             <label className={`flex items-center gap-3 rounded-md border-2 border-dashed px-4 py-5 cursor-pointer ${file ? 'border-emerald-300 bg-emerald-50/40' : 'border-border-gray hover:border-off-black/30'}`}>
@@ -106,6 +109,10 @@ export default function GelatoSample({ products, onSent }: { products: { uid: st
               <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload(f) }} />
             </label>
           )}
+          <div className="grid grid-cols-2 gap-2">
+            <select value={size} onChange={e => { setSize(e.target.value); setQuote(null) }} className={field} title="Size">{sizes.map(x => <option key={x}>{x}</option>)}</select>
+            <select value={frame} onChange={e => { setFrame(e.target.value); setQuote(null) }} className={field} title="Frame">{frames.map(x => <option key={x}>{x}</option>)}</select>
+          </div>
           <input value={title} onChange={e => setTitle(e.target.value)} placeholder="What it is, for sample spend (e.g. Berlin Marathon, Anna)" className={field} />
         </div>
       </div>

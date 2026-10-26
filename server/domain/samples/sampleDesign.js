@@ -23,7 +23,8 @@ import { formatTime, formatPace } from '../../lib/printFormat.js'
 import { GelatoError } from '../../services/gelato.js'
 
 const PUBLIC_BUCKET = 'order-proofs'
-// The one Gelato product (gelato.js GELATO_PRODUCTS): 12x18 in a black frame.
+// Gelato's prints are 12x18 (gelato.js GELATO_PRODUCTS). The frame is picked at
+// send time and does not change the design, so the design's order keeps black.
 const SIZE = '12x18'
 const FRAME = 'Black Premium Oak'
 
