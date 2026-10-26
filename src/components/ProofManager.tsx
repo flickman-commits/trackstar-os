@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import Linkify from '@/components/Linkify'
 import { Upload, Copy, Loader2, Check, ImagePlus, RefreshCw, CheckCircle2, AlertTriangle, X, Send, RotateCcw, MessageSquare, ExternalLink, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
@@ -58,6 +58,9 @@ interface ProofManagerProps {
   // The order view's sidebar carries Re-send and Message customer as actions:
   // given this, they leave the proofs area and the messages open as a dialog.
   onActions?: (a: ProofActions) => void
+  // The section heading. The approval link's Copy / Open / Regenerate sit on
+  // its right; the link itself is not shown.
+  heading?: ReactNode
 }
 
 export type ProofActions = { resend: (() => void) | null; resending: boolean; openMessages: () => void; newReply: boolean; messageCount: number }
@@ -116,7 +119,7 @@ function LabelPicker({ value, options, onChange, disabled, className = '' }: {
   )
 }
 
-export default function ProofManager({ orderId, designStatus, customerEmail, onDesignStatusChange, onLatestFeedback, disableEmail, allowGroups, onActions }: ProofManagerProps) {
+export default function ProofManager({ orderId, designStatus, customerEmail, onDesignStatusChange, onLatestFeedback, disableEmail, allowGroups, onActions, heading }: ProofManagerProps) {
   const [proofs, setProofs] = useState<Proof[]>([])
   const [approvalToken, setApprovalToken] = useState<ApprovalToken | null>(null)
   const [approvalUrl, setApprovalUrl] = useState<string | null>(null)
@@ -778,41 +781,40 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
   return (
     <div className="space-y-3" onPaste={handlePaste}>
       {lightbox}
-      {/* Approval Link — compact inline */}
-      {approvalUrl ? (
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            readOnly
-            value={approvalUrl}
-            className="flex-1 text-[10px] bg-blue-50 border border-blue-200 rounded px-2 py-1.5 text-blue-800 font-mono truncate"
-          />
-          <button
-            onClick={copyLink}
-            className="px-2 py-1.5 text-[10px] font-medium text-blue-600 hover:text-blue-800 rounded transition-colors flex items-center gap-1"
-          >
-            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-            {copied ? 'Copied' : 'Copy'}
-          </button>
-          <a
-            href={approvalUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-2 py-1.5 text-[10px] font-medium text-blue-600 hover:text-blue-800 rounded transition-colors flex items-center gap-1"
-            title="Open the portal in a new tab"
-          >
-            <ExternalLink className="w-3 h-3" />
-            Open
-          </a>
-          <button
-            onClick={generateToken}
-            className="text-[10px] text-off-black/30 hover:text-off-black/50 transition-colors"
-            title="Regenerate link"
-          >
-            <RefreshCw className="w-3 h-3" />
-          </button>
-        </div>
-      ) : null /* Sending the proofs makes the link; there is nothing to generate by hand. */}
+      {/* The heading, with the approval link's actions on its right. Sending
+          the proofs makes the link; there is nothing to generate by hand. */}
+      <div className="flex items-center justify-between gap-2 -mb-1.5">
+        {heading}
+        {approvalUrl && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={copyLink}
+              className="px-1.5 py-0.5 text-[10px] font-medium text-blue-600 hover:text-blue-800 rounded transition-colors flex items-center gap-1"
+              title="Copy the approval link"
+            >
+              {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+              {copied ? 'Copied' : 'Copy link'}
+            </button>
+            <a
+              href={approvalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-1.5 py-0.5 text-[10px] font-medium text-blue-600 hover:text-blue-800 rounded transition-colors flex items-center gap-1"
+              title="Open the portal in a new tab"
+            >
+              <ExternalLink className="w-3 h-3" />
+              Open
+            </a>
+            <button
+              onClick={generateToken}
+              className="px-1 py-0.5 text-[10px] text-off-black/30 hover:text-off-black/50 transition-colors"
+              title="Regenerate link"
+            >
+              <RefreshCw className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Proof History — thumbnail grid grouped by batch */}
       {(() => {

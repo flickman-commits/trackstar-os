@@ -1711,10 +1711,12 @@ Thank you!`
                   {/* Proofs & Approval: the main work until it is sent to production. */}
                   {ds !== 'sent_to_production' && (
                     <div>
-                      <h4 className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1.5">
-                        Proofs &amp; Approval{selectedOrder.proofCount ? <span className="ml-1 text-off-black/30">({selectedOrder.proofCount})</span> : null}
-                      </h4>
                       <ProofManager
+                        heading={
+                          <h4 className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider">
+                            Proofs &amp; Approval{selectedOrder.proofCount ? <span className="ml-1 text-off-black/30">({selectedOrder.proofCount})</span> : null}
+                          </h4>
+                        }
                         orderId={selectedOrder.id}
                         orderNumber={selectedOrder.orderNumber}
                         displayOrderNumber={selectedOrder.displayOrderNumber}
