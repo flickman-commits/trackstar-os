@@ -139,6 +139,12 @@ function SendStatus({ d, compact }: { d: Design; compact: boolean }) {
           {s.state === 'sent' ? 'Artelo has it as Received.' : s.state === 'waiting' ? 'The Artelo order goes once every print on it is approved.' : 'Attached to the Artelo order and sent. Hold it if something is wrong.'}
         </p>
       </div>
+      {/* Send right away: skip the rest of the hold; the sender takes it within a minute. */}
+      {s.state === 'queued' && d.canManage && (
+        <button onClick={() => { void d.sendAction('send-now') }} disabled={d.busy} title="Skip the wait: it goes to Artelo within a minute" className={`inline-flex items-center gap-1.5 px-4 ${pad} rounded-md bg-[#4600D6] border-2 border-[#4600D6] text-white font-semibold hover:bg-[#3a00b3] disabled:opacity-50`}>
+          {d.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Send right away
+        </button>
+      )}
       {s.state === 'queued' && d.canManage && (
         <button onClick={() => { void d.sendAction('hold') }} disabled={d.busy} className={`inline-flex items-center gap-1.5 px-4 ${pad} rounded-md bg-white border-2 border-[#4600D6]/30 text-[#4600D6] font-semibold hover:bg-[#4600D6]/[0.04] disabled:opacity-50`}>
           {d.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pause className="w-4 h-4" />} Hold

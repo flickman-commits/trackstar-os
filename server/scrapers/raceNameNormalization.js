@@ -55,6 +55,11 @@ export function parseRaceNameFromTitle(productTitle) {
   // Strip leading "Personalized " prefix (new title format)
   raceName = raceName.replace(/^Personalized\s+/i, '').trim()
 
+  // A listing that sells the half too says so in its title: "Eugene Marathon
+  // (+ Half Marathon) Personalized Poster". The race is still the marathon's;
+  // the event comes from the order, not the title.
+  raceName = raceName.replace(/\s*\(\s*\+\s*half(\s+marathon)?\s*\)\s*/i, ' ').trim()
+
   for (const suffix of TITLE_SUFFIXES) {
     if (raceName.toLowerCase().endsWith(suffix.toLowerCase())) {
       raceName = raceName.slice(0, -suffix.length).trim()
