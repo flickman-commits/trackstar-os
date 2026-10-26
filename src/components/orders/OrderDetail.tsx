@@ -104,8 +104,8 @@ export default function OrderDetail({
   const [savingYear, setSavingYear] = useState(false)
   useEffect(() => { setYearDraft(null) }, [selectedOrder?.id])
 
-  // Change frame: edits the Shopify order, and Artelo follows (changeFrame.js).
-  const [frameMenu, setFrameMenu] = useState<{ current: string | null; options: { variantId: string; frame: string }[] } | null>(null)
+  // Change frame: edits the Shopify order, and Artelo follows (support/changeItem.js, as Support's Change size or frame).
+  const [frameMenu, setFrameMenu] = useState<{ current: string | null; frames: { frame: string; difference: number }[] } | null>(null)
   const [frameBusy, setFrameBusy] = useState(false)
   useEffect(() => { setFrameMenu(null) }, [selectedOrder?.id])
   const canChangeFrame = isAdmin && selectedOrder?.source === 'shopify' && selectedOrder.status !== 'completed'
@@ -118,8 +118,8 @@ export default function OrderDetail({
       const r = await apiFetch('/api/orders/change-frame', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'options', orderId: selectedOrder.id }) })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d.error || 'Could not read the frames')
-      if (!d.options?.length) throw new Error(`No other frame at ${d.size || 'this size'} and the same price`)
-      setFrameMenu({ current: d.current, options: d.options })
+      if (!d.frames?.length) throw new Error(`No other frame at ${d.size || 'this size'}`)
+      setFrameMenu({ current: d.current, frames: d.frames })
     } catch (e) {
       setToast({ message: e instanceof Error ? e.message : 'Could not read the frames', type: 'error' })
     } finally {
@@ -127,16 +127,18 @@ export default function OrderDetail({
     }
   }
 
-  const changeFrameTo = async (option: { variantId: string; frame: string }) => {
+  const changeFrameTo = async (option: { frame: string; difference: number }) => {
     if (!selectedOrder) return
-    if (!confirm(`Change this print from ${frameMenu?.current || 'its frame'} to ${option.frame}? The Shopify order is edited (the customer is not emailed or charged) and Artelo picks it up within about 10 minutes.`)) return
+    const money = option.difference > 0 ? `It costs $${option.difference.toFixed(2)} more, so Shopify emails the customer an invoice for the difference.`
+      : option.difference < 0 ? `It costs $${(-option.difference).toFixed(2)} less; refund the difference in Shopify.` : 'Same price: the customer is not emailed or charged.'
+    if (!confirm(`Change this print from ${frameMenu?.current || 'its frame'} to ${option.frame}? ${money} Artelo picks it up within about 10 minutes.`)) return
     setFrameBusy(true)
     try {
-      const r = await apiFetch('/api/orders/change-frame', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'change', orderId: selectedOrder.id, variantId: option.variantId }) })
+      const r = await apiFetch('/api/orders/change-frame', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'change', orderId: selectedOrder.id, frame: option.frame }) })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d.error || 'Could not change the frame')
       setFrameMenu(null)
-      setToast({ message: d.outstanding > 0 ? `Frame changed to ${d.to}, but Shopify shows $${d.outstanding.toFixed(2)} owed. Check the order in Shopify.` : `Frame changed to ${d.to}. Artelo and this order update within about 10 minutes.`, type: d.outstanding > 0 ? 'error' : 'success' })
+      setToast({ message: `Changed to ${d.now}.${d.invoiced ? ` Shopify invoiced the customer $${Number(d.owed).toFixed(2)}.` : ''} Artelo follows within about 10 minutes.`, type: 'success' })
       await fetchOrders()
     } catch (e) {
       setToast({ message: e instanceof Error ? e.message : 'Could not change the frame', type: 'error' })
@@ -2005,9 +2007,10 @@ Thank you!`
                             {frameMenu && (
                               <div className="absolute left-0 top-full mt-1 z-20 min-w-[11rem] bg-white border border-border-gray rounded-md shadow-lg p-1">
                                 <div className="px-2 py-1 text-[10px] font-semibold text-off-black/40 uppercase tracking-wider">Change frame to</div>
-                                {frameMenu.options.map(o => (
-                                  <button key={o.variantId} onClick={() => { void changeFrameTo(o) }} disabled={frameBusy} className="w-full text-left px-2 py-1.5 rounded text-sm text-off-black hover:bg-off-black/5 disabled:opacity-50">
+                                {frameMenu.frames.map(o => (
+                                  <button key={o.frame} onClick={() => { void changeFrameTo(o) }} disabled={frameBusy} className="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded text-sm text-off-black hover:bg-off-black/5 disabled:opacity-50">
                                     {o.frame}
+                                    {o.difference !== 0 && <span className="text-xs text-off-black/45">{o.difference > 0 ? '+' : '−'}${Math.abs(o.difference).toFixed(0)}</span>}
                                   </button>
                                 ))}
                               </div>
