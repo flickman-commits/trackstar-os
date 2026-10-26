@@ -109,6 +109,17 @@ partial sweep is not a clean one.
    - A race that has not run cannot be verified against results, so an id saved
      before race day is checked again after it.
 
+9. **Races with no scraper** (`no_scraper`) — open orders for a race the tool
+   cannot look up at all. If it is a race we already have under another name,
+   add the alias. If it is a real new race, build it with the add-race-scraper
+   skill when budget allows (it counts toward the 5 repairs), else list it under
+   "Coming up" work, not `needsMatt`: Eli researches those orders by hand.
+
+These findings used to ping Matt in Slack one by one (Instant Lookup errors,
+"year not configured", "no scraper"). Since 2026-10-26 they come only to you,
+so working them is the whole point; Matt hears about them from your report.
+Years before 2020 never appear: they are researched by hand, never scraped.
+
 **A race that just ran** (`race_results_untested`) moves ahead of everything
 except paid-order problems. Its orders arrive in the next few days and every one
 needs this year's results. Once results are posted: find the event id if it is

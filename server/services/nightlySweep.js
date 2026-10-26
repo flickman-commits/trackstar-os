@@ -27,7 +27,7 @@ import prisma from '../../api/_lib/prisma.js'
 import { buildCatalogCoverage, coveredYears, NEEDS_HELP, STATUS } from '../lib/scraperHealth.js'
 import { repairPlan } from '../lib/scraperRepair.js'
 import { syncProductCatalog } from './shopifyProducts.js'
-import { getRaceConfigSummaries, getSupportedRaces, getVerifiedRaceDates, getScraperForRace } from '../scrapers/index.js'
+import { getRaceConfigSummaries, getSupportedRaces, getVerifiedRaceDates, getScraperForRace, hasScraperForRace } from '../scrapers/index.js'
 import { ensureOverridesLoaded } from '../scrapers/scraperOverrides.js'
 import { verificationOverview } from '../domain/races/verification.js'
 
@@ -383,8 +383,9 @@ async function raceDateCheck() {
 /**
  * The failures that have already pinged Slack.
  *
- * Two alerts fire in real time and then evaporate into a channel nobody reads
- * back: the Instant Lookup error, when a shopper's lookup hits a timing site
+ * These used to ping Matt in real time; since 2026-10-26 they do not (only a
+ * storefront outage does, lookupObservability.js), and this check is where
+ * they land instead. Three kinds: the Instant Lookup error, when a shopper's lookup hits a timing site
  * that is down or too slow, and "year not configured", when a scraper exists
  * but that year's event IDs were never added. Both are exactly the kind of
  * thing this sweep is for, and both were invisible to it.
@@ -454,7 +455,8 @@ async function alertedFailureCheck() {
   // clears every order behind it.
   const byRaceYear = new Map()
   for (const r of notConfigured) {
-    if (!r.race) continue
+    // Before 2020 is researched by hand, never scraped (CLAUDE.md), so a gap there is not a finding.
+    if (!r.race || r.race.year < 2020) continue
     const key = `${r.race.raceName}|${r.race.year}`
     if (!byRaceYear.has(key)) {
       byRaceYear.set(key, { raceName: r.race.raceName, year: r.race.year, open: 0 })
@@ -476,9 +478,34 @@ async function alertedFailureCheck() {
     })
   }
 
+  // ── Open orders for a race with no scraper at all ──
+  // Research throws before it writes anything for these, so they are read off
+  // the open orders. One finding per race.
+  await ensureOverridesLoaded()
+  const open = await prisma.order.findMany({
+    where: { status: { not: 'completed' }, trackstarOrderType: { notIn: ['custom', 'sample', 'race_partner'] }, raceYear: { gte: 2020 } },
+    select: { raceName: true, raceNameOverride: true },
+  })
+  const noScraper = new Map()
+  for (const o of open) {
+    const name = o.raceNameOverride || o.raceName
+    // Non-race products (the Catch Me If You Can apple posters) carry their product title as the race.
+    if (!name || /framed poster/i.test(name) || hasScraperForRace(name)) continue
+    noScraper.set(name, (noScraper.get(name) || 0) + 1)
+  }
+  for (const [race, n] of noScraper) {
+    findings.push({
+      severity: 'medium',
+      kind: 'no_scraper',
+      subject: race,
+      detail: `${n} open order${n === 1 ? '' : 's'} for a race with no scraper. Add one (add-race-scraper) or an alias if it is a known race under another name; otherwise it is researched by hand.`,
+      action: 'investigate',
+    })
+  }
+
   return {
     findings,
-    stats: { lookupErrorRaces: lookupRows.length, unconfiguredYears: byRaceYear.size },
+    stats: { lookupErrorRaces: lookupRows.length, unconfiguredYears: byRaceYear.size, racesWithoutScraper: noScraper.size },
   }
 }
 

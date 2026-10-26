@@ -4,9 +4,11 @@
  * Three knobs:
  *   1) logLookup()  — structured one-line `[LOOKUP] …` console log per request.
  *                     Grep it in Vercel logs to see every lookup attempt.
- *   2) maybeAlertLookupError() — throttled Slack alert on upstream errors.
- *                     De-duplicated per (race+errorType) for 10 minutes so a
- *                     dead timing site doesn't spam your DMs.
+ *   2) maybeAlertLookupError() — Slack only when a race's lookup is down for
+ *                     shoppers (an outage, not one slow search). Every single
+ *                     error is a LookupLog row, and the nightly sweep agent
+ *                     reads those and fixes what it can (nightlySweep.js,
+ *                     alertedFailureCheck), so one-off errors never ping.
  *   3) recordLookup() / getRecentLookups() — persists each lookup to Postgres
  *                     (LookupLog table) and exposes the last 200 via
  *                     /api/admin/lookups-recent. Persists because Vercel runs
@@ -17,8 +19,12 @@
 import prisma from '../../api/_lib/prisma.js'
 import { fetchWithTimeout } from './fetchWithTimeout.js'
 
-const ALERT_DEDUPE_MS = 10 * 60 * 1000 // 10 minutes per race+errorType
-const lastAlertAt = new Map() // key `race::errorType` -> ms timestamp
+// An outage: in the last hour, at least OUTAGE_MIN shopper lookups for one race
+// failed and they were at least half of its lookups. One ping per race per 6 hours.
+const OUTAGE_WINDOW_MS = 60 * 60 * 1000
+const OUTAGE_MIN = 8
+const ALERT_DEDUPE_MS = 6 * 60 * 60 * 1000
+const lastAlertAt = new Map() // race -> ms timestamp
 
 /** IPs are anonymized — useful to spot a single source spamming, but we never
  * need the raw value. Names are NOT anonymized: this is an internal dashboard
@@ -120,9 +126,11 @@ export async function getRecentLookups(limit = 200, race = null, sinceMs = null)
 }
 
 /**
- * Best-effort Slack alert for lookup errors. Throttled per (race+errorType).
- * Fires when the upstream timing site is down or the scraper threw — not for
- * ordinary not-founds (those are expected when shoppers typo their name).
+ * Slack, but only for an outage: when a race's Instant Lookup is failing for
+ * shoppers right now (OUTAGE_MIN failures in the last hour, at least half its
+ * lookups), since that loses sales before the nightly sweep runs. A single
+ * slow or failed search is not a ping: it is a LookupLog row the sweep agent
+ * picks up and fixes.
  *
  * @param {Object} opts
  * @param {string} opts.race        - canonical race name
@@ -131,25 +139,31 @@ export async function getRecentLookups(limit = 200, race = null, sinceMs = null)
  * @param {string} [opts.detail]    - free-text detail
  */
 export async function maybeAlertLookupError({ race, year, errorType, detail }) {
-  const key = `${race}::${errorType}`
+  if (!race) return
   const now = Date.now()
-  const last = lastAlertAt.get(key) || 0
-  if (now - last < ALERT_DEDUPE_MS) return
-  lastAlertAt.set(key, now)
+  if (now - (lastAlertAt.get(race) || 0) < ALERT_DEDUPE_MS) return
 
-  // Prefer a dedicated webhook if you want lookup alerts in their own channel,
-  // otherwise fall back to the same chain the research-service alerts use.
   const slackUrl =
     process.env.SLACK_LOOKUP_WEBHOOK_URL ||
     process.env.SLACK_DM_WEBHOOK_URL ||
     process.env.SLACK_PROOF_WEBHOOK_URL
   if (!slackUrl) return
 
+  // Shoppers only, as in the sweep: local testing logs to the same table.
+  const where = { race, createdAt: { gte: new Date(now - OUTAGE_WINDOW_MS) }, ip: { notIn: ['::…', '', 'unknown'] } }
+  const [failed, total] = await Promise.all([
+    prisma.lookupLog.count({ where: { ...where, outcome: 'upstream_error' } }),
+    prisma.lookupLog.count({ where }),
+  ]).catch(() => [0, 0])
+  // This request's own row is written after this check, so count it here.
+  if (failed + 1 < OUTAGE_MIN || (failed + 1) / (total + 1) < 0.5) return
+  lastAlertAt.set(race, now)
+
   const text = [
-    `⚠️ *Instant Lookup error:* \`${race}\` ${year}`,
-    `Type: \`${errorType}\``,
-    detail ? `Detail: ${detail}` : null,
-    `_Throttled to one alert per race+type per 10 min._`,
+    `🔴 *Instant Lookup is down for ${race}*`,
+    `${failed + 1} of ${total + 1} shopper lookups failed in the last hour, so shoppers are not seeing their result before buying.`,
+    detail ? `Latest (${errorType}, ${year}): ${detail}` : null,
+    `_The nightly sweep looks into it either way. One ping per race every 6 hours._`,
   ].filter(Boolean).join('\n')
 
   try {

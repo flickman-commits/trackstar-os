@@ -14,7 +14,6 @@ import prisma from '../db.js'
 import { getScraperForRace, hasScraperForRace, getCanonicalRaceName, namedEventsFor } from '../scrapers/index.js'
 import { ensureOverridesLoaded } from '../scrapers/scraperOverrides.js'
 import WeatherService from './WeatherService.js'
-import { fetchWithTimeout } from '../lib/fetchWithTimeout.js'
 
 
 /**
@@ -1038,44 +1037,14 @@ export class ResearchService {
   }
 
   /**
-   * Send a Slack alert when a scraper is missing or a year isn't configured.
-   * De-duplicates by race+year+kind so we only notify once per missing config
-   * per process (no point spamming when 30 orders for the same race come in).
-   *
-   * Goes to SLACK_DM_WEBHOOK_URL if set (Matt's DM), otherwise the proof
-   * channel webhook so it doesn't get lost.
+   * A scraper missing or a year not configured. No Slack: these used to DM
+   * Matt per race-year and drowned the channel. The research record carries
+   * the status ('no_scraper', 'year_not_configured'), and the nightly sweep
+   * agent reads those and adds the missing years or scrapers
+   * (nightlySweep.js, alertedFailureCheck). Logged here for the request log.
    */
-  async _notifyMissingScraper({ kind, race, year, orderNumber, runner }) {
-    const dedupeKey = `${kind}:${race}:${year}`
-    if (!ResearchService._notifiedKeys) ResearchService._notifiedKeys = new Set()
-    if (ResearchService._notifiedKeys.has(dedupeKey)) return
-    ResearchService._notifiedKeys.add(dedupeKey)
-
-    const slackUrl = process.env.SLACK_DM_WEBHOOK_URL || process.env.SLACK_PROOF_WEBHOOK_URL
-    if (!slackUrl) return
-
-    const heading = kind === 'no_scraper'
-      ? `🚧 *No scraper for race:* \`${race}\``
-      : `🗓️ *${race} ${year} not configured yet*`
-    const detail = kind === 'no_scraper'
-      ? `An order came in for *${race}* but we don't have a scraper for this race. Either add one (or add an alias if it should match an existing scraper).`
-      : `The ${race} scraper exists but ${year} event/result IDs aren't in the config yet. Add them so this year's runners can be looked up.`
-    const text = [
-      heading,
-      detail,
-      `Order: \`${orderNumber}\` - runner: *${runner}*`,
-    ].join('\n')
-
-    try {
-      await fetchWithTimeout(slackUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      })
-      console.log(`[ResearchService] Slack alert sent: ${kind} for ${race} ${year}`)
-    } catch (err) {
-      console.warn('[ResearchService] Slack alert failed:', err.message)
-    }
+  async _notifyMissingScraper({ kind, race, year, orderNumber }) {
+    console.log(`[ResearchService] ${kind} for ${race} ${year} (order ${orderNumber}); left for the nightly sweep`)
   }
 
   /**
