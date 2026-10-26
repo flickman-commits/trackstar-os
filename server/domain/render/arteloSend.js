@@ -253,10 +253,11 @@ export async function sendOne(job) {
       console.log(`[artelo.send] Attached ${job.spec?.file || job.id} to ${displayNumber(order)} (${status})`)
     }
 
+    // Attached; the order's other prints still need their designs. Not a
+    // refusal: it waits (and can be marked complete) however long that takes.
     if (status === 'Missing Designs') {
       const minutes = job.arteloAttachedAt ? (Date.now() - new Date(job.arteloAttachedAt).getTime()) / MIN : 0
-      if (minutes > 60) return outcome(job, { error: 'Attached, but Artelo still says the order is missing designs. Check the other items on the Artelo order.', notify: true })
-      return outcome(job, { error: `${WAITING} on this order`, retryIn: 5 })
+      return outcome(job, { error: `${WAITING} on this order`, retryIn: minutes > 60 ? 30 : 5 })
     }
     if (status && status !== 'Pending Approval') return outcome(job, { error: `Artelo: ${status}`, retryIn: 30, notify: true })
 

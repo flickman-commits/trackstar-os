@@ -48,7 +48,7 @@ function raceRun(race, year) {
 function approvedStage(render, stage) {
   const s = sendStateOf({ ...render, review: 'approved' })
   if (s?.state === 'held') return stage('attach', 'Held', { fix: `Approved, and held from production${s.by ? ` by ${s.by}` : ''}. Send it to production when it is ready, or attach it in Artelo by hand.` })
-  if (s?.state === 'waiting') return stage('attach', 'Waiting on the other prints', { fix: 'Attached in Artelo. The Artelo order goes to production once every print on it is approved.' })
+  if (s?.state === 'waiting') return stage('attach', 'Uploaded, waiting on other prints', { fix: 'Attached to its item in Artelo. The Artelo order goes to production once every print on it has its design. Mark it complete if the rest is handled in Artelo.' })
   if (s?.state === 'manual') return stage('action', 'Expedited shipping', { kind: 'artelo', fix: 'Manually attach and add expedited shipping to this order in Artelo, then mark it complete.' })
   if (s?.state === 'blocked') return stage('action', 'Artelo would not take it', { kind: 'artelo', fix: `${s.reason.replace(/\.$/, '')}. ${s.next ? 'The tool tries again on its own.' : 'Sort it out in Artelo, then Send to production.'}` })
   if (s?.state === 'queued') return stage('attach', 'Sending to production', { fix: 'Approved. It is attached in Artelo and sent to production in a few minutes, unless someone holds it.' })

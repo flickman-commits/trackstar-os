@@ -164,16 +164,23 @@ export async function verificationOverview() {
 
 /** A person checked the calculated weather against the breakdown and confirms it for printing. */
 /**
- * A person checked a suggested race date against its sources and confirms it.
- * The date and its source stay as they are; only the confirmation is added.
+ * A person checked a race date against its sources and confirms it. The date
+ * stays as it is. A date with no source on file (one a config set, say) is
+ * confirmed with sourceUrl, the page the person checked it on, which is saved
+ * as its source.
  */
-export async function confirmRaceDate({ raceId, user }) {
+export async function confirmRaceDate({ raceId, user, sourceUrl = null }) {
   const race = await prisma.race.findUnique({ where: { id: Number(raceId) } })
   if (!race) throw new Error('Race not found')
   if (!race.raceDate) throw new Error('There is no date to confirm')
-  if (!race.raceDateSourceUrl && !race.raceDateEvidence) throw new Error('There is no source on file to confirm against')
+  let link = null
+  if (sourceUrl) {
+    try { link = new URL(String(sourceUrl).trim()) } catch { /* checked below */ }
+    if (!link || !/^https?:$/.test(link.protocol)) throw new Error('That is not a link. Paste the page that shows the race date.')
+  }
+  if (!link && !race.raceDateSourceUrl && !race.raceDateEvidence) throw new Error('There is no source on file to confirm against. Add a link to the page that shows the date.')
   const by = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'unknown'
-  const updated = await prisma.race.update({ where: { id: race.id }, data: { raceDateVerifiedAt: new Date(), raceDateVerifiedBy: user?.id || by, raceDateConfirmedByPerson: by } })
+  const updated = await prisma.race.update({ where: { id: race.id }, data: { raceDateVerifiedAt: new Date(), raceDateVerifiedBy: user?.id || by, raceDateConfirmedByPerson: by, ...(link ? { raceDateSourceUrl: link.toString() } : {}) } })
   await recordAudit({ action: 'race.date-confirm', summary: `${race.raceName} ${race.year}: confirmed race date ${race.raceDate.toISOString().slice(0, 10)}`, detail: { raceId: race.id }, actor: user })
   return updated
 }

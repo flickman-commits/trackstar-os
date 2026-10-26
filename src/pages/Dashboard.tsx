@@ -388,7 +388,7 @@ export default function Dashboard() {
       : send === 'sent' ? { stage: 'done', reason: 'Completed' }
       : send === 'queued' ? { stage: 'attach', reason: 'Sending to production', fix: 'Approved. It is attached in Artelo and sent to production in a few minutes, unless someone holds it.' }
       : send === 'held' ? { stage: 'attach', reason: 'Held', fix: 'Approved, and held from production. Send it to production when it is ready, or attach it in Artelo by hand.' }
-      : send === 'waiting' ? { stage: 'attach', reason: 'Waiting on the other prints', fix: 'Attached in Artelo. The Artelo order goes to production once every print on it is approved.' }
+      : send === 'waiting' ? { stage: 'attach', reason: 'Uploaded, waiting on other prints', fix: 'Attached to its item in Artelo. The Artelo order goes to production once every print on it has its design. Mark it complete if the rest is handled in Artelo.' }
       : send === 'manual' ? { stage: 'action', reason: 'Expedited shipping', kind: 'artelo', fix: 'Manually attach and add expedited shipping to this order in Artelo, then mark it complete.' }
       : send === 'blocked' ? { stage: 'action', reason: 'Artelo would not take it', kind: 'artelo', fix: design.job?.send?.reason || 'Artelo refused it.' }
       : { stage: 'attach', reason: 'Attach in Artelo', fix: 'The print is approved and in the Artelo library (Orders folder), but was not sent. Send it to production, or attach it in Artelo by hand and mark the order done.' }

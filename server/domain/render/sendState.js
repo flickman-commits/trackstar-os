@@ -13,6 +13,8 @@
  *   null     approved without sending (Approve only, or before Approve sent things)
  */
 export const WAITING = 'Waiting on the other prints'
+// What the sender wrote before 2026-10-26 when the other prints took over an hour.
+const OLD_WAITING = /^Attached, but Artelo still says the order is missing designs/
 export const EXPEDITED = 'Expedited shipping'
 
 // Waits that clear on their own within minutes: still "Sending to production", not a problem.
@@ -24,7 +26,7 @@ export function sendStateOf(job) {
   if (job.arteloSentAt) return { state: 'sent', at: job.arteloSentAt }
   if (job.sendHeldAt) return { state: 'held', at: job.sendHeldAt, by: job.sendHeldBy || null }
   if (job.sendError && job.sendError.startsWith(EXPEDITED)) return { state: 'manual', reason: job.sendError }
-  if (job.sendError && job.sendError.startsWith(WAITING)) return { state: 'waiting', reason: job.sendError, next: job.sendAfter }
+  if (job.sendError && (job.sendError.startsWith(WAITING) || OLD_WAITING.test(job.sendError))) return { state: 'waiting', reason: job.sendError, next: job.sendAfter }
   if (job.sendError && job.sendAfter && PASSING.test(job.sendError)) return { state: 'queued', at: job.sendAfter, reason: job.sendError }
   if (job.sendError) return { state: 'blocked', reason: job.sendError, next: job.sendAfter }
   if (job.sendAfter) return { state: 'queued', at: job.sendAfter }

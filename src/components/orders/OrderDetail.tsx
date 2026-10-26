@@ -572,16 +572,22 @@ export default function OrderDetail({
       fetchOrders()
     } finally { setConfirmingWeather(false) }
   }
-  // Confirm a suggested race date (read off a results page) against its sources.
+  // Confirm a race date against its sources. With no source on file (a date a
+  // config set), it asks for the page the date was checked on and saves it.
   const [confirmingDate, setConfirmingDate] = useState(false)
-  const confirmRaceDate = async (order: Order) => {
+  const confirmRaceDate = async (order: Order, askForSource = false) => {
     if (!order.raceId) return
+    let sourceUrl: string | null = null
+    if (askForSource) {
+      sourceUrl = window.prompt(`Paste a link that shows ${order.effectiveRaceName || order.raceName} ${order.effectiveRaceYear || order.raceYear} was on ${order.raceDate} (the race's site, a results page, a news story):`)?.trim() || null
+      if (!sourceUrl) return
+    }
     setConfirmingDate(true)
     try {
-      const res = await apiFetch('/api/races/confirm-weather', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ raceId: order.raceId, field: 'date' }) })
+      const res = await apiFetch('/api/races/confirm-weather', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ raceId: order.raceId, field: 'date', sourceUrl }) })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { setToast({ message: data.error || 'Could not confirm the date', type: 'error' }); return }
-      setSelectedOrder(prev => prev && prev.raceId === order.raceId ? { ...prev, raceDateVerified: true, raceDateConfirmedBy: data.raceDateConfirmedBy } : prev)
+      setSelectedOrder(prev => prev && prev.raceId === order.raceId ? { ...prev, raceDateVerified: true, raceDateConfirmedBy: data.raceDateConfirmedBy, ...(sourceUrl ? { raceDateSourceUrl: sourceUrl } : {}) } : prev)
       setToast({ message: `Race date confirmed for every ${order.effectiveRaceName || order.raceName} ${order.effectiveRaceYear || order.raceYear} order`, type: 'success' })
       fetchOrders()
     } finally { setConfirmingDate(false) }
@@ -2778,6 +2784,14 @@ Thank you!`
                               <>
                                 <span className="px-1.5 py-0.5 rounded font-medium bg-amber-50 text-amber-700 border border-amber-200" title="Read off a results page; a person has not checked it against the sources yet. Prints wait for it.">Suggested</span>
                                 <button type="button" onClick={() => confirmRaceDate(selectedOrder)} disabled={confirmingDate}
+                                  className="px-1.5 py-0.5 rounded font-semibold bg-off-black text-white hover:opacity-90 disabled:opacity-40">
+                                  {confirmingDate ? '…' : 'Confirm'}
+                                </button>
+                              </>
+                            ) : selectedOrder.raceId ? (
+                              <>
+                                <span className="px-1.5 py-0.5 rounded font-medium bg-amber-50 text-amber-700 border border-amber-200" title="No source on file for this date, so prints wait for it. Confirm asks for the page you checked it on.">No source</span>
+                                <button type="button" onClick={() => confirmRaceDate(selectedOrder, true)} disabled={confirmingDate}
                                   className="px-1.5 py-0.5 rounded font-semibold bg-off-black text-white hover:opacity-90 disabled:opacity-40">
                                   {confirmingDate ? '…' : 'Confirm'}
                                 </button>

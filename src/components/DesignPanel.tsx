@@ -15,8 +15,10 @@ import { btnPrimary, btnGhost, inputBase } from '@/lib/ui'
  * (server/domain/render/arteloSend.js); Approve only leaves it at Attach.
  */
 
-function WorkerDot({ d }: { d: Design }) {
+function WorkerDot({ d, small = false }: { d: Design; small?: boolean }) {
   const online = d.state?.workersOnline || []
+  // small: the dot alone, beside Re-render, with who is online on hover.
+  if (small) return <span className={`w-2 h-2 rounded-full ${d.offline ? 'bg-red-500' : 'bg-green-500'}`} title={d.offline ? 'Renderer offline: no render worker has checked in for a minute and a half' : `Renderer online: ${online.join(', ')}`} aria-label={d.offline ? 'Renderer offline' : 'Renderer online'} />
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px] text-off-black/55" title={d.offline ? 'No render worker has checked in for a minute and a half' : `Online: ${online.join(', ')}`}>
       <span className={`w-2 h-2 rounded-full ${d.offline ? 'bg-red-500' : 'bg-green-500'}`} aria-hidden />
@@ -59,6 +61,7 @@ export function DesignCard({ d }: { d: Design }) {
               {d.creating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Re-render
             </button>
           )}
+          {d.canManage && <WorkerDot d={d} small />}
         </div>
         {lightbox && (
           <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-6" onClick={() => setLightbox(false)}>
@@ -124,7 +127,7 @@ function rememberConfirm() { try { localStorage.setItem(confirmKey(), '1') } cat
 const clock = (t?: string | null) => t ? new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
 
 /** An approved print on its way to production: queued (Hold), waiting on the order's other prints, or sent. */
-function SendStatus({ d, compact }: { d: Design; compact: boolean }) {
+function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; onComplete?: () => void }) {
   const s = d.job?.send
   if (!s || !['queued', 'waiting', 'sent'].includes(s.state)) return null
   const pad = compact ? 'py-3 text-[15px]' : 'py-3.5 text-base'
@@ -133,16 +136,22 @@ function SendStatus({ d, compact }: { d: Design; compact: boolean }) {
       {s.state === 'sent' ? <Check className="w-5 h-5 text-green-700 shrink-0" /> : <Send className="w-5 h-5 text-[#4600D6] shrink-0" />}
       <div className="flex-1 min-w-0">
         <p className={`font-semibold ${s.state === 'sent' ? 'text-green-800' : 'text-[#4600D6]'}`}>
-          {s.state === 'sent' ? `Sent to production ${clock(s.at)}` : s.state === 'waiting' ? 'Attached in Artelo' : `Sending to production at ${clock(s.at)}`}
+          {s.state === 'sent' ? `Sent to production ${clock(s.at)}` : s.state === 'waiting' ? 'Uploaded, waiting on other prints' : `Sending to production at ${clock(s.at)}`}
         </p>
         <p className="text-xs text-off-black/60">
-          {s.state === 'sent' ? 'Artelo has it as Received.' : s.state === 'waiting' ? 'The Artelo order goes once every print on it is approved.' : 'Attached to the Artelo order and sent. Hold it if something is wrong.'}
+          {s.state === 'sent' ? 'Artelo has it as Received.' : s.state === 'waiting' ? 'Attached to its item in Artelo. The order goes to production once every print on it has its design.' : 'Attached to the Artelo order and sent. Hold it if something is wrong.'}
         </p>
       </div>
       {/* Send right away: skip the rest of the hold; the sender takes it within a minute. */}
       {s.state === 'queued' && d.canManage && (
         <button onClick={() => { void d.sendAction('send-now') }} disabled={d.busy} title="Skip the wait: it goes to Artelo within a minute" className={`inline-flex items-center gap-1.5 px-4 ${pad} rounded-md bg-[#4600D6] border-2 border-[#4600D6] text-white font-semibold hover:bg-[#3a00b3] disabled:opacity-50`}>
           {d.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Send right away
+        </button>
+      )}
+      {/* Its design is on the Artelo item, so it can be done here while the others catch up. */}
+      {s.state === 'waiting' && onComplete && (
+        <button onClick={onComplete} className={`inline-flex items-center gap-1.5 px-4 ${pad} rounded-md bg-green-600 border-2 border-green-600 text-white font-semibold hover:bg-green-700`}>
+          <Check className="w-4 h-4" /> {compact ? 'Complete' : 'Mark as complete'}
         </button>
       )}
       {s.state === 'queued' && d.canManage && (
@@ -210,7 +219,7 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
     return () => window.removeEventListener('keydown', onKey)
   }, [attachable, arteloOrderUrl, compact])
   // Approved and on its way to production: its status, and Hold.
-  if (d.visible && job?.status === 'done' && job.review === 'approved' && onTheWay) return <SendStatus d={d} compact={compact} />
+  if (d.visible && job?.status === 'done' && job.review === 'approved' && onTheWay) return <SendStatus d={d} compact={compact} onComplete={onComplete} />
   // Approved and not sent (Approve only, held, or Artelo would not take it):
   // Send to production, or attach the file in Artelo by hand. Mark as
   // complete appears beside Attach only once Attach has been clicked, and
