@@ -32,7 +32,7 @@ model Order {
   createdAt          DateTime  @default(now())
 
   // Trackstar order classification
-  trackstarOrderType String    @default("standard") // "standard" | "custom" | "race_partner" | "bulk"
+  trackstarOrderType String    @default("standard") // "standard" | "custom" | "race_partner" | "bulk" | "sample" (overseas sample design)
   // Note: race_partner rows reuse raceName as the partner name and
   // customerName/customerEmail as the partner contact — no schema change needed.
 

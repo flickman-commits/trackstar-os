@@ -113,7 +113,8 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
   // a co-branded one is the designer's (server/domain/bulk/deals.js).
   // A co-branded one renders once its line has an uploaded production file (templates.js).
   const bulkStandard = order.trackstarOrderType === 'bulk' && ['standard', 'cobranded'].includes(order.bulkOrder?.deal?.printKind)
-  if (order.trackstarOrderType !== 'standard' && !bulkStandard) reasons.push('Only standard race prints are rendered')
+  // An overseas sample (server/domain/samples/sampleDesign.js) is our standard race print too.
+  if (!['standard', 'sample'].includes(order.trackstarOrderType) && !bulkStandard) reasons.push('Only standard race prints are rendered')
   if (!SIZES.includes(order.productSize)) reasons.push(`No artboard for size "${order.productSize}"`)
   const edition = editionOf(order)
   const research0 = order.runnerResearch?.find(r => r.researchStatus === 'found') || order.runnerResearch?.[0]

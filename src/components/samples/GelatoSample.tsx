@@ -1,14 +1,16 @@
 /**
  * Tools > Samples, overseas: a finished PDF printed and shipped by Gelato near
- * the recipient. Upload the PDF, fill in who it goes to, get Gelato's price
- * and shipping, send. Server: api/samples.js (gelato-*), server/domain/samples/gelato.js.
+ * the recipient. Make the print from the race results (SampleDesigner) or
+ * upload a PDF, fill in who it goes to, get Gelato's price and shipping, send.
+ * Server: api/samples.js (gelato-*, design-*), server/domain/samples/gelato.js.
  */
 import { useState } from 'react'
 import { ExternalLink, FileText, Loader2, Plus, Send, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { parseAddress } from '@/lib/parseAddress'
-import { btnPrimary, btnSecondary, sectionLabel, infoCard } from '@/lib/ui'
+import { btnPrimary, btnSecondary, sectionLabel, infoCard, segment, segmentGroup } from '@/lib/ui'
+import SampleDesigner from './SampleDesigner'
 
 const field = 'w-full px-3 py-2 text-sm border border-border-gray rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-off-black/10'
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`
@@ -24,6 +26,9 @@ async function post<T>(body: Record<string, unknown>): Promise<T> {
 
 export default function GelatoSample({ products, onSent }: { products: { uid: string; label: string }[]; onSent: () => void }) {
   const [productUid, setProductUid] = useState(products[0]?.uid || '')
+  const [source, setSource] = useState<'design' | 'upload'>('design')
+  // A new key starts the designer over after a send.
+  const [round, setRound] = useState(0)
   const [file, setFile] = useState<{ name: string; url: string } | null>(null)
   const [uploading, setUploading] = useState(false)
   const [name, setName] = useState('')
@@ -62,7 +67,7 @@ export default function GelatoSample({ products, onSent }: { products: { uid: st
     try { setSent(await post({ action: 'gelato-send', ...payload(), shipmentMethodUid: method })); onSent() }
     catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
   }
-  const reset = () => { setSent(null); setFile(null); setName(''); setEmail(''); setPaste(''); setAddr({ address1: '', address2: '', city: '', province: '', zip: '', country: '', phone: '' }); setTitle(''); setQuote(null) }
+  const reset = () => { setSent(null); setFile(null); setName(''); setEmail(''); setPaste(''); setAddr({ address1: '', address2: '', city: '', province: '', zip: '', country: '', phone: '' }); setTitle(''); setQuote(null); setRound(n => n + 1) }
 
   if (sent) return (
     <div className="bg-white border border-border-gray rounded-lg p-6 max-w-xl">
@@ -83,11 +88,24 @@ export default function GelatoSample({ products, onSent }: { products: { uid: st
           <select value={productUid} onChange={e => { setProductUid(e.target.value); setQuote(null) }} className={field}>
             {products.map(p => <option key={p.uid} value={p.uid}>{p.label}</option>)}
           </select>
-          <label className={`flex items-center gap-3 rounded-md border-2 border-dashed px-4 py-5 cursor-pointer ${file ? 'border-emerald-300 bg-emerald-50/40' : 'border-border-gray hover:border-off-black/30'}`}>
-            {uploading ? <Loader2 className="w-5 h-5 animate-spin text-off-black/50" /> : file ? <FileText className="w-5 h-5 text-emerald-700" /> : <Upload className="w-5 h-5 text-off-black/40" />}
-            <span className="text-sm">{file ? <><span className="font-medium text-off-black">{file.name}</span> <span className="text-off-black/50">· click to replace</span></> : <span className="text-off-black/60">Upload the print-ready PDF (12x18 with bleed, like our Artelo files)</span>}</span>
-            <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload(f) }} />
-          </label>
+          <div className={segmentGroup}>
+            {([['design', 'Make the design'], ['upload', 'Upload a PDF']] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setSource(k)} className={segment(source === k)}>{l}</button>
+            ))}
+          </div>
+          {file && source === 'design' && (
+            <div className="flex items-center gap-2 text-sm"><FileText className="w-4 h-4 text-emerald-700" /><span className="font-medium text-off-black truncate">{file.name}</span><span className="text-off-black/50 shrink-0">is the print</span></div>
+          )}
+          <div className={source === 'design' ? '' : 'hidden'}>
+            <SampleDesigner key={round} onUse={(f, t) => { setFile(f); setQuote(null); setTitle(t) }} />
+          </div>
+          {source === 'upload' && (
+            <label className={`flex items-center gap-3 rounded-md border-2 border-dashed px-4 py-5 cursor-pointer ${file ? 'border-emerald-300 bg-emerald-50/40' : 'border-border-gray hover:border-off-black/30'}`}>
+              {uploading ? <Loader2 className="w-5 h-5 animate-spin text-off-black/50" /> : file ? <FileText className="w-5 h-5 text-emerald-700" /> : <Upload className="w-5 h-5 text-off-black/40" />}
+              <span className="text-sm">{file ? <><span className="font-medium text-off-black">{file.name}</span> <span className="text-off-black/50">· click to replace</span></> : <span className="text-off-black/60">Upload the print-ready PDF (12x18 with bleed, like our Artelo files)</span>}</span>
+              <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload(f) }} />
+            </label>
+          )}
           <input value={title} onChange={e => setTitle(e.target.value)} placeholder="What it is, for sample spend (e.g. Berlin Marathon, Anna)" className={field} />
         </div>
       </div>

@@ -163,10 +163,10 @@ export default async function handler(req, res) {
     if (type === 'standard' || type === 'custom' || type === 'race_partner' || type === 'bulk') {
       whereClause.trackstarOrderType = type
     } else {
-      // No type specified: exclude partner design rows and bulk runners from
-      // the default "all" query so they never leak into customer-order
-      // analytics or list views.
-      whereClause.trackstarOrderType = { notIn: ['race_partner', 'bulk'] }
+      // No type specified: exclude partner design rows, bulk runners and
+      // overseas sample designs from the default "all" query so they never
+      // leak into customer-order analytics or list views.
+      whereClause.trackstarOrderType = { notIn: ['race_partner', 'bulk', 'sample'] }
     }
     // ?scope=open: leave completed orders out. The dashboard refreshes every
     // minute and only needs them for the completed list and search, so they
