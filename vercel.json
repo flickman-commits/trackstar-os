@@ -118,6 +118,9 @@
     "api/orders/artelo-send.js": {
       "maxDuration": 60
     },
+    "api/orders/change-frame.js": {
+      "maxDuration": 60
+    },
     "api/orders/gift-stats.js": {
       "maxDuration": 60
     },

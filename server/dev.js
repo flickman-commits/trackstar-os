@@ -56,6 +56,7 @@ const routes = [
   { method: 'post', path: '/api/orders/final-pdf',           handler: '../api/orders/final-pdf.js' },
   { method: 'get',  path: '/api/orders/artelo-send',         handler: '../api/orders/artelo-send.js' },
   { method: 'post', path: '/api/orders/artelo-send',         handler: '../api/orders/artelo-send.js' },
+  { method: 'post', path: '/api/orders/change-frame',        handler: '../api/orders/change-frame.js' },
   { method: 'get',  path: '/api/surveys',                    handler: '../api/surveys/index.js' },
   { method: 'post', path: '/api/surveys',                    handler: '../api/surveys/index.js' },
   { method: 'get',  path: '/api/public/survey',              handler: '../api/public/survey.js' },

@@ -104,6 +104,47 @@ export default function OrderDetail({
   const [savingYear, setSavingYear] = useState(false)
   useEffect(() => { setYearDraft(null) }, [selectedOrder?.id])
 
+  // Change frame: edits the Shopify order, and Artelo follows (changeFrame.js).
+  const [frameMenu, setFrameMenu] = useState<{ current: string | null; options: { variantId: string; frame: string }[] } | null>(null)
+  const [frameBusy, setFrameBusy] = useState(false)
+  useEffect(() => { setFrameMenu(null) }, [selectedOrder?.id])
+  const canChangeFrame = isAdmin && selectedOrder?.source === 'shopify' && selectedOrder.status !== 'completed'
+
+  const openFrameMenu = async () => {
+    if (!selectedOrder || frameBusy) return
+    if (frameMenu) { setFrameMenu(null); return }
+    setFrameBusy(true)
+    try {
+      const r = await apiFetch('/api/orders/change-frame', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'options', orderId: selectedOrder.id }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || 'Could not read the frames')
+      if (!d.options?.length) throw new Error(`No other frame at ${d.size || 'this size'} and the same price`)
+      setFrameMenu({ current: d.current, options: d.options })
+    } catch (e) {
+      setToast({ message: e instanceof Error ? e.message : 'Could not read the frames', type: 'error' })
+    } finally {
+      setFrameBusy(false)
+    }
+  }
+
+  const changeFrameTo = async (option: { variantId: string; frame: string }) => {
+    if (!selectedOrder) return
+    if (!confirm(`Change this print from ${frameMenu?.current || 'its frame'} to ${option.frame}? The Shopify order is edited (the customer is not emailed or charged) and Artelo picks it up within about 10 minutes.`)) return
+    setFrameBusy(true)
+    try {
+      const r = await apiFetch('/api/orders/change-frame', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'change', orderId: selectedOrder.id, variantId: option.variantId }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || 'Could not change the frame')
+      setFrameMenu(null)
+      setToast({ message: d.outstanding > 0 ? `Frame changed to ${d.to}, but Shopify shows $${d.outstanding.toFixed(2)} owed. Check the order in Shopify.` : `Frame changed to ${d.to}. Artelo and this order update within about 10 minutes.`, type: d.outstanding > 0 ? 'error' : 'success' })
+      await fetchOrders()
+    } catch (e) {
+      setToast({ message: e instanceof Error ? e.message : 'Could not change the frame', type: 'error' })
+    } finally {
+      setFrameBusy(false)
+    }
+  }
+
   // Personalization photo: opened on demand, never held as a durable link.
   const [photoError, setPhotoError] = useState<string | null>(null)
 
@@ -1952,9 +1993,25 @@ Thank you!`
                       {selectedOrder.frameType && (() => {
                         const f = selectedOrder.frameType.replace(/Premium/i, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\s+/g, ' ').trim()
                         const black = /black/i.test(f), natural = /natural|oak/i.test(f) && !black
+                        const chip = `inline-flex items-center gap-1.5 px-2 py-1 rounded border text-xs font-semibold ${black ? 'bg-off-black text-white border-off-black' : natural ? 'bg-[#e9d9bd] text-[#5c4425] border-[#d6c09a]' : 'bg-white text-off-black/70 border-border-gray'}`
+                        const label = /unframed/i.test(f) ? 'Unframed' : f
+                        if (!canChangeFrame) return <span className={chip}>{label}</span>
                         return (
-                          <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded border text-xs font-semibold ${black ? 'bg-off-black text-white border-off-black' : natural ? 'bg-[#e9d9bd] text-[#5c4425] border-[#d6c09a]' : 'bg-white text-off-black/70 border-border-gray'}`}>
-                            {/unframed/i.test(f) ? 'Unframed' : f}
+                          <span className="relative inline-flex">
+                            <button onClick={() => { void openFrameMenu() }} disabled={frameBusy} title="Change the frame: edits the Shopify order, and Artelo follows" className={`group ${chip} disabled:opacity-60`}>
+                              {label}
+                              {frameBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Pencil className="w-3 h-3 opacity-50 group-hover:opacity-90" />}
+                            </button>
+                            {frameMenu && (
+                              <div className="absolute left-0 top-full mt-1 z-20 min-w-[11rem] bg-white border border-border-gray rounded-md shadow-lg p-1">
+                                <div className="px-2 py-1 text-[10px] font-semibold text-off-black/40 uppercase tracking-wider">Change frame to</div>
+                                {frameMenu.options.map(o => (
+                                  <button key={o.variantId} onClick={() => { void changeFrameTo(o) }} disabled={frameBusy} className="w-full text-left px-2 py-1.5 rounded text-sm text-off-black hover:bg-off-black/5 disabled:opacity-50">
+                                    {o.frame}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </span>
                         )
                       })()}
