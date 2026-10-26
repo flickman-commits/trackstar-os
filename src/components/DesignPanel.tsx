@@ -17,8 +17,12 @@ import { btnPrimary, btnGhost, inputBase } from '@/lib/ui'
 
 function WorkerDot({ d, small = false }: { d: Design; small?: boolean }) {
   const online = d.state?.workersOnline || []
-  // small: the dot alone, beside Re-render, with who is online on hover.
-  if (small) return <span className={`w-2 h-2 rounded-full ${d.offline ? 'bg-red-500' : 'bg-green-500'}`} title={d.offline ? 'Renderer offline: no render worker has checked in for a minute and a half' : `Renderer online: ${online.join(', ')}`} aria-label={d.offline ? 'Renderer offline' : 'Renderer online'} />
+  // small: beside Re-render, labelled, with who is online on hover.
+  if (small) return (
+    <span className="inline-flex items-center gap-1.5 text-[11px] text-off-black/55" title={d.offline ? 'Renderer offline: no render worker has checked in for a minute and a half' : `Renderer online: ${online.join(', ')}`}>
+      Render Status<span className={`w-2 h-2 rounded-full ${d.offline ? 'bg-red-500' : 'bg-green-500'}`} aria-label={d.offline ? 'offline' : 'online'} />
+    </span>
+  )
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px] text-off-black/55" title={d.offline ? 'No render worker has checked in for a minute and a half' : `Online: ${online.join(', ')}`}>
       <span className={`w-2 h-2 rounded-full ${d.offline ? 'bg-red-500' : 'bg-green-500'}`} aria-hidden />
