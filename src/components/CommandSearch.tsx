@@ -111,7 +111,7 @@ export default function CommandSearch({ can, onOpenSettings }: { can: (c: Capabi
     ...(can('support') ? [{ name: 'Support', words: 'support inbox email instagram', to: '/support' }] : []),
     ...(can('sales') ? [{ name: 'Sales', words: 'sales outreach attio', to: '/sales' }] : []),
     ...(can('creators') ? [{ name: 'Creators', words: 'creators program samples', to: '/creators' }] : []),
-    ...(can('settings.admin') ? [{ name: 'Samples', words: 'samples gelato', to: '/samples' }] : []),
+    ...(can('tools.samples') ? [{ name: 'Samples', words: 'samples gelato', to: '/samples' }] : []),
     { name: 'Settings', words: 'settings connections team stats', to: '' },
   ], [can])
 

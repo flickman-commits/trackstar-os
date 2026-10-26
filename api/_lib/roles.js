@@ -45,6 +45,7 @@ export const CAPABILITIES = [
   { id: 'tools.pace', group: 'Tools', label: 'Pace calculator' },
   { id: 'tools.weather', group: 'Tools', label: 'Race weather' },
   { id: 'tools.surveys', group: 'Tools', label: 'Design Survey' },
+  { id: 'tools.samples', group: 'Tools', label: 'Samples (sends real orders)' },
   { id: 'settings.reviews', group: 'Settings', label: 'Request Reviews' },
   { id: 'settings.stats', group: 'Settings', label: 'Stats' },
   { id: 'settings.design_needs', group: 'Settings', label: 'Design Needs' },

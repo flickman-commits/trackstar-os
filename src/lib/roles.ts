@@ -9,7 +9,7 @@ export type Role = 'admin' | 'sales' | 'fulfillment' | 'support' | 'head_designe
 
 export type Capability =
   | 'sales' | 'support' | 'creators' | 'orders.assign_custom' | 'orders.render'
-  | 'tools.discounts' | 'tools.pace' | 'tools.weather' | 'tools.surveys'
+  | 'tools.discounts' | 'tools.pace' | 'tools.weather' | 'tools.surveys' | 'tools.samples'
   | 'settings.pricing' | 'settings.reviews' | 'settings.stats' | 'settings.design_needs' | 'settings.data' | 'settings.admin'
 
 export type Caps = '*' | Capability[]
@@ -35,6 +35,7 @@ export const CAPABILITY_LABEL: Partial<Record<Capability, string>> = {
   'tools.pace': 'Pace',
   'tools.weather': 'Weather',
   'tools.surveys': 'Design Survey',
+  'tools.samples': 'Samples',
   'settings.reviews': 'Reviews',
   'settings.stats': 'Stats',
   'settings.design_needs': 'Design Needs',

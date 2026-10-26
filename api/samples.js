@@ -1,5 +1,5 @@
 /**
- * /api/samples - Tools > Samples (admin).
+ * /api/samples - Tools > Samples (admins, and roles given Samples).
  *   GET                               the store's race prints with sizes and frames
  *   GET ?view=spend                   sample spend by month
  *   POST { action: 'quote', items }   at-cost prices from Artelo
@@ -13,8 +13,8 @@
  *   POST { action: 'design-state' | 'design-render' | 'design-use', orderNumber }
  *   POST { action: 'design-accept', orderNumber, match }                      take a near match as the result
  */
-import { setCors, requireAdmin } from './_lib/auth.js'
-import { requireAdminRole, recordAudit } from './_lib/users.js'
+import { setCors } from './_lib/auth.js'
+import { requireCapability, recordAudit } from './_lib/users.js'
 import { sampleCatalog, quoteAtCost, sendSample } from '../server/domain/samples/samples.js'
 import { estimateSampleCost, sampleSpend } from '../server/domain/samples/costs.js'
 import { GELATO_PRODUCTS, gelatoUploadUrl, quoteGelatoSample, sendGelatoSample } from '../server/domain/samples/gelato.js'
@@ -22,9 +22,8 @@ import { designRaces, findSampleResult, acceptSampleMatch, renderSample, sampleD
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, POST, OPTIONS' })) return
-  const actor = (await requireAdmin(req, res))
-  if (!actor) return
-  const user = await requireAdminRole(req, res, actor)
+  // Samples send real orders and spend money: a capability an admin grants in Settings > Admin > Roles.
+  const user = await requireCapability(req, res, 'tools.samples')
   if (!user) return
   try {
     if (req.method === 'GET') {
