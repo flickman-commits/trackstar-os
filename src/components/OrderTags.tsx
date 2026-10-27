@@ -285,16 +285,18 @@ export function TagChip({ tag, size = 'sm' }: { tag: OrderTag; size?: 'sm' | 'md
  * nothing is ever hidden behind an overflow chip. They wrap instead.
  */
 export default function OrderTags({
-  order, size = 'sm', className = '', exclude,
+  order, size = 'sm', className = '', exclude, only,
 }: {
   order: TaggableOrder
   size?: 'sm' | 'md'
   className?: string
   /** Tag keys to skip, for surfaces that already show them elsewhere. */
   exclude?: string[]
+  /** Only these tag keys, for a surface that shows one kind (the Runner card shows 'trust'). */
+  only?: string[]
 }) {
   const all = getOrderTags(order)
-  const tags = exclude?.length ? all.filter(t => !exclude.includes(t.key)) : all
+  const tags = all.filter(t => !exclude?.includes(t.key) && (!only || only.includes(t.key)))
   if (tags.length === 0) return null
 
   return (

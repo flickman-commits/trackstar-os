@@ -2065,7 +2065,8 @@ Thank you!`
               <div>
                 <h4 className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1.5">Tags</h4>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <OrderTags order={selectedOrder} size="md" className="contents" />
+                  {/* Where the runner's numbers came from sits on the Runner card instead. */}
+                  <OrderTags order={selectedOrder} size="md" className="contents" exclude={['trust']} />
                   {selectedOrder.orderPlacedAt && (
                     <span
                       className={`inline-flex items-center gap-1 px-2 py-1 border rounded text-xs ${(() => {
@@ -2534,7 +2535,11 @@ Thank you!`
                   <div className={design.reserved ? 'flex flex-col gap-3 min-w-0' : 'contents'}>
                   <div className="bg-subtle-gray border border-border-gray rounded-md p-3 [&_span.font-medium:not(.rounded)]:!text-[19px] [&_span.font-medium:not(.rounded)]:!font-semibold [&_span.font-medium:not(.rounded)]:!leading-tight">
                     <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-border-gray min-h-[22px]">
-                      <span className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider">Runner</span>
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider">Runner</span>
+                        {/* Where these numbers came from (Verified, Customer typed, Entered by hand), next to them. */}
+                        <OrderTags order={selectedOrder} only={['trust']} />
+                      </span>
                       {/* Edits in place, the same way the Race card does. */}
                       {!isEditing && (
                         <button
