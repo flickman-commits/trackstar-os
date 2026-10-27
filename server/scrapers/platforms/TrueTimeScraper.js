@@ -179,7 +179,9 @@ export class TrueTimeScraper extends BaseScraper {
     const iNo = col(/^no$/)
     const iName = col(/^name$/)
     const iStatus = col(/^status$/)
-    const iNet = col(/^net time$/)
+    // The grid's chip column was "Net Time" until Des Moines 2026 renamed it
+    // "Time" (the same number the athlete page prints as FINISH TIME).
+    const iNet = col(/^net time$/) >= 0 ? col(/^net time$/) : col(/^time$/)
     if (iName < 0 || iNet < 0) throw new Error(`unexpected search grid headers: ${headers.join(',')}`)
     const rows = []
     for (const tr of grid[0].matchAll(/<tr>([\s\S]*?)<\/tr>/g)) {

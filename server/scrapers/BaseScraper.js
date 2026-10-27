@@ -184,6 +184,26 @@ export class BaseScraper {
   }
 
   /**
+   * Round any fraction of a second UP: "4:13:56.379" -> "4:13:57",
+   * "4:13:56.000" -> "4:13:56". RTRT's tracker does this (Marine Corps 2026,
+   * bib 19200: 04:13:56.379 shows "Finish Time: 04:13:57"), as do ChronoTrack,
+   * Xacte and Sportstats; each platform's rule is read off its official page.
+   * @param {string} time - Time string possibly ending in .fraction
+   * @returns {string} Time in whole seconds
+   */
+  ceilTime(time) {
+    if (!time) return null
+    const m = String(time).match(/^(.+)\.(\d+)$/)
+    if (!m) return time
+    if (!/[1-9]/.test(m[2])) return m[1]
+    const parts = m[1].split(':').map(Number)
+    const total = parts.reduce((a, n) => a * 60 + n, 0) + 1
+    const h = Math.floor(total / 3600), mi = Math.floor(total / 60) % 60, se = total % 60
+    const pad = n => String(n).padStart(2, '0')
+    return parts.length === 3 || h ? `${h}:${pad(mi)}:${pad(se)}` : `${mi}:${pad(se)}`
+  }
+
+  /**
    * Round a time with milliseconds to the nearest second
    * e.g. "4:37:44.935" -> "4:37:45", "4:37:44.123" -> "4:37:44"
    * @param {string} time - Time string possibly ending in .milliseconds

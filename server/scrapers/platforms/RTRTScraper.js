@@ -232,11 +232,13 @@ export class RTRTScraper extends BaseScraper {
       const actual = this._labelForFinishPoint(finishSplit.point)
       const miles = actual?.miles || distanceMiles
 
-      // RTRT's tracker rounds the fraction to the nearest second (MCM 2026:
-      // 04:35:30.654 shows 4:35:31, 05:34:55.963 shows 5:34:56). Cutting it
-      // was tried on 2026-10-27 and printed 23 MCM orders a second low.
+      // RTRT's tracker rounds any fraction UP, read off the tracker for
+      // runners on both sides of .5 (MCM 2026: 04:13:56.379 shows 04:13:57,
+      // 04:35:30.654 shows 04:35:31; Illinois 2026 02:23:02.136 shows
+      // 02:23:03; Historic Half 01:48:07.206 shows 01:48:08). Cutting it, and
+      // rounding to nearest, each printed MCM orders a second low.
       const rawTime = finishSplit.netTime || finishSplit.time
-      const cleanTime = rawTime ? this.roundTime(rawTime) : null
+      const cleanTime = rawTime ? this.ceilTime(rawTime) : null
       const time = this.formatTime(cleanTime ? this.normalizeTime(cleanTime) : null)
 
       // RTRT's paceAvg is the overall average (chip time / distance; checked

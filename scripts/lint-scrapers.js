@@ -121,8 +121,10 @@ for (const fx of fixtures) {
   if (UNPROVEN_FIXTURES.has(key)) errors.push(`Fixture ${key} has officialPage: take it out of fixtures-unproven.js.`)
   if (!/^https:\/\//.test(op.url || '')) errors.push(`Fixture ${key}: officialPage.url must be the https results page.`)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(op.readOn || '')) errors.push(`Fixture ${key}: officialPage.readOn must be the date it was read, YYYY-MM-DD.`)
-  if (!/^\d{1,2}:\d{2}:\d{2}$/.test(op.shows || '')) errors.push(`Fixture ${key}: officialPage.shows must be the time exactly as the page prints it (HH:MM:SS).`)
-  else if (fx.expectedChipTime && asSeconds(op.shows) !== asSeconds(fx.expectedChipTime)) {
+  // A page that prints tenths ("3:22:15.8") is quoted as printed; the print
+  // carries its whole seconds.
+  if (!/^\d{1,2}:\d{2}:\d{2}(\.\d+)?$/.test(op.shows || '')) errors.push(`Fixture ${key}: officialPage.shows must be the time exactly as the page prints it (HH:MM:SS, with any tenths).`)
+  else if (fx.expectedChipTime && asSeconds(op.shows.replace(/\.\d+$/, '')) !== asSeconds(fx.expectedChipTime)) {
     errors.push(`Fixture ${key}: expectedChipTime ${fx.expectedChipTime} is not what the official page shows (${op.shows}).`)
   }
 }

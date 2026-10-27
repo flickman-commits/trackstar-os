@@ -285,7 +285,10 @@ export class ScoreThisScraper extends BaseScraper {
    * Build a standardized result from a parsed row
    */
   _buildResult(row, eventKey, raceId) {
-    const time = this.normalizeTime(row.chipTime)
+    // Buffalo 2026 is the first year with tenths ("3:51:25.5"). ScoreThis's own
+    // whole-second view (the splits page) cuts them to 3:51:25, so do we;
+    // passing them through put "3:51:25.5" on the print.
+    const time = this.normalizeTime(String(row.chipTime ?? '').replace(/\.\d+$/, '') || null)
     const formattedTime = this.formatTime(time)
 
     // Get pace from CSV data, or calculate it

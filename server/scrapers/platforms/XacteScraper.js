@@ -209,7 +209,10 @@ export class XacteScraper extends BaseScraper {
   _msToTime(ms) {
     if (!ms && ms !== 0) return null
 
-    const totalSeconds = Math.round(ms / 1000)
+    // Xacte's page rounds any fraction UP (Army Ten-Miler 2025: 4471430 ms
+    // shows 1:14:32; LA 2025: 19503400 ms shows 5:25:04). Nearest printed
+    // about half the field a second low.
+    const totalSeconds = Math.ceil(ms / 1000)
     const hours = Math.floor(totalSeconds / 3600)
     const minutes = Math.floor((totalSeconds % 3600) / 60)
     const seconds = totalSeconds % 60

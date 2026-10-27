@@ -210,9 +210,12 @@ export class RaceRosterScraper extends BaseScraper {
    * Extract standardized data from a RaceRoster detail result
    */
   extractRunnerData(result, eventType, eventCode, eventKey) {
-    // Some events publish tenths (Charlotte: "4:59:37.1"); round to the
-    // nearest second like RunSignUp/ChronoTrack so the print gets h:mm:ss.
-    const chipTime = this.formatTime(this.roundTime(result.chipTime))
+    // Some events publish tenths (Charlotte: "3:22:15.8"). The print shows the
+    // whole seconds the page shows, so the tenth is dropped, never rounded:
+    // rounding printed 3:22:16, a time not on the page, for about half of
+    // Charlotte's field. Athlinks lists the same runner as 3:22:15, and the
+    // race's 2024 release gave "2:26:50.5" as 2:26:50.
+    const chipTime = this.formatTime(String(result.chipTime ?? '').replace(/\.\d+$/, '') || null)
     // Pace is chip time over the race distance. Race Roster's own overallPace
     // is not that: Twin Cities 2026 shows 9:25 for a 4:10:03 marathon, which is
     // 9:33. The page value is kept only for an event with no known distance.
