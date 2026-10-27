@@ -15,8 +15,13 @@
  * we know the correct CHIP time + CHIP pace. The verifier fails if either
  * value drifts — catching gun-time / gun-pace regressions immediately.
  *
- * Verification standard: every fixture has been manually compared against
- * the official results page for that race.
+ * Verification standard: officialPage quotes the race's OFFICIAL results
+ * page (the one the race's own website links to, which is what a customer
+ * checks): { url, shows: the finish time exactly as the page prints it,
+ * readOn: 'YYYY-MM-DD' }. The lint fails a fixture whose `shows` differs
+ * from expectedChipTime, and any fixture without officialPage that is not in
+ * fixtures-unproven.js. Never type an expected time from the raw API value
+ * or from a belief about rounding: read it off the page.
  *
  * To add a new race scraper, ALWAYS add at least one fixture here that
  * includes BOTH expectedChipTime AND expectedChipPace.
@@ -526,6 +531,7 @@ export const CHIP_TIME_FIXTURES = [
     expectedChipTime: '4:35:31',
     expectedChipPace: '10:31',
     expectedBib: '7980',
+    officialPage: { url: 'https://track.rtrt.me/e/MCM-2026#/tracker/RCYHE2PM', shows: '04:35:31', readOn: '2026-10-27' },
     notes: 'MCM 2026 (RTRT MCM-2026, pid RCYHE2PM). The fraction case: FINISH-M netTime 04:35:30.654 (chip) shows as 4:35:31 on the tracker (read off app.rtrt.me 2026-10-27: "Finish Time: 04:35:31"), so RTRT rounds; cutting the fraction printed 4:35:30. Positive split: last segment 12:55/mi against a 10:31 average. Page avg pace 10:31. waveTime (gun) 05:04:56.498. https://track.rtrt.me/e/MCM-2026#/tracker/RCYHE2PM',
   },
   {
@@ -536,6 +542,7 @@ export const CHIP_TIME_FIXTURES = [
     expectedChipTime: '5:34:56',
     expectedChipPace: '12:47',
     expectedBib: '9399',
+    officialPage: { url: 'https://track.rtrt.me/e/MCM-2026', shows: '5:34:56', readOn: '2026-10-27' },
     notes: 'MCM 2026 (RTRT MCM-2026). Second rounding case: netTime 05:34:55.963 shows as 5:34:56 on the tracker (Matt\'s screenshot 2026-10-27); cutting printed 5:34:55. Positive split: last segment 13:16/mi against a 12:47 average; page avg pace 12:47. https://track.rtrt.me/e/MCM-2026#/dashboard',
   },
   {

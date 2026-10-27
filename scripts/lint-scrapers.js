@@ -102,6 +102,32 @@ for (const fx of fixtures) {
   }
 }
 
+// 4b. Every fixture's expected time is read off the race's official results
+// page, and says so. A hand-typed expectation is how a wrong rounding change
+// passed every test on 2026-10-27 (RTRT cut 04:35:30.654 to 4:35:30; MCM's
+// official results show 04:35:31). Fixtures from before then are listed in
+// fixtures-unproven.js until somebody reads their page.
+const { UNPROVEN_FIXTURES } = await import(path.resolve(__dirname, '../server/scrapers/__tests__/fixtures-unproven.js'))
+const asSeconds = t => String(t || '').trim().split(':').map(Number).reduce((a, n) => a * 60 + n, 0)
+let unproven = 0
+for (const fx of fixtures) {
+  const key = `${fx.platform}|${fx.race}|${fx.year}|${fx.runner}`
+  const op = fx.officialPage
+  if (!op) {
+    if (UNPROVEN_FIXTURES.has(key)) unproven++
+    else errors.push(`Fixture ${key}: no officialPage. Read the time off the official results page (the one the race's site links to) and add officialPage: { url, shows, readOn }.`)
+    continue
+  }
+  if (UNPROVEN_FIXTURES.has(key)) errors.push(`Fixture ${key} has officialPage: take it out of fixtures-unproven.js.`)
+  if (!/^https:\/\//.test(op.url || '')) errors.push(`Fixture ${key}: officialPage.url must be the https results page.`)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(op.readOn || '')) errors.push(`Fixture ${key}: officialPage.readOn must be the date it was read, YYYY-MM-DD.`)
+  if (!/^\d{1,2}:\d{2}:\d{2}$/.test(op.shows || '')) errors.push(`Fixture ${key}: officialPage.shows must be the time exactly as the page prints it (HH:MM:SS).`)
+  else if (fx.expectedChipTime && asSeconds(op.shows) !== asSeconds(fx.expectedChipTime)) {
+    errors.push(`Fixture ${key}: expectedChipTime ${fx.expectedChipTime} is not what the official page shows (${op.shows}).`)
+  }
+}
+if (unproven) warnings.push(`${unproven} fixtures predate officialPage and have not been checked against the official results page (fixtures-unproven.js).`)
+
 // Borrowed from the coverage grid rather than recomputed. Hand-rolling the
 // window here made this gate disagree with the nightly sweep: lint called
 // Boston's dates verified while the sweep correctly reported 2022 missing,

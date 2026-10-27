@@ -200,7 +200,11 @@ dressed as a fix is worse than a flag.
 the affected platform only. Follow `add-race-scraper` for anything about times
 and pace: **chip time, never gun time; pace computed from chip time over the
 matched distance.** A platform-wide scraper change affects every race on that
-platform, so the next step must probe all of them.
+platform, so the next step must probe all of them. Never change how a platform
+rounds or picks a time, or edit a fixture's expected time, without reading the
+race's official results page (the one its own site links to) for a runner past
+.5 of a second; that is the add-race-scraper hard gate, and an unreadable page
+means flag it, not fix it.
 
 **3. Local gates.** `npm run build`, `npm run lint`, `npm test`. `npm run
 test:scrapers` hits live sites, which your sandbox cannot reach; the preview

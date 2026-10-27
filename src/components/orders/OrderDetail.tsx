@@ -2540,8 +2540,17 @@ Thank you!`
                         {/* Where these numbers came from (Verified, Customer typed, Entered by hand), next to them. */}
                         <OrderTags order={selectedOrder} only={['trust']} />
                       </span>
-                      {/* Edits in place, the same way the Race card does. */}
+                      {/* Edits in place, the same way the Race card does. The results
+                          link sits beside it: the printed time has to match that page,
+                          because it is the page the customer checks. */}
                       {!isEditing && (
+                        <span className="flex items-center gap-3">
+                        {selectedOrder.resultsUrl && (
+                          <a href={selectedOrder.resultsUrl} target="_blank" rel="noopener noreferrer" title="Check the time against the runner's official result"
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors">
+                            Check results <ArrowUpRight className="w-3 h-3" />
+                          </a>
+                        )}
                         <button
                           onClick={() => startEditing(selectedOrder)}
                           className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors"
@@ -2549,6 +2558,7 @@ Thank you!`
                           <Pencil className="w-3 h-3" />
                           Edit
                         </button>
+                        </span>
                       )}
                       {isEditing && (
                         <div className="flex items-center gap-2">

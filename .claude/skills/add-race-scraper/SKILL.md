@@ -24,6 +24,13 @@ wasn't:
   overall average pace (9:24/mi). The scraped page column was literally labeled
   "Pace Between" — a per-segment value, not the overall.
 
+- **Rounding the fraction** — on 2026-10-27 RTRT was switched from rounding
+  (04:35:30.654 -> 4:35:31) to cutting (4:35:30) on a belief about what the
+  official results show. Nobody read the page; the fixture's expected time was
+  typed from the same belief, and the Illinois fixtures that disagreed were
+  "corrected" to match. Every test passed. Marine Corps' official results show
+  04:35:31: 23 orders moved a second low and 9 went to print that way.
+
 Both bugs are invisible to a casual check. The MTEC bug was also invisible to a
 fixture using an **even-splits runner**, because for them the final-segment pace
 ≈ the overall pace. It only showed on a runner who slowed down.
@@ -138,11 +145,30 @@ npm run test:scrapers      # live: fails on time OR pace mismatch
 - If `lint:scrapers` only *warns* that your platform has no fixture, that is a
   failure of this procedure — add the fixture.
 
-### 6. Verify against the official page with your own eyes
-Open the actual results page for each fixture runner and confirm the returned
-time AND pace match what's printed there as the **overall** values. Quote the
-page's own pace number in the PR/commit. The earlier this number is wrong, the
-cheaper the fix.
+### 6. Read the official page — HARD GATE, no exceptions
+The time we print must match the race's **official results page**: the one
+the race's own website links to, because that is what the customer checks.
+It is not always the timing vendor's own page, and the raw API value is not
+it either.
+
+- Find the official results link on the race's website. If it points at a
+  different vendor than the scraper reads, stop and say so.
+- For each fixture runner, read the finish time and pace **off that page**
+  and record them in the fixture as
+  `officialPage: { url, shows: '<exactly as printed>', readOn: 'YYYY-MM-DD' }`.
+  `lint:scrapers` fails a fixture without it, or whose `shows` differs from
+  `expectedChipTime`.
+- Fractions: pick at least one runner whose raw time has a fraction past .5
+  and one under it. Platforms differ (RTRT rounds to nearest, ChronoTrack
+  rounds up); only the page tells you which.
+- Never change how a platform rounds, cuts or picks a time without doing the
+  above for that platform first, and never edit an existing fixture's expected
+  time to make a new rule pass. If a fixture disagrees with your change, the
+  page decides.
+- If the page will not load (the RTRT embed renders blank; use
+  `https://app.rtrt.me/<EVENT>?&oe=1&loadpage=%2Ftracker%2F<PID>&event=<EVENT>`),
+  or is WAF-blocked, the scraper is **not verified**. Say so; do not
+  substitute an assumption.
 
 ### 7. Resource hygiene (Puppeteer platforms only)
 If the scraper launches a browser, close it in a `finally` block with
@@ -163,5 +189,6 @@ Vercel. See `MultiSportAustraliaScraper.js` / `RunSignUpScraper.js`.
 - [ ] `npm run lint:scrapers` passes with NO missing-fixture warning for the
       new platform.
 - [ ] `npm run test:scrapers` shows the new fixture(s) PASS (not WAF-blocked).
-- [ ] Returned time + pace eyeballed against the official page; the page's
-      overall pace value is quoted in the commit.
+- [ ] Every new fixture has `officialPage` with the time read off the
+      race's official results page (the one its own site links to), including
+      a runner past .5 of a second; the page's pace is quoted in the commit.
