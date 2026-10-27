@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Loader2, X, Inbox, Mail, Instagram, Settings2 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { OPEN_SEARCH_EVENT } from '@/lib/commandSearch'
 import type { Capability } from '@/lib/roles'
 
 /**
@@ -78,8 +79,10 @@ export default function CommandSearch({ can, onOpenSettings }: { can: (c: Capabi
         setOpen(o => !o)
       }
     }
+    const onOpen = () => setOpen(true)
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener(OPEN_SEARCH_EVENT, onOpen)
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener(OPEN_SEARCH_EVENT, onOpen) }
   }, [])
   useEffect(() => {
     if (!open) return
@@ -160,8 +163,8 @@ export default function CommandSearch({ can, onOpenSettings }: { can: (c: Capabi
   const term = q.trim().replace(/^#/, '')
 
   return (
-    <div className="fixed inset-0 z-[80] bg-black/40 flex items-start justify-center px-4 pt-[10vh]" onMouseDown={close}>
-      <div className="w-full max-w-[760px] bg-white rounded-3xl shadow-[0_32px_80px_rgba(0,0,0,0.22)] overflow-hidden flex flex-col max-h-[78vh]" onMouseDown={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[80] bg-black/40 flex items-start justify-center px-3 md:px-4 pt-[max(12px,env(safe-area-inset-top))] md:pt-[10vh]" onMouseDown={close}>
+      <div className="w-full max-w-[760px] bg-white rounded-3xl shadow-[0_32px_80px_rgba(0,0,0,0.22)] overflow-hidden flex flex-col max-h-[70dvh] md:max-h-[78vh]" onMouseDown={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-6 py-5 border-b border-border-gray">
           <Search className="w-5 h-5 text-off-black/80 flex-shrink-0" strokeWidth={2} />
           <input
@@ -229,7 +232,7 @@ export default function CommandSearch({ can, onOpenSettings }: { can: (c: Capabi
           </div>
         )}
 
-        <div className="flex items-center gap-5 px-6 py-3.5 border-t border-border-gray text-sm text-off-black/45">
+        <div className="hidden md:flex items-center gap-5 px-6 py-3.5 border-t border-border-gray text-sm text-off-black/45">
           <span className="inline-flex items-center gap-2">Move <Key>↑</Key><Key>↓</Key></span>
           {counts.length > 1 && <span className="inline-flex items-center gap-2">Filter <Key>Tab</Key></span>}
           <span className="inline-flex items-center gap-2">Close <Key>Esc</Key></span>
