@@ -582,19 +582,20 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
           </div>
         )}
         {approval && <ActionLink icon={Link2} onClick={() => onInsert(`You can view your design options here: ${approval}`)}>Insert approval link</ActionLink>}
-        {/* Only once it has shipped: a review is for someone holding the print. */}
-        {shipped && (() => {
+        {/* On every order, shipped or not: customers who love the design often
+            say so before the print arrives, and that is a fine time to ask. */}
+        {(() => {
           const it = o.items[0]
           const review = reviewLinkFor(it?.race || o.lineItems[0]?.title, it?.type)
           const delivered = o.tracking.map(t => t.deliveredAt).filter(Boolean).sort().pop() || null
           const sent = o.tracking[o.tracking.length - 1]?.at
           const when = delivered ? `delivered ${new Date(delivered).toLocaleDateString([], { month: 'short', day: 'numeric' })}`
-            : sent ? `shipped ${Math.max(0, Math.floor((Date.now() - new Date(sent).getTime()) / 86400000))}d ago, no delivery scan` : 'shipped'
+            : sent ? `shipped ${Math.max(0, Math.floor((Date.now() - new Date(sent).getTime()) / 86400000))}d ago, no delivery scan` : shipped ? 'shipped' : 'not shipped yet'
           const asked = thread.tags.includes('Review requested')
           if (!review) return <span className="self-start inline-flex items-center gap-1.5 text-xs text-off-black/40" title="Add it to src/lib/reviewLinks.ts"><Star className="w-3.5 h-3.5" />No Yotpo link for {it?.race || 'this product'}</span>
           return (
             <span className="self-start inline-flex items-baseline gap-1.5 flex-wrap">
-              <ActionLink icon={Star} busy={busy === 'review'} title={`${review.name} review link. Only for a good experience, after they have the print.`} onClick={() => run('review', async () => {
+              <ActionLink icon={Star} busy={busy === 'review'} title={`${review.name} review link. Only for a good experience.`} onClick={() => run('review', async () => {
                 onInsert(reviewAsk(review.link))
                 if (!asked) await supportApi.setTags(thread.id, [...thread.tags, 'Review requested'])
                 return asked ? 'Review link added to the reply' : 'Review link added; tagged Review requested'
