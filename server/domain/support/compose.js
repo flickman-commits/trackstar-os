@@ -5,11 +5,17 @@
  * Support conversation from the start: assigned to whoever sent it, waiting
  * on the customer, with the order linked. The order gets a comment saying
  * it was sent, so the fulfillment side sees it too.
+ *
+ * Or it sends the design for the customer to approve (an odd name, a race we
+ * are not sure of): the mockup goes attached and the print is held from
+ * production until they answer (holdForCustomer).
  */
 import prisma from '../../db.js'
 import { sendNew } from './mailbox.js'
 import { replyToHtml } from './format.js'
 import { UserError } from './errors.js'
+import { listMockups, resolveMockup } from './mockups.js'
+import { holdForCustomer } from '../render/arteloSend.js'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -31,7 +37,7 @@ function actorName(actor) {
   return [actor?.firstName, actor?.lastName].filter(Boolean).join(' ') || 'Someone'
 }
 
-export async function emailCustomer({ orderId, subject, text, actor }) {
+export async function emailCustomer({ orderId, subject, text, actor, mockupRef = null }) {
   const order = await prisma.order.findUnique({ where: { id: String(orderId || '') }, select: { id: true, orderNumber: true, parentOrderNumber: true, shopifyOrderData: true, customerEmail: true, customerName: true } })
   if (!order) throw new UserError('No such order')
   const to = String(order.customerEmail || '').trim().toLowerCase()
@@ -46,7 +52,17 @@ export async function emailCustomer({ orderId, subject, text, actor }) {
     subj = subj.split(`#${internal}`).join(number).split(String(internal)).join(number)
   }
 
-  const stored = await sendNew({ userId: actor?.id || null, to, subject: subj, html: replyToHtml(body), text: body })
+  // Only one of this order's own mockups, by reference; never a file from the page.
+  let attachments = []
+  if (mockupRef) {
+    const ours = await listMockups([order.id])
+    if (!ours.some(m => m.ref === mockupRef)) throw new UserError('That mockup is not on this order')
+    const f = await resolveMockup(mockupRef)
+    attachments = [{ bytes: f.bytes, contentType: f.contentType, filename: f.filename }]
+  }
+
+  const stored = await sendNew({ userId: actor?.id || null, to, subject: subj, html: replyToHtml(body), text: body, attachments })
+  const held = mockupRef ? await holdForCustomer({ orderId: order.id, actor }) : null
   const by = actorName(actor)
   await prisma.$transaction([
     prisma.supportThread.update({
@@ -54,9 +70,11 @@ export async function emailCustomer({ orderId, subject, text, actor }) {
       data: { assigneeId: actor?.id || undefined, ...(order.customerName ? { customerName: order.customerName } : {}) },
     }),
     prisma.supportNote.create({ data: { threadId: stored.threadId, kind: 'event', body: `${by} emailed from Fulfillment about #${number}`, authorId: actor?.id || null, authorName: by } }),
-    prisma.orderComment.create({ data: { orderId: order.id, text: `Emailed the customer from Support: "${subj}"`, authorId: actor?.id || null, authorName: by } }),
+    prisma.orderComment.create({ data: { orderId: order.id, text: mockupRef
+      ? `Sent the design to the customer to approve: "${subj}".${held ? ' Held from production until they answer; Send now once they approve.' : ''}`
+      : `Emailed the customer from Support: "${subj}"`, authorId: actor?.id || null, authorName: by } }),
   ])
-  return { threadId: stored.threadId, to, subject: subj }
+  return { threadId: stored.threadId, to, subject: subj, held: Boolean(held) }
 }
 
 /**

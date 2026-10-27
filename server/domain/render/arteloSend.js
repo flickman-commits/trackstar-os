@@ -80,6 +80,9 @@ function displayNumber(order) {
  */
 export async function queueSend(job, { orderType } = {}) {
   try {
+    // Held before it was approved (the mockup went to the customer to approve,
+    // holdForCustomer): it stays held, and Send now releases it once they say yes.
+    if (job.sendHeldAt) return job
     const type = orderType || (await prisma.order.findUnique({ where: { id: job.orderId }, select: { trackstarOrderType: true } }))?.trackstarOrderType
     if (!SEND_TYPES.includes(type) || !(await autoSendOn())) return job
     return await prisma.renderJob.update({
@@ -106,6 +109,19 @@ export async function holdSend({ orderId, actor }) {
   const order = await prisma.order.findUnique({ where: { id: job.orderId } })
   await recordAudit({ action: 'artelo.hold', summary: `Held ${order ? describeOrder(order) : job.orderId} from going to production`, detail: { jobId: job.id, orderId: job.orderId }, actor })
   return out
+}
+
+/**
+ * The design went to the customer to approve ("Email customer", Approve
+ * mockup): hold its newest print, approved or still waiting for review, so
+ * nothing sends to production until they answer. Approving it keeps the hold
+ * (queueSend); Send now releases it. Returns the held job, or null when the
+ * order has no print that could send.
+ */
+export async function holdForCustomer({ orderId, actor }) {
+  const job = await prisma.renderJob.findFirst({ where: { orderId: String(orderId || ''), status: 'done', review: { in: ['pending', 'approved'] }, arteloSentAt: null }, orderBy: { version: 'desc' } })
+  if (!job) return null
+  return prisma.renderJob.update({ where: { id: job.id }, data: { sendHeldAt: new Date(), sendHeldBy: `${personName(actor)}, waiting on the customer's approval`, sendAfter: null } })
 }
 
 /**
