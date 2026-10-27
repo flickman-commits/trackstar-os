@@ -183,11 +183,9 @@ export default async function handler(req, res) {
       ]
     }
     const openOnly = req.query.scope === 'open' && !number
-    let completedCount = null
-    if (openOnly) {
-      completedCount = await prisma.order.count({ where: { ...whereClause, status: 'completed' } })
-      whereClause.status = { not: 'completed' }
-    }
+    // Counted alongside the list below rather than before it.
+    const countWhere = openOnly ? { ...whereClause, status: 'completed' } : null
+    if (openOnly) whereClause.status = { not: 'completed' }
     // ?scope=completed&skip=100: completed orders a page at a time, newest
     // first, for the bottom of the standard queue's All (loaded as you scroll).
     const completedPage = req.query.scope === 'completed' && !number
@@ -204,7 +202,9 @@ export default async function handler(req, res) {
         { runnerName: text }, { runnerNameOverride: text },
         { raceName: text }, { raceNameOverride: text },
         { parentOrderNumber: { contains: q } },
-        { shopifyOrderData: { path: ['name'], string_contains: q } },
+        // Reading the Shopify name opens every row's whole payload, so only
+        // for a query that could be an order number.
+        ...(/^\d+$/.test(q) ? [{ shopifyOrderData: { path: ['name'], string_contains: q } }] : []),
         { bibNumberCustomer: { equals: q, mode: 'insensitive' } },
         { runnerResearch: { some: { bibNumber: { equals: q, mode: 'insensitive' } } } },
       ]
@@ -213,8 +213,10 @@ export default async function handler(req, res) {
       ? { take: Math.min(200, Math.max(1, Number(req.query.take) || 100)), skip: Math.max(0, Number(req.query.skip) || 0) }
       : {}
 
-    // Fetch orders with their research data and race info
-    const orders = await prisma.order.findMany({
+    // Fetch orders with their research data and race info. The catalog, the
+    // pipeline context and the completed count do not depend on the rows, so
+    // they load at the same time instead of one after another.
+    const [orders, productCatalog, pipelineContext, completedCount] = await Promise.all([prisma.order.findMany({
       where: whereClause,
       orderBy: [{ createdAt: 'desc' }],
       ...page,
@@ -235,7 +237,18 @@ export default async function handler(req, res) {
       // whole on every 30-second refresh blew through the Supabase egress
       // quota, so they are left out here and the few keys come from rawSlice.
       omit: { shopifyOrderData: true, etsyOrderData: true, arteloOrderData: true },
-    })
+    }),
+    // Product catalog is synced from Shopify and lives in the DB, so load it
+    // once here rather than per order.
+    loadProductCatalog(),
+    // Race rows by name and year, so an order that has not been researched
+    // yet still gets its race date (and weather). Without this the page could
+    // not tell a future race from a missing result, and new orders for a race
+    // not yet run read "Needs research" until research happened to run. Also
+    // what the render pipeline can do right now, for the pipeline status.
+    loadPipelineContext(),
+    countWhere ? prisma.order.count({ where: countWhere }) : null,
+    ])
     const slices = await rawSlice(orders.map(o => o.id))
     for (const o of orders) {
       const r = slices.get(o.id)
@@ -244,16 +257,7 @@ export default async function handler(req, res) {
       o.arteloOrderData = r?.a ?? null
     }
 
-    // Product catalog is synced from Shopify and lives in the DB, so load it
-    // once here rather than per order.
-    const productCatalog = await loadProductCatalog()
-
-    // Race rows by name and year, so an order that has not been researched
-    // yet still gets its race date (and weather). Without this the page could
-    // not tell a future race from a missing result, and new orders for a race
-    // not yet run read "Needs research" until research happened to run. Also
-    // what the render pipeline can do right now, for the pipeline status.
-    const { raceFor, templateKeys, gaps, workerOnline } = await loadPipelineContext()
+    const { raceFor, templateKeys, gaps, workerOnline } = pipelineContext
 
     // Transform orders to include flattened research data
     const transformedOrders = orders.map(order => {

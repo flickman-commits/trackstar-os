@@ -144,6 +144,38 @@ function greetingName(user: { firstName?: string | null; email?: string | null }
 // Date: MM.DD.YY (e.g., "11.02.25")
 // Pace: X:XX / mi (e.g., "7:15 / mi")
 
+// Each view's order list as last loaded, kept for the whole visit (leaving the
+// page and coming back too). Switching views shows the cached list at once and
+// refreshes it behind; before, every switch emptied the table and waited a
+// second or two for the whole list again.
+type ViewList = { orders: Order[]; completedCount: number | null }
+// The standard queue's search over completed orders, by term.
+const searchCache = new Map<string, { at: number; orders: Order[] }>()
+const viewCache = new Map<ActiveView, ViewList>()
+// One request per view at a time: a prefetch and a switch to the same view share it.
+const inFlight = new Map<ActiveView, Promise<ViewList & { matches: Record<string, PossibleMatch[]> }>>()
+function loadView(view: ActiveView) {
+  const running = inFlight.get(view)
+  if (running) return running
+  const p = (async () => {
+    const response = await apiFetch(`/api/orders?type=${view}${view === 'standard' ? '&scope=open' : ''}`)
+    if (!response.ok) throw new Error('Failed to fetch orders')
+    const data = await response.json()
+    const rows: Record<string, unknown>[] = data.orders || []
+    // The research's possible matches, so the accept picker shows after a reload too.
+    const matches: Record<string, PossibleMatch[]> = {}
+    for (const o of rows) {
+      const m = o.possibleMatches as PossibleMatch[] | undefined
+      if (Array.isArray(m) && m.length > 0) matches[o.orderNumber as string] = m
+    }
+    const list = { orders: rows.map(mapOrder), completedCount: typeof data.completedCount === 'number' ? data.completedCount : null }
+    viewCache.set(view, list)
+    return { ...list, matches }
+  })().finally(() => inFlight.delete(view))
+  inFlight.set(view, p)
+  return p
+}
+
 export default function Dashboard() {
   const { user: currentUser, isAdmin, can } = useAuth()
   // The "Email customer" modal on an order: a new Support conversation about it.
@@ -249,22 +281,25 @@ export default function Dashboard() {
   // Fetch orders from database (filtered by activeView type)
   // Completed standard orders are fetched only while someone is looking at them.
   const [completedCount, setCompletedCount] = useState<number | null>(null)
-  // Standard's completed orders are too many to load whole (searchDone below asks the server).
-  const includeCompleted = activeView !== 'standard' && (showCompleted || searchQuery.trim().length > 0)
+  // The view the orders in state belong to, so the cache below files them under it.
+  const ordersViewRef = useRef<ActiveView | null>(null)
+  const activeViewRef = useRef(activeView)
+  activeViewRef.current = activeView
+  useEffect(() => {
+    const view = ordersViewRef.current
+    if (view) viewCache.set(view, { orders, completedCount })
+  }, [orders, completedCount])
   const fetchOrders = useCallback(async () => {
+    const view = activeView
     try {
-      // Standard orders: completed ones come from their own requests (the pages below, or a search).
-      const openOnly = activeView === 'standard' && !includeCompleted
-      const response = await apiFetch(`/api/orders?type=${activeView}${openOnly ? '&scope=open' : ''}`)
-      if (!response.ok) throw new Error('Failed to fetch orders')
-      const data = await response.json()
-      setCompletedCount(typeof data.completedCount === 'number' ? data.completedCount : null)
-
-      // Transform database orders to match our Order interface
-      const transformedOrders: Order[] = (data.orders || []).map((order: Record<string, unknown>) => {
-        return mapOrder(order)
-      })
-
+      // Standard orders: completed ones come from their own requests (the pages
+      // below, or a search). The other views are small enough to load whole.
+      const data = await loadView(view)
+      // The person switched views while this loaded: it is cached, not shown.
+      if (activeViewRef.current !== view) return
+      setCompletedCount(data.completedCount)
+      const transformedOrders = data.orders
+      ordersViewRef.current = view
       setOrders(transformedOrders)
       // Current Team's per-person counts come from their own request; reload them
       // with the list so every count (bubble, queue chips, team) moves together.
@@ -273,16 +308,8 @@ export default function Dashboard() {
       // Hydrate possibleMatchesMap from persisted research records so the
       // accept-button picker shows up even after a page reload (not just
       // immediately after running research).
-      type PossibleMatchRow = { name: string; bib: string; time: string; pace?: string; city?: string; state?: string; eventType?: string; resultsUrl?: string }
-      const persistedMatches: Record<string, PossibleMatchRow[]> = {}
-      for (const o of data.orders || []) {
-        const matches = (o as { possibleMatches?: PossibleMatchRow[] }).possibleMatches
-        if (Array.isArray(matches) && matches.length > 0) {
-          persistedMatches[o.orderNumber as string] = matches
-        }
-      }
-      if (Object.keys(persistedMatches).length > 0) {
-        setPossibleMatchesMap(prev => ({ ...persistedMatches, ...prev }))
+      if (Object.keys(data.matches).length > 0) {
+        setPossibleMatchesMap(prev => ({ ...data.matches, ...prev }))
       }
 
       // Sync selectedOrder with fresh data if the detail panel is open
@@ -302,11 +329,11 @@ export default function Dashboard() {
       })
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error fetching orders:', error)
-      setToast({ message: 'Failed to fetch orders', type: 'error' })
+      if (activeViewRef.current === view) setToast({ message: 'Failed to fetch orders', type: 'error' })
     } finally {
-      setIsLoading(false)
+      if (activeViewRef.current === view) setIsLoading(false)
     }
-  }, [activeView, includeCompleted, loadTeam])
+  }, [activeView, loadTeam])
 
   // Completed standard orders, newest first, a page at a time: they sit at the
   // bottom of the queue's All and load as you scroll down to them. The open
@@ -342,11 +369,20 @@ export default function Dashboard() {
   useEffect(() => {
     const term = searchQuery.trim()
     if (activeView !== 'standard' || term.replace(/^#/, '').length < 2) { setSearchDone([]); return }
+    // A term searched in the last few minutes answers at once (completed orders rarely change).
+    const key = term.toLowerCase()
+    const hit = searchCache.get(key)
+    if (hit && Date.now() - hit.at < 5 * 60_000) { setSearchDone(hit.orders); return }
     let stale = false
     const t = setTimeout(() => {
       apiFetch(`/api/orders?type=standard&scope=completed&take=100&q=${encodeURIComponent(term)}`)
         .then(r => r.ok ? r.json() : null)
-        .then(d => { if (!stale && d) setSearchDone((d.orders || []).map((o: Record<string, unknown>) => mapOrder(o))) })
+        .then(d => {
+          if (!d) return
+          const rows: Order[] = (d.orders || []).map((o: Record<string, unknown>) => mapOrder(o))
+          searchCache.set(key, { at: Date.now(), orders: rows })
+          if (!stale) setSearchDone(rows)
+        })
         .catch(() => {})
     }, 250)
     return () => { stale = true; clearTimeout(t) }
@@ -615,13 +651,33 @@ export default function Dashboard() {
   // Only show full loading spinner on initial load; show subtle refresh indicator on view switch.
   // The count is read through a ref so a changing order count does not re-run
   // the effect and restart the poll.
-  const hasOrdersRef = useRef(false)
-  useEffect(() => { hasOrdersRef.current = orders.length > 0 }, [orders.length])
+  // Once the first list is up, load the other views quietly, one after another,
+  // so the first switch to each is instant too.
+  const prefetched = useRef(false)
   useEffect(() => {
-    if (!hasOrdersRef.current) {
-      setIsLoading(true)
-    } else {
+    if (isLoading || prefetched.current) return
+    const t = setTimeout(async () => {
+      prefetched.current = true
+      for (const v of ['standard', 'custom', 'race_partner', 'bulk'] as const) {
+        if (!viewCache.has(v)) await loadView(v).catch(() => {})
+      }
+    }, 1500)
+    return () => clearTimeout(t)
+  }, [isLoading])
+  // A view loaded before (this visit, or before leaving the page) shows at once
+  // from the cache while a fresh copy loads behind it.
+  useEffect(() => {
+    const cached = viewCache.get(activeView)
+    if (ordersViewRef.current !== activeView) {
+      ordersViewRef.current = cached ? activeView : null
+      setOrders(cached?.orders || [])
+      setCompletedCount(cached?.completedCount ?? null)
+    }
+    if (cached) {
+      setIsLoading(false)
       setIsRefreshing(true)
+    } else {
+      setIsLoading(true)
     }
     fetchOrders().finally(() => setIsRefreshing(false))
 
@@ -636,7 +692,7 @@ export default function Dashboard() {
     const onVisible = () => { if (document.visibilityState === 'visible') { fetchOrders() } }
     document.addEventListener('visibilitychange', onVisible)
     return () => { clearInterval(poll); document.removeEventListener('visibilitychange', onVisible) }
-  }, [fetchOrders, loadTeam])
+  }, [fetchOrders, loadTeam, activeView])
 
   // Fetch race shorthands from scraper configs + user overrides (once on mount).
     const fetchRaceShorthands = useCallback(async () => {
