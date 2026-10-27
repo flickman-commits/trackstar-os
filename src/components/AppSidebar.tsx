@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useLocation } from 'react-router-dom'
 import { Package, Users, Ticket, Calculator, Settings, Wrench, Send, FileText, ListOrdered, Braces, Vote, Inbox, Gift } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -83,7 +84,32 @@ function Tile({ item, active }: { item: Item; active?: boolean }) {
 }
 
 /**
- * The three small utilities, folded into one tile with a flyout.
+ * The card a rail tile opens beside itself. Drawn on the page body rather
+ * than inside the rail: inside, it shared the rail's layer, and any page that
+ * draws its own layer (a sticky header, a dropdown) covered it, so the menu
+ * only showed on Fulfillment. Above every page, below the modals (z-50).
+ */
+function Flyout({ anchor, onEnter, onLeave, children }: { anchor: RefObject<HTMLElement | null>; onEnter: () => void; onLeave: () => void; children: ReactNode }) {
+  const [at, setAt] = useState<{ left: number; top: number } | null>(null)
+  useLayoutEffect(() => {
+    const r = anchor.current?.getBoundingClientRect()
+    if (r) setAt({ left: r.right, top: r.top })
+  }, [anchor])
+  if (!at) return null
+  return createPortal(
+    // pl-2 rather than ml-2: the padding is part of the hover target, so
+    // the cursor never leaves the menu while crossing to it.
+    <div className="fixed pl-2 z-[45]" style={{ left: at.left, top: at.top }} onMouseEnter={onEnter} onMouseLeave={onLeave}>
+      <div className="w-60 p-1.5 rounded-2xl bg-dark-fill shadow-[0_6px_24px_rgba(0,0,0,0.25)] border border-white/[0.08]">
+        {children}
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+/**
+ * The two small utilities, folded into one tile with a flyout.
  *
  * Discounts, Pace and Weather each had their own tile, which made the rail
  * read as five equal destinations when only two of them are places you go.
@@ -106,6 +132,7 @@ function ToolsTile({
   onOpenPaceConverter: () => void
 }) {
   const [open, setOpen] = useState(false)
+  const anchor = useRef<HTMLDivElement>(null)
   const closeTimer = useRef<number | null>(null)
 
   const cancelClose = () => {
@@ -117,8 +144,6 @@ function ToolsTile({
   const tools = [
     { id: 'discounts', cap: 'tools.discounts' as Capability, label: 'Discounts', hint: 'One-time discount code', icon: Ticket, onClick: onOpenDiscounts },
     { id: 'pace', cap: 'tools.pace' as Capability, label: 'Pace Converter', hint: 'Finish time to pace', icon: Calculator, onClick: onOpenPaceConverter },
-    { id: 'surveys', cap: 'tools.surveys' as Capability, label: 'Design Survey', hint: 'Community votes on new designs', icon: Vote, to: '/surveys' },
-    { id: 'samples', cap: 'tools.samples' as Capability, label: 'Samples', hint: 'Send prints as Shopify orders', icon: Gift, to: '/samples' },
   ].filter(t => can(t.cap))
 
   // Nothing to offer this role: no Tools tile at all.
@@ -141,29 +166,19 @@ function ToolsTile({
   }
 
   return (
-    <div className="relative" onMouseEnter={show} onMouseLeave={hide}>
+    <div ref={anchor} className="relative" onMouseEnter={show} onMouseLeave={hide}>
       <Tile
-        item={{ id: 'tools', label: 'Tools', icon: Wrench, onClick: () => setOpen(o => !o), title: 'Discounts, pace converter, design survey and samples' }}
+        item={{ id: 'tools', label: 'Tools', icon: Wrench, onClick: () => setOpen(o => !o), title: 'Discounts and pace converter' }}
         active={active || open}
       />
       {open && (
-        // pl-2 rather than ml-2: the padding is part of the hover target, so
-        // the cursor never leaves the element while crossing to the menu.
-        <div className="absolute left-full top-0 pl-2 z-40">
-          <div className="w-60 p-1.5 rounded-2xl bg-dark-fill shadow-[0_6px_24px_rgba(0,0,0,0.25)] border border-white/[0.08]">
-            {tools.map(t =>
-              'to' in t && t.to ? (
-                <Link key={t.id} to={t.to} className={rowCls} onClick={() => setOpen(false)}>
-                  {rowInner(t)}
-                </Link>
-              ) : (
-                <button key={t.id} onClick={() => { t.onClick?.(); setOpen(false) }} className={rowCls}>
-                  {rowInner(t)}
-                </button>
-              )
-            )}
-          </div>
-        </div>
+        <Flyout anchor={anchor} onEnter={show} onLeave={hide}>
+          {tools.map(t => (
+            <button key={t.id} onClick={() => { t.onClick?.(); setOpen(false) }} className={rowCls}>
+              {rowInner(t)}
+            </button>
+          ))}
+        </Flyout>
       )}
     </div>
   )
@@ -176,6 +191,7 @@ function ToolsTile({
  */
 function SalesTile({ item, active }: { item: Item; active: boolean }) {
   const [open, setOpen] = useState(false)
+  const anchor = useRef<HTMLDivElement>(null)
   const closeTimer = useRef<number | null>(null)
   const cancelClose = () => { if (closeTimer.current) { window.clearTimeout(closeTimer.current); closeTimer.current = null } }
   const show = () => { cancelClose(); setOpen(true) }
@@ -187,11 +203,10 @@ function SalesTile({ item, active }: { item: Item; active: boolean }) {
     { to: '/sales/variables', label: 'Variables', hint: 'Words templates fill in', icon: Braces },
   ]
   return (
-    <div className="relative" onMouseEnter={show} onMouseLeave={hide}>
+    <div ref={anchor} className="relative" onMouseEnter={show} onMouseLeave={hide}>
       <Tile item={item} active={active || open} />
       {open && (
-        <div className="absolute left-full top-0 pl-2 z-40">
-          <div className="w-60 p-1.5 rounded-2xl bg-dark-fill shadow-[0_6px_24px_rgba(0,0,0,0.25)] border border-white/[0.08]">
+        <Flyout anchor={anchor} onEnter={show} onLeave={hide}>
             {pages.map(pg => {
               const Icon = pg.icon
               return (
@@ -204,8 +219,7 @@ function SalesTile({ item, active }: { item: Item; active: boolean }) {
                 </Link>
               )
             })}
-          </div>
-        </div>
+        </Flyout>
       )}
     </div>
   )
@@ -329,12 +343,17 @@ export default function AppSidebar({
   activeId?: string
 }) {
   const fulfillmentTo = useFulfillmentReturn()
-  const items = railItems(can, fulfillmentTo)
+  const items: Item[] = [
+    ...railItems(can, fulfillmentTo),
+    // Pages of their own, so they get tiles; Tools keeps the two popups.
+    ...(can('tools.surveys') ? [{ id: 'surveys', label: 'Survey', icon: Vote, to: '/surveys', title: 'Design Survey: community votes on new designs' } as Item] : []),
+    ...(can('tools.samples') ? [{ id: 'samples', label: 'Samples', icon: Gift, to: '/samples', title: 'Samples: send prints as Shopify or Gelato orders' } as Item] : []),
+  ]
 
   return (
     <aside className="hidden md:flex fixed left-3 top-3 bottom-3 w-[78px] z-30 flex-col rounded-[22px] bg-dark-fill shadow-[0_2px_10px_rgba(0,0,0,0.10)]">
       {/* overflow-visible on purpose: overflow-y-auto would also clip on the
-          x axis and swallow the Tools flyout. Four tiles never need to scroll. */}
+          x axis. Seven tiles never need to scroll. */}
       <div className="flex-1 flex flex-col gap-0.5 px-1.5 pt-2.5 overflow-visible">
         {items.map(item => (
           item.id === 'sales'

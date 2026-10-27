@@ -50,6 +50,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     : path.startsWith('/creators') || path.startsWith('/briefs') ? 'creators'
     : path.startsWith('/sales') || path.startsWith('/send') ? 'sales'
     : path.startsWith('/support') ? 'support'
+    : path.startsWith('/surveys') ? 'surveys'
+    : path.startsWith('/samples') ? 'samples'
     : 'fulfillment'
 
   const openSettings = () => {
