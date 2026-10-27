@@ -587,6 +587,22 @@ export function getRaceDateCitations() {
   return out
 }
 
+/**
+ * One race's verified dates, year -> "YYYY-MM-DD", or null when the race has
+ * no config or no pinned dates. Verified means looked up against an official
+ * source; computed (rule-based) dates are deliberately not included, so the
+ * storefront never promises a race day we have not confirmed.
+ */
+export function getRaceDatesForRace(raceName) {
+  const config = findConfigForRace(raceName)
+  if (!config || !config.raceDates) return null
+  const out = {}
+  for (const [year, date] of Object.entries(config.raceDates)) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(date))) out[year] = String(date)
+  }
+  return Object.keys(out).length ? out : null
+}
+
 export function getVerifiedRaceDates() {
   const out = {}
   for (const config of ALL_CONFIGS) {

@@ -2,7 +2,7 @@
  * Public, unauthenticated "does this race have an instant lookup?" probe.
  *
  *   GET /api/public/race-status?race=Bayshore+Marathon+Personalized+Race+Print
- *   -> { hasLookup: false, raceCanonical: "Bayshore Marathon" }
+ *   -> { hasLookup: false, raceCanonical: "Bayshore Marathon", raceDates: { "2026": "2026-05-23" } }
  *
  * The storefront wizard calls this once when it initialises, so it knows which
  * flow it is running BEFORE the shopper types anything. Without it the widget
@@ -17,7 +17,7 @@
  * only changes when we deploy a new config.
  */
 import { setCors } from '../_lib/auth.js'
-import { isRacePublicSafe, getCanonicalRaceName, getCoveredYears } from '../../server/scrapers/index.js'
+import { isRacePublicSafe, getCanonicalRaceName, getCoveredYears, getRaceDatesForRace } from '../../server/scrapers/index.js'
 import { parseRaceNameFromTitle } from '../../server/scrapers/raceNameNormalization.js'
 import { checkRateLimitDurable } from '../../server/lib/publicRateLimit.js'
 
@@ -75,5 +75,12 @@ export default async function handler(req, res) {
     // a year that is genuinely outside an explicit-id race's map.
     coveredYears: getCoveredYears(resolvedRace),
     raceCanonical,
+    // Verified race days, year -> "YYYY-MM-DD", or null. The storefront shows
+    // a pre-order message for a year whose race day is still ahead and drops
+    // it on race day by comparing dates in the browser, so nothing here has
+    // to change when a race happens. Public information (it is on every race's
+    // own site), and it comes from the deployed config like everything else
+    // in this response, so the CDN cache above still holds.
+    raceDates: getRaceDatesForRace(resolvedRace),
   })
 }
