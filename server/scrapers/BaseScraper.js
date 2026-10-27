@@ -207,18 +207,6 @@ export class BaseScraper {
   }
 
   /**
-   * Drop the fraction of a second: "4:35:30.654" -> "4:35:30". For platforms
-   * whose official page shows the time cut, not rounded (RTRT: Marine Corps
-   * printed a second high on every runner whose time ran past .5).
-   * @param {string} time - Time string possibly ending in .fraction
-   * @returns {string} Time without the fraction
-   */
-  truncateTime(time) {
-    if (!time) return null
-    return time.replace(/\.\d+$/, '')
-  }
-
-  /**
    * Calculate pace per mile from finish time and distance
    * @param {string} time - Finish time in h:mm:ss format
    * @param {number} distanceMiles - Distance in miles (26.2 for marathon, 13.1 for half)

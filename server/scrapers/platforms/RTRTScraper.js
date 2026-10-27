@@ -232,17 +232,17 @@ export class RTRTScraper extends BaseScraper {
       const actual = this._labelForFinishPoint(finishSplit.point)
       const miles = actual?.miles || distanceMiles
 
-      // RTRT's tracker shows the time with the fraction cut off (MCM 2026:
-      // netTime 04:35:30.654 reads 4:35:30 on the official results), so the
-      // fraction is dropped, never rounded up.
+      // RTRT's tracker rounds the fraction to the nearest second (MCM 2026:
+      // 04:35:30.654 shows 4:35:31, 05:34:55.963 shows 5:34:56). Cutting it
+      // was tried on 2026-10-27 and printed 23 MCM orders a second low.
       const rawTime = finishSplit.netTime || finishSplit.time
-      const cleanTime = rawTime ? this.truncateTime(rawTime) : null
+      const cleanTime = rawTime ? this.roundTime(rawTime) : null
       const time = this.formatTime(cleanTime ? this.normalizeTime(cleanTime) : null)
 
       // RTRT's paceAvg is the overall average (chip time / distance; checked
       // on positive-split runners in MCM 2023/2025 and Illinois 2025/2026),
-      // computed from the full time, so it is kept over recomputing from the
-      // cut one (which can drift a second, e.g. 11:54 vs the page's 11:53).
+      // computed from the unrounded time, so it is kept over recomputing from
+      // the rounded one (which drifts a second, e.g. 11:54 vs the page's 11:53).
       // It arrives zero-padded ("08:34 min/mile"); strip the pad so it reads
       // like every other platform's pace.
       const rawPace = finishSplit.paceAvg?.replace(/\s*min\/mile$/i, '').replace(/^0(\d:)/, '$1') || null
