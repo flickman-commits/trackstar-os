@@ -251,6 +251,10 @@ export async function sendOne(job) {
     if (live?.status !== 'PendingFulfillmentAction') {
       const sentByUs = await prisma.renderJob.findFirst({ where: { arteloSentAt: { not: null }, order: { parentOrderNumber: order.parentOrderNumber } }, select: { reviewedById: true } })
       if (sentByUs && ['Received', 'InProduction'].includes(live?.status)) { await markSent(job, order, job.reviewedById); return }
+      // Our design was on this very item before someone sent the order from
+      // Artelo by hand (MCM 6144 and five others, 2026-10-27): what prints is ours.
+      const ours = job.arteloAttachedAt && job.arteloItemId && (live?.orderItems || []).some(i => i.id === job.arteloItemId)
+      if (ours && ['Received', 'InProduction'].includes(live?.status)) { await markSent(job, order, job.reviewedById); return }
       return outcome(job, { error: `Artelo already has this order as ${live?.productionStatus || live?.status}. Nothing was sent; a change now means a reprint.`, notify: true })
     }
 

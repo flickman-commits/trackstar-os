@@ -547,17 +547,35 @@ export class RTRTScraper extends BaseScraper {
   async _searchProfiles(runnerName) {
     const full = await this._searchProfilesOnce(runnerName)
     if (full.length) return full
-    const parts = String(runnerName || '').trim().split(/\s+/)
-    if (parts.length < 2) return full
-    const surname = parts[parts.length - 1]
-    console.log(`[${this.tag}] No hit on full name; retrying on surname "${surname}"`)
-    try {
-      return await this._searchProfilesOnce(surname)
-    } catch (err) {
-      if (err.rtrtType === 'too_many_results') return []
-      throw err
+    // RTRT matches the text as typed, and runners register plainly: MCM 2026
+    // has "Stephanie Oconnor" for Stephanie O’Connor, "Ricardo Vergel Negron"
+    // for Negrón, "Oscar Navarro" for Navarro-Roldan. So: the plain spelling,
+    // then each surname part, and keep whatever comes back for the name
+    // matching to judge (a dropped second surname only ever reaches it as a
+    // possible match a person confirms).
+    const plain = String(runnerName || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/['’‘ʼ`]/g, '').replace(/\./g, ' ').split(/\s+/).filter(t => t.length > 1)
+    if (plain.length < 2) return full
+    const surnames = plain.slice(1).join(' ')
+    const parts = [...new Set([plain[plain.length - 1], ...surnames.split(/[\s-]+/).reverse()])].filter(t => t.length > 1)
+    const queries = [...new Set([plain.join(' '), `${plain[0]} ${plain[plain.length - 1]}`, ...parts])]
+      .filter(q => q.toLowerCase() !== String(runnerName).trim().toLowerCase())
+    const seen = new Map()
+    for (const q of queries) {
+      console.log(`[${this.tag}] No match yet; retrying on "${q}"`)
+      let rows = []
+      try {
+        rows = await this._searchProfilesOnce(q)
+      } catch (err) {
+        if (err.rtrtType !== 'too_many_results') throw err
+      }
+      for (const r of rows) seen.set(r.pid || `${r.name}#${r.bib}`, r)
+      const named = [...seen.values()].filter(r => this.nameMatchTier(runnerName, r.name || `${r.fname || ''} ${r.lname || ''}`.trim()) !== null)
+      if (named.length) return [...seen.values()]
     }
+    return [...seen.values()]
   }
+
 
   /**
    * Confirm the event id itself is real, once per scraper instance.

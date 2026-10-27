@@ -224,6 +224,18 @@ export class TokyoMarathonScraper extends BaseScraper {
     const $ = cheerio.load(html)
     let netTime = null
 
+    // The official time is the one on the split table's Finish row. Tokyo
+    // ranks elite, semi-elite and wheelchair runners on gross (gun) time and
+    // everyone else on net, and that row shows whichever counts: 2025 winner
+    // Takele net 02:03:22, Finish 02:03:23; general runner Miyazaki net and
+    // Finish both 03:49:20. Net is only the fallback when the row is missing.
+    $('td').each((_, td) => {
+      if (!/フィニッシュ|^\s*Finish\s*$/i.test($(td).text().replace(/.*／/, ''))) return
+      const m = $(td).next('td').text().trim().match(/^(\d{1,2}:\d{2}:\d{2})/)
+      if (m) { netTime = m[1]; return false }
+    })
+    if (netTime) return netTime
+
     // Look for the row whose header includes "ネット" (net) — find sibling td
     $('th').each((_, th) => {
       const headerText = $(th).text().trim()

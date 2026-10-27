@@ -20,7 +20,6 @@ export const UNPROVEN_FIXTURES = new Set([
   'mika|Boston Marathon|2014|Noel Smith',
   'mika|Chicago Marathon|2024|Lexi Smith',
   'rtrt|Marine Corps Historic Half|2025|Corey Smith',
-  'tokyo|Tokyo Marathon|2025|Tadese Takele',
   'athlinks|Orange County Marathon|2025|Xavier Smith',
   'chronotrack|San Francisco Marathon|2026|Garrett Patrick',
   'chronotrack|San Francisco Marathon|2026|Qiongfeng Pan',

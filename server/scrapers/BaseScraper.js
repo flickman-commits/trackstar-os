@@ -330,6 +330,9 @@ export class BaseScraper {
     // "Muller", etc. NFD splits an accented char into base + combining mark,
     // then we strip the combining marks (U+0300–U+036F).
     s = s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+    // Apostrophes vary by keyboard (’ from a phone, ' from a laptop) and many
+    // results pages drop them: MCM 2026 lists Stephanie O’Connor as "Oconnor".
+    s = s.replace(/['’‘ʼ`]/g, '')
     s = s.replace(/\./g, ' ')
 
     let suffix = null

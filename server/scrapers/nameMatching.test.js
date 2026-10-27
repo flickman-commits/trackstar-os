@@ -194,3 +194,10 @@ test('concurrent searches on one scraper do not share a name record', async () =
   assert.equal(a.researchStatus, 'ambiguous')
   assert.equal(b.found, true)
 })
+
+test('apostrophes: O’Connor, O\'Connor and Oconnor are one name (MCM 2026, bib 8282)', () => {
+  assert.equal(tier('Stephanie O’Connor', 'Stephanie Oconnor'), 0)
+  assert.equal(tier('Stephanie O’Connor', "Stephanie O'Connor"), 0)
+  assert.equal(tier('Kyle Vitale-O’Sullivan', "Kyle Vitale-O'Sullivan"), 0)
+  assert.equal(tier('Stephanie O’Connor', 'Stephanie Connor'), null)
+})

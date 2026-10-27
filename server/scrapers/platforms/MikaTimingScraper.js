@@ -171,7 +171,10 @@ export class MikaTimingScraper extends BaseScraper {
         console.log(`[${this.tag}] No results for first name "${firstName}"; retrying on surname only`)
         page = await this._searchPage(eventCode, lastName, '')
       }
-      if (!page.ok) return this.notFoundResult()
+      // A refused search is the site, not the runner: Chicago's results answered
+      // 403 with a "temporarily unavailable" page for days in October 2026 and
+      // nine orders sat as "Runner not found" instead of being retried.
+      if (!page.ok) return page.status === 404 ? this.notFoundResult() : this.upstreamErrorResult(`Results site returned ${page.status}`)
 
       const { searchUrl, results, yearMismatch } = page
 
@@ -272,6 +275,11 @@ export class MikaTimingScraper extends BaseScraper {
     console.log(`[${this.tag}] Response status: ${response.status}`)
     if (!response.ok) return { ok: false, status: response.status, searchUrl, results: [] }
     const html = await response.text()
+    // Down for maintenance, Mika redirects to a static "Temporarily
+    // Unavailable" page that answers 200 (Chicago, October 2026).
+    if (/\/unavailable\.html/i.test(response.url || '') || /<title>\s*Temporarily Unavailable/i.test(html)) {
+      return { ok: false, status: 503, searchUrl, results: [] }
+    }
     const yearMismatch = this._shownEdition(html, response.url)
     return { ok: true, searchUrl, yearMismatch, results: yearMismatch ? [] : this._parseResultsHtml(html, params.event) }
   }
