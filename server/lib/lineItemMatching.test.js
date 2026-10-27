@@ -96,3 +96,23 @@ test('a photo that is only on the add-on lands on the print it names (order 4053
   assert.equal(out[0].properties.find(p => p.name === '_photo_path').value, '2026-10-05/x.jpg')
   assert.equal(withAddonPhotos([{ ...print, properties: [...print.properties, { name: '_photo_path', value: 'own.jpg' }] }, addon])[0].properties.find(p => p.name === '_photo_path').value, 'own.jpg')
 })
+
+test('a photo whose add-on was taken out of the cart or edited off comes off the print', async () => {
+  const { normalizeShopifyLines } = await import('./lineItemMatching.js')
+  const print = (id, path) => ({ id, product_id: 5, title: 'Boston Marathon Personalized Race Print', current_quantity: 1, properties: [{ name: 'Runner Name (First & Last)', value: 'Jane Doe' }, { name: '_photo_path', value: path }] })
+  const addon = (id, path, qty = 1) => ({ id, product_id: 10329625723163, title: 'Photo Add-On', current_quantity: qty, properties: path ? [{ name: '_photo_path', value: path }] : [] })
+  const photo = li => li.properties.find(p => p.name === '_photo_path')?.value || null
+  // Removed in the cart: no add-on at all.
+  const [gone] = normalizeShopifyLines([print(1, 'a.jpg')])
+  assert.equal(photo(gone), null)
+  assert.equal(gone.properties.find(p => p.name === '_photo_removed').value, 'a.jpg')
+  // Paid: the add-on carries the same path, and one add-on covers two prints of one photo (order 4446).
+  assert.deepEqual(normalizeShopifyLines([print(1, 'a.jpg'), print(2, 'a.jpg'), addon(3, 'a.jpg')]).slice(0, 2).map(photo), ['a.jpg', 'a.jpg'])
+  // Edited off after purchase: the add-on line is at quantity 0.
+  assert.equal(photo(normalizeShopifyLines([print(1, 'a.jpg'), addon(2, 'a.jpg', 0)])[0]), null)
+  // Two photos, one add-on (order 5160): only the paid one stays.
+  assert.deepEqual(normalizeShopifyLines([print(1, 'a.jpg'), print(2, 'b.jpg'), addon(3, 'b.jpg')]).slice(0, 2).map(photo), [null, 'b.jpg'])
+  // An add-on with no path, or for a re-uploaded photo, still pays for one.
+  assert.equal(photo(normalizeShopifyLines([print(1, 'a.jpg'), addon(2, null)])[0]), 'a.jpg')
+  assert.equal(photo(normalizeShopifyLines([print(1, 'a.jpg'), addon(2, 'old.jpg')])[0]), 'a.jpg')
+})

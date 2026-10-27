@@ -182,12 +182,41 @@ export function withAddonPhotos(lineItems) {
 }
 
 /**
+ * A photo the customer stopped paying for comes off its print. The storefront
+ * writes `_photo_path` on the print and adds one Photo Add-On per photo,
+ * carrying the same path. A shopper who takes the add-on out of the cart, or
+ * an order edit that removes it, leaves the print still naming the photo, and
+ * the photo was printed unpaid. A print's photo stays when a live add-on
+ * carries its path; add-ons that name no print's photo (an older storefront,
+ * a re-upload, or one we added by editing the order) cover the rest one each.
+ * Otherwise the path moves to
+ * `_photo_removed`, so the order still shows what was dropped.
+ */
+export function withoutUnpaidPhotos(lineItems) {
+  if (!Array.isArray(lineItems)) return lineItems
+  const live = lineItems.filter(li => isPhotoAddonLineItem(li) && !isRemovedLineItem(li))
+  const paidPaths = new Set(live.map(li => propOf(li, '_photo_path')).filter(Boolean))
+  const printPaths = new Set(lineItems.filter(li => !isAddonLineItem(li) && !isRemovedLineItem(li)).map(li => propOf(li, '_photo_path')).filter(Boolean))
+  let loose = live.filter(li => !printPaths.has(propOf(li, '_photo_path'))).reduce((n, li) => n + Number(li.current_quantity ?? li.quantity ?? 1), 0)
+  let changed = false
+  const out = lineItems.map(li => {
+    const path = propOf(li, '_photo_path')
+    if (!path || isAddonLineItem(li) || isRemovedLineItem(li) || paidPaths.has(path)) return li
+    if (loose > 0) { loose--; paidPaths.add(path); return li }
+    changed = true
+    return { ...li, properties: [...li.properties.filter(p => p?.name !== '_photo_path'), { name: '_photo_removed', value: path }] }
+  })
+  return changed ? out : lineItems
+}
+
+/**
  * Everything the storefront and order edits scatter across lines, put back
  * on the print it belongs to: personalization carried over an edit, then the
- * photo from its add-on. Use on every Shopify order before reading it.
+ * photo from its add-on, then any photo whose add-on is gone taken off.
+ * Use on every Shopify order before reading it.
  */
 export function normalizeShopifyLines(lineItems) {
-  return withAddonPhotos(carryEditedProperties(lineItems))
+  return withoutUnpaidPhotos(withAddonPhotos(carryEditedProperties(lineItems)))
 }
 
 /**

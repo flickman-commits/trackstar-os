@@ -1164,6 +1164,24 @@ export async function processOrders(options = {}) {
                 }
               }
 
+              // The photo add-on came off (edited off the order, or never paid
+              // for at checkout): the print loses the photo too, before it is
+              // made. See withoutUnpaidPhotos. A photo attached by hand is ours.
+              if (existing.photoPath && !existing.photoAddedManually && existing.status !== 'completed' && existing.designStatus !== 'sent_to_production' && shopifyData?.shopifyOrderData) {
+                const idx = shopifyMatchMap?.[lineItemIndex] ?? -1
+                const line = idx >= 0 ? shopifyData.shopifyOrderData.line_items?.[idx] : null
+                if (line && (line.properties || []).some(p => p?.name === '_photo_removed' && p.value === existing.photoPath)) {
+                  updateData.photoPath = null
+                  if (updateData.shopifyOrderData === undefined) updateData.shopifyOrderData = shopifyData.shopifyOrderData
+                  needsUpdate = true
+                  // A design made with the photo is no longer the print: close it,
+                  // and the next pass renders it again without (as a year change does).
+                  await prisma.renderJob.updateMany({ where: { orderId: existing.id, review: { in: ['pending', 'approved'] }, arteloSentAt: null }, data: { review: 'closed', reviewNote: 'Photo add-on removed from the order', reviewedAt: new Date(), sendAfter: null } })
+                  await prisma.orderComment.create({ data: { orderId: existing.id, text: 'Photo taken off: the Photo Add-On is no longer on the Shopify order, so this print is made without the customer photo.', authorName: 'Trackstar' } })
+                  log(`[processOrders] Photo add-on gone on ${existing.orderNumber}: photo taken off the print`)
+                }
+              }
+
               if (needsUpdate) {
                 // An order that turns out to be custom on a later pass moves to
                 // the custom queue, unless someone already picked an assignee
