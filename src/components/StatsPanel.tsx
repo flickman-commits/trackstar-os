@@ -182,111 +182,59 @@ export default function StatsPanel() {
   )
 }
 
-const fmtHours = (h: number | null) => {
-  if (h === null) return '–'
-  if (h < 48) return `${Math.round(h)} hours`
-  const d = h / 24
-  return `${d < 10 ? d.toFixed(1) : Math.round(d)} days`
-}
 const pctTone = (p: number | null) => p === null ? 'text-off-black' : p >= 90 ? 'text-green-700' : p >= 75 ? 'text-amber-600' : 'text-red-600'
 // The average against its goal: met is green, within half a day of it amber.
 const meanTone = (h: number | null, goal: number) => h === null ? 'text-off-black' : h <= goal ? 'text-green-700' : h <= goal + 12 ? 'text-amber-600' : 'text-red-600'
-const fmtDays = (h: number | null) => h === null ? '–' : `${(h / 24).toFixed(1)} days`
 
-const fmtD = (d: number | null) => d === null ? '–' : `${d.toFixed(1)} days`
-
-/**
- * Custom designs against the 14 days the customer is told (4 with rush): how
- * often the final went to production by then, how often the first proofs
- * reached them by then, and how long from those first proofs to production.
- */
-function CustomCard({ c, rangeLabel }: { c: CustomPromise; rangeLabel: string }) {
+/** One number, its denominator under it: the same card as Gifting rate. */
+function SpeedCard({ label, value, unit, tone, detail, title }: { label: string; value: string | null; unit?: string; tone: string; detail: string; title: string }) {
   return (
-    <div className="rounded-lg border border-border-gray bg-white p-4 space-y-3">
-      <p className="text-sm font-semibold text-off-black">Custom designs</p>
-      {c.count === 0 ? (
-        <p className="text-sm text-off-black/50">No custom design went to production in this window.</p>
-      ) : (
-        <>
-          <p className="text-off-black leading-snug">
-            <span className={`text-3xl font-semibold tabular-nums ${pctTone(c.finalOnTimePct)}`}>{c.finalOnTimePct}%</span>
-            <span className="text-sm text-off-black/70"> went to production within the 14 days we promise ({c.finalOnTime} of {c.count}).</span>
-          </p>
-          {c.withProofs > 0 && (
-            <p className="text-sm text-off-black/70">
-              The first designs reached the customer within 14 days on <span className={`font-semibold ${pctTone(c.firstLookOnTimePct)}`}>{c.firstLookOnTimePct}%</span> of orders,
-              after <span className="font-semibold text-off-black">{fmtD(c.firstLook.meanDays)}</span> on average.
-            </p>
-          )}
-          {c.withProofs > 0 && (
-            <p className="text-sm text-off-black/70">
-              From the first designs to production: <span className="font-semibold text-off-black">{fmtD(c.toFinal.meanDays)}</span> on average,
-              typically <span className="font-semibold text-off-black">{fmtD(c.toFinal.medianDays)}</span>, the slowest 1 in 10 <span className="font-semibold text-off-black">{fmtD(c.toFinal.p90Days)}</span> or more.
-              {c.meanRounds !== null && <> {c.meanRounds.toFixed(1)} rounds of designs per order on average.</>}
-            </p>
-          )}
-        </>
-      )}
-      <p className="text-sm text-off-black/70">
-        Right now <span className={`font-semibold ${c.openPastDue ? 'text-red-600' : 'text-off-black'}`}>{c.openPastDue}</span> open custom order{c.openPastDue === 1 ? ' is' : 's are'} past the promised date{c.openNoProofsPastDue ? `, ${c.openNoProofsPastDue} with no designs sent yet` : ''}.
+    <div className="rounded-lg border border-border-gray bg-white p-4" title={title}>
+      <p className="text-xs text-off-black/50">{label}</p>
+      <p className={`text-2xl font-semibold mt-0.5 tabular-nums ${value === null ? '' : tone}`}>
+        {value === null ? <span className="text-base font-normal text-off-black/35">Not enough data</span> : <>{value}{unit && <span className="text-base text-off-black/40">{unit}</span>}</>}
       </p>
-      <p className="text-[11px] text-off-black/45 pt-2 border-t border-border-gray/60">The promise is 14 days from the order (4 with the rush fee). The first designs count when the proofs were emailed to the customer; production is when the design was sent to production. Time the customer spends reviewing counts. Based on {c.count} order{c.count === 1 ? '' : 's'} sent to production {rangeLabel.toLowerCase()}{c.noProofs ? `, ${c.noProofs} with no proofs on record` : ''}.</p>
+      <p className="text-[11px] text-off-black/40 mt-0.5">{detail}</p>
     </div>
   )
 }
 
 /**
- * Our handling time, said plainly: the average against the goal (1.5 days),
- * the share that made the deadline (also 1.5 days), what a typical order took, the
- * slowest tenth, and the last three weeks.
- * Standard prints and custom designs are different jobs and get their own card.
+ * How fast we get orders out, as plain cards. Standard prints: the share out
+ * within the 1.5-day goal and the average. Customs: the share whose first
+ * designs reached the customer within the 14-day design turnaround (time the
+ * customer then spends reviewing is theirs, so it is not counted).
  */
 function FulfillmentTime({ f, rangeLabel }: { f: Fulfillment; rangeLabel: string }) {
-  const goalDays = f.goalHours / 24
-  const goalMean = f.goalMeanHours ?? 36
-  const Card = ({ label, t, how, backlog }: { label: string; t: TimeSummary; how: string; backlog?: { workable: number; pastGoal: number } }) => {
-    const weeks = t.weekly.filter(w => w.count > 0).slice(-3).reverse()
-    const weekWords = ['This week', 'last week', 'the week before']
-    return (
-      <div className="rounded-lg border border-border-gray bg-white p-4 space-y-3">
-        <p className="text-sm font-semibold text-off-black">{label}</p>
-        {t.count === 0 ? (
-          <p className="text-sm text-off-black/50">Nothing was completed in this window.</p>
-        ) : (
-          <>
-            <p className="text-off-black leading-snug">
-              <span className={`text-3xl font-semibold tabular-nums ${meanTone(t.meanHours, goalMean)}`}>{fmtDays(t.meanHours)}</span>
-              <span className="text-sm text-off-black/70"> on average. The goal is {goalMean / 24} days.</span>
-            </p>
-            <p className="text-sm text-off-black/70">
-              <span className={`font-semibold ${pctTone(t.withinGoalPct)}`}>{t.withinGoalPct}%</span> got out within {goalDays} days.
-              A typical order took <span className="font-semibold text-off-black">{fmtHours(t.medianHours)}</span>.
-              The slowest 1 in 10 took <span className="font-semibold text-off-black">{fmtHours(t.p90Hours)}</span> or more.
-            </p>
-            {weeks.length > 1 && (
-              <p className="text-sm text-off-black/70">
-                {weeks.map((w, i) => (
-                  <span key={w.from}>{i > 0 ? ', ' : ''}{weekWords[i]} <span className={`font-semibold ${meanTone(w.meanHours, goalMean)}`}>{fmtDays(w.meanHours)}</span></span>
-                ))}.
-              </p>
-            )}
-          </>
-        )}
-        {backlog && (
-          <p className="text-sm text-off-black/70">
-            Right now <span className={`font-semibold ${backlog.pastGoal ? 'text-red-600' : 'text-off-black'}`}>{backlog.pastGoal}</span> open order{backlog.pastGoal === 1 ? ' has' : 's have'} been waiting more than {goalDays} days{backlog.workable ? `, out of ${backlog.workable} we could be working on` : ''}.
-          </p>
-        )}
-        <p className="text-[11px] text-off-black/45 pt-2 border-t border-border-gray/60">{how} Based on {t.count} order{t.count === 1 ? '' : 's'} completed {rangeLabel.toLowerCase()}. Shipping is not counted.</p>
-      </div>
-    )
-  }
+  const s = f.standard
+  const c = f.customPromise
+  const goalDays = (f.goalHours / 24).toFixed(1).replace(/\.0$/, '')
   return (
-    <div className="space-y-3">
+    <>
       <p className="text-xs font-semibold text-off-black/50">How fast we get orders out</p>
-      <Card label="Standard prints" t={f.standard} backlog={f.openStandard}
-        how={`Counted from when we could start on the order (the order itself, or race day if the race had not happened yet) to when it went to production at Artelo (sent automatically, or marked complete here by someone on the team).`} />
-      {f.customPromise && <CustomCard c={f.customPromise} rangeLabel={rangeLabel} />}
-    </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <SpeedCard
+          label={`Standard out within ${goalDays} days`}
+          value={s.withinGoalPct === null ? null : String(s.withinGoalPct)} unit="%"
+          tone={pctTone(s.withinGoalPct)}
+          detail={`${s.withinGoal} of ${s.count} orders`}
+          title={`From when we could start (the order, or race day if later) to when it went to production at Artelo. ${rangeLabel}. Shipping is not counted.`}
+        />
+        <SpeedCard
+          label="Standard average time out"
+          value={s.meanHours === null ? null : (s.meanHours / 24).toFixed(1)} unit=" days"
+          tone={meanTone(s.meanHours, f.goalMeanHours)}
+          detail={`Goal ${(f.goalMeanHours / 24).toFixed(1)} days · ${f.openStandard.pastGoal} open past ${goalDays} days now`}
+          title={`Average from when we could start to production at Artelo, ${rangeLabel.toLowerCase()}.`}
+        />
+        <SpeedCard
+          label="Customs: first designs within 14 days"
+          value={!c || c.firstLookOnTimePct === null ? null : String(c.firstLookOnTimePct)} unit="%"
+          tone={pctTone(c?.firstLookOnTimePct ?? null)}
+          detail={c ? `${c.firstLookOnTime} of ${c.withProofs} custom orders` : 'No custom orders'}
+          title={`Custom orders whose first designs were emailed to the customer within 14 days of the order (4 with the rush fee), of those sent to production ${rangeLabel.toLowerCase()}. Time the customer spends reviewing is not counted.`}
+        />
+      </div>
+    </>
   )
 }
