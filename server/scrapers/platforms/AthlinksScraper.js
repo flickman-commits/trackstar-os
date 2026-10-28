@@ -140,7 +140,14 @@ export class AthlinksScraper extends BaseScraper {
     const eventLabel = this.config.eventLabels?.[distKey] || distKey
     const time = this.formatTime(msToTime(r.chipMs))
     const distanceMiles = this.config.distances?.[distKey] || this.config.distanceMiles || 26.2
-    const pace = this.formatPace(this.calculatePace(time, distanceMiles))
+    // The pace the race's official page prints. athlinks.com itself rounds;
+    // a race whose official page is another vendor names that page's rule per
+    // year (config.pagePace: { [year]: { rule, miles } }), applied to the
+    // exact milliseconds: Des Moines 2025 (TrueTime) floors, Detroit
+    // (RunnerTag) rounds up over 26.21875 in 2023-24.
+    const pp = this.config.pagePace?.[this.year] || {}
+    const exact = `${msToTime(r.chipMs)}.${String(r.chipMs % 1000).padStart(3, '0')}`
+    const pace = this.paceWith(exact, pp.miles?.[distKey] || distanceMiles, pp.rule || 'round')
     console.log(`[${this.tag}] FOUND: ${r.displayName} bib ${r.bib} ${r.courseName} chip ${time}`)
     return {
       found: true,

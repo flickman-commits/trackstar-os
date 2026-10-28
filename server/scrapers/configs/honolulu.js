@@ -44,6 +44,8 @@ export default {
     marathon: /^(honolulu )?marathon$/i,
   },
   distances: { marathon: 26.2 },
+  // Official 2025 results are RaceResult's list: Pace floors, over 42.195 km in miles.
+  pagePace: { 2025: { rule: 'floor', miles: { marathon: 26.21875 } } },
   distanceMiles: 26.2,
   aliases: [
     'Honolulu Marathon',

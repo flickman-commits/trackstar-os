@@ -49,6 +49,13 @@ export default {
     half: /half-?marathon$/i,
   },
   distances: { marathon: 26.2, half: 13.1 },
+  // Official results are RunnerTag (Enmotive): pace rounds up, over 42.195 km in
+  // miles for 2023-24 and over 26.2 / 13.1 from 2025.
+  pagePace: {
+    2023: { rule: 'ceil', miles: { marathon: 26.21875, half: 13.109375 } },
+    2024: { rule: 'ceil', miles: { marathon: 26.21875, half: 13.109375 } },
+    2025: { rule: 'ceil' },
+  },
   // Two half courses, two designs. The course a runner ran picks the file:
   // "Detroit Marathon / International Half Marathon" crosses into Canada; the
   // U.S.-only course was renamed Motor City in 2024 and uses that design.

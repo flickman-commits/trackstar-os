@@ -54,6 +54,8 @@ export default {
     half: /^half marathon$/i,
   },
   distances: { marathon: 26.2, half: 13.1 },
+  // Official 2025 results are RaceResult's list, whose Pace column floors.
+  pagePace: { 2025: { rule: 'floor' } },
   distanceMiles: 26.2,
   aliases: [
     'Ann Arbor Marathon',

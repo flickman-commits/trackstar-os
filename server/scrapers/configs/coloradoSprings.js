@@ -42,6 +42,8 @@ export default {
     half: /^half marathon$/i,
   },
   distances: { marathon: 26.2, half: 13.1 },
+  // Official 2026 results are RunSignUp, whose pace rounds up.
+  pagePace: { 2026: { rule: 'ceil' } },
   distanceMiles: 26.2,
   aliases: [
     'Colorado Springs Marathon',

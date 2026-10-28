@@ -248,7 +248,10 @@ export class RTRTScraper extends BaseScraper {
       // It arrives zero-padded ("08:34 min/mile"); strip the pad so it reads
       // like every other platform's pace.
       const rawPace = finishSplit.paceAvg?.replace(/\s*min\/mile$/i, '').replace(/^0(\d:)/, '$1') || null
-      const pace = rawPace || this.formatPace(
+      // A race whose official page is another vendor names that page's rule
+      // (Jersey City 2026: RunSignUp rounds up), applied to the raw time.
+      const rule = this.config.pagePace?.[this.year]
+      const pace = (rule && rawTime ? this.paceWith(String(rawTime).trim(), miles, rule) : null) || rawPace || this.formatPace(
         cleanTime ? this.calculatePace(this.normalizeTime(cleanTime), miles) : null
       )
       return { time, pace, label: actual?.label || null, miles: actual?.miles || null }

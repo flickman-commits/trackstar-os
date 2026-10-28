@@ -158,10 +158,14 @@ export class XacteScraper extends BaseScraper {
     // Determine event type from subevent name or distance
     const eventType = this._getEventType(runner)
 
-    // Calculate pace based on distance
-    const distanceMiles = this._getDistanceMiles(runner)
-    const pace = distanceMiles ? this.calculatePace(time, distanceMiles) : null
-    const formattedPace = this.formatPace(pace)
+    // The page's pace: round(chip ms / finish-split miles), the distance read
+    // from the finish split itself (feet, or metres when is_metric). Army
+    // Ten-Miler 2025 Cameron Smith 5784630 ms shows 9:38; the rounded-up time
+    // over the config's distance gave 9:39.
+    const fin = Object.values(runner.splits || {}).find(s => /finish/i.test(s?.distance?.label || ''))?.distance
+    const distanceMiles = fin?.distance ? (fin.is_metric ? fin.distance / 1609.344 : fin.distance / 5280) : this._getDistanceMiles(runner)
+    const paceSecs = distanceMiles && chipTimeMs ? Math.round(chipTimeMs / 1000 / distanceMiles) : null
+    const formattedPace = paceSecs == null ? null : `${Math.floor(paceSecs / 60)}:${String(paceSecs % 60).padStart(2, '0')}`
 
     const eventId = this.eventId
 

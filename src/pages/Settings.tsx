@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Hash, Sparkles, Search, Copy, Loader2, FlaskConical, Check, Settings as SettingsIcon, ChevronLeft, ChevronRight, Star, Users, CloudSun, DollarSign, UserCog, ScrollText, BarChart3, ShieldCheck, KeyRound, Plug, PencilRuler, Lightbulb, EyeOff } from 'lucide-react'
+import { Hash, Sparkles, Search, Copy, Loader2, FlaskConical, Check, Settings as SettingsIcon, ChevronLeft, ChevronRight, Star, Users, CloudSun, DollarSign, UserCog, ScrollText, BarChart3, ShieldCheck, KeyRound, Plug, PencilRuler, Lightbulb, EyeOff, MailCheck } from 'lucide-react'
 import { REVIEW_PRODUCTS } from '@/lib/reviewLinks'
 import { apiFetch } from '@/lib/api'
 import { btnPrimary, inputBase } from '@/lib/ui'
@@ -17,6 +17,7 @@ import ConnectionsPanel from '@/components/ConnectionsPanel'
 import RaceDatabasePanel from '@/components/RaceDatabasePanel'
 import AssignmentPanel from '@/components/AssignmentPanel'
 import SkippedProductsPanel from '@/components/SkippedProductsPanel'
+import SupportClosesPanel from '@/components/SupportClosesPanel'
 import StatsPanel from '@/components/StatsPanel'
 import ProductsBulkEdit from '@/pages/ProductsBulkEdit'
 import PageHeader from '@/components/PageHeader'
@@ -24,7 +25,7 @@ import LookupHealthPanel from '@/components/LookupHealthPanel'
 import ClearResearchCard from '@/components/ClearResearchCard'
 import Toast, { type ToastMessage } from '@/components/orders/Toast'
 
-export type SettingsPanel = 'features' | 'design_needs' | 'products' | 'pricing' | 'reviews' | 'stats' | 'races' | 'lookup' | 'storefront' | 'account' | 'people' | 'roles' | 'apikeys' | 'connections' | 'assignments' | 'skipped' | 'activity' | 'counter' | 'designs' | 'diagnostics' | 'maintenance'
+export type SettingsPanel = 'features' | 'design_needs' | 'products' | 'pricing' | 'reviews' | 'stats' | 'races' | 'lookup' | 'storefront' | 'account' | 'people' | 'roles' | 'apikeys' | 'connections' | 'assignments' | 'skipped' | 'support_closes' | 'activity' | 'counter' | 'designs' | 'diagnostics' | 'maintenance'
 
 /**
  * Settings navigation. Grouped rather than a flat list because the panels do
@@ -79,6 +80,7 @@ const SETTINGS_NAV: {
       { id: 'assignments', label: 'Order Assignment', blurb: 'Who new orders go to, and extra help for busy stretches', icon: UserCog },
       { id: 'skipped', label: 'Skipped Products', blurb: 'Shopify products with nothing to personalize, kept out of the fulfillment tool', icon: EyeOff },
       { id: 'counter', label: 'Custom Counter', blurb: 'Customs each designer finished, by month, for payouts', icon: Hash },
+      { id: 'support_closes', label: 'Support Closes', blurb: 'Conversations each person closed, by day', icon: MailCheck },
       { id: 'designs', label: 'Designs', blurb: 'Automated prints: which races have a template, the workers and the queue', icon: Sparkles },
       { id: 'activity', label: 'Activity Log', blurb: 'Who did what, and when', icon: ScrollText },
       { id: 'diagnostics', label: 'Diagnostics', blurb: 'Test connections and run a full health check', icon: FlaskConical },
@@ -284,6 +286,7 @@ export default function Settings() {
               {settingsPanel === 'skipped' && isAdmin && <SkippedProductsPanel />}
               {settingsPanel === 'activity' && isAdmin && <ActivityPanel />}
               {settingsPanel === 'counter' && isAdmin && <CustomCounter />}
+              {settingsPanel === 'support_closes' && isAdmin && <SupportClosesPanel />}
               {settingsPanel === 'designs' && isAdmin && <RenderTemplatesPanel />}
 
               {settingsPanel === 'reviews' && can('settings.reviews') && (

@@ -54,6 +54,8 @@ export default {
     half: /^half marathon$/i,
   },
   distances: { marathon: 26.2, half: 13.1 },
+  // Official 2025 results are TrueTime, whose pace floors (hundredths over 26.2 / 13.1).
+  pagePace: { 2025: { rule: 'floor' } },
   distanceMiles: 26.2,
   aliases: [
     'Des Moines Marathon',

@@ -57,6 +57,10 @@ export default {
     marathon: 26.2,
     half: 13.1
   },
+  // The official 2026 results are RunSignUp, whose pace is the net time (with
+  // hundredths) over the distance, rounded up; RTRT's own paceAvg is a second
+  // lower for some runners.
+  pagePace: { 2026: 'ceil' },
   // Default if courseMap resolution fails
   defaultEventType: 'Marathon',
   distanceMiles: 26.2,

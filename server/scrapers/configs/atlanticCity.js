@@ -56,6 +56,21 @@ export default {
     2025: 1126179,
   },
   yearOverrides: {
+    // The official 2025 page is RaceResult 365346 too, and its "Chip Pace" is
+    // floor(gun / distance): Athlinks has no gun time, so read the page.
+    2025: {
+      platform: 'raceresult',
+      raceResult: {
+        eventId: 365346,
+        listName: 'Large Race Reports|Overall Results by Chip',
+        chipField: 'Finish.CHIP',
+        paceField: 'Finish.SPEEDORPACE',
+        contests: {
+          marathon: /^marathon$/i,
+          half: /^half marathon$/i,
+        },
+      },
+    },
     2026: {
       platform: 'raceresult',
       raceResult: {
