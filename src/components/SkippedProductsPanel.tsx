@@ -18,13 +18,17 @@ export default function SkippedProductsPanel() {
   const [picked, setPicked] = useState<Product[]>([])
   const [q, setQ] = useState('')
   const [saving, setSaving] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
+    setLoadError(null)
     apiFetch('/api/orders/excluded-products')
-      .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not load products'); return d })
+      // A function that times out answers with Vercel's plain-text error page, not JSON.
+      .then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok || !d.products) throw new Error(d.error || 'Could not load the store\'s products'); return d })
       .then(d => { setProducts(d.products); setSaved(d.excluded); setPicked(d.excluded) })
-      .catch(e => toast.error((e as Error).message))
-  }, [])
+      .catch(e => setLoadError((e as Error).message))
+  }, [attempt])
 
   const pickedIds = useMemo(() => new Set(picked.map(p => p.id)), [picked])
   const matches = useMemo(() => {
@@ -38,8 +42,8 @@ export default function SkippedProductsPanel() {
     setSaving(true)
     try {
       const r = await apiFetch('/api/orders/excluded-products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ products: picked }) })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d.error || 'Could not save')
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.excluded) throw new Error(d.error || 'Could not save. Try again.')
       setSaved(d.excluded)
       setPicked(d.excluded)
       toast.success(d.cleared.length ? `Saved. Completed ${d.cleared.length} open order${d.cleared.length === 1 ? '' : 's'} for these products.` : 'Saved')
@@ -48,6 +52,12 @@ export default function SkippedProductsPanel() {
     finally { setSaving(false) }
   }
 
+  if (loadError) return (
+    <div className="text-sm text-off-black/60 space-y-2">
+      <p className="text-red-600">{loadError}</p>
+      <button onClick={() => setAttempt(a => a + 1)} className="text-[#4600D6] hover:underline">Try again</button>
+    </div>
+  )
   if (!products) return <div className="flex items-center gap-2 text-sm text-off-black/50"><Loader2 className="w-4 h-4 animate-spin" />Loading the store's products…</div>
 
   return (
