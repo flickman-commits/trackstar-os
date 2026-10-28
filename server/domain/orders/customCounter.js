@@ -11,16 +11,22 @@
  * no proof (made before proofs, or by hand) falls back to when it was sent
  * to production.
  *
- * A repeat, a race we have designed before, pays half. Decided automatically
+ * A repeat, a race we have designed before, pays the repeat rate. Decided automatically
  * (an earlier custom for the same race at the same distance) unless set by
  * hand in the counter (Order.designRepeat).
  */
 import prisma from '../../db.js'
 
 const TZ = 'America/New_York'
-// Payout per custom, in cents, by role. Head of Design (Dan) $50, junior
-// designers $25; a repeat is half. Anyone else (admins) is counted but not paid.
-const RATE_CENTS = { head_designer: 5000, designer: 2500, staff: 2500 }
+// Contractor rates (Notion "Contractor Rates"), cents per custom, new / repeat.
+// Senior (head designer) $50 / $25, junior designer $40 / $20. A person's own
+// rate, set in Settings > Custom Counter, wins (Creed: $50 / $25, agreed before
+// the rate card). Anyone else (admins) is counted but not paid.
+export const DEFAULT_RATES = { head_designer: { newCents: 5000, repeatCents: 2500 }, designer: { newCents: 4000, repeatCents: 2000 } }
+export function ratesFor(u) {
+  const d = (u && DEFAULT_RATES[u.role]) || { newCents: 0, repeatCents: 0 }
+  return { newCents: u?.customRateCents ?? d.newCents, repeatCents: u?.customRepeatRateCents ?? d.repeatCents, custom: u?.customRateCents != null || u?.customRepeatRateCents != null }
+}
 const DESIGNERS = ['head_designer', 'designer']
 const monthOf = d => new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit' }).format(d).slice(0, 7)
 
@@ -63,7 +69,7 @@ export async function customCounter(month) {
   // Every custom designed before, oldest first, for the repeat check.
   const history = all.map(o => ({ id: o.id, at: designedAt(o), key: raceKey(o.raceName) })).filter(h => h.at).sort((a, b) => a.at - b.at)
 
-  const users = await prisma.user.findMany({ select: { id: true, firstName: true, lastName: true, role: true } })
+  const users = await prisma.user.findMany({ select: { id: true, firstName: true, lastName: true, role: true, customRateCents: true, customRepeatRateCents: true } })
   const byId = new Map(users.map(u => [u.id, u]))
   const groups = new Map()
   for (const o of all) {
@@ -75,7 +81,8 @@ export async function customCounter(month) {
     const who = (assignee && DESIGNERS.includes(assignee.role) ? assignee.id : null) || o.designCompletedById || o.assigneeId || null
     if (!groups.has(who)) {
       const u = who ? byId.get(who) : null
-      groups.set(who, { userId: who, name: u ? `${u.firstName} ${u.lastName}`.trim() : 'Unattributed', rateCents: (u && RATE_CENTS[u.role]) || 0, orders: [] })
+      const r = ratesFor(u)
+      groups.set(who, { userId: who, name: u ? `${u.firstName} ${u.lastName}`.trim() : 'Unattributed', rateCents: r.newCents, repeatRateCents: r.repeatCents, orders: [] })
     }
     const g = groups.get(who)
     const key = raceKey(o.raceName)
@@ -89,7 +96,7 @@ export async function customCounter(month) {
       runnerName: o.runnerName, race: [o.raceName, o.raceYear].filter(Boolean).join(' '), customerName: o.customerName,
       rush: o.isRushOrder, completedAt: at.toISOString(), estimated: !firstProof.has(o.id),
       repeat, repeatSet: o.designRepeat !== null, autoRepeat,
-      rateCents: repeat ? Math.round(g.rateCents / 2) : g.rateCents,
+      rateCents: repeat ? g.repeatRateCents : g.rateCents,
       sentToProduction: o.designStatus === 'sent_to_production',
     })
   }
@@ -102,4 +109,17 @@ export async function customCounter(month) {
 /** Set (true/false) or clear (null, back to automatic) whether a custom is a repeat. */
 export async function setDesignRepeat(orderId, repeat) {
   return prisma.order.update({ where: { id: String(orderId) }, data: { designRepeat: repeat === null ? null : Boolean(repeat) }, select: { id: true, designRepeat: true } })
+}
+
+/** Everyone paid per custom, with their rates, for the Rates editor. */
+export async function customRates() {
+  const users = await prisma.user.findMany({ where: { role: { in: Object.keys(DEFAULT_RATES) }, isActive: true }, select: { id: true, firstName: true, lastName: true, role: true, customRateCents: true, customRepeatRateCents: true }, orderBy: { firstName: 'asc' } })
+  return users.map(u => ({ userId: u.id, name: `${u.firstName} ${u.lastName}`.trim(), level: u.role === 'head_designer' ? 'Senior' : 'Junior', ...ratesFor(u), defaults: DEFAULT_RATES[u.role] }))
+}
+
+/** Set a person's rates in cents; null puts one back to their level's default. */
+export async function setCustomRates(userId, { newCents, repeatCents }) {
+  const ok = v => v === null || (Number.isInteger(v) && v >= 0 && v <= 100000)
+  if (!ok(newCents) || !ok(repeatCents)) throw new Error('Rates are whole cents between $0 and $1,000')
+  return prisma.user.update({ where: { id: String(userId) }, data: { customRateCents: newCents, customRepeatRateCents: repeatCents }, select: { id: true } })
 }

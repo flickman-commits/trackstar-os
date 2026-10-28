@@ -1,5 +1,5 @@
 /**
- * The month-end custom statement: on the last day of the month (Eastern),
+ * The month-end custom statement: at 10am Eastern on the last day of the month,
  * each designer gets a Slack DM listing the customs the counter has for them
  * (customCounter.js), the rate for each, and the total, and is asked to check
  * it; Matt pays. One message per designer per month (SystemConfig records it).
@@ -16,6 +16,11 @@ import { postSlack, slackText } from '../../lib/slack.js'
 const TZ = 'America/New_York'
 const usd = cents => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 })}`
 const etParts = d => Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d).map(p => [p.type, p.value]))
+
+/** 10am Eastern (the cron runs hourly on the 28th-31st; UTC moves with daylight saving). */
+export function isTenAmEastern(now = new Date()) {
+  return Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', hourCycle: 'h23' }).format(now)) === 10
+}
 
 /** True on the last calendar day of the month, Eastern. */
 export function isLastDayOfMonth(now = new Date()) {
@@ -36,7 +41,7 @@ export function statementText(designer, monthLabel) {
     '',
     ...lines,
     '',
-    `*${designer.count} design${designer.count === 1 ? '' : 's'}*: ${fresh} new at ${usd(designer.rateCents)}${designer.repeats ? ` and ${designer.repeats} repeat${designer.repeats === 1 ? '' : 's'} at ${usd(designer.rateCents / 2)}` : ''}. *Total ${usd(designer.payoutCents)}*`,
+    `*${designer.count} design${designer.count === 1 ? '' : 's'}*: ${fresh} new at ${usd(designer.rateCents)}${designer.repeats ? ` and ${designer.repeats} repeat${designer.repeats === 1 ? '' : 's'} at ${usd(designer.repeatRateCents)}` : ''}. *Total ${usd(designer.payoutCents)}*`,
     '',
     `Can you look it over and make sure everything looks good? If anything's missing or off, just reply here. You'll receive payment from Matt.`,
   ].join('\n')
@@ -51,6 +56,7 @@ export async function sendCustomStatements({ now = new Date(), force = false } =
   const p = etParts(now)
   const month = `${p.year}-${p.month}`
   if (!force && !isLastDayOfMonth(now)) return { month, sent: [], missingWebhook: [], skipped: 'not the last day of the month' }
+  if (!force && !isTenAmEastern(now)) return { month, sent: [], missingWebhook: [], skipped: 'not 10am Eastern yet' }
   const key = `custom_statements_sent:${month}`
   if (!force && await prisma.systemConfig.findUnique({ where: { key } })) return { month, sent: [], missingWebhook: [], skipped: 'already sent' }
 

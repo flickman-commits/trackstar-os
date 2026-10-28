@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, Loader2, Zap } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { Avatar } from '@/components/AssigneePicker'
-import { btnSecondary, sectionCount } from '@/lib/ui'
+import { btnSecondary, inputBase, sectionCount } from '@/lib/ui'
 
 /**
  * Admin only: custom designs each designer made in a month, for payouts:
@@ -12,7 +12,8 @@ import { btnSecondary, sectionCount } from '@/lib/ui'
  */
 
 type Row = { id: string; display: string; item: number; runnerName: string; race: string; customerName: string | null; rush: boolean; completedAt: string; estimated: boolean; repeat: boolean; repeatSet: boolean; autoRepeat: boolean; rateCents: number; sentToProduction: boolean }
-type Designer = { userId: string | null; name: string; count: number; repeats: number; rateCents: number; payoutCents: number; orders: Row[] }
+type Designer = { userId: string | null; name: string; count: number; repeats: number; rateCents: number; repeatRateCents: number; payoutCents: number; orders: Row[] }
+type Rate = { userId: string; name: string; level: string; newCents: number; repeatCents: number; custom: boolean; defaults: { newCents: number; repeatCents: number } }
 type Data = { month: string; total: number; payoutCents: number; designers: Designer[] }
 
 const usd = (cents: number) => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 })}`
@@ -26,7 +27,53 @@ const shift = (month: string, by: number) => {
 const label = (month: string) => new Date(`${month}-15T12:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })
 
+/**
+ * Each designer's pay per custom, new and repeat. Blank goes back to the
+ * level default from the rate card (senior $50 / $25, junior $40 / $20).
+ */
+function RatesEditor({ onSaved }: { onSaved: () => void }) {
+  const [rates, setRates] = useState<Rate[] | null>(null)
+  const [draft, setDraft] = useState<Record<string, { n: string; r: string }>>({})
+  const [saving, setSaving] = useState<string | null>(null)
+  const load = () => apiFetch('/api/admin/custom-counter?rates=1').then(r => (r.ok ? r.json() : null)).then(d => d && setRates(d.rates))
+  useEffect(() => { load() }, [])
+  if (!rates) return null
+  const dollars = (c: number) => (c / 100).toFixed(c % 100 ? 2 : 0)
+  const save = async (x: Rate) => {
+    const d = draft[x.userId] || { n: dollars(x.newCents), r: dollars(x.repeatCents) }
+    const cents = (v: string) => (v.trim() === '' ? null : Math.round(Number(v) * 100))
+    setSaving(x.userId)
+    const res = await apiFetch('/api/admin/custom-counter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'rates', userId: x.userId, newCents: cents(d.n), repeatCents: cents(d.r) }) })
+    setSaving(null)
+    if (res.ok) { setRates((await res.json()).rates); setDraft(p => { const n = { ...p }; delete n[x.userId]; return n }); onSaved() }
+  }
+  return (
+    <section className="bg-white border border-border-gray rounded-lg p-4 mb-6">
+      <div className="flex items-baseline justify-between mb-3">
+        <h3 className="font-semibold text-off-black">Rates</h3>
+        <span className="text-xs text-off-black/45">Per custom. Blank = level default (senior $50 / $25, junior $40 / $20).</span>
+      </div>
+      <div className="space-y-2">
+        {rates.map(x => {
+          const d = draft[x.userId] || { n: dollars(x.newCents), r: dollars(x.repeatCents) }
+          const changed = !!draft[x.userId]
+          return (
+            <div key={x.userId} className="flex flex-wrap items-center gap-3 text-sm">
+              <span className="w-36 font-medium text-off-black truncate">{x.name}</span>
+              <span className="w-20 text-xs text-off-black/50">{x.level}{x.custom ? ', own rate' : ''}</span>
+              <label className="flex items-center gap-1 text-off-black/60">New $<input value={d.n} onChange={e => setDraft(p => ({ ...p, [x.userId]: { ...d, n: e.target.value } }))} placeholder={dollars(x.defaults.newCents)} inputMode="decimal" className={`${inputBase} w-20 py-1`} /></label>
+              <label className="flex items-center gap-1 text-off-black/60">Repeat $<input value={d.r} onChange={e => setDraft(p => ({ ...p, [x.userId]: { ...d, r: e.target.value } }))} placeholder={dollars(x.defaults.repeatCents)} inputMode="decimal" className={`${inputBase} w-20 py-1`} /></label>
+              {changed && <button onClick={() => save(x)} disabled={saving === x.userId} className={`${btnSecondary} py-1`}>{saving === x.userId ? 'Saving…' : 'Save'}</button>}
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 export default function CustomCounter() {
+  const [reloadKey, setReloadKey] = useState(0)
   const [month, setMonth] = useState(thisMonth)
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -39,7 +86,7 @@ export default function CustomCounter() {
       .then(j => { if (live) setData(j) })
       .catch(e => { if (live) setError(e instanceof Error ? e.message : 'Could not load') })
     return () => { live = false }
-  }, [month])
+  }, [month, reloadKey])
 
   const atNow = month >= thisMonth()
 
@@ -65,6 +112,7 @@ export default function CustomCounter() {
           </div>
         </div>
 
+        <RatesEditor onSaved={() => setReloadKey(k => k + 1)} />
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!data && !error && <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-off-black/40" /></div>}
 
@@ -80,7 +128,7 @@ export default function CustomCounter() {
                 <div key={d.userId || 'none'} className="bg-white border border-border-gray rounded-lg p-4">
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-off-black/40 truncate">{d.name}</div>
                   <div className="text-3xl font-bold text-off-black mt-1">{d.count}</div>
-                  <div className="text-sm font-semibold text-green-700 mt-0.5">{d.rateCents ? `${usd(d.payoutCents)} · ${usd(d.rateCents)} each${d.repeats ? `, ${d.repeats} repeat${d.repeats === 1 ? '' : 's'} at ${usd(d.rateCents / 2)}` : ''}` : 'Not paid per custom'}</div>
+                  <div className="text-sm font-semibold text-green-700 mt-0.5">{d.rateCents ? `${usd(d.payoutCents)} · ${usd(d.rateCents)} each${d.repeats ? `, ${d.repeats} repeat${d.repeats === 1 ? '' : 's'} at ${usd(d.repeatRateCents)}` : ''}` : 'Not paid per custom'}</div>
                 </div>
               ))}
             </div>
@@ -94,7 +142,7 @@ export default function CustomCounter() {
                     {d.userId && <Avatar user={{ id: d.userId, firstName: d.name, lastName: '' }} size={24} />}
                     <span className="font-semibold text-off-black">{d.name}</span>
                     <span className={sectionCount}>{d.count}</span>
-                    {d.rateCents > 0 && <span className="ml-auto text-sm font-semibold text-green-700">{d.count - d.repeats} × {usd(d.rateCents)}{d.repeats ? ` + ${d.repeats} × ${usd(d.rateCents / 2)}` : ''} = {usd(d.payoutCents)}</span>}
+                    {d.rateCents > 0 && <span className="ml-auto text-sm font-semibold text-green-700">{d.count - d.repeats} × {usd(d.rateCents)}{d.repeats ? ` + ${d.repeats} × ${usd(d.repeatRateCents)}` : ''} = {usd(d.payoutCents)}</span>}
                   </div>
                   <table className="w-full text-sm">
                     <thead className="text-[11px] font-semibold uppercase tracking-wider text-off-black/45">

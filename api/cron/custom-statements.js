@@ -1,6 +1,6 @@
 /**
- * GET /api/cron/custom-statements - runs on the 28th to the 31st; on the last
- * day of the month (Eastern) each designer gets their custom statement in a
+ * GET /api/cron/custom-statements - hourly on the 28th to the 31st; at 10am
+ * Eastern on the last day of the month each designer gets their custom statement in a
  * Slack DM (server/domain/orders/customStatements.js). Cron only.
  */
 import { isCronRequest } from '../_lib/auth.js'

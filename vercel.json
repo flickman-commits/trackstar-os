@@ -44,7 +44,7 @@
     },
     {
       "path": "/api/cron/custom-statements",
-      "schedule": "0 22 28-31 * *"
+      "schedule": "0 * 28-31 * *"
     }
   ],
   "functions": {

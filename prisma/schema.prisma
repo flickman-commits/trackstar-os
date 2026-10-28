@@ -815,6 +815,11 @@ model User {
   // admin | sales | fulfillment | designer (api/_lib/roles.js). "staff" from
   // before roles reads as designer.
   role         String    @default("designer")
+  // Pay per custom design, in cents (USD), for the Custom Counter and the
+  // month-end statement. Null = the level default (senior head designer
+  // $50 / $25 repeat, junior designer $40 / $20). Set in Settings > Custom Counter.
+  customRateCents       Int?
+  customRepeatRateCents Int?
   isActive     Boolean   @default(true)
   // Bumped to sign this person out everywhere: on deactivation, a password
   // change or reset, or an admin's "Sign out everywhere". Carried in the
