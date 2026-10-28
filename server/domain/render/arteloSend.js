@@ -198,7 +198,7 @@ async function markSent(job, order, actorId) {
     if (row.id !== order.id && !j.arteloAttachedAt) continue
     await prisma.renderJob.update({ where: { id: j.id }, data: { arteloSentAt: now, sendAfter: null, sendError: null, sendCheckedAt: now } })
     try {
-      if (row.trackstarOrderType === 'custom') await setDesignStatus(row, 'sent_to_production', j.reviewedById || null, actor)
+      if (row.trackstarOrderType === 'custom') await setDesignStatus(row, 'sent_to_production', j.reviewedById || null, actor, { checkArtelo: false })
       else await completeOrder({ orderId: row.id, actor, via: 'approve', renderJobId: j.id })
     } catch (e) {
       problems.push(e.message)
@@ -260,7 +260,15 @@ export async function sendOne(job) {
 
     // This print's item on the Artelo order.
     const seller = order.arteloOrderData?.orderItems?.[order.lineItemIndex]?.orderItemId
-    const item = seller ? (live.orderItems || []).find(i => String(i.orderItemId) === String(seller)) : null
+    let item = seller ? (live.orderItems || []).find(i => String(i.orderItemId) === String(seller)) : null
+    // Our copy of the Artelo order goes stale when the Shopify line is replaced
+    // (an edited order: 4730's item came back with a new orderItemId). Then the
+    // order's only item of this print's size is it; two or more stays a person's call.
+    if (!item) {
+      const wantSize = order.trackstarOrderType === 'standard' ? (job.spec?.size || order.productSize) : order.productSize
+      const fits = (live.orderItems || []).filter(i => sameSize(i.product?.size, wantSize))
+      if (fits.length === 1) item = fits[0]
+    }
     if (!item?.id) return outcome(job, { error: 'Could not match this print to an item on the Artelo order', notify: true })
     const size = order.trackstarOrderType === 'standard' ? (job.spec?.size || order.productSize) : order.productSize
     if (!sameSize(item.product?.size, size)) return outcome(job, { error: `The Artelo item is ${String(item.product?.size || '').replace(/^x/, '')} but this print is ${size}`, notify: true })

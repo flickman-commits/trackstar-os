@@ -44,8 +44,24 @@ export async function acceptMatch({ orderNumber, match }) {
       const raceName = order.raceNameOverride || order.raceName
       const raceYear = order.yearOverride || order.raceYear
       const scraper = getScraperForRace(raceName, raceYear)
-      console.log(`[accept-match] Enriching match by re-searching "${match.name}"`)
-      const enriched = await scraper.searchRunner(match.name)
+      // By the accepted bib first: a name search for a shared name ("Erin
+      // Smith", Columbus 2026) comes back with the same two runners and no
+      // time, which saved the match timeless (order 6265).
+      let enriched = null
+      if (match.bib) {
+        console.log(`[accept-match] Enriching match by bib ${match.bib}`)
+        enriched = await scraper.searchRunnerByBib(match.bib).catch(() => null)
+        if (enriched?.found && String(enriched.bibNumber || '').trim() !== String(match.bib).trim()) enriched = null
+      }
+      if (!enriched?.found) {
+        console.log(`[accept-match] Enriching match by re-searching "${match.name}"`)
+        enriched = await scraper.searchRunner(match.name)
+        // Still several of that name: the one with the accepted bib, if it carries a time.
+        if (!enriched.found && match.bib) {
+          const same = (enriched.possibleMatches || []).find(c => String(c?.bib || '').trim() === String(match.bib).trim() && c.time)
+          if (same) enriched = { found: true, officialTime: same.time, officialPace: same.pace, eventType: same.eventType, resultsUrl: same.resultsUrl || enriched.resultsUrl }
+        }
+      }
       if (enriched.found) {
         enrichedTime = enriched.officialTime || enrichedTime
         enrichedPace = enriched.officialPace || enrichedPace

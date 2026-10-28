@@ -17,7 +17,7 @@
 import prisma from '../../db.js'
 import { ensureApprovalToken } from '../../../api/_lib/approvalToken.js'
 import { recordAudit } from '../../../api/_lib/users.js'
-import { describeOrder } from './complete.js'
+import { describeOrder, assertArteloHasIt } from './complete.js'
 import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js'
 
 export const DESIGN_STATUSES = ['not_started', 'in_progress', 'awaiting_review', 'in_revision', 'approved_by_customer', 'final_pdf_uploaded', 'sent_to_production']
@@ -25,10 +25,17 @@ export const DESIGN_STATUSES = ['not_started', 'in_progress', 'awaiting_review',
 // completedById: the person making the change, credited on the payout counter
 // when this sends it to production. Falls back to the assignee (system calls).
 // actor: the person, for the Activity Log (null for system calls).
-export async function setDesignStatus(existing, designStatus, completedById = null, actor = null) {
+// checkArtelo: a person moving it to Sent to Production must have sent it in
+// Artelo first; our own send passes false (Artelo just accepted it).
+export async function setDesignStatus(existing, designStatus, completedById = null, actor = null, { checkArtelo = true } = {}) {
   if (!DESIGN_STATUSES.includes(designStatus)) throw new Error(`Invalid designStatus. Must be one of: ${DESIGN_STATUSES.join(', ')}`)
   if (existing.trackstarOrderType !== 'custom' && existing.trackstarOrderType !== 'race_partner') {
     throw new Error('Design status can only be updated for custom or race partner orders')
+  }
+
+  if (designStatus === 'sent_to_production' && existing.designStatus !== 'sent_to_production' && checkArtelo) {
+    const withArtelo = existing.arteloOrderData !== undefined ? existing : await prisma.order.findUnique({ where: { id: existing.id }, select: { arteloOrderData: true } })
+    await assertArteloHasIt(withArtelo)
   }
 
   const updateData = { designStatus }

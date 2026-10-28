@@ -7,6 +7,7 @@ import prisma from '../../../../api/_lib/prisma.js'
 import { ToolError } from '../server.js'
 import { approvalUrl } from '../../../lib/links.js'
 import { setDesignStatus, DESIGN_STATUSES } from '../../../domain/orders/designStatus.js'
+import { CompleteError } from '../../../domain/orders/complete.js'
 import { findOrdersByNumber, displayNumber, openWhere, shopifyNames, daysLate, mayHoldLinks, linkField } from './orders.js'
 
 const LABEL = {
@@ -102,7 +103,14 @@ export const designTools = [
     async handler({ orderNumber, status }, { principal }) {
       const rows = (await findOrdersByNumber(orderNumber)).filter(o => ['custom', 'race_partner'].includes(o.trackstarOrderType))
       if (!rows.length) throw new ToolError(`No custom or partner order matching "${orderNumber}".`)
-      for (const o of rows) await setDesignStatus(o, status, principal?.user?.id || null, principal?.user || null)
+      for (const o of rows) {
+        try {
+          await setDesignStatus(o, status, principal?.user?.id || null, principal?.user || null)
+        } catch (e) {
+          if (e instanceof CompleteError) throw new ToolError(e.message)
+          throw e
+        }
+      }
       const n = displayNumber(rows[0])
       return { summary: `${n} design status set to ${LABEL[status]}`, orderNumber: n, designStatus: status, items: rows.length }
     },

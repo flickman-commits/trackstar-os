@@ -13,9 +13,32 @@
 import prisma from '../../db.js'
 import { recordAudit } from '../../../api/_lib/users.js'
 import { unpaidPhotoRows } from './photoPayment.js'
+import { call as arteloCall } from '../render/artelo.js'
 
 export class CompleteError extends Error {
   constructor(code, message) { super(message); this.code = code }
+}
+
+/**
+ * A person can mark an order done only once Artelo has it in production.
+ * Orders were completed here at approval while Artelo still had them as
+ * "Missing Designs" (4725, Oct 16): the tool said done, the customer got
+ * nothing. Anything past "pending fulfillment action" (Received, in
+ * production, shipped, cancelled) passes; an order with no Artelo order
+ * (a creator sample) is not ours to check. Artelo unreachable refuses too.
+ */
+export async function assertArteloHasIt(order) {
+  const id = order?.arteloOrderData?.id
+  if (!id) return
+  let live
+  try {
+    live = await arteloCall('orders/get-by-id', { query: { orderId: id } })
+  } catch {
+    throw new CompleteError('artelo_unreachable', 'Could not check Artelo, so the order was not marked complete. Try again in a minute.')
+  }
+  if (live?.status === 'PendingFulfillmentAction') {
+    throw new CompleteError('not_in_production', `Artelo still has this order as "${live.productionStatus || 'not sent'}": it has not gone to production. Attach its design and send it to production in Artelo, then mark it complete.`)
+  }
 }
 
 export function describeOrder(order) {
@@ -38,6 +61,9 @@ export async function completeOrder({ orderId, orderNumber, actor = null, via = 
     : await prisma.order.findFirst({ where: { orderNumber: String(orderNumber || '') } })
   if (!existing) throw new CompleteError('not_found', 'Order not found')
   if (existing.status === 'completed') return { order: existing, already: true }
+  // By hand: only once Artelo has it. Our own send (via 'approve') has just
+  // been accepted by Artelo; a skipped product is fulfilled by Artelo itself.
+  if (via === 'manual') await assertArteloHasIt(existing)
 
   // The photo gate is for designs made by hand. When the script made the
   // design, it placed the photo and a person approved the result with the
