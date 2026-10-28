@@ -111,6 +111,10 @@ model Order {
   // line for it; until then the order shows "Photo not paid" and cannot be
   // completed.
   photoAddedManually Boolean  @default(false)
+  // A hand-attached photo we are not charging for (Settings in the order
+  // view: "Photo is free"). Counts as paid, renders with the photo, and
+  // never needs a Photo Add-On line on the Shopify order.
+  photoFree          Boolean  @default(false)
   // Set when a designer confirms the customer's photo is actually placed on
   // the artwork. A photo order that ships without the photo is a reprint and a
   // refund, and the photo is the one element no proof template shows by

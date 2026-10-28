@@ -17,7 +17,7 @@ import { unpaidPhotoRows } from './photoPayment.js'
 export async function refreshUnpaidPhotoOrders({ limit = 30, log = () => {} } = {}) {
   const rows = await prisma.order.findMany({
     where: { source: 'shopify', status: { not: 'completed' }, photoPath: { not: null } },
-    select: { id: true, orderNumber: true, parentOrderNumber: true, source: true, photoPath: true, photoAddedManually: true, shopifyOrderData: true, trackstarOrderType: true },
+    select: { id: true, orderNumber: true, parentOrderNumber: true, source: true, photoPath: true, photoAddedManually: true, photoFree: true, shopifyOrderData: true, trackstarOrderType: true },
   })
   const byParent = new Map()
   for (const r of rows) { if (!byParent.has(r.parentOrderNumber)) byParent.set(r.parentOrderNumber, []); byParent.get(r.parentOrderNumber).push(r) }

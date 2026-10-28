@@ -55,7 +55,7 @@ export async function pipelinesFor(ids) {
   if (parents.length) {
     const siblings = await prisma.order.findMany({
       where: { parentOrderNumber: { in: parents } },
-      select: { id: true, parentOrderNumber: true, photoPath: true, photoAddedManually: true, lineItemIndex: true, trackstarOrderType: true },
+      select: { id: true, parentOrderNumber: true, photoPath: true, photoAddedManually: true, photoFree: true, lineItemIndex: true, trackstarOrderType: true },
       orderBy: { lineItemIndex: 'asc' },
     })
     const pay = await prisma.$queryRaw`SELECT DISTINCT ON ("parentOrderNumber") "parentOrderNumber" AS p, "shopifyOrderData"::jsonb->'financial_status' AS fs, "shopifyOrderData"::jsonb->'line_items' AS li FROM "Order" WHERE "parentOrderNumber" = ANY(${parents}) ORDER BY "parentOrderNumber", "lineItemIndex" ASC`

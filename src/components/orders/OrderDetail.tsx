@@ -1115,6 +1115,21 @@ export default function OrderDetail({
     } catch (e) { setToast({ message: e instanceof Error ? e.message : 'Could not remove', type: 'error' }) }
   }
 
+  // Admin: we are not charging for this photo. It counts as paid and the
+  // print renders again with it on.
+  const markPhotoFree = async (orderId: string) => {
+    if (!confirm('Add this photo free? No Photo Add-On charge; the print renders again with the photo on it.')) return
+    try {
+      const res = await apiFetch('/api/orders/photo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'free', orderId }) })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not mark the photo free')
+      setSelectedOrder(prev => prev && prev.id === orderId ? { ...prev, photoUnpaid: false } : prev)
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, photoUnpaid: false } : o))
+      setToast({ message: data.rendering ? `Photo marked free. Rendering v${data.rendering} with the photo.` : `Photo marked free.${data.reasons?.length ? ` Not rendering yet: ${data.reasons.join('. ')}` : ''}`, type: 'success' })
+      fetchOrders()
+    } catch (e) { setToast({ message: e instanceof Error ? e.message : 'Could not mark the photo free', type: 'error' }) }
+  }
+
   // Admin: cancel a creator's free sample. The order leaves the queue and the
   // creator goes back to pending, to approve again later or decline.
   const cancelCreatorSample = async (order: Order) => {
@@ -2297,6 +2312,9 @@ Thank you!`
                 {selectedOrder.photoUnpaid && (
                   <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                     <span className="font-semibold">Photo not paid.</span> It was added after the order and the customer has not paid the Photo Add-On yet. Hold this print until the Shopify order reads paid; it updates on its own within about 10 minutes of payment.
+                    {isAdmin && (
+                      <button onClick={() => markPhotoFree(selectedOrder.id)} className="ml-2 text-xs font-semibold underline underline-offset-2 text-red-800">Photo is free (don't charge)</button>
+                    )}
                     {isAdmin && selectedOrder.photoAddedManually && (
                       <button onClick={() => removeManualPhoto(selectedOrder.id)} className="ml-2 text-xs underline underline-offset-2 text-red-700/80">Remove photo</button>
                     )}

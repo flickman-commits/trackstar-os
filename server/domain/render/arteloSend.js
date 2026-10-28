@@ -150,7 +150,7 @@ export const sendState = sendStateOf
 
 const ORDER_SELECT = {
   id: true, orderNumber: true, parentOrderNumber: true, lineItemIndex: true, status: true, trackstarOrderType: true,
-  runnerName: true, raceName: true, raceYear: true, productSize: true, photoPath: true, photoAddedManually: true,
+  runnerName: true, raceName: true, raceYear: true, productSize: true, photoPath: true, photoAddedManually: true, photoFree: true,
   shopifyOrderData: true, arteloOrderData: true, designStatus: true,
 }
 
@@ -227,7 +227,7 @@ export async function sendOne(job) {
 
     // A photo added after purchase is printed only once it is paid for.
     if (order.photoAddedManually) {
-      const sibs = await prisma.order.findMany({ where: { parentOrderNumber: order.parentOrderNumber }, select: { id: true, photoPath: true, photoAddedManually: true, trackstarOrderType: true } })
+      const sibs = await prisma.order.findMany({ where: { parentOrderNumber: order.parentOrderNumber }, select: { id: true, photoPath: true, photoAddedManually: true, photoFree: true, trackstarOrderType: true } })
       if (unpaidPhotoRows(sibs, order.shopifyOrderData).has(order.id)) return outcome(job, { error: 'The customer has not paid for the photo yet', retryIn: 30 })
     }
 

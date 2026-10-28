@@ -6,6 +6,9 @@
  *                                             personalization-photos bucket
  *   { action: 'attach', orderIds, path }      set the photo on those prints
  *   { action: 'remove', orderId }             take a hand-attached photo off
+ *   { action: 'free', orderId, free? }        we are not charging for this photo (default
+ *                                             true): it counts as paid and the print renders
+ *                                             again with it on; free: false undoes it
  *   { action: 'replace', orderId, path }      swap the photo on a print that has one
  *                                             (the customer emailed a different one);
  *                                             never bills, keeps how it was paid for
@@ -23,6 +26,7 @@ import { requireAdminRole, requireCapability, recordAudit } from '../_lib/users.
 import prisma from '../_lib/prisma.js'
 import { addVariantToOrder, PHOTO_ADDON_VARIANT_ID } from '../../server/services/shopifyOrderEdit.js'
 import { storage } from '../../server/lib/storage.js'
+import { checkOrder, createJob } from '../../server/domain/render/jobs.js'
 
 const BUCKET = 'personalization-photos'
 const EXTS = new Set(['jpg', 'jpeg', 'png', 'heic', 'heif', 'webp'])
@@ -118,6 +122,27 @@ export default async function handler(req, res) {
         actor: admin,
       })
       return res.status(200).json({ ok: true, photoPath: path, charged, chargeError })
+    }
+
+    if (body.action === 'free') {
+      // A photo we add as a courtesy: no Photo Add-On to wait for. It renders
+      // again with the photo (a render waiting for review shows it without).
+      const o = await prisma.order.findUnique({ where: { id: String(body.orderId || '') }, select: { id: true, orderNumber: true, photoPath: true, photoFree: true } })
+      if (!o) return res.status(404).json({ error: 'Order not found' })
+      if (!o.photoPath) return res.status(400).json({ error: 'This print has no photo' })
+      const free = body.free !== false
+      await prisma.order.update({ where: { id: o.id }, data: { photoFree: free } })
+      const who = [admin.firstName, admin.lastName].filter(Boolean).join(' ') || 'Someone'
+      await prisma.orderComment.create({ data: { orderId: o.id, text: free ? 'Photo marked free: no Photo Add-On charge for this print.' : 'Photo no longer free: it needs a paid Photo Add-On.', authorId: admin.id || null, authorName: who } })
+      await recordAudit({ action: 'order.photo-free', summary: `${free ? 'Marked the photo free on' : 'Took the free photo off'} ${o.orderNumber}`, detail: { orderId: o.id, free }, actor: admin })
+      let rendering = null
+      if (free) {
+        await prisma.renderJob.updateMany({ where: { orderId: o.id, status: 'done', review: 'pending' }, data: { review: 'closed', reviewNote: 'Photo marked free; a new design with the photo replaces it', reviewedAt: new Date() } })
+        const { ok, reasons } = await checkOrder(o.id)
+        rendering = ok ? (await createJob({ orderId: o.id, requestedBy: 'admin', requestedById: admin.id || null })).version : null
+        if (!ok) return res.status(200).json({ ok: true, free, rendering: null, reasons })
+      }
+      return res.status(200).json({ ok: true, free, rendering })
     }
 
     if (body.action === 'remove') {
