@@ -6,10 +6,11 @@ import PhotoCropper from './PhotoCropper'
 
 /**
  * Admin only: a customer emails a photo after ordering. Attach it to one or
- * every print on the order and, on a Shopify order, bill for it in the same
- * step: the tool adds one Photo Add-On per print to the Shopify order and
- * Shopify emails the customer a link to pay. The photo reads "not paid" until
- * they do, and those prints cannot be completed before then.
+ * every print on the order and, on a Shopify order, either bill for it in the
+ * same step (the tool adds one Photo Add-On per print to the Shopify order and
+ * Shopify emails the customer a link to pay; the photo reads "not paid" until
+ * they do) or add it free. A free photo, and one on an Etsy order, which has
+ * no add-on to bill, renders with the photo straight away.
  */
 
 type Print = { id: string; label: string; hasPhoto: boolean }
@@ -31,14 +32,16 @@ export default function AddPhotoPanel({
   custom?: boolean
   /** Swap this print's existing photo for another one the customer sent. Never bills. */
   replace?: boolean
-  onDone: (result: { charged: boolean; chargeError: string | null }) => void
+  onDone: (result: { charged: boolean; chargeError: string | null; free: boolean; rendering: number[]; reasons: string[] }) => void
 }) {
   const [open, setOpen] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   // The crop stage hands back the square to upload.
   const cropExport = useRef<(() => Promise<File>) | null>(null)
   const [picked, setPicked] = useState<Set<string>>(() => new Set(prints.filter(p => !p.hasPhoto).map(p => p.id).length ? prints.filter(p => !p.hasPhoto).map(p => p.id) : [currentId]))
-  const [charge, setCharge] = useState(isShopify && !custom)
+  // Shopify orders choose: bill the customer, or add it free. Elsewhere there is nothing to bill.
+  const [billing, setBilling] = useState<'bill' | 'free'>(isShopify ? 'bill' : 'free')
+  const charge = isShopify && !custom && billing === 'bill'
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -54,14 +57,14 @@ export default function AddPhotoPanel({
       const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': cropped.type || 'application/octet-stream', 'x-upsert': 'false' }, body: cropped })
       if (!put.ok) throw new Error('The photo did not upload')
       if (replace) {
-        await post({ action: 'replace', orderId: currentId, path: slot.path })
+        const out = await post({ action: 'replace', orderId: currentId, path: slot.path })
         setOpen(false); choose(null)
-        onDone({ charged: false, chargeError: null })
+        onDone({ charged: false, chargeError: null, free: false, rendering: out.rendering ? [out.rendering] : [], reasons: out.reasons || [] })
         return
       }
-      const out = await post({ action: 'attach', orderIds: [...picked], path: slot.path, charge })
+      const out = await post({ action: 'attach', orderIds: [...picked], path: slot.path, charge, free: !custom && billing === 'free' })
       setOpen(false); choose(null)
-      onDone({ charged: !!out.charged, chargeError: out.chargeError || null })
+      onDone({ charged: !!out.charged, chargeError: out.chargeError || null, free: !!out.free, rendering: out.rendering || [], reasons: out.reasons || [] })
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not add the photo')
     } finally { setBusy(false) }
@@ -102,7 +105,7 @@ export default function AddPhotoPanel({
           </label>
         )}
         {replace ? (
-          <p className="flex-1 text-xs text-off-black/60">The new photo replaces the one on this print. Nothing is billed. It has to be placed on the artwork again, and a design made with the old photo needs a re-render.</p>
+          <p className="flex-1 text-xs text-off-black/60">The new photo replaces the one on this print. Nothing is billed. The design renders again with the new photo.</p>
         ) : custom && prints.length <= 1 ? (
           <p className="flex-1 text-xs text-off-black/60">The photo the customer emailed. It shows at the top of this order for the designer, and the order gets the Photo on print tag. Nothing is billed.</p>
         ) : (
@@ -119,18 +122,24 @@ export default function AddPhotoPanel({
       </div>
 
       {isShopify && !replace && !custom && (
-        <label className="flex items-start gap-2 text-sm text-off-black">
-          <input type="checkbox" className="mt-0.5" checked={charge} onChange={e => setCharge(e.target.checked)} />
-          <span>
-            Bill the customer: add {count} Photo Add-On{count === 1 ? '' : 's'} (${20 * count}) to the Shopify order. Shopify emails them a link to pay the difference.
-          </span>
-        </label>
+        <div className="space-y-1.5">
+          <label className="flex items-start gap-2 text-sm text-off-black">
+            <input type="radio" name="photo-billing" className="mt-0.5" checked={billing === 'bill'} onChange={() => setBilling('bill')} />
+            <span>
+              Bill the customer: add {count} Photo Add-On{count === 1 ? '' : 's'} (${20 * count}) to the Shopify order. Shopify emails them a link to pay; the print renders with the photo once they pay.
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm text-off-black">
+            <input type="radio" name="photo-billing" className="mt-0.5" checked={billing === 'free'} onChange={() => setBilling('free')} />
+            <span>Free, no charge. The print renders with the photo now.</span>
+          </label>
+        </div>
       )}
-      {!replace && !custom && <p className="text-[11px] text-off-black/50">The photo shows as not paid until the order reads paid in Shopify, and those prints cannot be completed before then.</p>}
+      {!isShopify && !replace && !custom && <p className="text-[11px] text-off-black/50">Added free (there is no Photo Add-On to bill on this order). The print renders with the photo now.</p>}
       {err && <p className="text-sm text-red-600">{err}</p>}
       <div className="flex gap-2">
         <button onClick={submit} disabled={!file || !count || busy} className={btnPrimary}>
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : replace ? 'Replace photo' : `Add photo${charge && isShopify && !custom ? ' and bill' : ''}`}
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : replace ? 'Replace photo' : `Add photo${charge ? ' and bill' : ''}`}
         </button>
         <button onClick={() => setOpen(false)} className={btnGhost}>Cancel</button>
       </div>

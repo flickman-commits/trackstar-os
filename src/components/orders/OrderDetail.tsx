@@ -1114,8 +1114,11 @@ export default function OrderDetail({
     }
   }
 
+  // Two clicks, in the page: Arc blocks window.confirm, and the click did nothing.
+  const [removePhotoArmed, setRemovePhotoArmed] = useState<string | null>(null)
   const removeManualPhoto = async (orderId: string) => {
-    if (!confirm('Remove this photo from the print? The Photo Add-On stays on the Shopify order; refund it there if needed.')) return
+    if (removePhotoArmed !== orderId) { setRemovePhotoArmed(orderId); setTimeout(() => setRemovePhotoArmed(a => a === orderId ? null : a), 5000); return }
+    setRemovePhotoArmed(null)
     try {
       const res = await apiFetch('/api/orders/photo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'remove', orderId }) })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not remove')
@@ -1126,8 +1129,8 @@ export default function OrderDetail({
 
   // Admin: we are not charging for this photo. It counts as paid and the
   // print renders again with it on.
+  // No confirm: it is undone the same way, and Arc blocked the confirm (6463).
   const markPhotoFree = async (orderId: string) => {
-    if (!confirm('Add this photo free? No Photo Add-On charge; the print renders again with the photo on it.')) return
     try {
       const res = await apiFetch('/api/orders/photo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'free', orderId }) })
       const data = await res.json().catch(() => ({}))
@@ -2203,7 +2206,7 @@ Thank you!`
                         currentId={selectedOrder.id}
                         isShopify={selectedOrder.source === 'shopify'}
                         prints={[]}
-                        onDone={() => { fetchOrders(); setToast({ message: 'Photo replaced. Place it on the artwork again.', type: 'success' }) }}
+                        onDone={({ rendering, reasons }) => { fetchOrders(); setToast({ message: rendering.length ? `Photo replaced. Rendering v${rendering[0]} with the new photo.` : `Photo replaced.${reasons.length ? ` Not rendering yet: ${reasons.join('. ')}` : ''}`, type: 'success' }) }}
                       />
                     ) : (
                       <AddPhotoPanel
@@ -2214,11 +2217,12 @@ Thank you!`
                           .filter(o => o.parentOrderNumber === selectedOrder.parentOrderNumber && o.trackstarOrderType === 'standard')
                           .sort((a, b) => a.lineItemIndex - b.lineItemIndex)
                           .map(o => ({ id: o.id, label: `${o.displayOrderNumber}${getOrderItemCount(o.parentOrderNumber) > 1 ? ` item ${getOrderItemPosition(o)}` : ''}: ${o.effectiveRunnerName || o.runnerName || 'runner'}`, hasPhoto: !!o.photoPath }))}
-                        onDone={({ charged, chargeError }) => {
+                        onDone={({ charged, chargeError, free, rendering, reasons }) => {
                           fetchOrders()
+                          const render = rendering.length ? ' Rendering the design with the photo.' : charged ? ' It renders with the photo once they pay.' : free && reasons.length ? ` Not rendering yet: ${reasons.join('. ')}` : ''
                           setToast(chargeError
                             ? { message: chargeError, type: 'error' }
-                            : { message: charged ? 'Photo added. Shopify is emailing the customer to pay for it.' : 'Photo added.', type: 'success' })
+                            : { message: `${charged ? 'Photo added. Shopify is emailing the customer to pay for it.' : free ? 'Photo added free.' : 'Photo added.'}${render}`, type: 'success' })
                         }}
                       />
                     )}
@@ -2325,7 +2329,7 @@ Thank you!`
                       <button onClick={() => markPhotoFree(selectedOrder.id)} className="ml-2 text-xs font-semibold underline underline-offset-2 text-red-800">Photo is free (don't charge)</button>
                     )}
                     {isAdmin && selectedOrder.photoAddedManually && (
-                      <button onClick={() => removeManualPhoto(selectedOrder.id)} className="ml-2 text-xs underline underline-offset-2 text-red-700/80">Remove photo</button>
+                      <button onClick={() => removeManualPhoto(selectedOrder.id)} className="ml-2 text-xs underline underline-offset-2 text-red-700/80">{removePhotoArmed === selectedOrder.id ? 'Click again to remove the photo' : 'Remove photo'}</button>
                     )}
                   </div>
                 )}

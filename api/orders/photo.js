@@ -4,7 +4,9 @@
  *
  *   { action: 'upload-url', filename }        signed upload slot in the
  *                                             personalization-photos bucket
- *   { action: 'attach', orderIds, path }      set the photo on those prints
+ *   { action: 'attach', orderIds, path, charge?, free? }
+ *                                             set the photo on those prints; charge bills a
+ *                                             Photo Add-On, free marks it as not charged
  *   { action: 'remove', orderId }             take a hand-attached photo off
  *   { action: 'free', orderId, free? }        we are not charging for this photo (default
  *                                             true): it counts as paid and the print renders
@@ -19,6 +21,10 @@
  * the photo is still attached and the answer says so, so it can be added by
  * hand in Shopify. Either way the photo is "not paid" until Shopify reads
  * paid, and the print cannot be completed before then (photoPayment.js).
+ *
+ * Adding, replacing or freeing a photo renders the print again with it on
+ * (renderWithPhoto). A paid-for photo that is not paid yet renders once
+ * Shopify reads paid (jobs.js rerenderChanged).
  */
 import crypto from 'node:crypto'
 import { setCors, requireAdmin } from '../_lib/auth.js'
@@ -32,6 +38,22 @@ const BUCKET = 'personalization-photos'
 const EXTS = new Set(['jpg', 'jpeg', 'png', 'heic', 'heif', 'webp'])
 
 const DESIGN_ROLES = ['head_designer', 'designer']
+
+/**
+ * The design on this print was made without this photo: close one waiting
+ * for review and render again now, if the print can render (a photo still
+ * unpaid renders when it is paid). 6463 sat on a design without the photo
+ * after the customer emailed it.
+ * @returns {Promise<{ rendering: number|null, reasons: string[] }>}
+ */
+async function renderWithPhoto(orderId, note) {
+  const o = await prisma.order.findUnique({ where: { id: orderId }, select: { trackstarOrderType: true, status: true } })
+  if (!o || o.trackstarOrderType === 'custom' || o.status === 'completed') return { rendering: null, reasons: [] }
+  await prisma.renderJob.updateMany({ where: { orderId, status: 'done', review: 'pending' }, data: { review: 'closed', reviewNote: note, reviewedAt: new Date() } })
+  const { ok, reasons } = await checkOrder(orderId)
+  if (!ok) return { rendering: null, reasons }
+  return { rendering: (await createJob({ orderId, requestedBy: 'admin' })).version, reasons: [] }
+}
 
 /** A designer adding or replacing the photo on custom orders only: the actor, else null. */
 async function customPhotoByDesigner(body, actor) {
@@ -86,7 +108,8 @@ export default async function handler(req, res) {
         detail: { orderId: o.id, from: o.photoPath, to: path },
         actor: admin,
       })
-      return res.status(200).json({ ok: true, photoPath: path })
+      const { rendering, reasons } = await renderWithPhoto(o.id, 'Photo replaced; a new design with the new photo replaces it')
+      return res.status(200).json({ ok: true, photoPath: path, rendering, reasons })
     }
 
     if (body.action === 'attach') {
@@ -98,12 +121,14 @@ export default async function handler(req, res) {
       if (rows.length !== ids.length || new Set(rows.map(r => r.parentOrderNumber)).size !== 1) {
         return res.status(400).json({ error: 'Those prints are not all on one order' })
       }
-      await prisma.order.updateMany({ where: { id: { in: ids } }, data: { photoPath: path, photoAddedManually: true, photoPlacedAt: null } })
+      // free: we are not charging for it, so there is no Photo Add-On to wait for.
+      const free = body.free === true
+      await prisma.order.updateMany({ where: { id: { in: ids } }, data: { photoPath: path, photoAddedManually: true, photoPlacedAt: null, photoFree: free } })
 
       // Bill for it: one Photo Add-On per print, on the same Shopify order.
       let charged = false, chargeError = null
       // A photo emailed after a custom order is added free (one bought at checkout was charged then).
-      if (body.charge && rows[0].source === 'shopify' && !rows.some(r => r.trackstarOrderType === 'custom')) {
+      if (body.charge && !free && rows[0].source === 'shopify' && !rows.some(r => r.trackstarOrderType === 'custom')) {
         try {
           await addVariantToOrder(rows[0].parentOrderNumber, PHOTO_ADDON_VARIANT_ID, ids.length,
             `Photo Add-On x${ids.length} added from TrackstarOS by ${admin.firstName || 'an admin'}`)
@@ -117,11 +142,17 @@ export default async function handler(req, res) {
       }
       await recordAudit({
         action: 'order.photo-added',
-        summary: `Added a customer photo to ${rows.map(r => r.orderNumber).join(', ')}`,
-        detail: { orderIds: ids, path, charged, chargeError },
+        summary: `Added a customer photo to ${rows.map(r => r.orderNumber).join(', ')}${free ? ' (free)' : ''}`,
+        detail: { orderIds: ids, path, charged, chargeError, free },
         actor: admin,
       })
-      return res.status(200).json({ ok: true, photoPath: path, charged, chargeError })
+      if (free) {
+        const who = [admin.firstName, admin.lastName].filter(Boolean).join(' ') || 'Someone'
+        await prisma.orderComment.createMany({ data: ids.map(orderId => ({ orderId, text: 'Photo added free: no Photo Add-On charge for this print.', authorId: admin.id || null, authorName: who })) })
+      }
+      const renders = []
+      for (const id of ids) renders.push(await renderWithPhoto(id, 'Photo added; a new design with the photo replaces it'))
+      return res.status(200).json({ ok: true, photoPath: path, charged, chargeError, free, rendering: renders.map(r => r.rendering).filter(Boolean), reasons: [...new Set(renders.flatMap(r => r.reasons))] })
     }
 
     if (body.action === 'free') {
@@ -135,14 +166,9 @@ export default async function handler(req, res) {
       const who = [admin.firstName, admin.lastName].filter(Boolean).join(' ') || 'Someone'
       await prisma.orderComment.create({ data: { orderId: o.id, text: free ? 'Photo marked free: no Photo Add-On charge for this print.' : 'Photo no longer free: it needs a paid Photo Add-On.', authorId: admin.id || null, authorName: who } })
       await recordAudit({ action: 'order.photo-free', summary: `${free ? 'Marked the photo free on' : 'Took the free photo off'} ${o.orderNumber}`, detail: { orderId: o.id, free }, actor: admin })
-      let rendering = null
-      if (free) {
-        await prisma.renderJob.updateMany({ where: { orderId: o.id, status: 'done', review: 'pending' }, data: { review: 'closed', reviewNote: 'Photo marked free; a new design with the photo replaces it', reviewedAt: new Date() } })
-        const { ok, reasons } = await checkOrder(o.id)
-        rendering = ok ? (await createJob({ orderId: o.id, requestedBy: 'admin', requestedById: admin.id || null })).version : null
-        if (!ok) return res.status(200).json({ ok: true, free, rendering: null, reasons })
-      }
-      return res.status(200).json({ ok: true, free, rendering })
+      if (!free) return res.status(200).json({ ok: true, free, rendering: null })
+      const { rendering, reasons } = await renderWithPhoto(o.id, 'Photo marked free; a new design with the photo replaces it')
+      return res.status(200).json({ ok: true, free, rendering, reasons })
     }
 
     if (body.action === 'remove') {
