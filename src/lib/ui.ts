@@ -137,3 +137,23 @@ export const footerPillCount = 'px-2 py-0.5 text-xs font-medium rounded-full bg-
 /** Toast card, shared by sonner and the dashboard's Toast (see BrandToaster). */
 export const toastCard = 'flex items-center gap-2.5 bg-white border border-border-gray rounded-lg shadow-[0_6px_24px_rgba(0,0,0,0.10)] px-4 py-3 text-sm font-medium text-off-black'
 export const toastStyle = { fontFamily: "Inter, system-ui, -apple-system, sans-serif", letterSpacing: '-0.01em' }
+
+/*
+ * The modal, as the global search (⌘K) draws it: dimmed page, a big white
+ * card with soft corners, a header row, a body, and a footer strip. Every
+ * action that needs typing or several steps opens in this (ActionModal).
+ */
+export const modalOverlay = 'fixed inset-0 z-[80] bg-black/40 flex items-start justify-center px-3 md:px-4 pt-[max(12px,env(safe-area-inset-top))] md:pt-[10vh]'
+export const modalCard = 'w-full bg-white rounded-3xl shadow-[0_32px_80px_rgba(0,0,0,0.22)] overflow-hidden flex flex-col max-h-[85dvh] md:max-h-[80vh]'
+export const modalHeader = 'flex items-center gap-3 px-6 py-5 border-b border-border-gray'
+export const modalBody = 'flex-1 overflow-y-auto px-6 py-5 space-y-4 text-sm text-off-black'
+export const modalFooter = 'flex items-center gap-2 px-6 py-3.5 border-t border-border-gray'
+/** Inputs, selects and textareas inside a modal: the search box's size, in a field. */
+export const modalInput = 'w-full min-w-0 px-3.5 py-2.5 text-[15px] text-off-black bg-white border border-border-gray rounded-xl focus:outline-none focus:ring-2 focus:ring-off-black/10 focus:border-off-black/30 placeholder:text-off-black/35'
+/** The search's filter chips, for quick picks (10% / 15% / 20%). */
+export const modalChip = (on: boolean) =>
+  `inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[15px] transition-colors ${on ? 'bg-dark-fill text-white' : 'bg-off-black/[0.05] text-off-black hover:bg-off-black/[0.09]'}`
+const modalBtnBase = 'inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+export const modalPrimary = `${modalBtnBase} bg-dark-fill text-white hover:bg-off-black/85`
+export const modalDanger = `${modalBtnBase} bg-red-600 text-white hover:bg-red-700`
+export const modalCancel = `${modalBtnBase} text-off-black/60 hover:text-off-black hover:bg-off-black/5`
