@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
-import { ImagePlus, Loader2, X } from 'lucide-react'
+import { ImagePlus, Loader2 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
-import { btnPrimary, btnGhost } from '@/lib/ui'
+import { fieldLabel, modalCancel, modalPrimary } from '@/lib/ui'
+import ActionModal from './ActionModal'
 import PhotoCropper from './PhotoCropper'
 
 /**
@@ -70,79 +71,82 @@ export default function AddPhotoPanel({
     } finally { setBusy(false) }
   }
 
-  if (!open) {
-    return (
-      <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2">
-        <ImagePlus className="w-3.5 h-3.5" /> {replace ? 'Replace the customer photo' : custom ? 'Add customer photo' : 'Add a customer photo'}
-      </button>
-    )
-  }
-
+  const title = replace ? 'Replace the customer photo' : custom ? 'Add customer photo' : 'Add a customer photo'
   const count = picked.size
+  // A choice drawn as a card: the whole box is the hit target.
+  const option = (on: boolean) => `flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-colors ${on ? 'border-dark-fill bg-off-black/[0.03]' : 'border-border-gray hover:border-off-black/30'}`
   return (
-    <div className="rounded-md border border-[#4600D6]/30 bg-[#4600D6]/[0.04] p-3 space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-[#4600D6]">{replace ? 'Replace the customer photo' : 'Add a customer photo'}</span>
-        <button onClick={() => setOpen(false)} className="text-off-black/40 hover:text-off-black" aria-label="Close"><X className="w-4 h-4" /></button>
-      </div>
+    <>
+      <button onClick={() => setOpen(true)} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2">
+        <ImagePlus className="w-3.5 h-3.5" /> {title}
+      </button>
+      {open && (
+        <ActionModal icon={ImagePlus} title={title} onClose={() => setOpen(false)} busy={busy}
+          footer={<>
+            <button onClick={() => setOpen(false)} disabled={busy} className={modalCancel}>Cancel</button>
+            <button onClick={submit} disabled={!file || !count || busy} className={modalPrimary}>
+              {busy && <Loader2 className="w-4 h-4 animate-spin" />}{replace ? 'Replace photo' : `Add photo${charge ? ` and bill $${20 * count}` : ''}`}
+            </button>
+          </>}>
+          <div className="flex items-start gap-4">
+            {file ? (
+              <div className="shrink-0">
+                {custom
+                  ? <img src={URL.createObjectURL(file)} alt="" className="max-w-[220px] max-h-56 rounded-xl border border-border-gray object-contain bg-white" />
+                  : <PhotoCropper file={file} exportRef={cropExport} className="w-[220px]" />}
+                <label className="mt-1.5 inline-block text-sm font-medium text-[#4600D6] hover:underline cursor-pointer">
+                  Choose a different photo
+                  <input type="file" accept="image/*" className="hidden" onChange={e => choose(e.target.files?.[0] || null)} />
+                </label>
+              </div>
+            ) : (
+              <label className="shrink-0 w-32 h-32 rounded-xl border-2 border-dashed border-border-gray hover:border-off-black/30 bg-subtle-gray flex flex-col items-center justify-center gap-1.5 cursor-pointer text-off-black/50" title="Choose a photo">
+                <ImagePlus className="w-6 h-6" />
+                <span className="text-xs font-medium">Choose photo</span>
+                <input type="file" accept="image/*" className="hidden" onChange={e => choose(e.target.files?.[0] || null)} />
+              </label>
+            )}
+            {replace ? (
+              <p className="flex-1 text-off-black/60">The new photo replaces the one on this print. Nothing is billed. The design renders again with the new photo.</p>
+            ) : custom && prints.length <= 1 ? (
+              <p className="flex-1 text-off-black/60">The photo the customer emailed. It shows at the top of this order for the designer, and the order gets the Photo on print tag. Nothing is billed.</p>
+            ) : (
+              <div className="flex-1 min-w-0">
+                <span className={fieldLabel}>Put it on</span>
+                <div className="space-y-1.5">
+                  {prints.map(p => (
+                    <label key={p.id} className="flex items-center gap-2.5 text-[15px] text-off-black cursor-pointer">
+                      <input type="checkbox" className="w-4 h-4 accent-dark-fill" checked={picked.has(p.id)} onChange={e => setPicked(prev => { const n = new Set(prev); if (e.target.checked) n.add(p.id); else n.delete(p.id); return n })} />
+                      <span className="truncate">{p.label}{p.hasPhoto ? ' (replaces its photo)' : ''}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
-      {file && (
-        <div>
-          {custom
-            ? <img src={URL.createObjectURL(file)} alt="" className="max-w-[280px] max-h-64 rounded border border-border-gray object-contain bg-white" />
-            : <PhotoCropper file={file} exportRef={cropExport} className="max-w-[280px]" />}
-          <label className="mt-1 inline-block text-[11px] font-medium text-[#4600D6] hover:underline cursor-pointer">
-            Choose a different photo
-            <input type="file" accept="image/*" className="hidden" onChange={e => choose(e.target.files?.[0] || null)} />
-          </label>
-        </div>
+          {isShopify && !replace && !custom && (
+            <div className="space-y-2">
+              <label className={option(billing === 'bill')}>
+                <input type="radio" name="photo-billing" className="mt-1 accent-dark-fill" checked={billing === 'bill'} onChange={() => setBilling('bill')} />
+                <span>
+                  <span className="block font-medium text-off-black">Bill the customer, ${20 * count}</span>
+                  <span className="block text-off-black/60">Adds {count} Photo Add-On{count === 1 ? '' : 's'} to the Shopify order. Shopify emails them a link to pay; the print renders with the photo once they pay.</span>
+                </span>
+              </label>
+              <label className={option(billing === 'free')}>
+                <input type="radio" name="photo-billing" className="mt-1 accent-dark-fill" checked={billing === 'free'} onChange={() => setBilling('free')} />
+                <span>
+                  <span className="block font-medium text-off-black">Free, no charge</span>
+                  <span className="block text-off-black/60">The print renders with the photo now.</span>
+                </span>
+              </label>
+            </div>
+          )}
+          {!isShopify && !replace && !custom && <p className="text-off-black/50">Added free (there is no Photo Add-On to bill on this order). The print renders with the photo now.</p>}
+          {err && <p className="text-red-700">{err}</p>}
+        </ActionModal>
       )}
-      <div className="flex items-start gap-3">
-        {!file && (
-          <label className="shrink-0 w-24 h-24 rounded-md border border-dashed border-[#4600D6]/40 bg-white flex items-center justify-center cursor-pointer overflow-hidden" title="Choose a photo">
-            <ImagePlus className="w-5 h-5 text-[#4600D6]/60" />
-            <input type="file" accept="image/*" className="hidden" onChange={e => choose(e.target.files?.[0] || null)} />
-          </label>
-        )}
-        {replace ? (
-          <p className="flex-1 text-xs text-off-black/60">The new photo replaces the one on this print. Nothing is billed. The design renders again with the new photo.</p>
-        ) : custom && prints.length <= 1 ? (
-          <p className="flex-1 text-xs text-off-black/60">The photo the customer emailed. It shows at the top of this order for the designer, and the order gets the Photo on print tag. Nothing is billed.</p>
-        ) : (
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="text-xs font-semibold text-off-black/60">Put it on</div>
-          {prints.map(p => (
-            <label key={p.id} className="flex items-center gap-2 text-sm text-off-black">
-              <input type="checkbox" checked={picked.has(p.id)} onChange={e => setPicked(prev => { const n = new Set(prev); if (e.target.checked) n.add(p.id); else n.delete(p.id); return n })} />
-              <span className="truncate">{p.label}{p.hasPhoto ? ' (replaces its photo)' : ''}</span>
-            </label>
-          ))}
-        </div>
-        )}
-      </div>
-
-      {isShopify && !replace && !custom && (
-        <div className="space-y-1.5">
-          <label className="flex items-start gap-2 text-sm text-off-black">
-            <input type="radio" name="photo-billing" className="mt-0.5" checked={billing === 'bill'} onChange={() => setBilling('bill')} />
-            <span>
-              Bill the customer: add {count} Photo Add-On{count === 1 ? '' : 's'} (${20 * count}) to the Shopify order. Shopify emails them a link to pay; the print renders with the photo once they pay.
-            </span>
-          </label>
-          <label className="flex items-start gap-2 text-sm text-off-black">
-            <input type="radio" name="photo-billing" className="mt-0.5" checked={billing === 'free'} onChange={() => setBilling('free')} />
-            <span>Free, no charge. The print renders with the photo now.</span>
-          </label>
-        </div>
-      )}
-      {!isShopify && !replace && !custom && <p className="text-[11px] text-off-black/50">Added free (there is no Photo Add-On to bill on this order). The print renders with the photo now.</p>}
-      {err && <p className="text-sm text-red-600">{err}</p>}
-      <div className="flex gap-2">
-        <button onClick={submit} disabled={!file || !count || busy} className={btnPrimary}>
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : replace ? 'Replace photo' : `Add photo${charge ? ' and bill' : ''}`}
-        </button>
-        <button onClick={() => setOpen(false)} className={btnGhost}>Cancel</button>
-      </div>
-    </div>
+    </>
   )
 }

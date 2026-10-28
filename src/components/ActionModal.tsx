@@ -24,11 +24,11 @@ export default function ActionModal({ icon: Icon, title, sub, description, actio
   hint?: ReactNode
   /** Right side of the footer: the buttons. */
   footer?: ReactNode
-  /** md for a form, lg for a form with a lot in it, xl for a list beside an editor. */
-  size?: 'md' | 'lg' | 'xl'
+  /** sm for a yes/no, md for a form, lg for a form with a lot in it, xl for a list beside an editor. */
+  size?: 'sm' | 'md' | 'lg' | 'xl'
   /** The body without padding, for panels that lay out their own (lists, cards). */
   bare?: boolean
-  children: ReactNode
+  children?: ReactNode
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) { e.stopPropagation(); onClose() } }
@@ -37,7 +37,7 @@ export default function ActionModal({ icon: Icon, title, sub, description, actio
   }, [busy, onClose])
   return createPortal(
     <div className={modalOverlay} onMouseDown={() => { if (!busy) onClose() }}>
-      <div role="dialog" aria-modal="true" className={`${modalCard} ${size === 'xl' ? 'max-w-[960px]' : size === 'lg' ? 'max-w-[760px]' : 'max-w-[560px]'}`} onMouseDown={e => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" className={`${modalCard} ${size === 'xl' ? 'max-w-[960px]' : size === 'lg' ? 'max-w-[760px]' : size === 'sm' ? 'max-w-[440px]' : 'max-w-[560px]'}`} onMouseDown={e => e.stopPropagation()}>
         <div className={modalHeader}>
           {Icon && <Icon className="w-5 h-5 text-off-black/80 flex-shrink-0" strokeWidth={2} />}
           <div className="flex-1 min-w-0">
@@ -52,7 +52,7 @@ export default function ActionModal({ icon: Icon, title, sub, description, actio
             <X className="w-5 h-5" />
           </button>
         </div>
-        {bare ? <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">{children}</div> : <div className={modalBody}>{children}</div>}
+        {bare ? <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">{children}</div> : children ? <div className={modalBody}>{children}</div> : null}
         {(hint || footer) && (
           <div className={modalFooter}>
             <div className="flex-1 min-w-0 text-sm text-off-black/45">{hint}</div>

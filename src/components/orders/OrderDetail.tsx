@@ -6,8 +6,8 @@ import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import type { Design } from '@/lib/useDesign'
 import { raceNotRunYet, showsRaceNotRun } from '@/lib/raceStatus'
-import { useArmed } from '@/lib/useArmed'
 import { useAskText } from '@/components/useAskText'
+import { useConfirm } from '@/components/useConfirm'
 import ProofManager, { type ProofActions } from '@/components/ProofManager'
 import PostApprovalChecklist from '@/components/PostApprovalChecklist'
 import CustomFinalPdf from '@/components/CustomFinalPdf'
@@ -109,8 +109,10 @@ export default function OrderDetail({
   // Change frame: edits the Shopify order, and Artelo follows (support/changeItem.js, as Support's Change size or frame).
   const [frameMenu, setFrameMenu] = useState<{ current: string | null; frames: { frame: string; difference: number }[] } | null>(null)
   const [frameBusy, setFrameBusy] = useState(false)
-  // Two clicks in the page for the rest of this card's destructive buttons (Arc blocks window.confirm).
-  const { arm, isArmed } = useArmed()
+  // Every yes/no on this card is a small modal (useConfirm), not window.confirm:
+  // after a run of browser dialogs Chrome offers to block them, and a blocked
+  // confirm answers "no" silently, so Re-Open did nothing at all (5308). Arc blocks them outright.
+  const { confirm, modal: confirmModal } = useConfirm()
   useEffect(() => { setFrameMenu(null) }, [selectedOrder?.id])
   const canChangeFrame = isAdmin && selectedOrder?.source === 'shopify' && selectedOrder.status !== 'completed'
 
@@ -133,7 +135,9 @@ export default function OrderDetail({
 
   const changeFrameTo = async (option: { frame: string; difference: number }) => {
     if (!selectedOrder) return
-    if (!arm(`frame:${option.frame}`)) return
+    const money = option.difference > 0 ? `It costs $${option.difference.toFixed(2)} more, so Shopify emails the customer an invoice for the difference.`
+      : option.difference < 0 ? `It costs $${(-option.difference).toFixed(2)} less; refund the difference in Shopify.` : 'Same price: the customer is not emailed or charged.'
+    if (!(await confirm({ title: `Change the frame to ${option.frame}?`, body: `From ${frameMenu?.current || 'its frame'}. ${money} Artelo picks it up within about 10 minutes.`, action: 'Change frame' }))) return
     setFrameBusy(true)
     try {
       const r = await apiFetch('/api/orders/change-frame', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'change', orderId: selectedOrder.id, frame: option.frame }) })
@@ -473,18 +477,8 @@ export default function OrderDetail({
   // Re-open a completed order. Brings it back into the active queue with
   // status='ready' (if research exists) or 'pending' (if it doesn't), so
   // it shows up in the standard view again and can be re-edited / printed.
-  // Confirmed on the page, not with window.confirm: after a run of browser
-  // dialogs Chrome offers to block them, and a blocked confirm answers "no"
-  // silently, so Re-Open did nothing at all (5308).
-  const [reopenArmed, setReopenArmed] = useState<string | null>(null)
-  useEffect(() => {
-    if (!reopenArmed) return
-    const t = setTimeout(() => setReopenArmed(null), 5000)
-    return () => clearTimeout(t)
-  }, [reopenArmed])
   const reopenOrder = async (orderNumber: string) => {
-    if (reopenArmed !== orderNumber) { setReopenArmed(orderNumber); return }
-    setReopenArmed(null)
+    if (!(await confirm({ title: 'Re-open this order?', body: 'It goes back in the active queue, to be edited and printed again.', action: 'Re-open order' }))) return
     try {
       const response = await apiFetch(`/api/orders/actions`, {
         method: 'POST',
@@ -1122,11 +1116,9 @@ export default function OrderDetail({
     }
   }
 
-  // Two clicks, in the page: Arc blocks window.confirm, and the click did nothing.
-  const [removePhotoArmed, setRemovePhotoArmed] = useState<string | null>(null)
+  // A small modal, not window.confirm: Arc blocks it, and the click did nothing.
   const removeManualPhoto = async (orderId: string) => {
-    if (removePhotoArmed !== orderId) { setRemovePhotoArmed(orderId); setTimeout(() => setRemovePhotoArmed(a => a === orderId ? null : a), 5000); return }
-    setRemovePhotoArmed(null)
+    if (!(await confirm({ title: 'Remove the photo?', body: 'It comes off this print. Add it again any time.', action: 'Remove photo', danger: true }))) return
     try {
       const res = await apiFetch('/api/orders/photo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'remove', orderId }) })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not remove')
@@ -1153,7 +1145,7 @@ export default function OrderDetail({
   // Admin: cancel a creator's free sample. The order leaves the queue and the
   // creator goes back to pending, to approve again later or decline.
   const cancelCreatorSample = async (order: Order) => {
-    if (!arm(`cancel-sample:${order.id}`)) return
+    if (!(await confirm({ title: 'Cancel the creator sample?', body: `For ${order.effectiveRunnerName || order.runnerName || 'this creator'}. The order is removed and the creator goes back to pending.`, action: 'Cancel sample', danger: true }))) return
     try {
       const res = await apiFetch('/api/orders/cancel-creator-sample', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id }) })
       const d = await res.json().catch(() => ({}))
@@ -1218,6 +1210,7 @@ Thank you!`
   return (
     <>
       {askModal}
+      {confirmModal}
       {converting && (
         <ConvertToCustomModal
           order={selectedOrder}
@@ -2028,9 +2021,8 @@ Thank you!`
                                 {frameMenu.frames.map(o => (
                                   <button key={o.frame} onClick={() => { void changeFrameTo(o) }} disabled={frameBusy} className="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded text-sm text-off-black hover:bg-off-black/5 disabled:opacity-50"
                                     title="Artelo picks the change up within about 10 minutes">
-                                    {isArmed(`frame:${o.frame}`)
-                                      ? <span className="text-left text-xs font-medium text-[#4600D6]">Click again to change to {o.frame}: {o.difference > 0 ? `Shopify invoices the customer $${o.difference.toFixed(2)}` : o.difference < 0 ? `refund $${(-o.difference).toFixed(2)} in Shopify` : 'same price, no email'}</span>
-                                      : <>{o.frame}{o.difference !== 0 && <span className="text-xs text-off-black/45">{o.difference > 0 ? '+' : '−'}${Math.abs(o.difference).toFixed(0)}</span>}</>}
+                                    {o.frame}
+                                    {o.difference !== 0 && <span className="text-xs text-off-black/45">{o.difference > 0 ? '+' : '−'}${Math.abs(o.difference).toFixed(0)}</span>}
                                   </button>
                                 ))}
                               </div>
@@ -2146,7 +2138,7 @@ Thank you!`
                     {/* The customer asked for the print without their photo. */}
                     {selectedOrder.photoPath && design.canManage && selectedOrder.status !== 'completed' && !isEditing && (
                       <button onClick={async () => {
-                          if (!arm(`remove-photo:${selectedOrder.id}`)) return
+                          if (!(await confirm({ title: 'Remove the customer photo?', body: 'The design renders again without it. If they paid for the Photo Add-On, refund it in Shopify.', action: 'Remove and re-render', danger: true }))) return
                           try {
                             const res = await apiFetch('/api/orders/photo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'remove', orderId: selectedOrder.id }) })
                             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not remove the photo')
@@ -2156,9 +2148,8 @@ Thank you!`
                             setToast({ message: 'Photo removed. Re-rendering the design without it.', type: 'success' })
                           } catch (e) { setToast({ message: e instanceof Error ? e.message : 'Could not remove the photo', type: 'error' }) }
                         }}
-                        className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2"
-                        title="If they paid for the Photo Add-On, refund it in Shopify">
-                        <X className="w-3.5 h-3.5" /> {isArmed(`remove-photo:${selectedOrder.id}`) ? 'Click again to remove the photo (refund the add-on in Shopify if paid)' : <>Remove photo &amp; re-render</>}
+                        className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2">
+                        <X className="w-3.5 h-3.5" /> Remove photo &amp; re-render
                       </button>
                     )}
                     {/* A runner who ran a race we do not carry: design it as a custom print instead of refunding. */}
@@ -2292,7 +2283,7 @@ Thank you!`
                         className="ml-auto text-xs font-medium text-red-600/80 hover:text-red-700 underline underline-offset-2"
                         title="Admin: remove this sample from the queue; the creator goes back to pending"
                       >
-                        {isArmed(`cancel-sample:${selectedOrder.id}`) ? 'Click again to cancel: the creator goes back to pending' : 'Cancel sample'}
+                        Cancel sample
                       </button>
                     )}
                   </div>
@@ -2341,7 +2332,7 @@ Thank you!`
                       <button onClick={() => markPhotoFree(selectedOrder.id)} className="ml-2 text-xs font-semibold underline underline-offset-2 text-red-800">Photo is free (don't charge)</button>
                     )}
                     {isAdmin && selectedOrder.photoAddedManually && (
-                      <button onClick={() => removeManualPhoto(selectedOrder.id)} className="ml-2 text-xs underline underline-offset-2 text-red-700/80">{removePhotoArmed === selectedOrder.id ? 'Click again to remove the photo' : 'Remove photo'}</button>
+                      <button onClick={() => removeManualPhoto(selectedOrder.id)} className="ml-2 text-xs underline underline-offset-2 text-red-700/80">Remove photo</button>
                     )}
                   </div>
                 )}
@@ -3092,7 +3083,7 @@ Thank you!`
                     onClick={() => reopenOrder(selectedOrder.orderNumber)}
                     className="flex-1 px-5 py-3 bg-white border-2 border-amber-300 text-amber-700 rounded-md hover:bg-amber-50 transition-colors font-medium"
                   >
-                    {reopenArmed === selectedOrder.orderNumber ? 'Click again to re-open: it goes back in the active queue' : '↩ Re-Open Order'}
+                    ↩ Re-Open Order
                   </button>
                 )}
                 {selectedOrder.status === 'flagged' && !isEditing && (
