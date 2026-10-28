@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { createPortal } from 'react-dom'
-import { Loader2, X } from 'lucide-react'
+import { Loader2, Palette } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
-import { btnPrimary, btnGhost, inputBase, fieldLabel } from '@/lib/ui'
+import { fieldLabel, modalCancel, modalInput, modalPrimary } from '@/lib/ui'
+import ActionModal from '@/components/ActionModal'
 
 /**
  * Convert a standard print to a custom one (server/domain/orders/convertToCustom.js):
@@ -39,41 +39,28 @@ export default function ConvertToCustomModal({ order, onClose, onDone }: {
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
-  return createPortal(
-    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4" onClick={() => { if (!busy) onClose() }}
-      onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape' && !busy) onClose() }}>
-      <div role="dialog" aria-modal="true" aria-label="Convert to a custom order" tabIndex={-1}
-        className="bg-white rounded-lg shadow-2xl w-full max-w-lg max-h-full overflow-auto p-5 space-y-3 outline-none" onClick={e => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-base font-semibold text-off-black">Convert to a custom order</h3>
-            <p className="text-xs text-off-black/55 mt-0.5">
-              For a runner who ran a race we do not carry. The {from} print becomes a custom print and goes to the designer. Shopify is not changed: same price, same item.
-            </p>
-          </div>
-          <button onClick={onClose} disabled={busy} className="p-1 -m-1 text-off-black/40 hover:text-off-black" aria-label="Close"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="grid grid-cols-[1fr_96px] gap-2">
-          <label className="block"><span className={fieldLabel}>Race they ran</span><input className={`${inputBase} w-full`} value={race} onChange={e => setRace(e.target.value)} placeholder="e.g. Foot Traffic Flat" autoFocus /></label>
-          <label className="block"><span className={fieldLabel}>Year</span><input className={`${inputBase} w-full`} value={year} onChange={e => setYear(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))} inputMode="numeric" /></label>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block"><span className={fieldLabel}>Bib</span><input className={`${inputBase} w-full`} value={bib} onChange={e => setBib(e.target.value)} /></label>
-          <label className="block"><span className={fieldLabel}>Finish time</span><input className={`${inputBase} w-full`} value={time} onChange={e => setTime(e.target.value)} placeholder="3:53:29" /></label>
-        </div>
-        <label className="block"><span className={fieldLabel}>What the customer wants (for the designer)</span>
-          <textarea className={`${inputBase} w-full`} rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder={`Runner ${order.runnerName || ''}; course, colors, anything they asked for`} />
-        </label>
-        <label className="block"><span className={fieldLabel}>Why (kept on the order)</span>
-          <input className={`${inputBase} w-full`} value={reason} onChange={e => setReason(e.target.value)} placeholder="Ran a race we do not carry; big customer, designing instead of refunding" />
-        </label>
-        {err && <p className="text-xs text-red-600">{err}</p>}
-        <div className="flex justify-end gap-2 pt-1">
-          <button className={btnGhost} onClick={onClose} disabled={busy}>Cancel</button>
-          <button className={btnPrimary} onClick={submit} disabled={busy || !race.trim() || !reason.trim()}>{busy && <Loader2 className="w-3 h-3 animate-spin" />} Convert to custom</button>
-        </div>
+  return (
+    <ActionModal icon={Palette} title="Convert to a custom order" sub={order.displayOrderNumber || undefined} onClose={onClose} busy={busy}
+      description={`For a runner who ran a race we do not carry. The ${from} print becomes a custom print and goes to the designer. Shopify is not changed: same price, same item.`}
+      footer={<>
+        <button className={modalCancel} onClick={onClose} disabled={busy}>Cancel</button>
+        <button className={modalPrimary} onClick={submit} disabled={busy || !race.trim() || !reason.trim()}>{busy && <Loader2 className="w-4 h-4 animate-spin" />}Convert to custom</button>
+      </>}>
+      <div className="grid grid-cols-[1fr_112px] gap-3">
+        <label className="block min-w-0"><span className={fieldLabel}>Race they ran</span><input className={modalInput} value={race} onChange={e => setRace(e.target.value)} placeholder="e.g. Foot Traffic Flat" autoFocus /></label>
+        <label className="block min-w-0"><span className={fieldLabel}>Year</span><input className={modalInput} value={year} onChange={e => setYear(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))} inputMode="numeric" /></label>
       </div>
-    </div>,
-    document.body,
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block min-w-0"><span className={fieldLabel}>Bib</span><input className={modalInput} value={bib} onChange={e => setBib(e.target.value)} /></label>
+        <label className="block min-w-0"><span className={fieldLabel}>Finish time</span><input className={modalInput} value={time} onChange={e => setTime(e.target.value)} placeholder="3:53:29" /></label>
+      </div>
+      <label className="block"><span className={fieldLabel}>What the customer wants (for the designer)</span>
+        <textarea className={`${modalInput} resize-none`} rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder={`Runner ${order.runnerName || ''}; course, colors, anything they asked for`} />
+      </label>
+      <label className="block"><span className={fieldLabel}>Why (kept on the order)</span>
+        <input className={modalInput} value={reason} onChange={e => setReason(e.target.value)} placeholder="Ran a race we do not carry; big customer, designing instead of refunding" />
+      </label>
+      {err && <p className="text-red-700">{err}</p>}
+    </ActionModal>
   )
 }

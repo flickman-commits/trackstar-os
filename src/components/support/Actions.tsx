@@ -417,7 +417,7 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
     )
   }
   return (
-    <ActionModal icon={Repeat} title="New Artelo order" sub={`#${o.number}`} onClose={onCancel} busy={busy} wide
+    <ActionModal icon={Repeat} title="New Artelo order" sub={`#${o.number}`} onClose={onCancel} busy={busy} size="lg"
       hint={confirming ? <span className={`${bad} font-medium`}>{test ? 'Create a test order in Artelo?' : `Send ${picked.length} print${picked.length === 1 ? '' : 's'} to production? Artelo charges for it.`}</span> : 'A reprint or replacement, $0 to the customer.'}
       footer={<>
         <button onClick={() => (confirming ? setConfirming(false) : onCancel())} disabled={busy} className={modalCancel}>{confirming ? 'Back' : 'Cancel'}</button>

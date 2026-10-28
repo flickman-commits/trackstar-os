@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { nameCase } from '@/lib/nameCase'
-import { ArrowUpRight, Loader2, Mail, Paperclip, Upload, X } from 'lucide-react'
+import { ArrowUpRight, Loader2, Mail, Paperclip, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { supportApi } from '@/lib/supportApi'
-import { btnPrimary, btnSecondary } from '@/lib/ui'
+import { fieldLabel, modalCancel, modalChip, modalInput, modalPrimary } from '@/lib/ui'
+import ActionModal from '@/components/ActionModal'
+import { useArmed } from '@/lib/useArmed'
 import type { Mockup } from '@/types/support'
-
-const chip = (on: boolean) => `px-2 py-0.5 rounded-full border text-[11px] ${on ? 'border-[#4600D6] bg-[#4600D6] text-white' : 'border-[#4600D6]/25 text-[#4600D6] hover:bg-[#4600D6]/5'}`
 
 /**
  * "Email customer" from an order in TrackstarOS. Usually it is the
@@ -94,11 +94,8 @@ export default function EmailCustomerModal({ order, repName, onClose }: { order:
     } catch (e) { toast.error((e as Error).message) }
     finally { setUploading(false); if (fileInput.current) fileInput.current.value = '' }
   }
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [busy, onClose])
+  // Picking a template over typed text takes a second click (browsers can block window.confirm).
+  const { arm, isArmed } = useArmed()
   useEffect(() => {
     let live = true
     supportApi.orderConversations(order.id).then(r => {
@@ -111,7 +108,7 @@ export default function EmailCustomerModal({ order, repName, onClose }: { order:
   const unfilled = text.includes(ASK)
   const choose = (next: Pick) => {
     // Anything typed into the email since the last template would be lost.
-    if (text !== template(order, rep, pick) && !window.confirm('Replace what you wrote with this template?')) return
+    if (text !== template(order, rep, pick) && !arm(`replace:${next}`)) return
     setPick(next)
     setText(template(order, rep, next))
     if (subject === subjects.ask || subject === subjects.mockup) setSubject(next === 'mockup' ? subjects.mockup : subjects.ask)
@@ -130,69 +127,65 @@ export default function EmailCustomerModal({ order, repName, onClose }: { order:
   }
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" onMouseDown={() => !busy && onClose()}>
-      <div className="w-full max-w-lg bg-white rounded-xl shadow-2xl border border-border-gray" onMouseDown={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-3 border-b border-border-gray">
-          <h2 className="text-sm font-semibold text-off-black inline-flex items-center gap-2"><Mail className="w-4 h-4" />Email customer</h2>
-          <button onClick={onClose} disabled={busy} className="p-1 rounded text-off-black/50 hover:text-off-black"><X className="w-4 h-4" /></button>
-        </div>
-        {sent ? (
-          <div className="px-5 py-6 space-y-3 text-sm">
-            <p className="text-off-black">Sent from fast@ to <b>{sent.to}</b>. Their reply comes into Support, assigned to you, and the order has a comment saying it went out.</p>
-            {sent.held && <p className="text-off-black">The print is held from production while we wait on their approval. Once they say yes, press <b>Send now</b> on the order.</p>}
-            <div className="flex items-center gap-2 justify-end">
-              <a href={`/support?thread=${encodeURIComponent(sent.threadId)}`} target="_blank" rel="noopener noreferrer" className={`${btnSecondary} inline-flex items-center gap-1.5`}>Open in Support<ArrowUpRight className="w-3.5 h-3.5" /></a>
-              <button onClick={onClose} className={btnPrimary}>Done</button>
-            </div>
+    <ActionModal icon={Mail} title="Email customer" sub={`#${number}`} onClose={onClose} busy={busy} size="lg"
+      hint={sent ? undefined : 'Sends from fast@trackstar.art'}
+      footer={sent ? <>
+        <a href={`/support?thread=${encodeURIComponent(sent.threadId)}`} target="_blank" rel="noopener noreferrer" className={modalCancel}>Open in Support<ArrowUpRight className="w-4 h-4" /></a>
+        <button onClick={onClose} className={modalPrimary}>Done</button>
+      </> : <>
+        <button onClick={onClose} disabled={busy} className={modalCancel}>Cancel</button>
+        <button onClick={send} disabled={busy || uploading || unfilled || !text.trim() || !subject.trim() || (pick === 'mockup' && !attached)} className={modalPrimary}>{busy && <Loader2 className="w-4 h-4 animate-spin" />}Send</button>
+      </>}>
+      {sent ? (
+        <>
+          <p>Sent from fast@ to <b>{sent.to}</b>. Their reply comes into Support, assigned to you, and the order has a comment saying it went out.</p>
+          {sent.held && <p>The print is held from production while we wait on their approval. Once they say yes, press <b>Send now</b> on the order.</p>}
+        </>
+      ) : (
+        <>
+          <div>
+            <span className={fieldLabel}>To</span>
+            <div className="text-[15px] text-off-black truncate">{order.customerName ? `${order.customerName} · ` : ''}{order.customerEmail}</div>
           </div>
-        ) : (
-          <div className="px-5 py-4 space-y-3">
-            <div className="grid grid-cols-[56px_1fr] items-center gap-y-2 text-sm">
-              <span className="text-off-black/50 text-xs">To</span>
-              <span className="text-off-black truncate">{order.customerName ? `${order.customerName} · ` : ''}{order.customerEmail}</span>
-              <span className="text-off-black/50 text-xs">Subject</span>
-              <input value={subject} onChange={e => setSubject(e.target.value)} className="w-full px-2.5 py-1.5 text-sm border border-border-gray rounded focus:outline-none focus:ring-1 focus:ring-off-black/20" />
+          <label className="block"><span className={fieldLabel}>Subject</span>
+            <input value={subject} onChange={e => setSubject(e.target.value)} className={modalInput} />
+          </label>
+          <div>
+            <span className={fieldLabel}>We need</span>
+            <div className="flex flex-wrap items-center gap-2">
+              {ASKS.map(a => (
+                <button key={a.id} onClick={() => choose(a.id)} className={modalChip(pick === a.id)}>{a.label}</button>
+              ))}
+              <button onClick={() => choose('mockup')} className={modalChip(pick === 'mockup')}
+                title={mockup ? `Attach ${mockup.label} for them to approve, and hold the print until they do` : 'Attach a mockup you made for them to approve'}>Approve mockup</button>
             </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                <span className="text-[11px] text-off-black/50">We need:</span>
-                {ASKS.map(a => (
-                  <button key={a.id} onClick={() => choose(a.id)} className={chip(pick === a.id)}>{a.label}</button>
-                ))}
-                <button onClick={() => choose('mockup')} className={chip(pick === 'mockup')}
-                  title={mockup ? `Attach ${mockup.label} for them to approve, and hold the print until they do` : 'Attach a mockup you made for them to approve'}>Approve mockup</button>
-              </div>
-              <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,application/pdf" className="hidden" onChange={e => attachOwn(e.target.files?.[0])} />
-              {pick === 'mockup' && (
-                <div className="flex items-center gap-2 mb-1.5 text-[11px] text-off-black/60">
-                  {attached ? (
-                    <>
-                      {attached.thumbUrl ? <img src={attached.thumbUrl} alt="" className="w-9 h-9 rounded border border-border-gray object-cover" /> : <Paperclip className="w-3.5 h-3.5" />}
-                      <span className="min-w-0"><b className="text-off-black/80 font-medium break-all">{attached.label}</b> attached. Sending holds the print from production until they approve.</span>
-                    </>
-                  ) : (
-                    <span>No design on this order yet. Attach the mockup you made.</span>
-                  )}
-                  <span className="ml-auto flex items-center gap-2 shrink-0">
-                    {ownFile && mockup && <button onClick={() => setOwnFile(null)} className="text-[#4600D6] hover:underline">Use {mockup.label.split(',')[0]}</button>}
-                    <button onClick={() => fileInput.current?.click()} disabled={uploading} className="inline-flex items-center gap-1 text-[#4600D6] hover:underline disabled:opacity-50">
-                      {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}{attached ? 'Use a file instead' : 'Attach a file'}
-                    </button>
-                  </span>
-                </div>
+            {[...ASKS.map(a => a.id), 'mockup' as Pick].some(id => isArmed(`replace:${id}`)) && <p className="mt-2 text-amber-700">Click it again to replace what you wrote with the template.</p>}
+          </div>
+          <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,application/pdf" className="hidden" onChange={e => attachOwn(e.target.files?.[0])} />
+          {pick === 'mockup' && (
+            <div className="flex items-center gap-3 rounded-xl bg-subtle-gray border border-border-gray p-3 text-off-black/60">
+              {attached ? (
+                <>
+                  {attached.thumbUrl ? <img src={attached.thumbUrl} alt="" className="w-11 h-11 rounded-lg border border-border-gray object-cover" /> : <Paperclip className="w-4 h-4" />}
+                  <span className="min-w-0"><b className="text-off-black/80 font-medium break-all">{attached.label}</b> attached. Sending holds the print from production until they approve.</span>
+                </>
+              ) : (
+                <span>No design on this order yet. Attach the mockup you made.</span>
               )}
-              <textarea ref={box} value={text} onChange={e => setText(e.target.value)} rows={11}
-                className="w-full px-3 py-2 text-sm leading-relaxed border border-border-gray rounded focus:outline-none focus:ring-1 focus:ring-off-black/20" />
-              {unfilled && <p className="text-[11px] text-amber-700 mt-1">Pick what we need above, or replace {ASK} yourself.</p>}
+              <span className="ml-auto flex items-center gap-3 shrink-0 text-sm">
+                {ownFile && mockup && <button onClick={() => setOwnFile(null)} className="font-medium text-[#4600D6] hover:underline">Use {mockup.label.split(',')[0]}</button>}
+                <button onClick={() => fileInput.current?.click()} disabled={uploading} className="inline-flex items-center gap-1.5 font-medium text-[#4600D6] hover:underline disabled:opacity-50">
+                  {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}{attached ? 'Use a file instead' : 'Attach a file'}
+                </button>
+              </span>
             </div>
-            <div className="flex items-center gap-2 justify-end">
-              <span className="text-[11px] text-off-black/45 mr-auto">Sends from fast@trackstar.art</span>
-              <button onClick={onClose} disabled={busy} className={btnSecondary}>Cancel</button>
-              <button onClick={send} disabled={busy || uploading || unfilled || !text.trim() || !subject.trim() || (pick === 'mockup' && !attached)} className={`${btnPrimary} inline-flex items-center gap-1.5 disabled:opacity-50`}>{busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}Send</button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+          )}
+          <label className="block"><span className={fieldLabel}>Email</span>
+            <textarea ref={box} value={text} onChange={e => setText(e.target.value)} rows={11} className={`${modalInput} leading-relaxed`} />
+          </label>
+          {unfilled && <p className="text-amber-700">Pick what we need above, or replace {ASK} yourself.</p>}
+        </>
+      )}
+    </ActionModal>
   )
 }
