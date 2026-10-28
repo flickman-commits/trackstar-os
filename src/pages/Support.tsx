@@ -91,6 +91,8 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
   const [thread, setThread] = useState<ThreadDetail | null>(null)
   const [threadLoading, setThreadLoading] = useState(false)
   const [busy, setBusy] = useState(false)
+  // Which conversations are being merged in, so their Merge button can spin.
+  const [merging, setMerging] = useState<string[]>([])
   const [syncing, setSyncing] = useState(false)
   const [macros, setMacros] = useState<Macro[]>([])
   const [macrosOpen, setMacrosOpen] = useState(false)
@@ -240,9 +242,12 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
     } catch (e) { toast.error((e as Error).message); return false }
   }
   const merge = (sourceIds: string[]) => thread && run(async () => {
-    const fresh = await supportApi.merge(thread.id, sourceIds)
-    setThread(fresh)
-    toast.success(`Merged ${sourceIds.length} conversation${sourceIds.length === 1 ? '' : 's'} into this one`)
+    setMerging(sourceIds)
+    try {
+      const fresh = await supportApi.merge(thread.id, sourceIds)
+      setThread(fresh)
+      toast.success(`Merged ${sourceIds.length} conversation${sourceIds.length === 1 ? '' : 's'} into this one`)
+    } finally { setMerging([]) }
   })
   const redraft = async (instruction: string) => {
     if (!thread) return
@@ -382,7 +387,7 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
               <Conversation
                 key={thread.id} thread={thread} team={inbox?.team || []} me={me} isAdmin={isAdmin} busy={busy} macros={macros} expectedHandle={instagram?.expectedHandle}
                 onAssign={assign} onStatus={setStatusOf} onSnooze={snooze} onPriority={setPriority} onMarkUnread={markUnread}
-                onReply={reply} onNote={addNote} onDeleteNote={deleteNote} onRedraft={redraft} onMerge={ids => { merge(ids) }} onUseMacro={id => { supportApi.useMacro(id).catch(() => {}) }} onRefresh={() => { if (thread) { refreshThread(thread.id); loadInbox(true) } }}
+                onReply={reply} onNote={addNote} onDeleteNote={deleteNote} onRedraft={redraft} onMerge={ids => { merge(ids) }} merging={merging} onUseMacro={id => { supportApi.useMacro(id).catch(() => {}) }} onRefresh={() => { if (thread) { refreshThread(thread.id); loadInbox(true) } }}
                 replyRef={replyRef} noteRef={noteRef} insertRef={insertRef} attachRef={attachRef}
               />
               </div>
@@ -400,7 +405,7 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
             <ResizeHandle onDrag={dx => detailsCol.by(-dx)} onReset={detailsCol.reset} />
             <Details
               width={wide ? detailsCol.width : undefined}
-              thread={thread} tagSuggestions={inbox?.tagSuggestions || []} onOpenThread={openThread} onMerge={ids => { merge(ids) }}
+              thread={thread} tagSuggestions={inbox?.tagSuggestions || []} onOpenThread={openThread} onMerge={ids => { merge(ids) }} merging={merging}
               onPriority={setPriority} onTags={setTags}
               filters={filters} onFiltersChanged={() => { loadFilters(); loadInbox(true); if (selectedId) refreshThread(selectedId) }}
               onInsert={t => insertRef.current?.(t)} onAttach={m => attachRef.current?.(m)} onChanged={() => { if (selectedId) refreshThread(selectedId); loadInbox(true) }}

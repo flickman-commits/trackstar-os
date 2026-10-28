@@ -80,7 +80,7 @@ const SETTINGS_NAV: {
       { id: 'assignments', label: 'Order Assignment', blurb: 'Who new orders go to, and extra help for busy stretches', icon: UserCog },
       { id: 'skipped', label: 'Skipped Products', blurb: 'Shopify products with nothing to personalize, kept out of the fulfillment tool', icon: EyeOff },
       { id: 'counter', label: 'Custom Counter', blurb: 'Customs each designer finished, by month, for payouts', icon: Hash },
-      { id: 'support_closes', label: 'Support Closes', blurb: 'Conversations each person closed, by day', icon: MailCheck },
+      { id: 'support_closes', label: 'Tickets Resolved', blurb: 'Support tickets each person closed, by day', icon: MailCheck },
       { id: 'designs', label: 'Designs', blurb: 'Automated prints: which races have a template, the workers and the queue', icon: Sparkles },
       { id: 'activity', label: 'Activity Log', blurb: 'Who did what, and when', icon: ScrollText },
       { id: 'diagnostics', label: 'Diagnostics', blurb: 'Test connections and run a full health check', icon: FlaskConical },

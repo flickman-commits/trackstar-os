@@ -201,7 +201,7 @@ function MacroMenu({ macros, onPick, onClose }: { macros: Macro[]; onPick: (m: M
   )
 }
 
-export default function Conversation({ thread, team, me, isAdmin, busy, macros, expectedHandle = 'trackstar_art', onAssign, onStatus, onSnooze, onPriority, onMarkUnread, onReply, onNote, onDeleteNote, onRedraft, onMerge, onUseMacro, onRefresh, replyRef, noteRef, insertRef, attachRef }: {
+export default function Conversation({ thread, team, me, isAdmin, busy, macros, expectedHandle = 'trackstar_art', onAssign, onStatus, onSnooze, onPriority, onMarkUnread, onReply, onNote, onDeleteNote, onRedraft, onMerge, merging = [], onUseMacro, onRefresh, replyRef, noteRef, insertRef, attachRef }: {
   thread: ThreadDetail
   /** The Instagram account replies go out as, without the @. */
   expectedHandle?: string
@@ -220,6 +220,8 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
   onDeleteNote: (noteId: string) => void
   onRedraft: (instruction: string) => Promise<void>
   onMerge: (ids: string[]) => void
+  /** Conversations being merged right now; their button spins. */
+  merging?: string[]
   onUseMacro: (id: string) => void
   /** Reload this conversation after an approved suggested action. */
   onRefresh: () => void
@@ -498,7 +500,10 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
           <div className="px-5 py-2 border-b border-amber-200 bg-amber-50 text-xs text-amber-900 flex flex-wrap items-center gap-x-3 gap-y-1 shrink-0">
             <span>{(thread.customerName || 'This customer').split(/\s+/)[0]} has {others.length} other open conversation{others.length === 1 ? '' : 's'}{others.length === 1 ? `: "${others[0].subject || '(no subject)'}"` : ''}.</span>
             <button onClick={() => { if (globalThis.confirm(`Merge ${others.length === 1 ? 'it' : `all ${others.length}`} into this conversation? Their messages move here; this cannot be undone.`)) onMerge(others.map(o => o.id)) }}
-              className="font-semibold text-[#4600D6] hover:underline underline-offset-2">Merge {others.length === 1 ? 'it' : 'them'} here</button>
+              disabled={merging.length > 0}
+              className="inline-flex items-center gap-1 font-semibold text-[#4600D6] hover:underline underline-offset-2 disabled:opacity-60 disabled:no-underline">
+              {others.some(o => merging.includes(o.id)) ? <><Loader2 className="w-3 h-3 animate-spin" />Merging…</> : <>Merge {others.length === 1 ? 'it' : 'them'} here</>}
+            </button>
           </div>
         )
       })()}

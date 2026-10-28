@@ -15,7 +15,7 @@ function dayLabel(iso: string) {
 }
 
 /**
- * Settings > Support Closes (admin only): Support conversations each person
+ * Settings > Tickets Resolved (admin only): Support conversations each person
  * closed per day, Eastern time. Credited to whoever clicked Close, not who it
  * was assigned to (server/domain/support/closeCounter.js).
  */
@@ -37,7 +37,7 @@ export default function SupportClosesPanel() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <p className="text-sm text-off-black/55">Support conversations each person closed, by who clicked Close. Eastern time.</p>
+        <p className="text-sm text-off-black/55">Support tickets each person resolved, credited to whoever clicked Close. Eastern time.</p>
         <div className={segmentGroup}>
           {RANGES.map(r => <button key={r} onClick={() => setDays(r)} className={segment(days === r)}>{r} days</button>)}
         </div>
@@ -59,7 +59,7 @@ export default function SupportClosesPanel() {
           </div>
 
           {!data.people.length ? (
-            <p className="text-sm text-off-black/50 py-10 text-center">Nobody closed a conversation in the last {days} days.</p>
+            <p className="text-sm text-off-black/50 py-10 text-center">No tickets resolved in the last {days} days.</p>
           ) : (
             <div className="bg-white border border-border-gray rounded-lg shadow-sm overflow-x-auto">
               <table className="w-full text-sm">

@@ -427,12 +427,13 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
-export default function Details({ thread, tagSuggestions, onOpenThread, onMerge, onPriority, onTags, onInsert, onAttach, onChanged, width, filters, onFiltersChanged }: {
+export default function Details({ thread, tagSuggestions, onOpenThread, onMerge, merging = [], onPriority, onTags, onInsert, onAttach, onChanged, width, filters, onFiltersChanged }: {
   thread: ThreadDetail | null
   tagSuggestions: string[]
   onOpenThread: (id: string) => void
   /** Fold these other conversations of the customer into this one. */
   onMerge: (ids: string[]) => void
+  merging?: string[]
   onPriority: (p: boolean) => void
   onTags: (tags: string[]) => void
   /** Drops a line into the reply box. */
@@ -513,7 +514,10 @@ export default function Details({ thread, tagSuggestions, onOpenThread, onMerge,
                   </button>
                   {thread.channel === 'email' && (
                     <button onClick={() => { if (window.confirm(`Merge "${p.subject || '(no subject)'}" into this conversation? Its messages move here; this cannot be undone.`)) onMerge([p.id]) }}
-                      className="w-full text-left px-2.5 py-1 border-t border-border-gray text-[11px] font-medium text-[#4600D6] hover:bg-[#4600D6]/5 rounded-b-md">Merge into this conversation</button>
+                      disabled={merging.length > 0}
+                      className="w-full inline-flex items-center gap-1.5 text-left px-2.5 py-1 border-t border-border-gray text-[11px] font-medium text-[#4600D6] hover:bg-[#4600D6]/5 rounded-b-md disabled:opacity-60">
+                      {merging.includes(p.id) ? <><Loader2 className="w-3 h-3 animate-spin" />Merging…</> : 'Merge into this conversation'}
+                    </button>
                   )}
                   </div>
                 ))}
