@@ -83,7 +83,7 @@ export async function completeOrder({ orderId, orderNumber, actor = null, via = 
 
   const order = await prisma.order.update({
     where: { id: existing.id },
-    data: { status: 'completed', researchedAt: new Date(), ...(photoByRender && !existing.photoPlacedAt ? { photoPlacedAt: new Date() } : {}) },
+    data: { status: 'completed', researchedAt: new Date(), arteloHold: null, ...(photoByRender && !existing.photoPlacedAt ? { photoPlacedAt: new Date() } : {}) },
   })
   // A render still waiting for review is moot now.
   const closed = await prisma.renderJob.updateMany({

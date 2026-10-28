@@ -471,9 +471,18 @@ export default function OrderDetail({
   // Re-open a completed order. Brings it back into the active queue with
   // status='ready' (if research exists) or 'pending' (if it doesn't), so
   // it shows up in the standard view again and can be re-edited / printed.
+  // Confirmed on the page, not with window.confirm: after a run of browser
+  // dialogs Chrome offers to block them, and a blocked confirm answers "no"
+  // silently, so Re-Open did nothing at all (5308).
+  const [reopenArmed, setReopenArmed] = useState<string | null>(null)
+  useEffect(() => {
+    if (!reopenArmed) return
+    const t = setTimeout(() => setReopenArmed(null), 5000)
+    return () => clearTimeout(t)
+  }, [reopenArmed])
   const reopenOrder = async (orderNumber: string) => {
-    const ok = window.confirm('Re-open this order? It will go back into the active queue and disappear from the completed list.')
-    if (!ok) return
+    if (reopenArmed !== orderNumber) { setReopenArmed(orderNumber); return }
+    setReopenArmed(null)
     try {
       const response = await apiFetch(`/api/orders/actions`, {
         method: 'POST',
@@ -3067,7 +3076,7 @@ Thank you!`
                     onClick={() => reopenOrder(selectedOrder.orderNumber)}
                     className="flex-1 px-5 py-3 bg-white border-2 border-amber-300 text-amber-700 rounded-md hover:bg-amber-50 transition-colors font-medium"
                   >
-                    ↩ Re-Open Order
+                    {reopenArmed === selectedOrder.orderNumber ? 'Click again to re-open: it goes back in the active queue' : '↩ Re-Open Order'}
                   </button>
                 )}
                 {selectedOrder.status === 'flagged' && !isEditing && (

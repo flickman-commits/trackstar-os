@@ -197,6 +197,7 @@ async function markSent(job, order, actorId) {
     if (!j) continue
     if (row.id !== order.id && !j.arteloAttachedAt) continue
     await prisma.renderJob.update({ where: { id: j.id }, data: { arteloSentAt: now, sendAfter: null, sendError: null, sendCheckedAt: now } })
+    await prisma.order.update({ where: { id: row.id }, data: { arteloHold: null } })
     try {
       if (row.trackstarOrderType === 'custom') await setDesignStatus(row, 'sent_to_production', j.reviewedById || null, actor, { checkArtelo: false })
       else await completeOrder({ orderId: row.id, actor, via: 'approve', renderJobId: j.id })

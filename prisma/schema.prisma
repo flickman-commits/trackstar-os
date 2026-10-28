@@ -115,6 +115,11 @@ model Order {
   // view: "Photo is free"). Counts as paid, renders with the photo, and
   // never needs a Photo Add-On line on the Shopify order.
   photoFree          Boolean  @default(false)
+  // Why Artelo is holding this order, when it is ("Missing Designs", "Needs
+  // Address Review", "Customer Unpaid"); null when it is not. Set by the
+  // import's hold check and the daily Artelo check (arteloMismatch.js); the
+  // Action queue shows it, since nothing prints until someone acts in Artelo.
+  arteloHold         String?
   // Set when a designer confirms the customer's photo is actually placed on
   // the artwork. A photo order that ships without the photo is a reprint and a
   // refund, and the photo is the one element no proof template shows by
