@@ -28,6 +28,8 @@ import { isBulkShopifyOrder } from './domain/bulk/shopifyBulk.js'
 import { assigneeForNewOrder, isAutoAssignee, endExpiredShifts } from './domain/orders/assignment.js'
 import { requireConnection } from './lib/connections.js'
 import { listExcluded, isExcludedLine } from './domain/orders/excludedProducts.js'
+import { alertArteloHolds } from './domain/orders/arteloMismatch.js'
+import { arteloOrderUrl } from './lib/links.js'
 
 // Artelo API configuration
 // artelo.com, not artelo.io: the old host now redirects across domains and
@@ -731,6 +733,8 @@ export async function processOrders(options = {}) {
 
     const data = await response.json()
     const allOrders = Array.isArray(data) ? data : (data.orders || [])
+    // Address review, unpaid: Artelo holds these until a person acts there. Tell Slack once.
+    await alertArteloHolds(allOrders, { link: arteloOrderUrl }).catch(e => log(`[processOrders] Artelo hold check failed: ${e.message}`))
 
     // Count ALL new Artelo orders (regardless of status) for the "customers served" counter.
     // This catches manual orders that go straight to "received"/"in production" and never
