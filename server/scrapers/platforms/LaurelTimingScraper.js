@@ -169,10 +169,11 @@ export class LaurelTimingScraper extends BaseScraper {
 
     const formattedTime = this.formatTime(detail.chipTime)
     const distanceMiles = this.config.distances?.[match.distKey] || 26.2
-    // Always chip time over the matched distance. The page's own pace is
-    // truncated on the summary cards (3:21:59 shows 7:42, the real figure is
-    // 7:42.6), and older editions only have the cards.
-    const pace = this.formatPace(this.calculatePace(detail.chipTime, distanceMiles))
+    // The page's own pace (the card's "Pace (min/miles)", cum_pace in the
+    // data): floor(displayed time / distance), so 3:20:40 shows 7:39 where
+    // rounding gave 7:40. The printed pace matches the page; computed the same
+    // way only if the page had none.
+    const pace = this.cleanPagePace(detail.pace) || this.paceWith(detail.chipTime, distanceMiles, 'floor')
 
     console.log(`\n[${this.tag}] FOUND RUNNER:`)
     console.log(`  Name: ${match.fullName}`)

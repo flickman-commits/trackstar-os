@@ -216,11 +216,12 @@ export class RaceRosterScraper extends BaseScraper {
     // Charlotte's field. Athlinks lists the same runner as 3:22:15, and the
     // race's 2024 release gave "2:26:50.5" as 2:26:50.
     const chipTime = this.formatTime(String(result.chipTime ?? '').replace(/\.\d+$/, '') || null)
-    // Pace is chip time over the race distance. Race Roster's own overallPace
-    // is not that: Twin Cities 2026 shows 9:25 for a 4:10:03 marathon, which is
-    // 9:33. The page value is kept only for an event with no known distance.
+    // Pace is what the race's participant page shows: Race Roster renders
+    // overallPace verbatim, and each timer computes it its own way (Oakland
+    // floors, Pittsburgh rounds up, Newport rounds, all from fractional
+    // seconds), so it is never recomputed. Computed only if the field is empty.
     const distance = this.config.distances?.[eventKey] ?? DEFAULT_DISTANCES[eventKey]
-    const pace = (chipTime && distance) ? this.calculatePace(chipTime, distance) : this.formatPace(result.overallPace)
+    const pace = this.cleanPagePace(result.overallPace) ?? ((chipTime && distance) ? this.calculatePace(chipTime, distance) : null)
     const bib = result.bib || null
 
     console.log(`\n[${this.tag} ${this.year}] FOUND RUNNER:`)

@@ -66,6 +66,8 @@ const routes = [
   { method: 'get',  path: '/api/orders/auto-import',         handler: '../api/orders/auto-import.js' },
   { method: 'get',  path: '/api/orders/assign',              handler: '../api/orders/assign.js' },
   { method: 'post', path: '/api/orders/assign',              handler: '../api/orders/assign.js' },
+  { method: 'get',  path: '/api/orders/excluded-products',   handler: '../api/orders/excluded-products.js' },
+  { method: 'post', path: '/api/orders/excluded-products',   handler: '../api/orders/excluded-products.js' },
   { method: 'post', path: '/api/orders/research-runner',     handler: '../api/orders/research-runner.js' },
   { method: 'get',  path: '/api/orders/actions',              handler: '../api/orders/actions.js' },
   { method: 'post', path: '/api/orders/actions',              handler: '../api/orders/actions.js' },

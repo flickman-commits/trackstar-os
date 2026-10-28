@@ -16,12 +16,12 @@
  * time (cumulative). The compact "Splits" card on the same page shows INTERVAL
  * times between splits — not cumulative — so do not extract finish time from it.
  *
- * PACE: we do NOT scrape pace from this page. Its pace column is labeled
- * "Pace Between" (cumulative table) / "Pace" (segment table) and is the
- * per-SEGMENT pace — on the Finish row that's the pace over the final segment
- * only, which is wrong for anyone who didn't run even splits. We compute the
- * overall pace from chip time ÷ distance instead, which matches the page's own
- * headline "Pace" value exactly.
+ * PACE: the runner page's "Average Pace" block, its visible chip value
+ * (.chipContainer; the gun one is hidden). That is ceil(chip / distance):
+ * Grandma's 2026 6:22:32 shows 14:37 where rounding gave 14:36. Never the
+ * splits table's "Pace Between" / "Pace" column, which is per SEGMENT (the
+ * final segment's pace on the Finish row). If the block is missing, the same
+ * ceil formula is used.
  */
 import { BaseScraper } from '../BaseScraper.js'
 import * as cheerio from 'cheerio'
@@ -159,9 +159,8 @@ export class MTECResultsScraper extends BaseScraper {
 
       const formattedTime = this.formatTime(detail.chipTime)
       const distanceMiles = this.config.distances?.[distKey] || 26.2
-      // Always compute overall pace: the page only exposes per-segment pace
-      // (see file header). Computed pace == the page's headline "Pace" value.
-      const pace = this.formatPace(this.calculatePace(detail.chipTime, distanceMiles))
+      // The page's "Average Pace" (see file header), else the same ceil formula.
+      const pace = this.cleanPagePace(detail.avgPace) || this.paceWith(detail.chipTime, distanceMiles, 'ceil')
 
       console.log(`\n[${this.tag}] FOUND RUNNER:`)
       console.log(`  Name: ${match.name}`)
@@ -230,7 +229,7 @@ export class MTECResultsScraper extends BaseScraper {
         runnerName: match.name,
         bibNumber: String(match.bib).trim(),
         officialTime: this.formatTime(detail.chipTime),
-        officialPace: this.formatPace(this.calculatePace(detail.chipTime, distanceMiles)),
+        officialPace: this.cleanPagePace(detail.avgPace) || this.paceWith(detail.chipTime, distanceMiles, 'ceil'),
         eventType: eventLabel,
         yearFound: this.year,
         researchNotes: null,
@@ -305,9 +304,8 @@ export class MTECResultsScraper extends BaseScraper {
 
     // Find the detailed splits table by walking every <tr> that has a
     // <th class='pe-3'>Finish</th> header — the first <td> next to it is the
-    // cumulative chip Finish time. We deliberately do NOT read the page's pace
-    // column here (it's per-segment, not overall); pace is computed in
-    // searchRunner from chip time ÷ distance. See the file header.
+    // cumulative chip Finish time. The splits table's pace column is
+    // per-segment, never read; the overall pace is the "Average Pace" block.
     let chipTime = null
     $('tr').each((_, tr) => {
       const th = $(tr).find('th').first()
@@ -320,7 +318,12 @@ export class MTECResultsScraper extends BaseScraper {
       return false // break each loop
     })
 
-    return { chipTime }
+    // "Average Pace", the chip figure ("14:37 / mi"); the gun one sits hidden beside it.
+    const avg = $('p.label-text').filter((_, el) => $(el).text().trim() === 'Average Pace').first()
+      .closest('.d-md-flex').find('.chipContainer .pace-imperial strong').first().text().trim()
+    const avgPace = (avg.match(/^(\d{1,2}:\d{2})/) || [])[1] || null
+
+    return { chipTime, avgPace }
   }
 }
 

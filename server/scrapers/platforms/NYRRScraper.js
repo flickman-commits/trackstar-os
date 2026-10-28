@@ -213,8 +213,9 @@ export class NYRRScraper extends BaseScraper {
   _extractRunnerData(runner) {
     const rawTime = runner.overallTime || null
     const time = this.formatTime(rawTime)
-    // Overall pace from chip time ÷ the race's distance; the page value only when there is no time.
-    const pace = time ? this.calculatePace(time, this.config.distanceMiles || 26.2) : this.formatPace(runner.pace)
+    // The API's pace is the page's "PACE PER MILE" (net-based): printed as
+    // shown. Recomputing over 26.2 was a second off on ~15% of NYC runners.
+    const pace = this.cleanPagePace(runner.pace) || (time ? this.calculatePace(time, this.config.distanceMiles || 26.2) : null)
 
     return {
       found: true,

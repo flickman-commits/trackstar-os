@@ -184,6 +184,35 @@ export class BaseScraper {
   }
 
   /**
+   * A pace exactly as a results page prints it, as m:ss: "08:51" -> "8:51",
+   * "5:43/M" -> "5:43", "7:38 min/mile" -> "7:38". The printed pace is the
+   * official page's own figure (Matt, 2026-10-28): every timer computes it
+   * its own way (round, floor or ceil, over 26.2 or 26.219, from hundredths,
+   * sometimes from gun time), so recomputing it from the time is wrong for a
+   * share of runners on most platforms.
+   * @param {string} raw - The page's pace text
+   * @returns {string|null}
+   */
+  cleanPagePace(raw) {
+    const m = String(raw ?? '').match(/(\d{1,2}):(\d{2})/)
+    return m ? `${Number(m[1])}:${m[2]}` : null
+  }
+
+  /**
+   * Pace from a time and distance with an explicit rounding rule, for the
+   * platforms whose page shows a computed pace we have to reproduce:
+   * 'floor' | 'ceil' | 'round'. Fractional seconds in the time count.
+   */
+  paceWith(time, distanceMiles, rule = 'round') {
+    const m = String(time || '').match(/^(?:(\d+):)?(\d{1,2}):(\d{2})(\.\d+)?$/)
+    if (!m || !distanceMiles) return null
+    const secs = (Number(m[1] || 0) * 3600) + Number(m[2]) * 60 + Number(m[3]) + Number(m[4] || 0)
+    const per = secs / distanceMiles
+    const p = rule === 'floor' ? Math.floor(per) : rule === 'ceil' ? Math.ceil(per - 1e-9) : Math.round(per)
+    return `${Math.floor(p / 60)}:${String(p % 60).padStart(2, '0')}`
+  }
+
+  /**
    * Round any fraction of a second UP: "4:13:56.379" -> "4:13:57",
    * "4:13:56.000" -> "4:13:56". RTRT's tracker does this (Marine Corps 2026,
    * bib 19200: 04:13:56.379 shows "Finish Time: 04:13:57"), as do ChronoTrack,

@@ -215,8 +215,9 @@ export class SVETimingScraper extends BaseScraper {
         found: true,
         bibNumber: runner.bib,
         officialTime: runner.chipTime,
-        // Computed from chip time, never read off the page.
-        officialPace: this.calculatePace(runner.chipTime, distanceMiles),
+        // The results page's Pace column is floor(chip / distance) (Baltimore
+        // and Big Sur 2025, 400 of 400 rows each); our search view lacks it.
+        officialPace: this.paceWith(runner.chipTime, distanceMiles, 'floor'),
         eventType: this.config.eventLabels?.[runner.distanceKey] || runner.division,
         yearFound: this.year,
         researchStatus: 'found',

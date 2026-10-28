@@ -28,9 +28,10 @@
  * (cert.racetec.net) TRUNCATES to the second: Ryan Newstrom 05:18:31.50 is
  * printed 05:18:31. We truncate the same way (Athlinks' mirror agrees).
  *
- * Pace: never scraped. The page pace truncates its seconds (Mya Sullivan
- * 13:04 for 20564s / 26.2 = 784.9). Pace is chip time / the matched event's
- * distance (config.distances[eventKey]).
+ * Pace: the athlete page's finish-row Pace cell, which is floor(exact net time
+ * with hundredths / distance): Mya Sullivan 05:42:44.61 shows 13:04 where
+ * rounding gave 13:05. The printed pace matches the page; the same formula
+ * is the fallback when the cell cannot be read.
  *
  * Events are matched by EId from the athlete link, not the event label, so
  * relays, 5K and 10K (other EIds) can never match.
@@ -203,14 +204,17 @@ export class TrueTimeScraper extends BaseScraper {
     return rows
   }
 
-  /** Finish time of day from the runner detail (last split row). */
-  async fetchFinishTimeOfDay(href) {
+  /** Finish time of day and the page's overall pace, from the runner detail's last split row. */
+  async fetchFinishRow(href) {
     const { text } = await this.fetchText(href)
     const rows = [...text.matchAll(/<tr class="rtv3-splits-main[^"]*">([\s\S]*?)<\/tr>/g)]
     const last = rows[rows.length - 1]
-    if (!last) return null
+    if (!last) return { tod: null, pace: null }
     const cells = [...last[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(m => decode(m[1]))
-    return /^\d{1,2}:\d{2}:\d{2}$/.test(cells[1] || '') ? cells[1] : null
+    return {
+      tod: /^\d{1,2}:\d{2}:\d{2}$/.test(cells[1] || '') ? cells[1] : null,
+      pace: (String(cells[3] || '').match(/^(\d{1,2}:\d{2})/) || [])[1] || null,
+    }
   }
 
   /** Truncate hundredths to whole seconds, as the official certificate does. */
@@ -313,10 +317,13 @@ export class TrueTimeScraper extends BaseScraper {
     // Gun is informational only: finish time of day minus the published gun.
     let gun = null
     let finishTimeOfDay = null
-    if (this.tt.gunStart && match.href) {
+    let pagePace = null
+    if (match.href) {
       try {
-        finishTimeOfDay = await this.fetchFinishTimeOfDay(match.href)
-        const diff = toSeconds(finishTimeOfDay) - toSeconds(this.tt.gunStart)
+        const row = await this.fetchFinishRow(match.href)
+        finishTimeOfDay = row.tod
+        pagePace = row.pace
+        const diff = this.tt.gunStart ? toSeconds(finishTimeOfDay) - toSeconds(this.tt.gunStart) : 0
         if (finishTimeOfDay && diff > 0) gun = fromSeconds(diff)
       } catch (err) {
         console.warn(`[${this.tag} ${this.year}] detail fetch failed for ${match.href}: ${err.message}`)
@@ -324,7 +331,7 @@ export class TrueTimeScraper extends BaseScraper {
     }
 
     const distance = this.config.distances?.[eventKey] ?? DEFAULT_DISTANCES[eventKey]
-    const pace = distance ? this.calculatePace(chip, distance) : null
+    const pace = this.cleanPagePace(pagePace) ?? (distance ? this.paceWith(match.net, distance, 'floor') : null)
     console.log(`[${this.tag} ${this.year}] FOUND ${match.name} bib ${match.bib} ${eventLabel}: chip ${chip} (net ${match.net}), gun ~${gun || '?'}, pace ${pace}`)
 
     return {

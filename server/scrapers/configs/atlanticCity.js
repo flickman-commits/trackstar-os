@@ -62,6 +62,8 @@ export default {
         eventId: 430762,
         listName: 'Large Race Reports|Overall Results by Chip',
         chipField: 'Finish.CHIP',
+        // The page's "Chip Pace" column, which is ceil(gun / distance); printed as shown.
+        paceField: 'Finish.SPEEDORPACE',
         contests: {
           marathon: /^marathon$/i,
           half: /^half marathon$/i,

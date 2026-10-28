@@ -76,6 +76,8 @@ export default {
         eventId: 425548,
         listName: 'Result Lists|Overall Results',
         chipField: 'Finish',
+        // The "Pace" column, about floor(chip / distance); read, not recomputed.
+        paceField: 'Finish.PACE',
         contests: {
           marathon: /^(early |pacer )?marathon$/i,
           half: /^(half marathon|pacer half)$/i,

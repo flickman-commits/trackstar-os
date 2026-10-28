@@ -20,6 +20,10 @@ export default {
   eventTypes: ['Marathon'],
   defaultEventType: 'Marathon',
   distanceMiles: 26.2,
+  // The results list runcim.org links shows pace as round(chip / 42.195 km in
+  // miles); MyRace's own paceTime floors it and its athlete page uses 26.2.
+  // The printed pace matches the list.
+  listPaceMiles: 26.21875,
   aliases: [
     'California International Marathon',
     'CIM Marathon',

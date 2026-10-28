@@ -27,6 +27,7 @@ import { buildShopifyMatchMap, buildEtsyMatchMap, isRushAddonLineItem, isRemoved
 import { isBulkShopifyOrder } from './domain/bulk/shopifyBulk.js'
 import { assigneeForNewOrder, isAutoAssignee, endExpiredShifts } from './domain/orders/assignment.js'
 import { requireConnection } from './lib/connections.js'
+import { listExcluded, isExcludedLine } from './domain/orders/excludedProducts.js'
 
 // Artelo API configuration
 // artelo.com, not artelo.io: the old host now redirects across domains and
@@ -663,6 +664,8 @@ export async function processOrders(options = {}) {
   const prisma = externalPrisma || sharedPrisma
 
   const log = verbose ? console.log.bind(console) : () => {}
+  // Products that never enter the tool (Settings > Skipped Products).
+  const excludedProducts = await listExcluded().catch(() => [])
 
   const results = {
     success: true,
@@ -972,6 +975,16 @@ export async function processOrders(options = {}) {
             if (!existing && isShopify && shopifyData?.shopifyOrderData?.line_items?.length) {
               if ((shopifyMatchMap?.[lineItemIndex] ?? -1) < 0) {
                 log(`[processOrders] Skipping line item ${lineItemIndex} on order ${order.orderId} (no print to match, treating as photo add-on)`)
+                results.skipped++
+                orderResult.action = 'skipped'
+                results.orders.push(orderResult)
+                continue
+              }
+              // A product with nothing to personalize (Settings > Skipped
+              // Products): Artelo fulfills it from its own library.
+              const line = shopifyData.shopifyOrderData.line_items[shopifyMatchMap[lineItemIndex]]
+              if (isExcludedLine(line, excludedProducts)) {
+                log(`[processOrders] Skipping line item ${lineItemIndex} on order ${order.orderId} (${line.title}: a skipped product)`)
                 results.skipped++
                 orderResult.action = 'skipped'
                 results.orders.push(orderResult)

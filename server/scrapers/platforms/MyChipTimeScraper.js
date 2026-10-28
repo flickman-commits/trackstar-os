@@ -353,6 +353,15 @@ export class MyChipTimeScraper extends BaseScraper {
    * Parse searchResultGen.php HTML (column-index based)
    * Used by Austin Marathon
    */
+  /**
+   * A column's position by its header text (spaces ignored, any case). The
+   * fixed indexes read TotDiv as the pace on Dallas and Philadelphia 2025.
+   */
+  _headerIndex($, tableEl, name) {
+    const heads = tableEl.find('tr').first().find('th, td').map((_, c) => $(c).text().replace(/\s+/g, '').toLowerCase()).get()
+    return heads.indexOf(name)
+  }
+
   _parseColumnsHtml(html) {
     const $ = cheerio.load(html)
     const results = []
@@ -364,6 +373,7 @@ export class MyChipTimeScraper extends BaseScraper {
 
     const mainTable = $('table#myTable')
     const tableEl = mainTable.length ? mainTable : $('table').first()
+    const paceIdx = this._headerIndex($, tableEl, 'totalpace')
 
     tableEl.find('tr').each((_, row) => {
       const cells = $(row).find('td')
@@ -385,7 +395,7 @@ export class MyChipTimeScraper extends BaseScraper {
         classPosition: $(cells[12]).text().trim(),
         overallPlace:  $(cells[13]).text().trim(),
         genPlace:      $(cells[16])?.text()?.trim() || '',
-        pace:          $(cells[17])?.text()?.trim() || '',
+        pace:          paceIdx >= 0 ? $(cells[paceIdx]).text().trim() : '',
       })
     })
 
@@ -421,6 +431,7 @@ export class MyChipTimeScraper extends BaseScraper {
     const tableEl = $('table#myTable').length
       ? $('table#myTable')
       : $('table').first()
+    const paceIdx = this._headerIndex($, tableEl, 'totalpace')
 
     tableEl.find('tbody tr, tr').each((_, row) => {
       const cells = $(row).find('td')
@@ -445,7 +456,7 @@ export class MyChipTimeScraper extends BaseScraper {
           city:          $(cells[8]).text().trim(),
           state:         $(cells[9]).text().trim(),
           overallPlace:  $(cells[14])?.text()?.trim() || '',
-          pace:          $(cells[18])?.text()?.trim() || '',
+          pace:          paceIdx >= 0 ? $(cells[paceIdx]).text().trim() : '',
         })
         return
       }
@@ -520,13 +531,13 @@ export class MyChipTimeScraper extends BaseScraper {
    * Extract standardized result from a match
    */
   _extractResult(match, eventLabel, searchUrl) {
-    // Column-mode results have chipTime directly. Pace is COMPUTED from chip
-    // time ÷ matched distance, not scraped — the page's pace column carries a
-    // "/M" unit suffix and isn't guaranteed to be the overall average (see the
-    // add-race-scraper skill's "compute, don't scrape" rule).
+    // Column-mode results have chipTime directly. Pace is the page's
+    // TotalPace column ("8:37/M"), chip-based, printed as shown: it comes from
+    // fractional seconds the page hides, so recomputing it misses at .5
+    // boundaries. Computed only when the column is missing.
     if (match.chipTime) {
       const distanceMiles = /half/i.test(eventLabel) ? 13.1 : 26.2
-      const computedPace = this.calculatePace(this.normalizeTime(match.chipTime), distanceMiles)
+      const computedPace = this.cleanPagePace(match.pace) || this.calculatePace(this.normalizeTime(match.chipTime), distanceMiles)
       return {
         found: true,
         eventType: eventLabel,

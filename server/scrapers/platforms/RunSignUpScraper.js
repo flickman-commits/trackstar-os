@@ -452,13 +452,14 @@ export class RunSignUpScraper extends BaseScraper {
     // times with hundredths ("2:45:55.71") — round to the nearest second.
     const time = this.formatTime(this.roundTime(result.chipTime))
     const bib = result.bib || null
-    // Compute overall pace from chip time ÷ distance rather than trusting the
-    // scraped pace column (per the add-race-scraper skill). Distance comes from
-    // the matched event so half-marathon paces aren't computed against 26.2.
-    // A race's own distances win (Northshore's 10 Miler is 10, not 26.2).
+    // Pace is the "Pace" column the RunSignUp results page shows (the REST
+    // row's `pace`; the browser path reads the same column). It is computed
+    // from the hundredths, so recomputing from the rounded time is a second
+    // off for ~2% of runners, and Bangor's is clock-based. Computed from chip
+    // time over the matched distance only when the page has no pace.
     const key = Object.keys(this.config?.eventLabels || {}).find(k => this.config.eventLabels[k] === eventType)
     const distanceMiles = (key && this.config?.distances?.[key]) || (/half/i.test(eventType) ? 13.1 : 26.2)
-    const pace = this.calculatePace(time, distanceMiles)
+    const pace = this.cleanPagePace(result.pace) ?? this.calculatePace(time, distanceMiles)
 
     return {
       found: true,

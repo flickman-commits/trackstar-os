@@ -29,7 +29,10 @@
  *
  * PACE AND DISTANCE
  *   The API exposes NO pace value — only `paceUnits: "min/mi"`, which is a
- *   display hint. So pace must be computed: chip time ÷ distance.
+ *   display hint. The page computes it in the browser, and we reproduce that
+ *   exactly (_pagePace, from live.chronotrack.com's own code): speed =
+ *   meters / seconds, minutes per mile rounded UP to 0.001, then seconds
+ *   rounded. Chip time over 26.2 was a second off on 25 of 59 Detroit runners.
  *
  *   DISTANCE IS IN METERS, whatever the payload says. The distance object is:
  *
@@ -124,6 +127,20 @@ export class ChronoTrackScraper extends BaseScraper {
     } finally {
       clearTimeout(timer)
     }
+  }
+
+  /**
+   * The pace live.chronotrack.com prints, by its own formula (its bundle):
+   * speed = meters / (ms / 1000); min/mi = ceil(1000 * 1609.344 / 60 / speed)
+   * / 1000; seconds = round(60 * min). SF 2026 David Jones 13567260 ms over
+   * 42195 m shows 8:38; chip time over 26.2 gave 8:37.
+   */
+  _pagePace(chipMs, meters) {
+    if (!chipMs || !meters) return null
+    const speed = meters / (chipMs / 1000)
+    const min = Math.ceil(1e3 * (1609.344 / 60 / speed)) / 1e3
+    const s = Math.round(60 * min)
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
   }
 
   /**
@@ -377,7 +394,7 @@ export class ChronoTrackScraper extends BaseScraper {
       bib: (res.data?.bib || entry.bib) ? String(res.data?.bib || entry.bib) : null,
       time,
       gunTime: this._formatMillis(course.gunTimeInMillis),
-      pace: this.formatPace(this.calculatePace(time, distanceMiles)),
+      pace: this._pagePace(chipMs, meters) ?? this.formatPace(this.calculatePace(time, distanceMiles)),
       distanceMiles,
       // Label from the distance, not the race's marketing name ("CHINA
       // AIRLINES BRIDGE HALF MARATHON" is not what we print on a poster).

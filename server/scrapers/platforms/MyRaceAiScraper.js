@@ -127,18 +127,23 @@ export class MyRaceAiScraper extends BaseScraper {
   }
 
   /**
+   * The pace MyRace's results list prints: round(chip / listPaceMiles), which
+   * for CIM is 42.195 km in miles (2025 Colton Smith 12393s shows 7:53;
+   * paceTime said 7:52, floor over 26.2 is 7:53 but misses others).
+   */
+  _listPace(chip) {
+    const t = chip ? this.normalizeTime(chip) : null
+    return t ? this.paceWith(t, this.config.listPaceMiles || this.config.distanceMiles || 26.2, 'round') : null
+  }
+
+  /**
    * Extract from search result (fallback)
    */
   _extractSearchResult(result) {
     const time = this.formatTime(result.finishChipTime)
     const bib = result.bib || null
 
-    let pace = null
-    if (result.finishChipTime) {
-      const distanceMiles = this.config.distanceMiles || 26.2
-      const normalizedTime = this.normalizeTime(result.finishChipTime)
-      pace = normalizedTime ? this.formatPace(this.calculatePace(normalizedTime, distanceMiles)) : null
-    }
+    const pace = this._listPace(result.finishChipTime)
 
     return {
       found: true,
@@ -165,19 +170,9 @@ export class MyRaceAiScraper extends BaseScraper {
   _extractDetailedResult(athlete) {
     const time = this.formatTime(athlete.finishChipTime)
 
-    // MyRace's detailed athlete record often carries paceTime: null - CIM 2019
-    // returns it null for every runner we checked - and this used to pass that
-    // straight through, so orders showed a finish time with "Pending research"
-    // where the pace goes. The search-result path next door already derives
-    // pace from the chip time; there is no reason this one should not. Their
-    // value wins when they give us one, since it is the timing system's own.
-    let pace = this.formatPace(athlete.paceTime)
-    if (!pace && athlete.finishChipTime) {
-      const normalized = this.normalizeTime(athlete.finishChipTime)
-      if (normalized) {
-        pace = this.formatPace(this.calculatePace(normalized, this.config.distanceMiles || 26.2))
-      }
-    }
+    // The pace the race's results list shows, never the record's paceTime
+    // (null for CIM 2019, and a floor that disagrees with the list otherwise).
+    const pace = this._listPace(athlete.finishChipTime)
 
     return {
       found: true,

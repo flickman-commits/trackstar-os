@@ -172,7 +172,7 @@ test('RaceRoster searches once per lookup and filters rows by resultSubEventId (
   assert.equal(r.bibNumber, '2097')
   assert.equal(r.eventType, 'Half Marathon')
   assert.equal(r.officialTime, '2:11:33')
-  assert.equal(r.officialPace, '10:03')
+  assert.equal(r.officialPace, '10:02') // the page's overallPace, printed as shown
 })
 
 test('RaceRoster: a miss is one request, not one per sub-event', async () => {

@@ -27,6 +27,8 @@ export default {
   eventTypes: ['Marathon'],
   defaultEventType: 'Marathon',
   distanceMiles: 26.2,
+  // The printed pace is the detail page's "min/mile" (see MikaTimingScraper._withDetailPace).
+  detailPace: true,
   aliases: [
     'Boston Marathon',
     'BAA Boston Marathon',

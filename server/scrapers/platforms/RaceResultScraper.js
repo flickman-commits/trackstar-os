@@ -25,10 +25,12 @@
  * runner. If the detail view is unreachable, a list column is used only when
  * the config names one (`chipField`) that was verified to be chip.
  *
- * Pace: never scraped. RaceResult list pace columns can be gun-based even
- * when labelled "Chip Pace" (Atlantic City 2025/2026: Luddy Johnson chip
- * 2:25:07 half shows 11:20, which is gun 2:28:31 / 13.1). Pace is always
- * chip time / the matched contest's distance.
+ * Pace: the list column the official page shows, named per config
+ * (`paceField`). It is printed as shown even when it is gun-based: Atlantic
+ * City's "Chip Pace" is ceil(gun / distance), and the printed pace matches
+ * the official page (Matt, 2026-10-28). Never the detail view's Finish
+ * "Speed", which is the last split's pace. Computed from chip time only when
+ * the config names no pace column.
  *
  * Config (usually inside yearOverrides[year]):
  *   raceResult: {
@@ -122,12 +124,14 @@ export class RaceResultScraper extends BaseScraper {
     const bibIdx = idx('BIB')
     const pidIdx = idx('ID')
     const chipIdx = this.rr.chipField ? idx(this.rr.chipField) : -1
+    const paceIdx = this.rr.paceField ? idx(this.rr.paceField) : -1
     if (nameIdx == null || pidIdx < 0) throw new Error(`unexpected list fields: ${fields.join(',')}`)
     return this.flattenRows(json.data, fields.length).map(({ row, groups }) => ({
       name: row[nameIdx],
       bib: bibIdx >= 0 ? row[bibIdx] : null,
       pid: row[pidIdx],
       listChip: chipIdx >= 0 ? row[chipIdx] : null,
+      listPace: paceIdx >= 0 ? row[paceIdx] : null,
       contestLabel: groups[0] || '',
     }))
   }
@@ -264,7 +268,7 @@ export class RaceResultScraper extends BaseScraper {
     }
 
     const distance = this.config.distances?.[eventKey] ?? DEFAULT_DISTANCES[eventKey]
-    const pace = distance ? this.calculatePace(chip, distance) : null
+    const pace = this.cleanPagePace(match.listPace) ?? (distance ? this.calculatePace(chip, distance) : null)
     console.log(`[${this.tag} ${this.year}] FOUND ${match.name} bib ${match.bib} ${eventLabel}: chip ${chip}, gun ${gun || '?'}, pace ${pace}`)
 
     return {

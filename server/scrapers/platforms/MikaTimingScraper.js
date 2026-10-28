@@ -215,7 +215,7 @@ export class MikaTimingScraper extends BaseScraper {
       console.log(`  Bib: ${runner.bib}`)
       console.log(`  Time: ${runner.finishTime}`)
 
-      return { ...this._extractRunnerData(runner), resultsUrl: searchUrl }
+      return { ...(await this._withDetailPace(this._extractRunnerData(runner), runner)), resultsUrl: searchUrl }
 
     } catch (error) {
       console.error(`[${this.tag}] Error searching for ${runnerName}:`, error.message)
@@ -255,7 +255,7 @@ export class MikaTimingScraper extends BaseScraper {
       if (!hits.length) return this.notFoundResult(`No bib ${wanted} in ${this.raceName} ${this.year} results`)
       const runner = hits[0]
       console.log(`[${this.tag}] BIB MATCH: ${runner.name} bib ${runner.bib} ${runner.finishTime || 'no time'}`)
-      return { ...this._extractRunnerData(runner), runnerName: runner.name, resultsUrl: page.searchUrl }
+      return { ...(await this._withDetailPace(this._extractRunnerData(runner), runner)), runnerName: runner.name, resultsUrl: page.searchUrl }
     } catch (error) {
       console.error(`[${this.tag}] Bib lookup error for ${wanted}:`, error.message)
       return this.upstreamErrorResult(error.message)
@@ -392,6 +392,7 @@ export class MikaTimingScraper extends BaseScraper {
             bib,
             finishTime,
             halfTime,
+            detailHref: $row.find('a[href*="content=detail"]').attr('href') || null,
             overallPlace,
             genderPlace,
             division
@@ -486,6 +487,29 @@ export class MikaTimingScraper extends BaseScraper {
       city: r.city,
       state: r.state,
       eventType: d.eventType,
+    }
+  }
+
+  /**
+   * Boston prints pace only on the runner's detail page ("min/mile 06:21",
+   * net-based), worked out from fractional seconds the list hides, so no
+   * formula over the shown time matches it (round over 26.2 missed 6 of 74).
+   * Configs set detailPace: true to read it; the computed pace stays if the
+   * page cannot be read. Berlin's detail page has no per-mile pace.
+   */
+  async _withDetailPace(result, runner) {
+    if (!this.config.detailPace || !runner.detailHref) return result
+    try {
+      const res = await fetchWithTimeout(new URL(runner.detailHref, `${this.baseUrl}/`).toString(), { headers: { 'User-Agent': USER_AGENT, Accept: 'text/html' } })
+      if (!res.ok) return result
+      const $ = cheerio.load(await res.text())
+      // Exactly "min/mile": the splits table's "Min/mile" header is a <th> too.
+      const th = $('th').filter((_, el) => $(el).text().trim() === 'min/mile' && $(el).next().is('td')).first()
+      const pace = this.cleanPagePace(th.next('td').text().trim())
+      return pace ? { ...result, officialPace: pace } : result
+    } catch (err) {
+      console.log(`[${this.tag}] Detail pace not read: ${err.message}`)
+      return result
     }
   }
 
