@@ -410,6 +410,20 @@ export default function OrderDetail({
   const commentFileInputRef = useRef<HTMLInputElement>(null)
 
   // Accept a suggested match for an ambiguous result
+  // Reload one order (its Shopify order's rows) into the list and the open
+  // view. The full /api/orders read this replaced took long enough that
+  // "Researching..." seemed stuck, and it swapped in a different list.
+  const reloadOrder = async (orderNumber: string) => {
+    const row = selectedOrder?.orderNumber === orderNumber ? selectedOrder : null
+    const parent = row?.parentOrderNumber || orderNumber.replace(/-\d+$/, '')
+    const data = await apiFetch(`/api/orders?number=${encodeURIComponent(parent)}`).then(r => (r.ok ? r.json() : null)).catch(() => null)
+    const fresh: Order[] = (data?.orders || []).map(mapOrder)
+    if (!fresh.length) return
+    setOrders(prev => prev.map(o => fresh.find(f => f.orderNumber === o.orderNumber) || o))
+    const mine = fresh.find(f => f.orderNumber === orderNumber)
+    if (mine) setSelectedOrder(prev => (prev?.orderNumber === orderNumber ? mine : prev))
+  }
+
   const acceptMatch = async (orderNumber: string, match: { name: string; bib: string; time: string; pace?: string; eventType?: string; resultsUrl?: string }) => {
     try {
       setToast({ message: 'Accepting match...', type: 'info' })
@@ -437,20 +451,7 @@ export default function OrderDetail({
         return next
       })
 
-      // Refresh orders to get updated data
-      await fetchOrders()
-
-      // Update selected order with fresh data
-      const freshResponse = await apiFetch(`/api/orders`)
-      if (freshResponse.ok) {
-        const freshData = await freshResponse.json()
-        const freshOrders: Order[] = (freshData.orders || []).map(mapOrder)
-        setOrders(freshOrders)
-        const updatedOrder = freshOrders.find(o => o.orderNumber === orderNumber)
-        if (updatedOrder) {
-          setSelectedOrder(updatedOrder)
-        }
-      }
+      await reloadOrder(orderNumber)
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error accepting match:', error)
       const message = error instanceof Error ? error.message : 'Failed to accept match'
@@ -785,18 +786,7 @@ export default function OrderDetail({
 
       setToast({ message: 'Changes saved!', type: 'success' })
       setIsEditing(false)
-      await fetchOrders()
-
-      // Update selected order with new data
-      const updatedOrders = await apiFetch(`/api/orders`).then(r => r.json())
-      const updated = updatedOrders.orders?.find((o: { orderNumber: string }) => o.orderNumber === orderNumber)
-      if (updated) {
-        setSelectedOrder({
-          ...selectedOrder!,
-          ...updated,
-          displayOrderNumber: updated.displayOrderNumber || updated.orderNumber
-        })
-      }
+      await reloadOrder(orderNumber)
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error saving overrides:', error)
       setToast({ message: 'Failed to save changes', type: 'error' })
@@ -893,21 +883,7 @@ export default function OrderDetail({
         })
       }
 
-      // Fetch fresh data and update both orders list and selected order
-      const freshResponse = await apiFetch(`/api/orders`)
-      if (freshResponse.ok) {
-        const freshData = await freshResponse.json()
-        const freshOrders: Order[] = (freshData.orders || []).map(mapOrder)
-
-        // Update orders list
-        setOrders(freshOrders)
-
-        // Update selected order with fresh data
-        const updatedOrder = freshOrders.find(o => o.orderNumber === orderNumber)
-        if (updatedOrder) {
-          setSelectedOrder(updatedOrder)
-        }
-      }
+      await reloadOrder(orderNumber)
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error researching order:', error)
       const message = error instanceof Error ? error.message : 'Research failed'
@@ -2346,11 +2322,12 @@ Thank you!`
                   </div>
                 )}
 
-                {/* Research Status */}
-                {selectedOrder.researchStatus && selectedOrder.researchStatus !== 'found' && (
+                {/* Research Status. Candidates from a search again show even
+                    when the saved result was kept, or there is no way to accept one. */}
+                {selectedOrder.researchStatus && (selectedOrder.researchStatus !== 'found' || possibleMatchesMap[selectedOrder.orderNumber]?.length > 0) && (
                   <div>
                     {(() => {
-                      const status = selectedOrder.researchStatus
+                      const status = selectedOrder.researchStatus === 'found' ? 'ambiguous' : selectedOrder.researchStatus
                       // Different visual treatment per status:
                       //   - no_scraper / year_not_configured = red (config gap, blocks fulfillment, dev needed)
                       //   - upstream_error / not_found / ambiguous = amber (transient or resolvable via manual verification)

@@ -909,7 +909,10 @@ export class ResearchService {
     // describes this runner (same name, or typed in by a person): a timing
     // site having a bad day should not undo a good answer. The caller hears
     // what the search said; the saved result stays.
+    // A saved result with neither bib nor time (a hand entry whose bib was
+    // cleared, order 6265) is nothing worth keeping: the new candidates win.
     if (force && existingResearch?.researchStatus === 'found' && researchData.researchStatus !== 'found'
+      && (existingResearch.bibNumber || existingResearch.officialTime)
       && (existingResearch.source === 'manual_entry' || existingResearch.runnerName === runnerName)) {
       console.log(`[ResearchService] ${order.orderNumber}: search again came back ${researchData.researchStatus}; kept the saved result`)
       return {
