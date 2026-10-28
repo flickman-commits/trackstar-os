@@ -9,7 +9,8 @@ import { editorToMarkup, lineToEditorHtml, markupToEditorHtml } from '@/lib/repl
  *
  * Content is set from `value` only when it changes from outside (the
  * starter, a macro, a draft); typing goes the other way, so the caret
- * stays where it is. Paste is plain text; pasted or dropped files go to
+ * stays where it is. Paste is plain text, except a web address pasted over
+ * selected words, which links them; pasted or dropped files go to
  * `onFiles` (the attachments). In a DM (`plain`), formatting keys do nothing.
  */
 export interface RichReplyHandle {
@@ -144,7 +145,8 @@ const RichReply = forwardRef<RichReplyHandle, Props>(function RichReply({ value,
           if (!plain && e.key.toLowerCase() !== 'u') { document.execCommand(e.key.toLowerCase() === 'b' ? 'bold' : 'italic'); emit() }
           return
         }
-        if (mod && e.key.toLowerCase() === 'k' && !plain) { e.preventDefault(); api.format('link'); return }
+        // ⌘K is the global search (CommandSearch), here too. A link is made by
+        // selecting text and pasting the address over it (onPaste below).
         onKeyDown?.(e)
       }}
       onPaste={e => {
@@ -152,7 +154,16 @@ const RichReply = forwardRef<RichReplyHandle, Props>(function RichReply({ value,
         if (files.length && onFiles) { e.preventDefault(); onFiles(files); return }
         // Plain text only: a paste from a web page or Word brings its fonts and colours otherwise.
         e.preventDefault()
-        document.execCommand('insertText', false, e.clipboardData.getData('text/plain'))
+        const pasted = e.clipboardData.getData('text/plain')
+        // A web address pasted over selected words links them, no dialog.
+        const sel = document.getSelection()
+        const url = pasted.trim()
+        if (!plain && /^https?:\/\/\S+$/.test(url) && sel && !sel.isCollapsed && sel.toString().trim() && el.current?.contains(sel.anchorNode)) {
+          document.execCommand('createLink', false, url)
+          emit()
+          return
+        }
+        document.execCommand('insertText', false, pasted)
       }}
       onDragOver={e => { if (onFiles && Array.from(e.dataTransfer.types).includes('Files')) e.preventDefault() }}
       onDrop={e => {

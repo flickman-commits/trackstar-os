@@ -546,7 +546,7 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
                 <span className="inline-flex items-center rounded-md border border-border-gray overflow-hidden" title="Formatting: **bold**, _italic_, [text](link). Links are made from bare addresses too.">
                   <button type="button" onClick={() => wrapSelection('bold')} className="px-2 py-1.5 text-off-black/60 hover:bg-subtle-gray hover:text-off-black" title="Bold (⌘B)"><Bold className="w-3.5 h-3.5" /></button>
                   <button type="button" onClick={() => wrapSelection('italic')} className="px-2 py-1.5 text-off-black/60 hover:bg-subtle-gray hover:text-off-black border-l border-border-gray" title="Italic (⌘I)"><Italic className="w-3.5 h-3.5" /></button>
-                  <button type="button" onClick={() => wrapSelection('link')} className="px-2 py-1.5 text-off-black/60 hover:bg-subtle-gray hover:text-off-black border-l border-border-gray" title="Link (⌘K)"><LinkIcon className="w-3.5 h-3.5" /></button>
+                  <button type="button" onClick={() => wrapSelection('link')} className="px-2 py-1.5 text-off-black/60 hover:bg-subtle-gray hover:text-off-black border-l border-border-gray" title="Link (or select words and paste the address, ⌘V)"><LinkIcon className="w-3.5 h-3.5" /></button>
                 </span>
               )}
               <input ref={fileInput} type="file" multiple accept={ig ? 'image/*' : 'image/*,application/pdf'} className="hidden"
