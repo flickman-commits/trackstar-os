@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2, Plus, Copy, ExternalLink, ImagePlus, X, Trash2, ArrowLeft, MessageSquareText } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { useArmed } from '@/lib/useArmed'
 import { btnPrimary, btnSecondary, btnGhost, inputBase, segment, segmentGroup, pageShell, fieldLabel } from '@/lib/ui'
 
 /**
@@ -111,6 +112,7 @@ export default function DesignSurveys() {
 function SurveyEditor({ id, onBack }: { id: string; onBack: () => void }) {
   const [s, setS] = useState<Survey | null>(null)
   const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null)
+  const { arm, isArmed } = useArmed()
   const [title, setTitle] = useState('')
   const [question, setQuestion] = useState('')
   // Two states: Setup (title, designs, link) and Results (what people chose
@@ -178,11 +180,11 @@ function SurveyEditor({ id, onBack }: { id: string; onBack: () => void }) {
     try { await post({ action: 'update-option', optionId: o.id, label }); load() } catch { toast.error('Could not rename') }
   }
   const remove = async (o: Option) => {
-    if (!confirm(`Remove ${o.name}${o.votes ? ` and its ${o.votes} vote${o.votes === 1 ? '' : 's'}` : ''}?`)) return
+    if (!arm(`remove:${o.id}`)) return
     try { await post({ action: 'remove-option', optionId: o.id }); load() } catch { toast.error('Could not remove') }
   }
   const del = async () => {
-    if (!s || !confirm(`Delete "${s.title}" and all its votes? This cannot be undone.`)) return
+    if (!s || !arm('delete')) return
     try { await post({ action: 'delete', id }); onBack() } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not delete') }
   }
 
@@ -246,7 +248,11 @@ function SurveyEditor({ id, onBack }: { id: string; onBack: () => void }) {
             <div key={o.id} className={`bg-white border rounded-lg overflow-hidden ${o.votes && o.votes === top ? 'border-[#4600D6] ring-1 ring-[#4600D6]/30' : 'border-border-gray'}`}>
               <div className="relative aspect-[4/5] bg-subtle-gray">
                 <a href={o.imageUrl} target="_blank" rel="noopener noreferrer"><img src={o.thumbnailUrl || o.imageUrl} alt={o.name} className="w-full h-full object-cover" /></a>
-                <button onClick={() => remove(o)} className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/55 text-white flex items-center justify-center hover:bg-red-600" title="Remove"><X className="w-3.5 h-3.5" /></button>
+                <button onClick={() => remove(o)} className={isArmed(`remove:${o.id}`)
+                  ? 'absolute top-1.5 right-1.5 h-6 px-2 rounded-full bg-red-600 text-white text-xs font-medium'
+                  : 'absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/55 text-white flex items-center justify-center hover:bg-red-600'} title="Remove">
+                  {isArmed(`remove:${o.id}`) ? `Click again to remove${o.votes ? ` with ${o.votes} vote${o.votes === 1 ? '' : 's'}` : ''}` : <X className="w-3.5 h-3.5" />}
+                </button>
               </div>
               <div className="p-2.5">
                 <input defaultValue={o.label || ''} placeholder={o.name} onBlur={e => rename(o, e.target.value)}
@@ -264,7 +270,7 @@ function SurveyEditor({ id, onBack }: { id: string; onBack: () => void }) {
       <SendOut s={s} url={url} onLaunch={launch} onEnd={() => setStatus('closed')} />
 
       <div className="mt-8">
-        <button onClick={del} className={`${btnGhost} text-red-600`}><Trash2 className="w-4 h-4" /> Delete survey</button>
+        <button onClick={del} className={`${btnGhost} text-red-600`}><Trash2 className="w-4 h-4" /> {isArmed('delete') ? 'Click again to delete it and all its votes' : 'Delete survey'}</button>
       </div>
       </>)}
     </div>

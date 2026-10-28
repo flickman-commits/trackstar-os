@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { Loader2, X, Copy, Check, Instagram, Plus, Mail, Pencil, ChevronDown, ChevronLeft, Search, ExternalLink } from 'lucide-react'
 import { btnSecondary, pageShell, sectionLabel, infoCard, cardLabel, textLink } from '@/lib/ui'
+import { useArmed } from '@/lib/useArmed'
 import { apiFetch } from '@/lib/api'
 import { toast } from 'sonner'
 import { TRYBE_URL } from '@/lib/creatorLinks'
@@ -151,6 +152,7 @@ export default function CreatorsHome() {
   const [showInvite, setShowInvite] = useState(false)
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [decliningId, setDecliningId] = useState<string | null>(null)
+  const { arm, isArmed } = useArmed()
   const [query, setQuery] = useState('')
   const [catalog, setCatalog] = useState<CatalogRace[] | null>(null)
 
@@ -229,7 +231,7 @@ export default function CreatorsHome() {
   const list = (q ? creators : inView[view]).filter(matches)
 
   const handleDeclineSample = async (creator: Creator) => {
-    if (!confirm(`Decline ${creator.name || 'this creator'}? They'll be marked denied and no sample is made. You can un-deny them later from the Denied view.`)) return
+    if (!arm(`decline:${creator.id}`)) return
     setDecliningId(creator.id)
     try {
       const res = await apiFetch('/api/creators/manage', {
@@ -277,8 +279,9 @@ export default function CreatorsHome() {
         onClick={(e) => { e.stopPropagation(); handleDeclineSample(c) }}
         disabled={decliningId === c.id || approvingId === c.id}
         className={btnSecondary}
+        title="Marked denied and no sample is made. You can un-deny them later from the Denied view."
       >
-        {decliningId === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />} Decline
+        {decliningId === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />} {isArmed(`decline:${c.id}`) ? 'Click again to decline' : 'Decline'}
       </button>
       <button
         onClick={(e) => { e.stopPropagation(); handleApproveSample(c) }}
@@ -453,6 +456,7 @@ function WinningAdsPanel({ ads, onChanged }: { ads: WinningAd[]; onChanged: () =
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [f, setF] = useState({ title: '', url: '', imageUrl: '', notes: '' })
+  const { arm, isArmed } = useArmed()
   const field = 'w-full px-3 py-2 text-sm border border-border-gray rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-off-black/10'
 
   const save = async () => {
@@ -466,7 +470,7 @@ function WinningAdsPanel({ ads, onChanged }: { ads: WinningAd[]; onChanged: () =
     } catch (e) { setErr(e instanceof Error ? e.message : 'Could not add the ad') } finally { setBusy(false) }
   }
   const remove = async (ad: WinningAd) => {
-    if (!confirm(`Remove "${ad.title}" from winning ads? Creators will stop seeing it.`)) return
+    if (!arm(`remove:${ad.id}`)) return
     const res = await apiFetch(`/api/creators/ads?id=${encodeURIComponent(ad.id)}`, { method: 'DELETE' })
     if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Could not remove the ad'); return }
     await onChanged()
@@ -526,7 +530,7 @@ function WinningAdsPanel({ ads, onChanged }: { ads: WinningAd[]; onChanged: () =
                   {ad.notes && <p className="text-xs text-off-black/65 whitespace-pre-wrap leading-relaxed">{ad.notes}</p>}
                   <div className="mt-auto pt-1 flex items-center justify-between text-[11px] text-off-black/40">
                     <span>{new Date(ad.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                    <button onClick={() => remove(ad)} className="hover:text-red-600">Remove</button>
+                    <button onClick={() => remove(ad)} className={isArmed(`remove:${ad.id}`) ? 'text-red-600' : 'hover:text-red-600'}>{isArmed(`remove:${ad.id}`) ? 'Click again: creators stop seeing it' : 'Remove'}</button>
                   </div>
                 </div>
               </div>
@@ -783,6 +787,7 @@ function CreatorDetail({ creator, onBack, decide, onChanged, onDeleted, catalog 
   const [copied, setCopied] = useState(false)
   const [notes, setNotes] = useState(creator.notes || '')
   const [link, setLink] = useState('')
+  const { arm, isArmed } = useArmed()
   const statusCfg = STATUS_CONFIG[creator.status]
   const portalUrl = `${window.location.origin}/creator/${creator.inviteToken}`
   const links = (creator.bestContentLinks || '').split(/\s+/).map(s => s.trim()).filter(Boolean)
@@ -808,9 +813,7 @@ function CreatorDetail({ creator, onBack, decide, onChanged, onDeleted, catalog 
   const saveQuietly = (updates: Partial<Creator>) => save(updates).catch(e => alert(e instanceof Error ? e.message : 'Could not save'))
 
   const remove = async () => {
-    const note = creator.sampleOrder && !creator.sampleOrder.shippedAt && creator.sampleOrder.status !== 'completed'
-      ? `\n\nTheir sample ${creator.sampleOrder.orderNumber} has not shipped and will be deleted too.` : ''
-    if (!confirm(`Delete ${creator.name || 'this creator'}? This can't be undone.${note}`)) return
+    if (!arm('delete')) return
     const res = await apiFetch('/api/creators/manage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -998,7 +1001,9 @@ function CreatorDetail({ creator, onBack, decide, onChanged, onDeleted, catalog 
               <button onClick={copyPortal} className={textLink}>{copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} {copied ? 'Copied' : 'Copy their portal link'}</button>
               <a href={portalUrl} target="_blank" rel="noopener noreferrer" className={textLink}><ExternalLink className="w-3.5 h-3.5" /> Open their portal</a>
               {creator.email && <a href={`mailto:${creator.email}`} className={textLink}><Mail className="w-3.5 h-3.5" /> Email them</a>}
-              <button onClick={remove} className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700"><X className="w-3.5 h-3.5" /> Delete creator</button>
+              <button onClick={remove} className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700"><X className="w-3.5 h-3.5" /> {isArmed('delete')
+                ? `Click again to delete for good${creator.sampleOrder && !creator.sampleOrder.shippedAt && creator.sampleOrder.status !== 'completed' ? `, with unshipped sample ${creator.sampleOrder.orderNumber}` : ''}`
+                : 'Delete creator'}</button>
             </div>
             <p className="text-[11px] text-off-black/40 mt-3">
               Invited {new Date(creator.invitedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}

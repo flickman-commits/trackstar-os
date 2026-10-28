@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2, Plus, ExternalLink, RefreshCw, Power, Trash2, ChevronDown, ChevronRight, Check, X } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
+import { useArmed } from '@/lib/useArmed'
 import { btnPrimary, btnSecondary, btnGhost, inputBase, fieldLabel, sectionCount } from '@/lib/ui'
 
 /**
@@ -197,6 +198,7 @@ function TemplateRow({ t, st, isOpen, onToggle, busy, act }: {
   act: (label: string, body: Record<string, unknown>) => Promise<void>
 }) {
   const r = t.report
+  const { arm, isArmed } = useArmed()
   return (
     <>
       <tr className="border-t border-border-gray hover:bg-subtle-gray/60 cursor-pointer" onClick={onToggle}>
@@ -234,7 +236,7 @@ function TemplateRow({ t, st, isOpen, onToggle, busy, act }: {
               <div className="flex lg:flex-col gap-2 shrink-0">
                 <button disabled={!!busy} onClick={() => act('recheck', { action: 'recheck', key: t.key }).then(() => toast.success(`Re-checking ${t.key}. The result shows here in under a minute; a file that has not changed gets the same verdict.`))} className={btnSecondary} title="Forget the last check; the next worker check-in runs it again"><RefreshCw className="w-3.5 h-3.5" /> Re-check</button>
                 <button disabled={!!busy} onClick={() => act('toggle', { action: t.enabled ? 'disable' : 'enable', key: t.key })} className={btnSecondary}><Power className="w-3.5 h-3.5" /> {t.enabled ? 'Turn off' : 'Turn on'}</button>
-                <button disabled={!!busy} onClick={() => { if (confirm(`Remove the ${t.key} template? Orders for it go back to the designers.`)) act('delete', { action: 'delete', key: t.key }) }} className={`${btnGhost} text-red-600`}><Trash2 className="w-3.5 h-3.5" /> Remove</button>
+                <button disabled={!!busy} onClick={() => { if (arm(`delete:${t.key}`)) act('delete', { action: 'delete', key: t.key }) }} className={`${btnGhost} text-red-600`} title="Orders for it go back to the designers"><Trash2 className="w-3.5 h-3.5" /> {isArmed(`delete:${t.key}`) ? 'Click again to remove: orders go back to designers' : 'Remove'}</button>
               </div>
             </div>
           </td>

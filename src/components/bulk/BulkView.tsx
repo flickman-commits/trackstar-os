@@ -6,6 +6,7 @@ import {
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { btnPrimary, btnSecondary, btnGhost, inputBase } from '@/lib/ui'
+import { useArmed } from '@/lib/useArmed'
 import AssigneePicker, { Avatar, type Teammate } from '@/components/AssigneePicker'
 import { DealModal, InvoiceCard, LineTemplate, type Deal } from '@/components/bulk/DealPanels'
 import StatusPill from '@/components/orders/StatusPill'
@@ -260,6 +261,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   // The order's billing record: customer, terms, invoice, and a co-branded file's check.
   const [deal, setDeal] = useState<Deal | null>(null)
   const [editingOrder, setEditingOrder] = useState(false)
+  const { arm, isArmed } = useArmed()
 
   const load = useCallback(async () => {
     const res = await apiFetch(`${API_BASE}/api/bulk?id=${id}`)
@@ -398,7 +400,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
         <div className="flex gap-1.5 shrink-0">
           <button onClick={() => copyText(intakeLink, 'Intake link copied')} className={btnPrimary}><Copy className="w-4 h-4" /> Copy link</button>
           <a href={intakeLink} target="_blank" rel="noopener noreferrer" className={btnSecondary} title="Open"><ExternalLink className="w-3.5 h-3.5" /></a>
-          <button onClick={() => { if (confirm('Rotate the link? The old one stops working.')) act({ action: 'new-intake-link' }, 'New link made') }} className={btnGhost} title="Make a new link"><RefreshCw className="w-3.5 h-3.5" /></button>
+          <button onClick={() => { if (arm('rotate-link')) act({ action: 'new-intake-link' }, 'New link made') }} className={btnGhost} title="Make a new link (the old one stops working)"><RefreshCw className="w-3.5 h-3.5" />{isArmed('rotate-link') && ' Click again: the old link stops working'}</button>
         </div>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-off-black/60">
@@ -480,10 +482,10 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
             </thead>
             <tbody>
               {runners.map(x => (
-                <RunnerRow key={x.id} r={x} compact={collecting} reach={reach[x.orderNumber]} editing={editing === x.orderNumber}
+                <RunnerRow key={x.id} r={x} compact={collecting} reach={reach[x.orderNumber]} editing={editing === x.orderNumber} removeArmed={isArmed(`remove:${x.orderNumber}`)}
                   onEdit={() => setEditing(editing === x.orderNumber ? null : x.orderNumber)}
                   onSave={async (fields) => { await act({ action: 'update-runner', orderNumber: x.orderNumber, ...fields }, 'Saved'); setEditing(null); refreshRunners() }}
-                  onRemove={async () => { if (confirm(`Remove ${x.runnerName}?`)) { await act({ action: 'remove-runner', orderNumber: x.orderNumber }, 'Removed'); refreshRunners() } }}
+                  onRemove={async () => { if (arm(`remove:${x.orderNumber}`)) { await act({ action: 'remove-runner', orderNumber: x.orderNumber }, 'Removed'); refreshRunners() } }}
                   onOpen={() => onOpenRunner(x.orderNumber)}
                   onUpload={(f) => uploadFiles([f], x.orderNumber)}
                   onDetach={async () => { await apiFetch(`${API_BASE}/api/bulk/files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action: 'detach', orderNumber: x.orderNumber }) }); load() }}
@@ -533,7 +535,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
         </div>
         <div className="flex gap-2">
           <button onClick={() => downloadSheet(false)} disabled={runners.length === 0} className={btnPrimary}><Download className="w-4 h-4" /> Download sheet</button>
-          {!submitted && <button onClick={() => { if (confirm('Mark this order as uploaded to Artelo?')) update({ status: 'submitted' }) }} className={btnSecondary}><FileText className="w-3.5 h-3.5" /> Mark uploaded</button>}
+          {!submitted && <button onClick={() => { if (arm('submitted')) update({ status: 'submitted' }) }} className={btnSecondary}><FileText className="w-3.5 h-3.5" /> {isArmed('submitted') ? 'Click again to mark uploaded to Artelo' : 'Mark uploaded'}</button>}
         </div>
       </div>
       {problems.length > 0 ? (
@@ -627,7 +629,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
               </button>
             )}
             {!collecting && <button onClick={() => downloadSheet(false)} disabled={runners.length === 0} className={link}><Download className="w-3.5 h-3.5" /> Download the Artelo sheet</button>}
-            {fulfilling && <button onClick={() => { if (confirm('Mark this order as uploaded to Artelo?')) update({ status: 'submitted' }) }} className={link}><FileText className="w-3.5 h-3.5" /> Mark uploaded to Artelo</button>}
+            {fulfilling && <button onClick={() => { if (arm('submitted')) update({ status: 'submitted' }) }} className={link}><FileText className="w-3.5 h-3.5" /> {isArmed('submitted') ? 'Click again to mark uploaded to Artelo' : 'Mark uploaded to Artelo'}</button>}
           </div>
         </div>
       </aside>
@@ -652,8 +654,8 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   )
 }
 
-function RunnerRow({ r, compact, reach, editing, onEdit, onSave, onRemove, onOpen, onUpload, onDetach }: {
-  r: BulkRunner; compact?: boolean; reach?: boolean; editing: boolean
+function RunnerRow({ r, compact, reach, editing, removeArmed, onEdit, onSave, onRemove, onOpen, onUpload, onDetach }: {
+  r: BulkRunner; compact?: boolean; reach?: boolean; editing: boolean; removeArmed?: boolean
   onEdit: () => void; onSave: (fields: { runnerName?: string; address?: BulkRunner['address'] }) => Promise<void>; onRemove: () => void; onOpen: () => void
   onUpload: (f: File) => void; onDetach: () => void
 }) {
@@ -690,7 +692,7 @@ function RunnerRow({ r, compact, reach, editing, onEdit, onSave, onRemove, onOpe
         </>}
         <td className="px-2 py-2 text-right whitespace-nowrap">
           <button onClick={onEdit} className={btnGhost}>{editing ? 'Close' : 'Edit'}</button>
-          <button onClick={onRemove} className={btnGhost} title="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
+          <button onClick={onRemove} className={`${btnGhost}${removeArmed ? ' text-red-600' : ''}`} title="Remove"><Trash2 className="w-3.5 h-3.5" />{removeArmed && ' Click again to remove'}</button>
         </td>
       </tr>
       {editing && (

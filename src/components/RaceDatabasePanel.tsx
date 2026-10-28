@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useArmed } from '@/lib/useArmed'
 import { Search, Pencil, Check, X, Loader2, ChevronRight, ChevronDown as ChevronDownIcon } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import SourceLinks from '@/components/SourceLinks'
@@ -61,6 +62,7 @@ export default function RaceDatabasePanel({ raceShorthands, raceShorthandOverrid
   const fetchRaceShorthands = refreshShorthands
   const [races, setRaces] = useState<{ id: number; raceName: string; year: number; raceDate: string | null; raceDateSource: string | null; raceDateSourceUrl?: string | null; raceDateEvidence?: string | null; firstPrintedAt?: string | null; location: string | null; weatherCondition: string | null; weatherTemp: string | null; weatherFetchedAt: string | null; _count?: { runnerResearch: number } }[]>([])
   const [isLoadingRaces, setIsLoadingRaces] = useState(false)
+  const { arm, isArmed } = useArmed()
   const [editingRaceId, setEditingRaceId] = useState<number | null>(null)
   const [raceEditValues, setRaceEditValues] = useState({ raceDate: '', location: '', weatherCondition: '', weatherTemp: '', sourceUrl: '', reason: '' })
   const [isSavingRace, setIsSavingRace] = useState(false)
@@ -206,7 +208,7 @@ export default function RaceDatabasePanel({ raceShorthands, raceShorthandOverrid
 
   const mergeRace = async (aliasName: string, canonicalName: string) => {
     if (!canonicalName || aliasName === canonicalName) return
-    if (!confirm(`Merge "${aliasName}" into "${canonicalName}"?\n\nAll orders and race entries with this name will be re-pointed. This can't be undone (without manually re-aliasing back).`)) return
+    if (!arm(`merge:${aliasName}>${canonicalName}`)) return
     setIsMergingRace(true)
     try {
       const res = await apiFetch('/api/orders/actions', {
@@ -515,7 +517,7 @@ export default function RaceDatabasePanel({ raceShorthands, raceShorthandOverrid
                                       className="px-2.5 py-1 text-xs font-medium bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
                                     >
                                       {isMergingRace ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                                      Merge
+                                      {isArmed(`merge:${raceName}>${mergeTarget}`) ? 'Click again to merge: every order re-points, no undo' : 'Merge'}
                                     </button>
                                     <button
                                       onClick={() => { setMergingRace(null); setMergeTarget('') }}

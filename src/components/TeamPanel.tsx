@@ -19,6 +19,7 @@ import { toast } from 'sonner'
 import { Loader2, RefreshCw, UserPlus, Copy, Check, LogOut, ChevronDown } from 'lucide-react'
 import { useAuth, fullName, PasswordInput } from '@/lib/auth'
 import { btnPrimary, btnSecondary, btnDanger, btnGhost, inputBase, fieldLabel } from '@/lib/ui'
+import { useArmed } from '@/lib/useArmed'
 import { ROLES, ROLE_LABEL, normalizeRole, describeCaps, type Role, type Caps, type Capability } from '@/lib/roles'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -134,6 +135,7 @@ export function PeoplePanel() {
   const [members, setMembers] = useState<TeamMember[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const { arm, isArmed } = useArmed()
   const [inviteUrl, setInviteUrl] = useState('')
   const [showInvite, setShowInvite] = useState(false)
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', role: 'designer' as string })
@@ -185,7 +187,7 @@ export function PeoplePanel() {
   }
 
   const remove = async (m: TeamMember) => {
-    if (!confirm(`Delete the account for ${m.email}? Their comments and edit history stay, attributed to their name.`)) return
+    if (!arm(`delete:${m.id}`)) return
     setBusyId(m.id)
     try {
       const res = await api('/api/admin/users', { method: 'DELETE', body: JSON.stringify({ id: m.id }) })
@@ -355,8 +357,8 @@ export function PeoplePanel() {
                         >
                           {m.isActive ? 'Deactivate' : 'Reactivate'}
                         </button>
-                        <button className={btnDanger} disabled={busyId === m.id} onClick={() => remove(m)}>
-                          Delete
+                        <button className={btnDanger} disabled={busyId === m.id} onClick={() => remove(m)} title="Comments and edit history stay, attributed to their name">
+                          {isArmed(`delete:${m.id}`) ? 'Click again to delete' : 'Delete'}
                         </button>
                       </div>
                     </td>

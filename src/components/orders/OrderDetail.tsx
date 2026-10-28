@@ -6,6 +6,7 @@ import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import type { Design } from '@/lib/useDesign'
 import { raceNotRunYet, showsRaceNotRun } from '@/lib/raceStatus'
+import { useArmed } from '@/lib/useArmed'
 import ProofManager, { type ProofActions } from '@/components/ProofManager'
 import PostApprovalChecklist from '@/components/PostApprovalChecklist'
 import CustomFinalPdf from '@/components/CustomFinalPdf'
@@ -107,6 +108,8 @@ export default function OrderDetail({
   // Change frame: edits the Shopify order, and Artelo follows (support/changeItem.js, as Support's Change size or frame).
   const [frameMenu, setFrameMenu] = useState<{ current: string | null; frames: { frame: string; difference: number }[] } | null>(null)
   const [frameBusy, setFrameBusy] = useState(false)
+  // Two clicks in the page for the rest of this card's destructive buttons (Arc blocks window.confirm).
+  const { arm, isArmed } = useArmed()
   useEffect(() => { setFrameMenu(null) }, [selectedOrder?.id])
   const canChangeFrame = isAdmin && selectedOrder?.source === 'shopify' && selectedOrder.status !== 'completed'
 
@@ -129,9 +132,7 @@ export default function OrderDetail({
 
   const changeFrameTo = async (option: { frame: string; difference: number }) => {
     if (!selectedOrder) return
-    const money = option.difference > 0 ? `It costs $${option.difference.toFixed(2)} more, so Shopify emails the customer an invoice for the difference.`
-      : option.difference < 0 ? `It costs $${(-option.difference).toFixed(2)} less; refund the difference in Shopify.` : 'Same price: the customer is not emailed or charged.'
-    if (!confirm(`Change this print from ${frameMenu?.current || 'its frame'} to ${option.frame}? ${money} Artelo picks it up within about 10 minutes.`)) return
+    if (!arm(`frame:${option.frame}`)) return
     setFrameBusy(true)
     try {
       const r = await apiFetch('/api/orders/change-frame', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'change', orderId: selectedOrder.id, frame: option.frame }) })
@@ -1145,7 +1146,7 @@ export default function OrderDetail({
   // Admin: cancel a creator's free sample. The order leaves the queue and the
   // creator goes back to pending, to approve again later or decline.
   const cancelCreatorSample = async (order: Order) => {
-    if (!confirm(`Cancel the creator sample for ${order.effectiveRunnerName || order.runnerName || 'this creator'}? The order is removed and the creator goes back to pending.`)) return
+    if (!arm(`cancel-sample:${order.id}`)) return
     try {
       const res = await apiFetch('/api/orders/cancel-creator-sample', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id }) })
       const d = await res.json().catch(() => ({}))
@@ -2017,9 +2018,11 @@ Thank you!`
                               <div className="absolute left-0 top-full mt-1 z-20 min-w-[11rem] bg-white border border-border-gray rounded-md shadow-lg p-1">
                                 <div className="px-2 py-1 text-[10px] font-semibold text-off-black/40 uppercase tracking-wider">Change frame to</div>
                                 {frameMenu.frames.map(o => (
-                                  <button key={o.frame} onClick={() => { void changeFrameTo(o) }} disabled={frameBusy} className="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded text-sm text-off-black hover:bg-off-black/5 disabled:opacity-50">
-                                    {o.frame}
-                                    {o.difference !== 0 && <span className="text-xs text-off-black/45">{o.difference > 0 ? '+' : '−'}${Math.abs(o.difference).toFixed(0)}</span>}
+                                  <button key={o.frame} onClick={() => { void changeFrameTo(o) }} disabled={frameBusy} className="w-full flex items-center justify-between gap-3 px-2 py-1.5 rounded text-sm text-off-black hover:bg-off-black/5 disabled:opacity-50"
+                                    title="Artelo picks the change up within about 10 minutes">
+                                    {isArmed(`frame:${o.frame}`)
+                                      ? <span className="text-left text-xs font-medium text-[#4600D6]">Click again to change to {o.frame}: {o.difference > 0 ? `Shopify invoices the customer $${o.difference.toFixed(2)}` : o.difference < 0 ? `refund $${(-o.difference).toFixed(2)} in Shopify` : 'same price, no email'}</span>
+                                      : <>{o.frame}{o.difference !== 0 && <span className="text-xs text-off-black/45">{o.difference > 0 ? '+' : '−'}${Math.abs(o.difference).toFixed(0)}</span>}</>}
                                   </button>
                                 ))}
                               </div>
@@ -2135,7 +2138,7 @@ Thank you!`
                     {/* The customer asked for the print without their photo. */}
                     {selectedOrder.photoPath && design.canManage && selectedOrder.status !== 'completed' && !isEditing && (
                       <button onClick={async () => {
-                          if (!confirm('Remove the customer photo from this print and render the design again without it? If they paid for the Photo Add-On, refund it in Shopify.')) return
+                          if (!arm(`remove-photo:${selectedOrder.id}`)) return
                           try {
                             const res = await apiFetch('/api/orders/photo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'remove', orderId: selectedOrder.id }) })
                             if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not remove the photo')
@@ -2145,8 +2148,9 @@ Thank you!`
                             setToast({ message: 'Photo removed. Re-rendering the design without it.', type: 'success' })
                           } catch (e) { setToast({ message: e instanceof Error ? e.message : 'Could not remove the photo', type: 'error' }) }
                         }}
-                        className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2">
-                        <X className="w-3.5 h-3.5" /> Remove photo &amp; re-render
+                        className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2"
+                        title="If they paid for the Photo Add-On, refund it in Shopify">
+                        <X className="w-3.5 h-3.5" /> {isArmed(`remove-photo:${selectedOrder.id}`) ? 'Click again to remove the photo (refund the add-on in Shopify if paid)' : <>Remove photo &amp; re-render</>}
                       </button>
                     )}
                     {/* A runner who ran a race we do not carry: design it as a custom print instead of refunding. */}
@@ -2280,7 +2284,7 @@ Thank you!`
                         className="ml-auto text-xs font-medium text-red-600/80 hover:text-red-700 underline underline-offset-2"
                         title="Admin: remove this sample from the queue; the creator goes back to pending"
                       >
-                        Cancel sample
+                        {isArmed(`cancel-sample:${selectedOrder.id}`) ? 'Click again to cancel: the creator goes back to pending' : 'Cancel sample'}
                       </button>
                     )}
                   </div>

@@ -4,6 +4,7 @@ import { Upload, Copy, Loader2, Check, ImagePlus, RefreshCw, CheckCircle2, Alert
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { useIsAdmin } from '@/lib/auth'
+import { useArmed } from '@/lib/useArmed'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -132,6 +133,7 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
   const [copied, setCopied] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [overridingId, setOverridingId] = useState<string | null>(null)
+  const { arm, isArmed } = useArmed()
   const isAdmin = useIsAdmin()
   const [isSending, setIsSending] = useState(false)
   const [sendNote, setSendNote] = useState('')
@@ -347,7 +349,7 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
 
   // Admin: the customer approved the wrong option; record the right one.
   const overrideApproval = async (proof: Proof) => {
-    if (!confirm(`Make option v${proof.version} the approved one? The option they approved becomes rejected. The customer is not emailed.`)) return
+    if (!arm(`approve:${proof.id}`)) return
     setOverridingId(proof.id)
     try {
       const res = await apiFetch(`${API_BASE}/api/proofs`, {
@@ -848,12 +850,14 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
                 hunting for a hover target, and the label picker below used
                 to cover the old one on partner orders. */}
             <button
-              onClick={() => { if (confirm('Delete this proof?')) deleteProof(proof.id) }}
+              onClick={() => { if (arm(`delete:${proof.id}`)) deleteProof(proof.id) }}
               disabled={deletingId === proof.id}
-              className="absolute -top-1.5 -left-1.5 z-10 bg-white border border-border-gray shadow-sm rounded-full w-5 h-5 flex items-center justify-center text-off-black/50 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50"
+              className={isArmed(`delete:${proof.id}`)
+                ? 'absolute -top-1.5 -left-1.5 z-10 bg-red-600 text-white shadow-sm rounded-full h-5 px-2 text-[10px] font-medium whitespace-nowrap'
+                : 'absolute -top-1.5 -left-1.5 z-10 bg-white border border-border-gray shadow-sm rounded-full w-5 h-5 flex items-center justify-center text-off-black/50 hover:text-red-600 hover:border-red-300 hover:bg-red-50 transition-colors disabled:opacity-50'}
               title="Delete this proof"
             >
-              {deletingId === proof.id ? (
+              {isArmed(`delete:${proof.id}`) ? 'Click again to delete' : deletingId === proof.id ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
               ) : (
                 <X className="w-3 h-3" strokeWidth={2.5} />
@@ -877,9 +881,9 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
                 onClick={() => overrideApproval(proof)}
                 disabled={overridingId === proof.id}
                 className="mt-1 w-14 text-[9px] text-center text-off-black/45 hover:text-off-black underline decoration-dotted disabled:opacity-50"
-                title="The customer meant this one: make it the approved option"
+                title="The customer meant this one: make it the approved option. The option they approved becomes rejected. The customer is not emailed."
               >
-                {overridingId === proof.id ? 'Saving…' : 'Make approved'}
+                {overridingId === proof.id ? 'Saving…' : isArmed(`approve:${proof.id}`) ? 'Click again to approve (no email)' : 'Make approved'}
               </button>
             )}
             {allowGroups && proof.status !== 'pending' && proof.groupLabel && (

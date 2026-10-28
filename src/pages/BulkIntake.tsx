@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Trash2, Loader2, CheckCircle2, Upload, Download, Copy, Link2, ChevronDown, ChevronUp } from 'lucide-react'
 import ProofFullscreen from '@/components/ProofFullscreen'
+import { useArmed } from '@/lib/useArmed'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -64,6 +65,7 @@ export default function BulkIntake() {
   const [rows, setRows] = useState<Row[]>([blank()])
   const [mode, setMode] = useState<'paste' | 'link'>('paste')
   const [copied, setCopied] = useState(false)
+  const { arm, isArmed } = useArmed()
   const [receivedOpen, setReceivedOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -213,14 +215,15 @@ export default function BulkIntake() {
                           type="button"
                           title="Remove from the list"
                           onClick={async () => {
-                            if (!confirm(`Remove ${r.name} from the list?`)) return
+                            if (!arm(`remove:${r.id}`)) return
                             const res = await fetch(`${API_BASE}/api/public/bulk-intake`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, action: 'remove', id: r.id }) })
                             if (!res.ok) { setErr(res.status === 409 ? `${r.name} already has a print in production, so we can't remove them here. Email us.` : 'Could not remove them just now.'); return }
                             const data = await res.json()
                             setInfo(v => v ? { ...v, entered: data.entered, received: (v.received || []).filter(x => x.id !== r.id) } : v)
                           }}
-                          style={{ color: '#999' }}
-                        ><Trash2 className="w-4 h-4" /></button>
+                          className="inline-flex items-center gap-1 text-xs"
+                          style={{ color: isArmed(`remove:${r.id}`) ? '#DC2626' : '#999' }}
+                        ><Trash2 className="w-4 h-4" />{isArmed(`remove:${r.id}`) && 'Click again to remove'}</button>
                       </span>
                     </li>
                   ))}
