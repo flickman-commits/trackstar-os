@@ -8,7 +8,8 @@
  *
  * Or it sends the design for the customer to approve (an odd name, a race we
  * are not sure of): the mockup goes attached and the print is held from
- * production until they answer (holdForCustomer).
+ * production until they answer (holdForCustomer). The mockup is the newest
+ * render or proof, or a file made by hand and uploaded from the modal.
  */
 import prisma from '../../db.js'
 import { sendNew } from './mailbox.js'
@@ -52,11 +53,15 @@ export async function emailCustomer({ orderId, subject, text, actor, mockupRef =
     subj = subj.split(`#${internal}`).join(number).split(String(internal)).join(number)
   }
 
-  // Only one of this order's own mockups, by reference; never a file from the page.
+  // One of this order's own mockups, or a design made by hand that the rep
+  // uploaded through the support uploader (upload:<path>, read from our own
+  // bucket); never a URL from the page.
   let attachments = []
   if (mockupRef) {
-    const ours = await listMockups([order.id])
-    if (!ours.some(m => m.ref === mockupRef)) throw new UserError('That mockup is not on this order')
+    if (!String(mockupRef).startsWith('upload:')) {
+      const ours = await listMockups([order.id])
+      if (!ours.some(m => m.ref === mockupRef)) throw new UserError('That mockup is not on this order')
+    }
     const f = await resolveMockup(mockupRef)
     attachments = [{ bytes: f.bytes, contentType: f.contentType, filename: f.filename }]
   }

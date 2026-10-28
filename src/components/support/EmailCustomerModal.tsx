@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { nameCase } from '@/lib/nameCase'
-import { ArrowUpRight, Loader2, Mail, Paperclip, X } from 'lucide-react'
+import { ArrowUpRight, Loader2, Mail, Paperclip, Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { supportApi } from '@/lib/supportApi'
 import { btnPrimary, btnSecondary } from '@/lib/ui'
@@ -76,7 +76,24 @@ export default function EmailCustomerModal({ order, repName, onClose }: { order:
   const [sent, setSent] = useState<{ threadId: string; to: string; held?: boolean } | null>(null)
   // The design the customer would approve: the newest render, else the newest proof.
   const [mockup, setMockup] = useState<Mockup | null>(null)
+  // Or a design made by hand: a file from the rep's computer, which replaces
+  // the render for this email.
+  const [ownFile, setOwnFile] = useState<{ ref: string; name: string; preview: string | null } | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
   const box = useRef<HTMLTextAreaElement>(null)
+  const attachOwn = async (f: File | undefined) => {
+    if (!f) return
+    if (!/^(application\/pdf|image\/(png|jpeg|webp))$/.test(f.type)) { toast.error('A mockup is a PNG, JPG or PDF'); return }
+    setUploading(true)
+    try {
+      const slot = await supportApi.uploadSlot(f.name, f.type, f.size)
+      const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': f.type, 'x-upsert': 'false' }, body: f })
+      if (!put.ok) throw new Error(`${f.name} did not upload`)
+      setOwnFile({ ref: slot.ref, name: slot.filename, preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : null })
+    } catch (e) { toast.error((e as Error).message) }
+    finally { setUploading(false); if (fileInput.current) fileInput.current.value = '' }
+  }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose() }
     window.addEventListener('keydown', onKey)
@@ -100,11 +117,12 @@ export default function EmailCustomerModal({ order, repName, onClose }: { order:
     if (subject === subjects.ask || subject === subjects.mockup) setSubject(next === 'mockup' ? subjects.mockup : subjects.ask)
     box.current?.focus()
   }
-  const withMockup = pick === 'mockup' && mockup
+  // What goes attached: a file made by hand wins over the render.
+  const attached = pick === 'mockup' ? (ownFile ? { ref: ownFile.ref, label: ownFile.name, thumbUrl: ownFile.preview } : mockup) : null
   const send = async () => {
     setBusy(true)
     try {
-      const out = await supportApi.emailCustomer(order.id, subject, text, withMockup ? mockup.ref : null)
+      const out = await supportApi.emailCustomer(order.id, subject, text, attached ? attached.ref : null)
       setSent(out)
       toast.success(`Sent to ${out.to}`)
     } catch (e) { toast.error((e as Error).message) }
@@ -141,13 +159,26 @@ export default function EmailCustomerModal({ order, repName, onClose }: { order:
                 {ASKS.map(a => (
                   <button key={a.id} onClick={() => choose(a.id)} className={chip(pick === a.id)}>{a.label}</button>
                 ))}
-                <button onClick={() => choose('mockup')} disabled={!mockup} className={`${chip(pick === 'mockup')} disabled:opacity-40 disabled:cursor-not-allowed`}
-                  title={mockup ? `Attach ${mockup.label} for them to approve, and hold the print until they do` : 'This order has no design yet'}>Approve mockup</button>
+                <button onClick={() => choose('mockup')} className={chip(pick === 'mockup')}
+                  title={mockup ? `Attach ${mockup.label} for them to approve, and hold the print until they do` : 'Attach a mockup you made for them to approve'}>Approve mockup</button>
               </div>
-              {withMockup && (
+              <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,application/pdf" className="hidden" onChange={e => attachOwn(e.target.files?.[0])} />
+              {pick === 'mockup' && (
                 <div className="flex items-center gap-2 mb-1.5 text-[11px] text-off-black/60">
-                  {mockup.thumbUrl ? <img src={mockup.thumbUrl} alt="" className="w-9 h-9 rounded border border-border-gray object-cover" /> : <Paperclip className="w-3.5 h-3.5" />}
-                  <span><b className="text-off-black/80 font-medium">{mockup.label}</b> attached. Sending holds the print from production until they approve.</span>
+                  {attached ? (
+                    <>
+                      {attached.thumbUrl ? <img src={attached.thumbUrl} alt="" className="w-9 h-9 rounded border border-border-gray object-cover" /> : <Paperclip className="w-3.5 h-3.5" />}
+                      <span className="min-w-0"><b className="text-off-black/80 font-medium break-all">{attached.label}</b> attached. Sending holds the print from production until they approve.</span>
+                    </>
+                  ) : (
+                    <span>No design on this order yet. Attach the mockup you made.</span>
+                  )}
+                  <span className="ml-auto flex items-center gap-2 shrink-0">
+                    {ownFile && mockup && <button onClick={() => setOwnFile(null)} className="text-[#4600D6] hover:underline">Use {mockup.label.split(',')[0]}</button>}
+                    <button onClick={() => fileInput.current?.click()} disabled={uploading} className="inline-flex items-center gap-1 text-[#4600D6] hover:underline disabled:opacity-50">
+                      {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}{attached ? 'Use a file instead' : 'Attach a file'}
+                    </button>
+                  </span>
                 </div>
               )}
               <textarea ref={box} value={text} onChange={e => setText(e.target.value)} rows={11}
@@ -157,7 +188,7 @@ export default function EmailCustomerModal({ order, repName, onClose }: { order:
             <div className="flex items-center gap-2 justify-end">
               <span className="text-[11px] text-off-black/45 mr-auto">Sends from fast@trackstar.art</span>
               <button onClick={onClose} disabled={busy} className={btnSecondary}>Cancel</button>
-              <button onClick={send} disabled={busy || unfilled || !text.trim() || !subject.trim()} className={`${btnPrimary} inline-flex items-center gap-1.5 disabled:opacity-50`}>{busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}Send</button>
+              <button onClick={send} disabled={busy || uploading || unfilled || !text.trim() || !subject.trim() || (pick === 'mockup' && !attached)} className={`${btnPrimary} inline-flex items-center gap-1.5 disabled:opacity-50`}>{busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}Send</button>
             </div>
           </div>
         )}

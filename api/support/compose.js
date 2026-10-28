@@ -3,7 +3,8 @@
  *
  *   GET  ?orderId=                    the customer's conversations that are not closed, and the order's mockups
  *   POST { orderId, subject, text, mockupRef? }   "Email customer": sends from fast@; returns { threadId, to, subject, held }
- *        With mockupRef, the mockup goes attached for the customer to approve and the print is held from production.
+ *        With mockupRef (render:, proof: or upload: from /api/support/upload), the mockup goes attached for the customer
+ *        to approve and the print is held from production.
  *
  * The address comes from the order, never from the page.
  */
@@ -12,7 +13,7 @@ import { requireCapability, recordAudit } from '../_lib/users.js'
 import { emailCustomer, conversationsForOrder } from '../../server/domain/support/compose.js'
 import { listMockups } from '../../server/domain/support/mockups.js'
 
-const SAFE = /^(No such order|That mockup is not on this order|That design is not ready|That proof is gone|This order has no customer email to write to|Write the email first|Fill in what we need from them first|The support mailbox|Gmail is rate limiting us)/
+const SAFE = /^(No such order|Unknown attachment|That attachment is gone|That mockup is not on this order|That design is not ready|That proof is gone|This order has no customer email to write to|Write the email first|Fill in what we need from them first|The support mailbox|Gmail is rate limiting us)/
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, POST, OPTIONS' })) return
