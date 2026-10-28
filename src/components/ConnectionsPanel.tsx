@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Loader2, PlugZap, CheckCircle2, AlertTriangle, CircleOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
+import { useArmed } from '@/lib/useArmed'
 import { btnSecondary, btnGhost, chip, chipTone } from '@/lib/ui'
 
 /**
@@ -46,13 +47,15 @@ function StateChip({ c }: { c: Connection }) {
 function ArteloAutoSend() {
   const [on, setOn] = useState<boolean | null>(null)
   const [busy, setBusy] = useState(false)
+  // Turning it off takes a second click, in the page (Arc blocks window.confirm).
+  const { arm, isArmed } = useArmed(10000)
   useEffect(() => {
     apiFetch('/api/orders/artelo-send').then(r => r.json()).then(d => setOn(d.on !== false)).catch(() => setOn(null))
   }, [])
   if (on === null) return null
   const flip = async () => {
     const next = !on
-    if (!next && !window.confirm('Stop sending approved prints to production? Approve will only upload to the Artelo library, and prints waiting to send stay where they are until this is back on.')) return
+    if (!next && !arm('off')) return
     setBusy(true)
     try {
       const res = await apiFetch('/api/orders/artelo-send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'setting', on: next }) })
@@ -67,7 +70,9 @@ function ArteloAutoSend() {
         className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors disabled:opacity-50 ${on ? 'bg-dark-fill' : 'bg-off-black/20'}`}>
         <span className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-[14px]' : 'translate-x-0.5'}`} />
       </button>
-      Approve sends to production {on ? '(attaches the print and sends the order after a few minutes)' : '(off: attach and send in Artelo by hand)'}
+      {isArmed('off')
+        ? <span className="text-red-600">Click again to stop sending approved prints to production. Approve will only upload to the Artelo library, and prints waiting to send stay where they are until this is back on.</span>
+        : <>Approve sends to production {on ? '(attaches the print and sends the order after a few minutes)' : '(off: attach and send in Artelo by hand)'}</>}
     </div>
   )
 }
@@ -76,6 +81,9 @@ export default function ConnectionsPanel() {
   const [rows, setRows] = useState<Connection[] | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [tests, setTests] = useState<Record<string, TestResult>>({})
+  // Switching off, and anything the server asks to confirm, takes another click on the switch (Arc blocks window.confirm).
+  const { arm, isArmed } = useArmed(10000)
+  const [serverAsk, setServerAsk] = useState<Record<string, string>>({})
 
   const load = useCallback(async () => {
     try {
@@ -94,16 +102,16 @@ export default function ConnectionsPanel() {
 
   const flip = async (c: Connection) => {
     const on = !c.on
-    const offText = c.id === 'render_worker'
-      ? 'Pause the render queue? Workers stop picking up jobs; new renders wait until you turn it back on.'
-      : `Turn ${c.label} off? Everything that uses it stops until it is turned back on: ${c.what.toLowerCase()}.`
-    if (!on && !window.confirm(offText)) return
+    const serverKey = `server:${c.id}`
+    const confirmed = isArmed(serverKey) && arm(serverKey)
+    if (!confirmed && !on && !arm(`off:${c.id}`)) return
     setBusy(c.id)
     try {
-      let { res, data } = await post({ action: 'switch', id: c.id, on })
+      const { res, data } = await post({ action: 'switch', id: c.id, on, ...(confirmed ? { confirm: true } : {}) })
       if (res.status === 409 && data.needsConfirm) {
-        if (!window.confirm(data.error)) return
-        ;({ res, data } = await post({ action: 'switch', id: c.id, on, confirm: true }))
+        setServerAsk(a => ({ ...a, [c.id]: data.error }))
+        arm(serverKey)
+        return
       }
       if (!res.ok) throw new Error(data.error || 'That did not work')
       setRows(data.connections)
@@ -145,6 +153,14 @@ export default function ConnectionsPanel() {
                   {c.note && <> · {c.note}</>}
                   {c.missing.length > 0 && <> · Missing in Vercel: <span className="font-mono">{c.missing.join(', ')}</span></>}
                 </p>
+                {isArmed(`off:${c.id}`) && (
+                  <p className="text-[11px] text-red-600 mt-1">
+                    {c.id === 'render_worker'
+                      ? 'Pause the render queue? Workers stop picking up jobs; new renders wait until you turn it back on.'
+                      : `Turn ${c.label} off? Everything that uses it stops until it is turned back on: ${c.what.toLowerCase()}.`} Click the switch again to confirm.
+                  </p>
+                )}
+                {isArmed(`server:${c.id}`) && <p className="text-[11px] text-red-600 mt-1">{serverAsk[c.id]} Click the switch again to go ahead.</p>}
                 {c.id === 'artelo' && c.on && <ArteloAutoSend />}
                 {t && (
                   <p className={`text-[11px] mt-1 ${t.ok ? 'text-teal-700' : 'text-red-600'}`}>

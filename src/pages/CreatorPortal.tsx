@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { toast } from 'sonner'
 import { useParams } from 'react-router-dom'
 import PrintPicker from '@/components/PrintPicker'
 import { Loader2, AlertTriangle, ChevronRight, ChevronLeft, ChevronDown, ClipboardList, CheckCircle2, Truck, Home, ExternalLink, Printer } from 'lucide-react'
@@ -268,7 +269,7 @@ function OnboardingWizard({ data, token, onDone }: {
       }
       await onDone()
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to submit')
+      toast.error(e instanceof Error ? e.message : 'Failed to submit')
       setIsSubmitting(false)
     }
   }

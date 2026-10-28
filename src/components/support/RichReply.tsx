@@ -1,4 +1,7 @@
-import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
+import { Link as LinkIcon } from 'lucide-react'
+import ActionModal from '@/components/ActionModal'
+import { fieldLabel, modalCancel, modalInput, modalPrimary } from '@/lib/ui'
 import { editorToMarkup, lineToEditorHtml, markupToEditorHtml } from '@/lib/replyMarkup'
 
 /**
@@ -41,6 +44,8 @@ const RichReply = forwardRef<RichReplyHandle, Props>(function RichReply({ value,
   const el = useRef<HTMLDivElement>(null)
   const shown = useRef<string | null>(null)
   const saved = useRef<Range | null>(null)
+  // The link address is asked for in a modal (Arc blocks window.prompt); the selection is remembered meanwhile.
+  const [link, setLink] = useState<{ picked: string; url: string } | null>(null)
 
   useLayoutEffect(() => {
     if (!el.current || value === shown.current) return
@@ -116,11 +121,8 @@ const RichReply = forwardRef<RichReplyHandle, Props>(function RichReply({ value,
       if (kind === 'link') {
         const sel = document.getSelection()
         const picked = sel ? sel.toString() : ''
-        const url = globalThis.prompt('Link to (https://...)', /^https?:\/\//.test(picked) ? picked : 'https://')
-        if (!url || !/^https?:\/\/\S+$/.test(url.trim())) return
-        restore()
-        if (!picked) document.execCommand('insertHTML', false, `<a href="${url.trim().replace(/"/g, '&quot;')}">${url.trim().replace(/</g, '&lt;')}</a>&nbsp;`)
-        else document.execCommand('createLink', false, url.trim())
+        setLink({ picked, url: /^https?:\/\//.test(picked) ? picked : 'https://' })
+        return
       } else {
         document.execCommand(kind)
       }
@@ -129,7 +131,31 @@ const RichReply = forwardRef<RichReplyHandle, Props>(function RichReply({ value,
   }
   useImperativeHandle(ref, () => api)
 
+  const linkOk = !!link && /^https?:\/\/\S+$/.test(link.url.trim())
+  const addLink = () => {
+    if (!link || !linkOk) return
+    const url = link.url.trim()
+    setLink(null)
+    restore()
+    if (!link.picked) document.execCommand('insertHTML', false, `<a href="${url.replace(/"/g, '&quot;')}">${url.replace(/</g, '&lt;')}</a>&nbsp;`)
+    else document.execCommand('createLink', false, url)
+    emit()
+  }
+
   return (
+    <>
+    {link && (
+      <ActionModal icon={LinkIcon} title="Add a link" description={link.picked ? `On "${link.picked.slice(0, 80)}"` : undefined} onClose={() => { setLink(null); restore() }}
+        footer={<>
+          <button className={modalCancel} onClick={() => { setLink(null); restore() }}>Cancel</button>
+          <button className={modalPrimary} onClick={addLink} disabled={!linkOk}>Add link</button>
+        </>}>
+        <label className="block"><span className={fieldLabel}>Link to</span>
+          <input value={link.url} onChange={e => setLink({ ...link, url: e.target.value })} autoFocus onFocus={e => e.currentTarget.select()}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addLink() } }} placeholder="https://" className={modalInput} />
+        </label>
+      </ActionModal>
+    )}
     <div
       ref={el}
       role="textbox"
@@ -177,6 +203,7 @@ const RichReply = forwardRef<RichReplyHandle, Props>(function RichReply({ value,
         empty:before:content-[attr(data-placeholder)] empty:before:text-off-black/40
         ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
     />
+    </>
   )
 })
 

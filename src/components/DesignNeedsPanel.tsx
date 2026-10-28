@@ -4,6 +4,7 @@ import { Loader2, Plus, RefreshCw, Trash2, ChevronDown, ChevronRight } from 'luc
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { btnPrimary, btnSecondary, btnGhost, chip, chipTone, inputBase, sectionLabel } from '@/lib/ui'
+import { useArmed } from '@/lib/useArmed'
 
 /**
  * Settings > Design Needs: what the designer has to fix in production files
@@ -33,6 +34,7 @@ export default function DesignNeedsPanel() {
   const [done, setDone] = useState<Need[]>([])
   const [kinds, setKinds] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
+  const { arm, isArmed } = useArmed()
   const [showDone, setShowDone] = useState(false)
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState({ title: '', template: '', size: '', detail: '' })
@@ -65,7 +67,7 @@ export default function DesignNeedsPanel() {
   }
 
   const remove = async (n: Need) => {
-    if (!window.confirm(`Remove "${n.title}"?`)) return
+    if (!arm(`remove:${n.id}`)) return
     setBusy(n.id)
     try { await post({ action: 'delete', id: n.id }); await load() } catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
   }
@@ -114,7 +116,7 @@ export default function DesignNeedsPanel() {
           </p>
         </div>
         {n.source !== 'auto' && n.status === 'open' && (
-          <button onClick={() => remove(n)} disabled={busy !== null} className={`${btnGhost} flex-shrink-0`} title="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
+          <button onClick={() => remove(n)} disabled={busy !== null} className={`${btnGhost} flex-shrink-0${isArmed(`remove:${n.id}`) ? ' text-red-600' : ''}`} title="Remove"><Trash2 className="w-3.5 h-3.5" />{isArmed(`remove:${n.id}`) && ' Click again to remove'}</button>
         )}
       </div>
     )

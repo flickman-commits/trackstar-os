@@ -6,8 +6,8 @@ import { fieldLabel, modalCancel, modalInput, modalPrimary } from '@/lib/ui'
 import ActionModal from '@/components/ActionModal'
 import { sendFeatureRequest } from '@/components/FeatureRequestsPanel'
 
-/** Request feature, from Support: one line and an optional why, into Settings > Feature Requests. */
-export default function RequestFeatureModal({ onClose }: { onClose: () => void }) {
+/** Request feature, from Support or Settings: one line and an optional why, into Settings > Feature Requests. */
+export default function RequestFeatureModal({ source = 'support', onClose, onSent }: { source?: 'support' | 'settings'; onClose: () => void; onSent?: () => void }) {
   const [title, setTitle] = useState('')
   const [detail, setDetail] = useState('')
   const [busy, setBusy] = useState(false)
@@ -15,8 +15,9 @@ export default function RequestFeatureModal({ onClose }: { onClose: () => void }
   const send = async () => {
     setBusy(true)
     try {
-      await sendFeatureRequest(title, detail, 'support')
-      toast.success('Sent. It is on the Feature Requests list in Settings.')
+      await sendFeatureRequest(title, detail, source)
+      toast.success(source === 'settings' ? 'Request added' : 'Sent. It is on the Feature Requests list in Settings.')
+      onSent?.()
       onClose()
     } catch (e) { toast.error((e as Error).message) } finally { setBusy(false) }
   }

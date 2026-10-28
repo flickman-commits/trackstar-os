@@ -3,6 +3,7 @@ import { Check, ChevronDown, Copy, Loader2, Package, Truck, AlertCircle, Databas
 import { toast } from 'sonner'
 import { btnSecondary, chip } from '@/lib/ui'
 import { supportApi } from '@/lib/supportApi'
+import { useArmed } from '@/lib/useArmed'
 import { ago, day } from '@/lib/supportDates'
 import { STATUS_LABEL, STATUS_TONE } from '@/lib/supportStatus'
 import type { CustomerOrder, OrderItem, InstagramStatus, MailboxStatus, Mockup, SenderFilter, ThreadDetail } from '@/types/support'
@@ -106,6 +107,8 @@ function PrintRow({ o, it, showStage }: { o: CustomerOrder; it: OrderItem; showS
 }
 
 function OrderCard({ o, onUnlink }: { o: CustomerOrder; onUnlink?: () => void }) {
+  // Unlink takes a second click, in the page (Arc blocks window.confirm).
+  const { arm, isArmed } = useArmed()
   const age = Math.floor((Date.now() - new Date(o.createdAt).getTime()) / 86400000)
   const late = o.fulfillmentStatus !== 'FULFILLED' && !o.tracking.length
   const ageCls = !late ? 'text-off-black/50' : age > 5 ? 'text-red-600 font-medium' : age >= 3 ? 'text-orange-600 font-medium' : 'text-off-black/50'
@@ -134,7 +137,7 @@ function OrderCard({ o, onUnlink }: { o: CustomerOrder; onUnlink?: () => void })
             {o.linked && (
               <span className="ml-auto shrink-0 inline-flex items-center gap-0.5 px-1.5 py-px rounded border border-blue-200 bg-blue-50 text-[10px] font-medium text-blue-700" title="Linked by hand: they ordered under a different email">
                 Linked
-                {onUnlink && <button onClick={onUnlink} title="Unlink this order" aria-label={`Unlink order #${o.number}`} className="-mr-0.5 text-blue-700/60 hover:text-blue-900"><X className="w-3 h-3" /></button>}
+                {onUnlink && <button onClick={() => { if (arm('unlink')) onUnlink() }} title="Unlink this order" aria-label={`Unlink order #${o.number}`} className={isArmed('unlink') ? '-mr-0.5 text-[10px] font-semibold text-red-600' : '-mr-0.5 text-blue-700/60 hover:text-blue-900'}>{isArmed('unlink') ? 'Click again to unlink' : <X className="w-3 h-3" />}</button>}
               </span>
             )}
           </div>
@@ -251,7 +254,6 @@ function SuggestedOrder({ s, threadId, onChanged }: { s: NonNullable<ThreadDetai
 }
 
 async function unlinkOrder(threadId: string, number: string, onChanged: () => void) {
-  if (!window.confirm(`Unlink order #${number} from this customer?`)) return
   try {
     await supportApi.unlinkOrder(threadId, number)
     toast.success(`Unlinked order #${number}`)
@@ -364,6 +366,7 @@ export function InstagramCard({ status, isAdmin, onChanged }: { status: Instagra
   const [pasting, setPasting] = useState(false)
   const [token, setToken] = useState('')
   const [busy, setBusy] = useState(false)
+  const { arm, isArmed } = useArmed()
   if (!status) return null
   const run = async (fn: () => Promise<string | void>) => {
     setBusy(true)
@@ -373,7 +376,7 @@ export function InstagramCard({ status, isAdmin, onChanged }: { status: Instagra
   }
   const saveToken = () => run(async () => { const out = await supportApi.instagramToken(token.trim()); setToken(''); setPasting(false); return `Connected as @${out.username}` })
   const backfill = () => run(async () => { const out = await supportApi.instagramBackfill(); return `Imported ${out.imported} DM${out.imported === 1 ? '' : 's'} from ${out.conversations} conversation${out.conversations === 1 ? '' : 's'}` })
-  const disconnect = () => { if (window.confirm(`Disconnect @${status.username}? DMs stop arriving until an admin connects again.`)) run(async () => { await supportApi.instagramDisconnect(); return 'Instagram disconnected' }) }
+  const disconnect = () => { if (arm('disconnect')) run(async () => { await supportApi.instagramDisconnect(); return 'Instagram disconnected' }) }
   return (
     <Section title="Instagram" open={!status.connected}>
       <div className="text-xs space-y-1.5">
@@ -393,7 +396,7 @@ export function InstagramCard({ status, isAdmin, onChanged }: { status: Instagra
             {!status.connected && <a href={supportApi.instagramConnectUrl} className={btnSecondary}><Instagram className="w-3.5 h-3.5" />Connect @{status.expectedHandle}</a>}
             {!status.connected && <button onClick={() => setPasting(v => !v)} className={btnSecondary}><KeyRound className="w-3.5 h-3.5" />Paste a token</button>}
             {status.connected && <button onClick={backfill} disabled={busy} className={btnSecondary}>{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}Import recent DMs</button>}
-            {status.connected && <button onClick={disconnect} disabled={busy} className={btnSecondary}>Disconnect</button>}
+            {status.connected && <button onClick={disconnect} disabled={busy} className={btnSecondary} title="DMs stop arriving until an admin connects again">{isArmed('disconnect') ? 'Click again: DMs stop arriving' : 'Disconnect'}</button>}
           </div>
         )}
         {isAdmin && status.configured && !status.connected && pasting && (
@@ -447,6 +450,8 @@ export default function Details({ thread, tagSuggestions, onOpenThread, onMerge,
   filters: SenderFilter[]
   onFiltersChanged: () => void
 }) {
+  // Merging takes a second click, in the page (Arc blocks window.confirm).
+  const { arm, isArmed } = useArmed()
   return (
     <aside style={width ? { width } : undefined} className="hidden lg:block w-full lg:w-[272px] xl:w-[300px] shrink-0 lg:overflow-y-auto overflow-x-hidden border-t lg:border-t-0 lg:border-l border-border-gray min-h-0 bg-white">
       {!thread && <div className="px-4 py-6 text-xs text-off-black/45">Pick a conversation to see the customer, their orders and the actions.</div>}
@@ -513,10 +518,10 @@ export default function Details({ thread, tagSuggestions, onOpenThread, onMerge,
                     <div className="mt-0.5"><span className={`${chip} ${STATUS_TONE[p.status]}`}>{STATUS_LABEL[p.status]}</span></div>
                   </button>
                   {thread.channel === 'email' && (
-                    <button onClick={() => { if (window.confirm(`Merge "${p.subject || '(no subject)'}" into this conversation? Its messages move here; this cannot be undone.`)) onMerge([p.id]) }}
+                    <button onClick={() => { if (arm(`merge:${p.id}`)) onMerge([p.id]) }}
                       disabled={merging.length > 0}
                       className="w-full inline-flex items-center gap-1.5 text-left px-2.5 py-1 border-t border-border-gray text-[11px] font-medium text-[#4600D6] hover:bg-[#4600D6]/5 rounded-b-md disabled:opacity-60">
-                      {merging.includes(p.id) ? <><Loader2 className="w-3 h-3 animate-spin" />Merging…</> : 'Merge into this conversation'}
+                      {merging.includes(p.id) ? <><Loader2 className="w-3 h-3 animate-spin" />Merging…</> : isArmed(`merge:${p.id}`) ? <span className="text-red-600">Click again to merge: its messages move here, no undo</span> : 'Merge into this conversation'}
                     </button>
                   )}
                   </div>

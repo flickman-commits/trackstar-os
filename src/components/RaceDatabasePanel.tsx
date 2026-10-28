@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { useArmed } from '@/lib/useArmed'
 import { Search, Pencil, Check, X, Loader2, ChevronRight, ChevronDown as ChevronDownIcon } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
@@ -230,7 +231,7 @@ export default function RaceDatabasePanel({ raceShorthands, raceShorthandOverrid
       await fetchRaces()
       await fetchOrders()
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to merge')
+      toast.error(e instanceof Error ? e.message : 'Failed to merge')
     } finally {
       setIsMergingRace(false)
     }
@@ -251,7 +252,7 @@ export default function RaceDatabasePanel({ raceShorthands, raceShorthandOverrid
       await fetchRaceShorthands()
       setEditingShorthandFor(null)
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to save shorthand')
+      toast.error(e instanceof Error ? e.message : 'Failed to save shorthand')
     } finally {
       setSavingShorthand(false)
     }

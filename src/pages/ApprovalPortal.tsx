@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react'
+import { toast } from 'sonner'
 import { useParams } from 'react-router-dom'
 import { CheckCircle2, XCircle, Loader2, AlertTriangle, X, Maximize2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react'
 
@@ -168,13 +169,13 @@ export default function ApprovalPortal() {
       })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error || 'Something went wrong')
+        toast.error(data.error || 'Something went wrong')
         return
       }
       setConfirmApproveProofId(null)
       await fetchData()
     } catch {
-      alert('Unable to submit. Please try again.')
+      toast.error('Unable to submit. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -191,13 +192,13 @@ export default function ApprovalPortal() {
       })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error || 'Something went wrong')
+        toast.error(data.error || 'Something went wrong')
         return
       }
       setReply('')
       await fetchData()
     } catch {
-      alert('Unable to send. Please try again.')
+      toast.error('Unable to send. Please try again.')
     } finally {
       setSendingReply(false)
     }
@@ -231,7 +232,7 @@ export default function ApprovalPortal() {
       })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error || 'Something went wrong')
+        toast.error(data.error || 'Something went wrong')
         return
       }
       setFeedback('')
@@ -247,7 +248,7 @@ export default function ApprovalPortal() {
       if (othersLeft) await fetchData()
       else setState('revision_submitted')
     } catch {
-      alert('Unable to submit. Please try again.')
+      toast.error('Unable to submit. Please try again.')
     } finally {
       setSubmitting(false)
     }

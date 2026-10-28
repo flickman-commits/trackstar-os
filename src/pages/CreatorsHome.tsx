@@ -245,7 +245,7 @@ export default function CreatorsHome() {
       }
       await loadAll()
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to decline')
+      toast.error(e instanceof Error ? e.message : 'Failed to decline')
     } finally {
       setDecliningId(null)
     }
@@ -267,7 +267,7 @@ export default function CreatorsHome() {
       toast.success(`Approved. Sample ${out.orderNumber || ''} sent as a free Shopify order.`.replace('  ', ' '))
       await loadAll()
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to approve')
+      toast.error(e instanceof Error ? e.message : 'Failed to approve')
     } finally {
       setApprovingId(null)
     }
@@ -472,7 +472,7 @@ function WinningAdsPanel({ ads, onChanged }: { ads: WinningAd[]; onChanged: () =
   const remove = async (ad: WinningAd) => {
     if (!arm(`remove:${ad.id}`)) return
     const res = await apiFetch(`/api/creators/ads?id=${encodeURIComponent(ad.id)}`, { method: 'DELETE' })
-    if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Could not remove the ad'); return }
+    if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error || 'Could not remove the ad'); return }
     await onChanged()
   }
 
@@ -597,7 +597,7 @@ function InviteModal({ briefs, onClose, onCreated }: {
       }
       await onCreated()
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to create invite')
+      toast.error(e instanceof Error ? e.message : 'Failed to create invite')
     } finally {
       setIsCreating(false)
     }
@@ -810,7 +810,7 @@ function CreatorDetail({ creator, onBack, decide, onChanged, onDeleted, catalog 
     }
     await onChanged()
   }
-  const saveQuietly = (updates: Partial<Creator>) => save(updates).catch(e => alert(e instanceof Error ? e.message : 'Could not save'))
+  const saveQuietly = (updates: Partial<Creator>) => save(updates).catch(e => toast.error(e instanceof Error ? e.message : 'Could not save'))
 
   const remove = async () => {
     if (!arm('delete')) return
@@ -819,7 +819,7 @@ function CreatorDetail({ creator, onBack, decide, onChanged, onDeleted, catalog 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'delete-creator', creatorId: creator.id }),
     })
-    if (!res.ok) { const err = await res.json().catch(() => ({})); alert(err.error || 'Could not delete'); return }
+    if (!res.ok) { const err = await res.json().catch(() => ({})); toast.error(err.error || 'Could not delete'); return }
     await onDeleted()
   }
 
@@ -1058,7 +1058,7 @@ function EditCard({ title, creator, fields, onSave, note, catalog }: {
       if (fields.some(f => f.kind === 'print') && draft.raceName) updates.raceName = draft.raceName
       await onSave(updates)
       setEditing(false)
-    } catch (e) { alert(e instanceof Error ? e.message : 'Could not save') } finally { setBusy(false) }
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not save') } finally { setBusy(false) }
   }
   return (
     <div>

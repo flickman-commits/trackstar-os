@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Loader2, Plus, Trash2, ChevronDown, ChevronRight, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
-import { btnPrimary, btnGhost, inputBase, sectionLabel } from '@/lib/ui'
+import { btnPrimary, btnGhost, fieldLabel, modalCancel, modalInput, modalPrimary, sectionLabel } from '@/lib/ui'
+import ActionModal from '@/components/ActionModal'
+import RequestFeatureModal from '@/components/support/RequestFeatureModal'
+import { useArmed } from '@/lib/useArmed'
 
 /**
  * Settings > Feature Requests: what the team has asked to have built, sent
@@ -34,7 +37,10 @@ export default function FeatureRequestsPanel() {
   const [busy, setBusy] = useState<string | null>(null)
   const [showDone, setShowDone] = useState(false)
   const [adding, setAdding] = useState(false)
-  const [draft, setDraft] = useState({ title: '', detail: '' })
+  // Resolving asks for a note in a modal, and delete takes a second click: Arc blocks window.prompt and window.confirm.
+  const [resolving, setResolving] = useState<Request | null>(null)
+  const [resolveNote, setResolveNote] = useState('')
+  const { arm, isArmed } = useArmed()
 
   const load = useCallback(async () => {
     try {
@@ -53,31 +59,20 @@ export default function FeatureRequestsPanel() {
     return d
   }
 
-  const toggle = async (r: Request) => {
-    let note = ''
-    if (r.status === 'open') {
-      const typed = window.prompt('Resolve this request. A note for the team (optional), e.g. "Live now" or why it will not be built:', '')
-      if (typed === null) return
-      note = typed
-    }
+  const toggle = (r: Request) => {
+    if (r.status === 'open') { setResolveNote(''); setResolving(r); return }
+    void setStatus(r, 'undo', '')
+  }
+  const setStatus = async (r: Request, action: 'done' | 'undo', note: string) => {
     setBusy(r.id)
-    try { await post({ action: r.status === 'open' ? 'done' : 'undo', id: r.id, note }); await load() }
+    try { await post({ action, id: r.id, note }); setResolving(null); await load() }
     catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
   }
 
   const remove = async (r: Request) => {
-    if (!window.confirm(`Delete "${r.title}"?`)) return
+    if (!arm(`delete:${r.id}`)) return
     setBusy(r.id)
     try { await post({ action: 'delete', id: r.id }); await load() } catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
-  }
-
-  const add = async () => {
-    setBusy('add')
-    try {
-      await sendFeatureRequest(draft.title, draft.detail, 'settings')
-      setDraft({ title: '', detail: '' }); setAdding(false)
-      await load()
-    } catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
   }
 
   if (!open) return <div className="flex items-center gap-2 text-xs text-off-black/50"><Loader2 className="w-3 h-3 animate-spin" /> Loading feature requests…</div>
@@ -98,7 +93,7 @@ export default function FeatureRequestsPanel() {
         </p>
       </div>
       {isAdmin && r.status === 'open' && (
-        <button onClick={() => remove(r)} disabled={busy !== null} className={`${btnGhost} flex-shrink-0`} title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+        <button onClick={() => remove(r)} disabled={busy !== null} className={`${btnGhost} flex-shrink-0${isArmed(`delete:${r.id}`) ? ' text-red-600' : ''}`} title="Delete"><Trash2 className="w-3.5 h-3.5" />{isArmed(`delete:${r.id}`) && ' Click again to delete'}</button>
       )}
       {busy === r.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-off-black/40" />}
     </div>
@@ -110,18 +105,21 @@ export default function FeatureRequestsPanel() {
         <p className="text-xs text-off-black/55 flex-1 min-w-[240px]">
           What the team has asked to have built. Add one here or with Request feature in Support. {isAdmin ? 'Check one off when it ships.' : 'Matt checks them off as they ship.'}
         </p>
-        <button className={btnPrimary} onClick={() => setAdding(a => !a)} disabled={busy !== null}><Plus className="w-3 h-3" /> Request a feature</button>
+        <button className={btnPrimary} onClick={() => setAdding(true)} disabled={busy !== null}><Plus className="w-3 h-3" /> Request a feature</button>
       </div>
 
-      {adding && (
-        <div className="rounded-lg border border-border-gray bg-subtle-gray p-3 space-y-2">
-          <input value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} placeholder="What would you like built?" className={`${inputBase} w-full`} autoFocus />
-          <textarea value={draft.detail} onChange={e => setDraft({ ...draft, detail: e.target.value })} placeholder="Why it would help, or an example (optional)" rows={3} className={`${inputBase} w-full`} />
-          <div className="flex gap-2 justify-end">
-            <button className={btnGhost} onClick={() => setAdding(false)}>Cancel</button>
-            <button className={btnPrimary} onClick={add} disabled={busy !== null || !draft.title.trim()}>{busy === 'add' ? <Loader2 className="w-3 h-3 animate-spin" /> : null} Send request</button>
-          </div>
-        </div>
+      {adding && <RequestFeatureModal source="settings" onClose={() => setAdding(false)} onSent={load} />}
+      {resolving && (
+        <ActionModal icon={CheckCircle2} title="Resolve request" onClose={() => setResolving(null)} busy={busy === resolving.id}
+          description={resolving.title}
+          footer={<>
+            <button className={modalCancel} onClick={() => setResolving(null)} disabled={busy === resolving.id}>Cancel</button>
+            <button className={modalPrimary} onClick={() => setStatus(resolving, 'done', resolveNote)} disabled={busy === resolving.id}>{busy === resolving.id && <Loader2 className="w-4 h-4 animate-spin" />}Mark done</button>
+          </>}>
+          <label className="block"><span className={fieldLabel}>A note for the team (optional)</span>
+            <textarea value={resolveNote} onChange={e => setResolveNote(e.target.value)} rows={3} autoFocus placeholder='e.g. "Live now", or why it will not be built' className={`${modalInput} resize-none`} />
+          </label>
+        </ActionModal>
       )}
 
       <div>

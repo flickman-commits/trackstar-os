@@ -5,6 +5,7 @@ import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import PrintPicker, { type PrintOption } from '@/components/PrintPicker'
 import { btnPrimary, btnSecondary, btnGhost, inputBase, fieldLabel } from '@/lib/ui'
+import { useArmed } from '@/lib/useArmed'
 
 /**
  * A bulk deal (server/domain/bulk/deals.js): one organization's order across
@@ -271,6 +272,7 @@ export function InvoiceCard({ deal, onChanged }: { deal: Deal; onChanged: () => 
   const { isAdmin } = useAuth()
   const [quote, setQuote] = useState<Quote | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const { arm, isArmed } = useArmed()
 
   // Prices are admins' only.
   useEffect(() => {
@@ -289,7 +291,7 @@ export function InvoiceCard({ deal, onChanged }: { deal: Deal; onChanged: () => 
   }
   const send = async () => {
     if (!deal.contactEmail) { toast.error('Add the contact email first'); return }
-    if (!window.confirm(`Shopify will email the invoice to ${deal.contactEmail}. Send it?`)) return
+    if (!arm('send')) return
     setBusy('send')
     try {
       const out = await dealApi<{ sentTo: string }>({ action: 'send-invoice', id: deal.id })
@@ -328,7 +330,7 @@ export function InvoiceCard({ deal, onChanged }: { deal: Deal; onChanged: () => 
               {busy === 'invoice' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Receipt className="w-3.5 h-3.5" />}{deal.shopifyDraftId ? `Update invoice ${deal.shopifyDraftName || ''}` : 'Build Shopify invoice'}
             </button>
           )}
-          {deal.invoiceUrl && <button onClick={send} disabled={busy !== null} className={`${deal.invoiceSentAt ? btnSecondary : btnPrimary} ${row}`}>{busy === 'send' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}{deal.invoiceSentAt ? 'Email it again' : 'Email invoice'}</button>}
+          {deal.invoiceUrl && <button onClick={send} disabled={busy !== null} className={`${deal.invoiceSentAt ? btnSecondary : btnPrimary} ${row}`}>{busy === 'send' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}{isArmed('send') ? `Click again: Shopify emails it to ${deal.contactEmail}` : deal.invoiceSentAt ? 'Email it again' : 'Email invoice'}</button>}
         </div>
       )}
       {(deal.adminUrl || deal.invoiceUrl) && isAdmin && (

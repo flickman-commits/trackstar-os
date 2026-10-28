@@ -1,4 +1,5 @@
 import CreatorsTabs from '@/components/CreatorsTabs'
+import { toast } from 'sonner'
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Loader2, Plus, X, FileText, Users, Search, ChevronLeft, Link as LinkIcon } from 'lucide-react'
@@ -207,7 +208,7 @@ function BriefEditor({ brief, onClose, onSaved }: {
 
   const handleSave = async () => {
     if (!draft.title.trim()) {
-      alert('Title is required')
+      toast.error('Title is required')
       return
     }
     setIsSaving(true)
@@ -254,7 +255,7 @@ function BriefEditor({ brief, onClose, onSaved }: {
       if (!res.ok) throw new Error(data.error || `Save failed: ${res.status}`)
       await onSaved(data.brief?.id || draft.id || null)
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to save')
+      toast.error(e instanceof Error ? e.message : 'Failed to save')
     } finally {
       setIsSaving(false)
     }

@@ -3,6 +3,7 @@ import { AlertTriangle, Archive, Bold, ChevronDown, Clock, Italic, Link as LinkI
 import { toast } from 'sonner'
 import { btnGhost, btnPrimary, btnSecondary } from '@/lib/ui'
 import { supportApi } from '@/lib/supportApi'
+import { useArmed } from '@/lib/useArmed'
 import { when } from '@/lib/supportDates'
 import { fillMacro, tagStoreLinks } from '@/lib/supportStatus'
 import AssigneePicker, { Avatar } from '@/components/AssigneePicker'
@@ -234,6 +235,8 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
   attachRef: React.MutableRefObject<((m: Mockup) => void) | null>
 }) {
   const [mode, setMode] = useState<'reply' | 'note'>('reply')
+  // Merging the customer's other conversations takes a second click, in the page (Arc blocks window.confirm).
+  const { arm: armMerge, isArmed: mergeArmed } = useArmed()
   const [text, setText] = useState(() => starter(thread, me))
   const [note, setNote] = useState('')
   const [mentionIds, setMentionIds] = useState<string[]>([])
@@ -499,10 +502,10 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
         return (
           <div className="px-5 py-2 border-b border-amber-200 bg-amber-50 text-xs text-amber-900 flex flex-wrap items-center gap-x-3 gap-y-1 shrink-0">
             <span>{(thread.customerName || 'This customer').split(/\s+/)[0]} has {others.length} other open conversation{others.length === 1 ? '' : 's'}{others.length === 1 ? `: "${others[0].subject || '(no subject)'}"` : ''}.</span>
-            <button onClick={() => { if (globalThis.confirm(`Merge ${others.length === 1 ? 'it' : `all ${others.length}`} into this conversation? Their messages move here; this cannot be undone.`)) onMerge(others.map(o => o.id)) }}
+            <button onClick={() => { if (armMerge('merge-others')) onMerge(others.map(o => o.id)) }}
               disabled={merging.length > 0}
               className="inline-flex items-center gap-1 font-semibold text-[#4600D6] hover:underline underline-offset-2 disabled:opacity-60 disabled:no-underline">
-              {others.some(o => merging.includes(o.id)) ? <><Loader2 className="w-3 h-3 animate-spin" />Merging…</> : <>Merge {others.length === 1 ? 'it' : 'them'} here</>}
+              {others.some(o => merging.includes(o.id)) ? <><Loader2 className="w-3 h-3 animate-spin" />Merging…</> : mergeArmed('merge-others') ? <span className="text-red-600">Click again to merge {others.length === 1 ? 'it' : `all ${others.length}`}: messages move here, no undo</span> : <>Merge {others.length === 1 ? 'it' : 'them'} here</>}
             </button>
           </div>
         )

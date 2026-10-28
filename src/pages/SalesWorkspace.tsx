@@ -9,6 +9,7 @@ import {
 } from '@/lib/ui'
 import { salesApi, type CustomVariable, type LibraryTemplate, type SequencePipeline, type SequenceStep, type TemplateMotion, type TemplateNote, type Workspace } from '@/lib/salesApi'
 import { BodyEditor } from '@/components/sales/Composer'
+import { useArmed } from '@/lib/useArmed'
 import type { Asset } from '@/types/sales'
 import { TIPS, wordCount, isThreadReply } from '@/lib/coldEmailTips'
 import { useDocumentHead } from '@/lib/useDocumentHead'
@@ -84,6 +85,8 @@ const MOTIONS: TemplateMotion[] = ['Race', 'Charity', 'PR', 'Any']
 
 function Templates({ ws, reload }: { ws: Workspace; reload: () => Promise<void> }) {
   const { isAdmin } = useAuth()
+  // Deleting takes a second click, in the page (Arc blocks window.confirm).
+  const { arm, isArmed } = useArmed()
   const location = useLocation()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
@@ -140,7 +143,7 @@ function Templates({ ws, reload }: { ws: Workspace; reload: () => Promise<void> 
     finally { setSaving(false) }
   }
   const remove = async () => {
-    if (!saved || !window.confirm(`Delete "${saved.name}"? This cannot be undone.`)) return
+    if (!saved || !arm(`delete:${saved.id}`)) return
     try { await salesApi.deleteLibraryTemplate(saved.id); await reload(); setId(null); toast.message('Template deleted') }
     catch (e) { toast.error((e as Error).message) }
   }
@@ -247,7 +250,7 @@ function Templates({ ws, reload }: { ws: Workspace; reload: () => Promise<void> 
             </div>
             <TemplateImages ids={draft.assetIds || []} onChange={assetIds => setDraft(d => (d ? { ...d, assetIds } : d))} />
             <div className="flex items-center justify-between pt-2">
-              {saved && isAdmin ? <button onClick={remove} className={`${btnGhost} text-red-700 hover:text-red-800`}><Trash2 className="w-3.5 h-3.5" /> Delete</button> : <span />}
+              {saved && isAdmin ? <button onClick={remove} className={`${btnGhost} text-red-700 hover:text-red-800`}><Trash2 className="w-3.5 h-3.5" /> {isArmed(`delete:${saved.id}`) ? 'Click again to delete for good' : 'Delete'}</button> : <span />}
               <button onClick={save} disabled={saving || !dirty || !draft.name?.trim()} className={`${btnPrimary} px-4 py-2`}>{saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null} {saved ? 'Save changes' : 'Add template'}</button>
             </div>
           </div>
@@ -332,6 +335,7 @@ function TemplateNotes({ template, reload }: { template: LibraryTemplate | null;
   const [text, setText] = useState('')
   const [from, setFrom] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
+  const { arm, isArmed } = useArmed()
   useEffect(() => { setText(''); setFrom('') }, [template?.id])
   const notes: TemplateNote[] = [...(template?.notes || [])].reverse()
 
@@ -342,7 +346,7 @@ function TemplateNotes({ template, reload }: { template: LibraryTemplate | null;
     catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
   }
   const remove = async (n: TemplateNote) => {
-    if (!template || !window.confirm('Remove this note?')) return
+    if (!template || !arm(`remove:${n.id}`)) return
     setBusy(n.id)
     try { await salesApi.deleteTemplateNote(template.id, n.id); await reload() }
     catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
@@ -382,8 +386,10 @@ function TemplateNotes({ template, reload }: { template: LibraryTemplate | null;
                 </p>
                 <button
                   onClick={() => remove(n)} disabled={busy === n.id} title="Remove note"
-                  className="absolute top-2 right-2 p-0.5 rounded text-off-black/30 opacity-0 group-hover:opacity-100 hover:text-red-700 hover:bg-red-50 transition-opacity"
-                ><X className="w-3.5 h-3.5" /></button>
+                  className={isArmed(`remove:${n.id}`)
+                    ? 'absolute top-2 right-2 px-1.5 py-0.5 rounded bg-red-600 text-white text-[11px] font-medium'
+                    : 'absolute top-2 right-2 p-0.5 rounded text-off-black/30 opacity-0 group-hover:opacity-100 hover:text-red-700 hover:bg-red-50 transition-opacity'}
+                >{isArmed(`remove:${n.id}`) ? 'Click again to remove' : <X className="w-3.5 h-3.5" />}</button>
               </div>
             ))}
           </div>

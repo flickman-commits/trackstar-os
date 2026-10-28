@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Loader2, ArrowLeft, RotateCcw, AlertTriangle, Check, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
+import { useArmed } from '@/lib/useArmed'
 import CustomFeePanel from '@/components/CustomFeePanel'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -97,6 +98,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 /** `embedded`: shown as a Settings panel, which has its own title. */
 export default function ProductsBulkEdit({ embedded = false }: { embedded?: boolean } = {}) {
   const [variants, setVariants] = useState<Variant[]>([])
+  // Undo takes a second click, in the page (Arc blocks window.confirm).
+  const { arm, isArmed } = useArmed(8000)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [batches, setBatches] = useState<Batch[]>([])
@@ -299,10 +302,7 @@ export default function ProductsBulkEdit({ embedded = false }: { embedded?: bool
     // A removal batch is rebuilt, not repriced, and the wording has to say so:
     // "restore 192 variant prices" would be a lie about what is coming back.
     const isRemoval = /^Removed /.test(batch.description)
-    const prompt = isRemoval
-      ? `Undo "${batch.description}"? This recreates ${batch.count} variant${batch.count === 1 ? '' : 's'} with their original options, price, SKU, weight and image. They will get NEW Shopify variant IDs.`
-      : `Undo "${batch.description}"? This restores ${batch.count} variant price${batch.count === 1 ? '' : 's'}.`
-    if (!window.confirm(prompt)) return
+    if (!arm(`undo:${batch.id}`)) return
     try {
       const res = await apiFetch(`${API_BASE}/api/products/bulk-edit`, {
         method: 'POST',
@@ -560,9 +560,14 @@ export default function ProductsBulkEdit({ embedded = false }: { embedded?: bool
                       ) : (
                         <button
                           onClick={() => undo(b)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-off-black/70 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors shrink-0"
+                          title={/^Removed /.test(b.description)
+                            ? `Recreates ${b.count} variant${b.count === 1 ? '' : 's'} with their original options, price, SKU, weight and image. They get NEW Shopify variant IDs.`
+                            : `Restores ${b.count} variant price${b.count === 1 ? '' : 's'}.`}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors shrink-0 ${isArmed(`undo:${b.id}`) ? 'bg-red-600 text-white hover:bg-red-700' : 'text-off-black/70 bg-gray-100 hover:bg-gray-200'}`}
                         >
-                          <RotateCcw className="w-3.5 h-3.5" /> Undo
+                          <RotateCcw className="w-3.5 h-3.5" /> {isArmed(`undo:${b.id}`)
+                            ? (/^Removed /.test(b.description) ? `Click again: recreates ${b.count} with new Shopify IDs` : `Click again to restore ${b.count} price${b.count === 1 ? '' : 's'}`)
+                            : 'Undo'}
                         </button>
                       )}
                     </li>

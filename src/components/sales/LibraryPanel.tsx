@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { FileText, Image as ImageIcon, Loader2, Plus, Trash2, Upload, Check, Pencil, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { sectionLabel, textLink } from '@/lib/ui'
+import { useArmed } from '@/lib/useArmed'
 import { salesApi } from '@/lib/salesApi'
 import { ASSET_DRAG_TYPE } from './Composer'
 import type { Asset } from '@/types/sales'
@@ -32,6 +33,7 @@ export default function LibraryPanel({ assets, configured, attachedIds, onAttach
 }) {
   const [over, setOver] = useState(false)
   const [uploading, setUploading] = useState<Record<string, number>>({})
+  const { arm, isArmed } = useArmed()
   const [filter, setFilter] = useState<'all' | 'image' | 'deck'>('all')
   const fileInput = useRef<HTMLInputElement>(null)
   const resigned = useRef(false)
@@ -57,7 +59,7 @@ export default function LibraryPanel({ assets, configured, attachedIds, onAttach
     onChanged()
   }
   const remove = async (a: Asset) => {
-    if (!window.confirm(`Remove ${a.name} from the library? Emails already sent keep their copy.`)) return
+    if (!arm(`remove:${a.id}`)) return
     try { await salesApi.deleteAsset(a.id); toast.message(`Removed ${a.name}`); onChanged() }
     catch (e) { toast.error((e as Error).message) }
   }
@@ -169,7 +171,7 @@ export default function LibraryPanel({ assets, configured, attachedIds, onAttach
                   {attached ? <Check className="w-3.5 h-3.5 text-success-green" /> : <Plus className="w-3.5 h-3.5" />}
                 </button>
                 <button onClick={e => { e.stopPropagation(); startRename(a) }} className="w-6 h-6 rounded bg-white/95 border border-border-gray grid place-items-center hover:bg-subtle-gray" title="Rename"><Pencil className="w-3 h-3" /></button>
-                <button onClick={e => { e.stopPropagation(); remove(a) }} className="w-6 h-6 rounded bg-white/95 border border-border-gray grid place-items-center hover:bg-red-50 hover:text-red-700" title="Remove from the library"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button onClick={e => { e.stopPropagation(); remove(a) }} className={isArmed(`remove:${a.id}`) ? 'h-6 px-2 rounded bg-red-600 text-white text-[11px] font-medium whitespace-nowrap' : 'w-6 h-6 rounded bg-white/95 border border-border-gray grid place-items-center hover:bg-red-50 hover:text-red-700'} title="Remove from the library (emails already sent keep their copy)">{isArmed(`remove:${a.id}`) ? 'Click again to remove' : <Trash2 className="w-3.5 h-3.5" />}</button>
               </div>
               {attached && <div className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-dark-fill text-white grid place-items-center"><Check className="w-2.5 h-2.5" strokeWidth={3} /></div>}
             </div>

@@ -9,6 +9,7 @@ import { ExternalLink, FileText, Loader2, Plus, Send, Upload } from 'lucide-reac
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { parseAddress } from '@/lib/parseAddress'
+import { useArmed } from '@/lib/useArmed'
 import { btnPrimary, btnSecondary, sectionLabel, infoCard, segment, segmentGroup } from '@/lib/ui'
 import SampleDesigner, { type DesignPrint } from './SampleDesigner'
 
@@ -28,6 +29,8 @@ type GelatoProduct = { uid: string; label: string; size: string; frame: string }
 
 export default function GelatoSample({ products, prints, onSent }: { products: GelatoProduct[]; prints: DesignPrint[] | null; onSent: () => void }) {
   const [size, setSize] = useState('12x18')
+  // Ordering costs money: a second click, in the page (Arc blocks window.confirm).
+  const { arm, isArmed } = useArmed(8000)
   const [frame, setFrame] = useState('Black Premium Oak')
   const sizes = [...new Set(products.map(p => p.size))]
   const frames = products.filter(p => p.size === size).map(p => p.frame)
@@ -68,7 +71,7 @@ export default function GelatoSample({ products, prints, onSent }: { products: G
   const send = async () => {
     const m = quote?.shipping.find(s => s.uid === method)
     if (!quote || !m) return
-    if (!window.confirm(`Order this sample from Gelato for ${usd(quote.printCents + m.cents)} (${m.name}) to ${name} in ${addr.country.toUpperCase()}? Gelato charges the account on file.`)) return
+    if (!arm(`send:${method}`)) return
     setBusy('send')
     try { setSent(await post({ action: 'gelato-send', ...payload(), shipmentMethodUid: method })); onSent() }
     catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
@@ -154,7 +157,8 @@ export default function GelatoSample({ products, prints, onSent }: { products: G
                 </label>
               ))}
               <div className="flex justify-between font-semibold border-t border-border-gray pt-2"><span>Total, from {quote.country}</span><span>{usd(quote.printCents + (quote.shipping.find(s => s.uid === method)?.cents || 0))}</span></div>
-              <button onClick={send} disabled={!ready || busy !== null} className={`${btnPrimary} w-full justify-center`}>{busy === 'send' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}Send with Gelato</button>
+              <button onClick={send} disabled={!ready || busy !== null} className={`${btnPrimary} w-full justify-center`}>{busy === 'send' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}{isArmed(`send:${method}`) ? 'Click again to order it' : 'Send with Gelato'}</button>
+              {isArmed(`send:${method}`) && (() => { const m = quote?.shipping.find(s => s.uid === method); return quote && m ? <p className="text-xs text-red-600">Orders this sample from Gelato for {usd(quote.printCents + m.cents)} ({m.name}) to {name} in {addr.country.toUpperCase()}. Gelato charges the account on file.</p> : null })()}
             </div>
           )}
         </div>

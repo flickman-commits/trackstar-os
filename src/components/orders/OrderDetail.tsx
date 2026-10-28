@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth'
 import type { Design } from '@/lib/useDesign'
 import { raceNotRunYet, showsRaceNotRun } from '@/lib/raceStatus'
 import { useArmed } from '@/lib/useArmed'
+import { useAskText } from '@/components/useAskText'
 import ProofManager, { type ProofActions } from '@/components/ProofManager'
 import PostApprovalChecklist from '@/components/PostApprovalChecklist'
 import CustomFinalPdf from '@/components/CustomFinalPdf'
@@ -586,11 +587,17 @@ export default function OrderDetail({
   // Confirm a race date against its sources. With no source on file (a date a
   // config set), it asks for the page the date was checked on and saves it.
   const [confirmingDate, setConfirmingDate] = useState(false)
+  // Links and reasons are asked for in a modal (Arc blocks window.prompt).
+  const { ask, modal: askModal } = useAskText()
   const confirmRaceDate = async (order: Order, askForSource = false) => {
     if (!order.raceId) return
     let sourceUrl: string | null = null
     if (askForSource) {
-      sourceUrl = window.prompt(`Paste a link that shows ${order.effectiveRaceName || order.raceName} ${order.effectiveRaceYear || order.raceYear} was on ${order.raceDate} (the race's site, a results page, a news story):`)?.trim() || null
+      sourceUrl = await ask({
+        title: 'Confirm the race date',
+        description: `A page that shows ${order.effectiveRaceName || order.raceName} ${order.effectiveRaceYear || order.raceYear} was on ${order.raceDate}: the race's site, a results page, a news story.`,
+        label: 'Link', placeholder: 'https://', action: 'Confirm date', valid: v => /^https?:\/\/\S+$/.test(v),
+      })
       if (!sourceUrl) return
     }
     setConfirmingDate(true)
@@ -636,9 +643,9 @@ export default function OrderDetail({
       let data = await res.json()
       // A print of this race year was already approved: changing its weather needs a reason.
       if (res.status === 409 && data.needsReason) {
-        const reason = window.prompt(`${data.error}\n\nWhy is the weather changing?`)
-        if (!reason?.trim()) return
-        res = await send(reason.trim())
+        const reason = await ask({ title: 'Why is the weather changing?', description: data.error, label: 'Reason (kept with the race)', multiline: true, action: 'Change weather' })
+        if (!reason) return
+        res = await send(reason)
         data = await res.json()
       }
       if (!res.ok) {
@@ -719,7 +726,7 @@ export default function OrderDetail({
           weatherCondition: weatherEditValues.weatherCondition || null,
           // Only a changed date needs a source link.
           raceDateSourceUrl: weatherEditValues.raceDate && weatherEditValues.raceDate !== (order.raceDateIso || '')
-            ? (window.prompt('Link where this date is confirmed (results page or race site).') || undefined) : undefined,
+            ? ((await ask({ title: 'Where is this date confirmed?', description: 'A results page or the race site. Leave it closed to save without one.', label: 'Link', placeholder: 'https://', action: 'Use this link', valid: v => /^https?:\/\/\S+$/.test(v) })) || undefined) : undefined,
           reason,
         })
       })
@@ -727,8 +734,8 @@ export default function OrderDetail({
         const err = await response.json().catch(() => ({}))
         // A race year that has already printed keeps a record of why its weather changed.
         if (!reason && /needs a reason/i.test(err.error || '')) {
-          const why = window.prompt(`${err.error}\n\nWhy is it changing?`)
-          if (why && why.trim()) { setIsSavingWeather(false); return saveWeather(order, why.trim()) }
+          const why = await ask({ title: 'Why is it changing?', description: err.error, label: 'Reason (kept with the race)', multiline: true, action: 'Save' })
+          if (why) { setIsSavingWeather(false); return saveWeather(order, why) }
           setToast({ message: 'Not saved: a reason is needed to change printed weather', type: 'error' })
           return
         }
@@ -1210,6 +1217,7 @@ Thank you!`
 
   return (
     <>
+      {askModal}
       {converting && (
         <ConvertToCustomModal
           order={selectedOrder}

@@ -3,6 +3,7 @@ import { Loader2, Plus, Copy, Check, KeyRound, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { btnPrimary, btnSecondary, btnGhost, inputBase, fieldLabel } from '@/lib/ui'
+import { useArmed } from '@/lib/useArmed'
 
 /**
  * Settings > Admin > API Keys: credentials for the MCP server and anything
@@ -61,6 +62,7 @@ export default function ApiKeysPanel() {
   const [busy, setBusy] = useState<string | null>(null)
   const [fresh, setFresh] = useState<{ key: ApiKey; secret: string } | null>(null)
   const [showRevoked, setShowRevoked] = useState(false)
+  const { arm, isArmed } = useArmed()
 
   const load = useCallback(async () => {
     try {
@@ -72,7 +74,7 @@ export default function ApiKeysPanel() {
   useEffect(() => { load() }, [load])
 
   const revoke = async (k: ApiKey) => {
-    if (!window.confirm(`Revoke "${k.name}"? Anything using it stops working now.`)) return
+    if (!arm(`revoke:${k.id}`)) return
     setBusy(k.id)
     try {
       const res = await apiFetch('/api/admin/api-keys', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: k.id }) })
@@ -141,7 +143,7 @@ export default function ApiKeysPanel() {
                 </td>
                 <td className="px-3 py-2 text-off-black/55">{ago(k.lastUsedAt)}</td>
                 <td className="px-3 py-2 text-right">
-                  {!k.revokedAt && <button onClick={() => revoke(k)} disabled={busy === k.id} className={btnGhost}><X className="w-3 h-3" /> Revoke</button>}
+                  {!k.revokedAt && <button onClick={() => revoke(k)} disabled={busy === k.id} className={`${btnGhost}${isArmed(`revoke:${k.id}`) ? ' text-red-600' : ''}`} title="Anything using it stops working now"><X className="w-3 h-3" /> {isArmed(`revoke:${k.id}`) ? 'Click again to revoke: anything using it stops' : 'Revoke'}</button>}
                 </td>
               </tr>
             ))}
