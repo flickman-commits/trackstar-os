@@ -55,7 +55,6 @@ const SETTINGS_NAV: {
     items: [
       { id: 'races', label: 'Race Database', blurb: 'Race dates, locations and weather', icon: CloudSun, cap: 'settings.data' },
       { id: 'lookup', label: 'Instant Lookup', blurb: 'Which races work, which need help', icon: Search, cap: 'settings.data' },
-      { id: 'storefront', label: 'Customers Served', blurb: 'The counter shown on the Shopify storefront', icon: Users, cap: 'settings.data' },
     ],
   },
   {
@@ -79,6 +78,7 @@ const SETTINGS_NAV: {
       { id: 'pricing', label: 'Pricing Calculator', blurb: 'Costs, retail and margin across DTC and wholesale', icon: DollarSign },
       { id: 'products', label: 'Products & Prices', blurb: 'Change prices across every Shopify product at once', icon: DollarSign },
       { id: 'skipped', label: 'Skipped Products', blurb: 'Shopify products with nothing to personalize, kept out of the fulfillment tool', icon: EyeOff },
+      { id: 'storefront', label: 'Customers Served', blurb: 'The counter shown on the Shopify storefront', icon: Users },
     ],
   },
   {
@@ -344,7 +344,7 @@ export default function Settings() {
                 <RaceDatabasePanel raceShorthands={raceShorthands} raceShorthandOverrides={raceShorthandOverrides} refreshShorthands={fetchRaceShorthands} setToast={setToast} fetchOrders={refreshOrders} />
               )}
 
-              {settingsPanel === 'storefront' && can('settings.data') && (
+              {settingsPanel === 'storefront' && isAdmin && (
                 <div className="space-y-4">
             {/* Customers Served Counter */}
             <div>
