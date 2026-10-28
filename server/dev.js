@@ -105,6 +105,7 @@ const routes = [
   // Storefront stats panel (Shopify-derived)
   { method: 'get',    path: '/api/admin/stats',            handler: '../api/admin/stats.js' },
   { method: 'get',    path: '/api/admin/custom-counter',   handler: '../api/admin/custom-counter.js' },
+  { method: 'post',   path: '/api/admin/custom-counter',   handler: '../api/admin/custom-counter.js' },
   { method: 'get',    path: '/api/admin/support-closes',   handler: '../api/admin/support-closes.js' },
   { method: 'get',    path: '/api/admin/roles',            handler: '../api/admin/roles.js' },
   { method: 'put',    path: '/api/admin/roles',            handler: '../api/admin/roles.js' },

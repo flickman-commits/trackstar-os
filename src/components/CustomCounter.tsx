@@ -5,15 +5,17 @@ import { Avatar } from '@/components/AssigneePicker'
 import { btnSecondary, sectionCount } from '@/lib/ui'
 
 /**
- * Admin only: custom designs each designer sent to production in a month,
- * for payouts. Each row is one print; a two-print order counts twice.
+ * Admin only: custom designs each designer made in a month, for payouts:
+ * counted the month the first proof went to the customer, credited to the
+ * assigned designer. A repeat (a race designed before) pays half; the toggle
+ * on each row corrects the automatic call. Each row is one print.
  */
 
-type Row = { id: string; display: string; item: number; runnerName: string; race: string; customerName: string | null; rush: boolean; completedAt: string; estimated: boolean }
-type Designer = { userId: string | null; name: string; count: number; rateCents: number; payoutCents: number; orders: Row[] }
+type Row = { id: string; display: string; item: number; runnerName: string; race: string; customerName: string | null; rush: boolean; completedAt: string; estimated: boolean; repeat: boolean; repeatSet: boolean; autoRepeat: boolean; rateCents: number; sentToProduction: boolean }
+type Designer = { userId: string | null; name: string; count: number; repeats: number; rateCents: number; payoutCents: number; orders: Row[] }
 type Data = { month: string; total: number; payoutCents: number; designers: Designer[] }
 
-const usd = (cents: number) => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+const usd = (cents: number) => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 })}`
 
 const thisMonth = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit' }).format(new Date()).slice(0, 7)
 const shift = (month: string, by: number) => {
@@ -40,6 +42,16 @@ export default function CustomCounter() {
   }, [month])
 
   const atNow = month >= thisMonth()
+
+  // Flip one custom between repeat and new; back to automatic when it matches the automatic call.
+  const toggleRepeat = async (o: Row) => {
+    const next = !o.repeat
+    const body = { orderId: o.id, repeat: next === o.autoRepeat ? null : next }
+    const res = await apiFetch('/api/admin/custom-counter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    if (!res.ok) return
+    const fresh = await apiFetch(`/api/admin/custom-counter?month=${month}`).then(r => (r.ok ? r.json() : null))
+    if (fresh) setData(fresh)
+  }
 
   return (
     <div>
@@ -68,12 +80,12 @@ export default function CustomCounter() {
                 <div key={d.userId || 'none'} className="bg-white border border-border-gray rounded-lg p-4">
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-off-black/40 truncate">{d.name}</div>
                   <div className="text-3xl font-bold text-off-black mt-1">{d.count}</div>
-                  <div className="text-sm font-semibold text-green-700 mt-0.5">{d.rateCents ? `${usd(d.payoutCents)} · ${usd(d.rateCents)} each` : 'Not paid per custom'}</div>
+                  <div className="text-sm font-semibold text-green-700 mt-0.5">{d.rateCents ? `${usd(d.payoutCents)} · ${usd(d.rateCents)} each${d.repeats ? `, ${d.repeats} repeat${d.repeats === 1 ? '' : 's'} at ${usd(d.rateCents / 2)}` : ''}` : 'Not paid per custom'}</div>
                 </div>
               ))}
             </div>
 
-            {!data.designers.length && <p className="text-sm text-off-black/50 py-10 text-center">No customs sent to production in {label(month)}.</p>}
+            {!data.designers.length && <p className="text-sm text-off-black/50 py-10 text-center">No custom designs sent for review in {label(month)}.</p>}
 
             <div className="space-y-5">
               {data.designers.map(d => (
@@ -82,15 +94,16 @@ export default function CustomCounter() {
                     {d.userId && <Avatar user={{ id: d.userId, firstName: d.name, lastName: '' }} size={24} />}
                     <span className="font-semibold text-off-black">{d.name}</span>
                     <span className={sectionCount}>{d.count}</span>
-                    {d.rateCents > 0 && <span className="ml-auto text-sm font-semibold text-green-700">{d.count} × {usd(d.rateCents)} = {usd(d.payoutCents)}</span>}
+                    {d.rateCents > 0 && <span className="ml-auto text-sm font-semibold text-green-700">{d.count - d.repeats} × {usd(d.rateCents)}{d.repeats ? ` + ${d.repeats} × ${usd(d.rateCents / 2)}` : ''} = {usd(d.payoutCents)}</span>}
                   </div>
                   <table className="w-full text-sm">
                     <thead className="text-[11px] font-semibold uppercase tracking-wider text-off-black/45">
                       <tr className="border-b border-border-gray">
-                        <th className="text-left px-4 py-2">Completed</th>
+                        <th className="text-left px-4 py-2">First proof</th>
                         <th className="text-left px-4 py-2">Order</th>
                         <th className="text-left px-4 py-2 hidden md:table-cell">Runner</th>
                         <th className="text-left px-4 py-2 hidden md:table-cell">Race</th>
+                        <th className="text-right px-4 py-2">Rate</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -105,6 +118,15 @@ export default function CustomCounter() {
                           </td>
                           <td className="px-4 py-2 hidden md:table-cell text-off-black/70">{o.runnerName || o.customerName || ''}</td>
                           <td className="px-4 py-2 hidden md:table-cell text-off-black/70">{o.race}</td>
+                          <td className="px-4 py-2 text-right whitespace-nowrap">
+                            {d.rateCents > 0 && (
+                              <button onClick={() => toggleRepeat(o)} title={o.repeatSet ? 'Set by hand. Click to change.' : `Decided automatically (${o.autoRepeat ? 'a race designed before' : 'a new race'}). Click to change.`}
+                                className={`mr-2 px-1.5 py-0.5 rounded text-[11px] font-medium border ${o.repeat ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-white border-border-gray text-off-black/45 hover:text-off-black'}`}>
+                                {o.repeat ? 'Repeat' : 'New'}{o.repeatSet ? ' ✎' : ''}
+                              </button>
+                            )}
+                            <span className="font-medium text-off-black tabular-nums">{d.rateCents ? usd(o.rateCents) : ''}</span>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -113,7 +135,7 @@ export default function CustomCounter() {
               ))}
             </div>
             {data.designers.some(d => d.orders.some(o => o.estimated)) && (
-              <p className="text-xs text-off-black/45 mt-4">* Completed before the tool recorded who finished each design, so it is credited to the order's assignee.</p>
+              <p className="text-xs text-off-black/45 mt-4">* No proof on file (made before proofs, or by hand), so it is dated by when it was sent to production.</p>
             )}
           </>
         )}

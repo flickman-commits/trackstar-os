@@ -509,7 +509,7 @@ function normalizeUrl(raw: string) {
 }
 
 /**
- * Links Matt adds often, one click away in the ⌘K box. Instagram handles and
+ * Links Matt adds often, one click away in the ⌘⇧K box. Instagram handles and
  * pages are taken from trackstar.art and flickmanmedia.com; change them here.
  */
 const QUICK_LINKS: { label: string; text: string; url: string }[] = [
@@ -519,10 +519,10 @@ const QUICK_LINKS: { label: string; text: string; url: string }[] = [
   { label: 'Marathons', text: 'our marathon prints', url: 'https://trackstar.art/collections/marathons' },
 ]
 
-/** What the ⌘K box is editing: the selected words, or a link the caret is in. */
+/** What the ⌘⇧K box is editing: the selected words, or a link the caret is in. */
 type LinkTarget = { text: string; url: string; existing: boolean; top: number; left: number }
 
-/** The ⌘K box: compact, with the usual links one click away. */
+/** The ⌘⇧K box: compact, with the usual links one click away. */
 function LinkBox({ target, onSave, onRemove, onCancel }: { target: LinkTarget; onSave: (text: string, url: string) => void; onRemove: () => void; onCancel: () => void }) {
   const [text, setText] = useState(target.text)
   const [url, setUrl] = useState(target.url)
@@ -621,8 +621,8 @@ function fromEditor(root: HTMLElement) {
 }
 
 /**
- * One editable block of the email. Links show as blue underlined words; ⌘K
- * (Ctrl+K) adds one on the selection or edits the one under the caret, and
+ * One editable block of the email. Links show as blue underlined words; ⌘⇧K
+ * (Ctrl+Shift+K; ⌘K is the global search) adds one on the selection or edits the one under the caret, and
  * pasting an address over selected words links them. ⌘-click opens a link.
  * Paste is always plain text, so nothing arrives with someone else's fonts.
  */
@@ -736,7 +736,9 @@ export function RichBox({ value, onChange, onBlur, placeholder, minHeight, boxRe
         onInput={emit}
         onBlur={onBlur}
         onKeyDown={e => {
-          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openLink() }
+          // ⌘K is the global search; the link box (saved links) is ⌘⇧K. Pasting
+          // an address over selected words links them without it.
+          if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); openLink() }
         }}
         onClick={e => {
           const a = (e.target as HTMLElement).closest('a')
@@ -839,7 +841,7 @@ export function BodyEditor({ body, signature, onChange, onBlur, boxRef, minHeigh
       {!bare && (
         <span className="flex items-center justify-between px-2 mb-0.5">
           <span className={cardLabel}>Body</span>
-          <span className="text-[10px] text-off-black/35">⌘K adds a link</span>
+          <span className="text-[10px] text-off-black/35">Select words and paste a link · ⌘⇧K for saved links</span>
         </span>
       )}
       <div className="rounded-md px-1 py-1 focus-within:bg-subtle-gray/50 transition-colors">

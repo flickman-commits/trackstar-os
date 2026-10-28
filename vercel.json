@@ -41,6 +41,10 @@
     {
       "path": "/api/cron/artelo-completed-check",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/custom-statements",
+      "schedule": "0 22 28-31 * *"
     }
   ],
   "functions": {
