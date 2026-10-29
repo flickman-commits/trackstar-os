@@ -30,6 +30,7 @@ import { getCanonicalRaceName } from '../../server/scrapers/index.js'
 import { defaultAssigneeFor } from '../../server/domain/orders/assignment.js'
 import { sendPublicError } from '../../server/lib/publicError.js'
 import { seesMoney } from '../_lib/money.js'
+import { bulkNeedingAttention } from '../../server/domain/bulk/attention.js'
 
 const RUNNER_SELECT = {
   id: true, orderNumber: true, lineItemIndex: true, runnerName: true, runnerNameOverride: true, customerEmail: true,
@@ -103,6 +104,8 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       if (req.query?.options) return res.status(200).json({ frames: FRAME_OPTIONS, sizes: SIZE_OPTIONS })
+      // The Standard view's "Bulk orders" panel: runs near or past race day.
+      if (req.query?.attention) return res.status(200).json({ runs: await bulkNeedingAttention() })
       if (req.query?.id) {
         // The invoice's state, read back from Shopify each time the order is opened.
         const run = await prisma.bulkOrder.findUnique({ where: { id: String(req.query.id) }, select: { dealId: true } })

@@ -49,9 +49,16 @@
     {
       "path": "/api/cron/custom-statements",
       "schedule": "0 * 28-31 * *"
+    },
+    {
+      "path": "/api/cron/bulk-runs",
+      "schedule": "0 13 * * *"
     }
   ],
   "functions": {
+    "api/cron/bulk-runs.js": {
+      "maxDuration": 300
+    },
     "api/cron/fulfillment-check.js": {
       "maxDuration": 120
     },

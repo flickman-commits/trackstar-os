@@ -144,7 +144,10 @@ function Chip({ tone, children, onClick, title }: { tone: 'green' | 'amber' | 'r
   return <span className={base} title={title}>{children}</span>
 }
 
-export default function BulkView({ onOpenRunner, refreshRunners, onCount, toolbar, search = '', creating = false, onCreatingChange, team = [], meId }: {
+export default function BulkView({ onOpenRunner, refreshRunners, onCount, toolbar, search = '', creating = false, onCreatingChange, team = [], meId, openId, onOpened }: {
+  /** Open this run straight away (from the Standard view's Bulk orders panel). */
+  openId?: string | null
+  onOpened?: () => void
   /** The team, for the Assignee column and picker. */
   team?: Teammate[]
   meId?: string | null
@@ -163,6 +166,7 @@ export default function BulkView({ onOpenRunner, refreshRunners, onCount, toolba
 }) {
   const [list, setList] = useState<BulkOrder[] | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  useEffect(() => { if (openId) { setSelectedId(openId); onOpened?.() } }, [openId, onOpened])
   const setCreating = (v: boolean) => onCreatingChange?.(v)
   const q = search.trim().toLowerCase()
   const shown = useMemo(() => !list || !q ? list : list.filter(b => [b.number, b.partnerName, b.raceName, b.eventType, String(b.raceYear)].some(v => String(v || '').toLowerCase().includes(q))), [list, q])

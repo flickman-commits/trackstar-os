@@ -14,6 +14,7 @@ import EmailCustomerModal from '@/components/support/EmailCustomerModal'
 import PageHeader from '@/components/PageHeader'
 import OrderTags, { HoverTip } from '@/components/OrderTags'
 import OrderDetail from '@/components/orders/OrderDetail'
+import BulkAttention from '@/components/bulk/BulkAttention'
 import StatusPill from '@/components/orders/StatusPill'
 import {
   type ActiveView, type DesignStatus, type EditValues, type Order, type PossibleMatch,
@@ -238,6 +239,8 @@ export default function Dashboard() {
   const [isImporting, setIsImporting] = useState(false)
   const [lastImportedAt, setLastImportedAt] = useState<string | null>(null)
   const [bulkCreating, setBulkCreating] = useState(false)
+  // A run opened from the Standard view's Bulk orders panel.
+  const [bulkOpenId, setBulkOpenId] = useState<string | null>(null)
 
   // Old links with ?settings=1 go to the Settings page.
   const goToSettings = useNavigate()
@@ -1282,10 +1285,13 @@ export default function Dashboard() {
               onCreatingChange={setBulkCreating}
               team={team}
               meId={myId}
+              openId={bulkOpenId}
+              onOpened={() => setBulkOpenId(null)}
             />
           ) : (
           <div className="bg-white border border-border-gray rounded-lg shadow-sm overflow-hidden flex-1 flex flex-col min-h-0">
             {toolbar}
+            {activeView === 'standard' && <BulkAttention onOpen={id => { setBulkOpenId(id); setActiveView('bulk') }} />}
 
             {/* Scrollable Container */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
