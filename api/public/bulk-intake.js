@@ -10,6 +10,7 @@
  */
 import prisma from '../_lib/prisma.js'
 import { setCors } from '../_lib/auth.js'
+import { recordAudit } from '../_lib/users.js'
 import { checkRateLimitDurable } from '../../server/lib/publicRateLimit.js'
 import { addRunners, addressComplete, orgShipTo } from '../../server/domain/bulk/bulkOrders.js'
 
@@ -81,6 +82,7 @@ export default async function handler(req, res) {
       if (runner.productionFileUrl || runner.status === 'completed') return res.status(409).json({ error: 'in_production' })
       await prisma.runnerResearch.deleteMany({ where: { orderId: runner.id } })
       await prisma.order.delete({ where: { id: runner.id } })
+      await recordAudit({ action: 'bulk.intake_remove', summary: `${bulk.partnerName} removed a runner from ${bulk.number} through the partner intake link`, detail: { bulkOrderId: bulk.id, orderNumber: String(body.id) }, actor: { isSystem: true, email: 'partner intake link' } })
       const count = await prisma.order.count({ where: { bulkOrderId: bulk.id } })
       return res.status(200).json({ removed: true, entered: count })
     }
@@ -107,6 +109,11 @@ export default async function handler(req, res) {
       rows.push({ runnerName: `${first} ${last}`, email, address })
     }
     const created = await addRunners(bulk, rows)
+    // Who entered what is otherwise invisible: a partner's whole list arrives in one request.
+    if (created.length) {
+      const via = kind === 'runner' ? 'runner self-serve link' : 'partner intake link'
+      await recordAudit({ action: 'bulk.intake', summary: `${kind === 'runner' ? 'A runner' : bulk.partnerName} added ${created.length} runner${created.length === 1 ? '' : 's'} to ${bulk.number} through the ${via}`, detail: { bulkOrderId: bulk.id, added: created.length, duplicates: rows.length - created.length, rejected: rejected.length }, actor: { isSystem: true, email: via } })
+    }
     const count = kind === 'runner' ? null : await prisma.order.count({ where: { bulkOrderId: bulk.id } })
     return res.status(200).json({ added: created.length, duplicates: rows.length - created.length, rejected, entered: count })
   } catch (error) {

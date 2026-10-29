@@ -29,6 +29,7 @@ import {
 import { getCanonicalRaceName } from '../../server/scrapers/index.js'
 import { defaultAssigneeFor } from '../../server/domain/orders/assignment.js'
 import { sendPublicError } from '../../server/lib/publicError.js'
+import { seesMoney } from '../_lib/money.js'
 
 const RUNNER_SELECT = {
   id: true, orderNumber: true, lineItemIndex: true, runnerName: true, runnerNameOverride: true, customerEmail: true,
@@ -97,6 +98,8 @@ export default async function handler(req, res) {
   const actor = (await requireAdmin(req, res))
   if (!actor) return
 
+  // The old Stripe invoice link shows what the partner paid: admins only, like every price.
+  const noMoney = b => (b && !seesMoney(actor) ? { ...b, stripeInvoiceUrl: null } : b)
   try {
     if (req.method === 'GET') {
       if (req.query?.options) return res.status(200).json({ frames: FRAME_OPTIONS, sizes: SIZE_OPTIONS })
@@ -106,7 +109,7 @@ export default async function handler(req, res) {
         if (run?.dealId) await syncDraftStatus(run.dealId)
         const one = await loadOne(String(req.query.id))
         if (!one) return res.status(404).json({ error: 'Bulk order not found' })
-        return res.status(200).json({ bulkOrder: one })
+        return res.status(200).json({ bulkOrder: noMoney(one) })
       }
       // Pick up bulk runs paid in Shopify since the last import, at most once a
       // minute per instance; a Shopify hiccup never blocks the list.
@@ -122,7 +125,7 @@ export default async function handler(req, res) {
         : []
       const byBulk = new Map()
       for (const r of all) { if (!byBulk.has(r.bulkOrderId)) byBulk.set(r.bulkOrderId, []); byBulk.get(r.bulkOrderId).push(r) }
-      return res.status(200).json({ bulkOrders: list.map(b => ({ ...b, paymentStatus: paymentStatus(b, b.deal), shopifyOrderUrl: shopifyAdminUrl(b.shopifyOrderId), progress: progressOf(byBulk.get(b.id) || []) })) })
+      return res.status(200).json({ bulkOrders: list.map(b => ({ ...noMoney(b), paymentStatus: paymentStatus(b, b.deal), shopifyOrderUrl: shopifyAdminUrl(b.shopifyOrderId), progress: progressOf(byBulk.get(b.id) || []) })) })
     }
 
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
