@@ -72,7 +72,8 @@ export async function emailCustomer({ orderId, subject, text, actor, mockupRef =
   await prisma.$transaction([
     prisma.supportThread.update({
       where: { id: stored.threadId },
-      data: { assigneeId: actor?.id || undefined, ...(order.customerName ? { customerName: order.customerName } : {}) },
+      // Waiting on the customer from the start: the ball is in their court until they reply (a reply moves it to open).
+      data: { status: 'waiting', assigneeId: actor?.id || undefined, ...(order.customerName ? { customerName: order.customerName } : {}) },
     }),
     prisma.supportNote.create({ data: { threadId: stored.threadId, kind: 'event', body: `${by} emailed from Fulfillment about #${number}`, authorId: actor?.id || null, authorName: by } }),
     prisma.orderComment.create({ data: { orderId: order.id, text: mockupRef

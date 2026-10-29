@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Ticket, X, Copy, Check, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
+import { useIdleClose } from '@/lib/useIdleClose'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -205,12 +206,14 @@ function CreatedView({ created, onReset }: { created: CreatedDiscount; onReset: 
  */
 export default function StandardTools({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [created, setCreated] = useState<CreatedDiscount | null>(null)
+  // Goes away after 7 seconds without use.
+  const idle = useIdleClose(open, onClose)
   if (!open) return null
 
   return (
     // Anchored beside the rail rather than over it, so the tile you clicked
     // stays visible and clickable.
-    <div className="hidden md:block fixed bottom-4 left-[100px] z-40">
+    <div className="hidden md:block fixed bottom-4 left-[100px] z-40" {...idle}>
       <div className="w-72 bg-white border border-border-gray rounded-xl shadow-lg p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1.5">

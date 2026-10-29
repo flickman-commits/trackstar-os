@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Calculator, X, Copy, Check } from 'lucide-react'
+import { useIdleClose } from '@/lib/useIdleClose'
 
 // Two desktop-only helper tiles for the custom-order workflow, pinned to the
 // bottom-left of the Custom view:
@@ -161,10 +162,12 @@ function PaceConverter() {
  * panel. Both used to appear only on the custom-orders view.
  */
 export default function CustomTools({ open, onClose }: { open: boolean; onClose: () => void }) {
+  // Goes away after 7 seconds without use.
+  const idle = useIdleClose(open, onClose)
   if (!open) return null
 
   return (
-    <div className="hidden md:block fixed bottom-4 left-[100px] z-40">
+    <div className="hidden md:block fixed bottom-4 left-[100px] z-40" {...idle}>
       <div className="w-64 bg-white border border-border-gray rounded-xl shadow-lg p-4">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-1.5">
