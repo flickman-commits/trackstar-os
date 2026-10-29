@@ -121,7 +121,11 @@ async function viaScraper(item, { dryRun }) {
   // only when the search itself ran; a timeless result refilled in place does not.
   const bib = r.bibNumber || item.research?.bib || item.customerBib || null
   let look = dryRun || Array.isArray(r.possibleMatches) ? r : null
-  if (!look && (await raceBudget(item.race))) look = await researchService.findRunner(item.race, item.year, item.runner, { bib }).catch(() => null)
+  if (!look) {
+    // Out of lookups for this race this hour: come back next run rather than leave a note built on nothing.
+    if (!(await raceBudget(item.race))) return { outcome: 'untouched', detail: `${item.race} is out of lookups this hour; research ran, the follow-up search did not.` }
+    look = await researchService.findRunner(item.race, item.year, item.runner, { bib }).catch(() => null)
+  }
   const lookStatus = look?.researchStatus || status
   if (lookStatus === 'upstream_error' || status === 'upstream_error') return { outcome: 'person', text: `Ran research again and the timing site answered with an error: ${(look?.researchNotes || r.researchNotes || 'no detail').slice(0, 200)} If it keeps failing, the scraper may be pointed at the wrong event for ${item.year}.`, quiet: status === 'upstream_error' && /unreachable|slow|503|timed out/i.test(look?.researchNotes || r.researchNotes || '') }
 
@@ -133,7 +137,29 @@ async function viaScraper(item, { dryRun }) {
     const list = same.slice(0, 3).map(c => `"${c.name}"${c.bib ? `, bib ${c.bib}` : ''}${c.eventType ? `, ${c.eventType}` : ''}${c.time ? `, ${c.time}` : ''}`).join('; ')
     const otherEvent = same.some(c => c.eventType && !/^marathon$/i.test(c.eventType) && !fold(item.race).includes(fold(c.eventType)))
     await saveSuggestions(item, same, dryRun)
-    return { outcome: 'suggested', text: `The ${item.race} ${item.year} results have ${list}, but research did not take it as this order's result.${otherEvent ? ' That looks like another event of the race weekend: check with the customer which race the print is for.' : ' Check it is the same person, then Accept.'}` }
+    const next = otherEvent ? ' That looks like another event of the race weekend: check with the customer which race the print is for.'
+      : same.length > 1 ? ' Several finishers share the name: pick the right one (ask the customer for their bib if unsure), then Accept.' : ' Check it is the same person, then Accept.'
+    return { outcome: 'suggested', text: `The ${item.race} ${item.year} results have ${list}, but research did not take it as this order's result.${next}` }
+  }
+  // A result already on file (often the customer's own numbers) that cannot
+  // print: no pace, or a time typed as "03:12.07". The official result for
+  // the same name and bib replaces it, only when it says the same thing.
+  if (status === 'found' && look?.found && look.officialTime && sameName(look.runnerName || look.rawData?.name || item.runner, item.runner)
+    && (!bib || String(look.bibNumber || '') === String(bib))) {
+    const typed = String(r.officialTime || '').replace(/\D/g, '').replace(/^0+/, '')
+    const official = String(look.officialTime).replace(/\D/g, '').replace(/^0+/, '')
+    if (!typed || typed === official) {
+      if (!dryRun) {
+        await prisma.runnerResearch.update({ where: { id: r.id }, data: {
+          officialTime: look.officialTime, officialPace: look.officialPace || null, bibNumber: r.bibNumber || look.bibNumber || null,
+          eventType: r.eventType || look.eventType || null, resultsUrl: r.resultsUrl || look.resultsUrl || null,
+          researchNotes: `${r.researchNotes || ''} Time and pace from the official results (research agent)${typed ? `; the customer typed "${r.officialTime}"` : ''}.`.trim(),
+        } })
+        await prisma.order.update({ where: { id: item.id }, data: { status: 'ready', researchedAt: new Date() } })
+      }
+      return { outcome: 'cleared', detail: `official result for bib ${look.bibNumber || bib}: ${look.officialTime}${look.officialPace ? `, ${look.officialPace}/mi` : ''}${typed ? ` (customer typed "${r.officialTime}")` : ''}`, url: look.resultsUrl || null }
+    }
+    return { outcome: 'person', text: `The customer's time on file is "${r.officialTime}" but the official results give ${look.officialTime} for ${item.runner}${bib ? ` (bib ${bib})` : ''}. A person decides which prints.` }
   }
   if (status === 'found') return { outcome: 'person', text: `Ran research again: the timing site gives no finish time for ${item.runner}${bib ? ` (bib ${bib})` : ''}. ${after?.fix || ''}`.trim() }
   if (status !== 'not_found') return { outcome: 'person', text: `Ran research again: ${status}. ${after?.fix || r.researchNotes || ''}`.trim() }
