@@ -296,6 +296,12 @@ export default async function handler(req, res) {
         if (!approval || !['approve', 'request_revision'].includes(approval)) {
           return res.status(400).json({ error: 'approval must be "approve" or "request_revision"' })
         }
+        // Customs ask "Can we feature this design on our site?" with no
+        // default (Settings > Site Gallery reads the answer).
+        const askFeature = approval === 'approve' && approvalToken.order.trackstarOrderType === 'custom'
+        if (askFeature && typeof body.featureOk !== 'boolean') {
+          return res.status(400).json({ error: 'Please answer whether we can feature your design on our site.' })
+        }
 
         const proof = await prisma.proof.findUnique({ where: { id: String(proofId) } })
         if (!proof || proof.orderId !== approvalToken.orderId) {
@@ -372,7 +378,7 @@ export default async function handler(req, res) {
 
         await prisma.order.update({
           where: { id: approvalToken.orderId },
-          data: { designStatus: newDesignStatus }
+          data: { designStatus: newDesignStatus, ...(askFeature ? { featureConsent: body.featureOk } : {}) }
         })
 
         console.log(`[approve] Customer ${approval} proof v${proof.version} for order ${approvalToken.order.orderNumber}`)

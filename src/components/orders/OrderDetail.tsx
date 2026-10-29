@@ -22,6 +22,7 @@ import ProofShowcase from '@/components/ProofShowcase'
 import PhotoCropper from '@/components/PhotoCropper'
 import OrderProduction from '@/components/orders/OrderProduction'
 import ConvertToCustomModal from '@/components/orders/ConvertToCustomModal'
+import FeatureStar from '@/components/orders/FeatureStar'
 import Linkify from '@/components/Linkify'
 import OrderTags, { HoverTip } from '@/components/OrderTags'
 import type { ToastMessage } from '@/components/orders/Toast'
@@ -1686,6 +1687,11 @@ Thank you!`
                       }}
                       onComplete={() => updateDesignStatus(selectedOrder.orderNumber, 'sent_to_production')}
                     />
+                  )}
+
+                  {/* Approved custom: star it for the site gallery (Settings > Site Gallery). */}
+                  {['approved_by_customer', 'final_pdf_uploaded', 'sent_to_production'].includes(ds) && selectedOrder.trackstarOrderType === 'custom' && (
+                    <FeatureStar orderId={selectedOrder.id} />
                   )}
 
                   {/* Partner order approved: upload the production file + photo to Drive and notify Eli */}

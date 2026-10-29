@@ -124,6 +124,10 @@ model Order {
   // automatically (an earlier custom for the same race and distance); true or
   // false = set by hand in the counter (customCounter.js).
   designRepeat       Boolean?
+  // The customer's answer on the approval page to "Can we feature this
+  // design on our site?" (custom orders). Null = approved before the
+  // question existed. False keeps it out of Settings > Site Gallery.
+  featureConsent     Boolean?
   // Set when a designer confirms the customer's photo is actually placed on
   // the artwork. A photo order that ships without the photo is a reprint and a
   // refund, and the photo is the one element no proof template shows by
@@ -158,6 +162,7 @@ model Order {
   bulkOrderId      String?
   bulkOrder        BulkOrder? @relation(fields: [bulkOrderId], references: [id], onDelete: Cascade)
   renderJobs       RenderJob[]
+  galleryPick      GalleryPick?
   shippingAddress  Json?      // { line1, line2, city, state, zip, country }
   productionFileUrl String?   // Public URL of the finished print file, for the Artelo sheet
 
@@ -1476,4 +1481,28 @@ model FetchRelay {
   doneAt         DateTime?
 
   @@index([status, createdAt])
+}
+
+// Settings > Site Gallery: an approved custom design offered for the "Our
+// Favorite Designs" section on the custom product page. A row exists once a
+// designer stars it or an admin decides; an approved custom with no row is
+// simply a suggestion (server/domain/gallery/siteGallery.js).
+model GalleryPick {
+  id            String    @id @default(cuid())
+  orderId       String    @unique
+  status        String    @default("suggested") // "suggested" | "live" | "skipped"
+  segment       String?   // "marathon" | "ultra" | "other"; null = guessed from the race
+  starredById   String?
+  starredAt     DateTime?
+  decidedById   String?
+  decidedAt     DateTime?
+  // The Shopify metaobject entry (type custom_gallery_item) while it is live.
+  metaobjectId  String?
+  shopifyFileId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([status])
 }

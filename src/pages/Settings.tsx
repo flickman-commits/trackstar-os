@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Sparkles, Search, Copy, Loader2, FlaskConical, Check, Settings as SettingsIcon, ChevronLeft, ChevronRight, Star, Users, CloudSun, DollarSign, UserCog, ScrollText, BarChart3, ShieldCheck, KeyRound, Plug, PencilRuler, Lightbulb, EyeOff } from 'lucide-react'
+import { Sparkles, Search, Copy, Loader2, FlaskConical, Check, Settings as SettingsIcon, ChevronLeft, ChevronRight, Star, Users, CloudSun, DollarSign, UserCog, ScrollText, BarChart3, ShieldCheck, KeyRound, Plug, PencilRuler, Lightbulb, EyeOff, Image as ImageIcon } from 'lucide-react'
 import { REVIEW_PRODUCTS } from '@/lib/reviewLinks'
 import { apiFetch } from '@/lib/api'
 import { btnPrimary, inputBase } from '@/lib/ui'
@@ -16,6 +16,7 @@ import ConnectionsPanel from '@/components/ConnectionsPanel'
 import RaceDatabasePanel from '@/components/RaceDatabasePanel'
 import AssignmentPanel from '@/components/AssignmentPanel'
 import SkippedProductsPanel from '@/components/SkippedProductsPanel'
+import SiteGalleryPanel from '@/components/SiteGalleryPanel'
 import StatsHub from '@/components/StatsHub'
 import ProductsBulkEdit from '@/pages/ProductsBulkEdit'
 import PageHeader from '@/components/PageHeader'
@@ -23,7 +24,7 @@ import LookupHealthPanel from '@/components/LookupHealthPanel'
 import ClearResearchCard from '@/components/ClearResearchCard'
 import Toast, { type ToastMessage } from '@/components/orders/Toast'
 
-export type SettingsPanel = 'features' | 'design_needs' | 'products' | 'pricing' | 'reviews' | 'stats' | 'races' | 'lookup' | 'storefront' | 'account' | 'people' | 'roles' | 'apikeys' | 'connections' | 'assignments' | 'skipped' | 'support_closes' | 'activity' | 'counter' | 'designs' | 'diagnostics' | 'maintenance'
+export type SettingsPanel = 'features' | 'design_needs' | 'products' | 'pricing' | 'reviews' | 'stats' | 'races' | 'lookup' | 'storefront' | 'account' | 'people' | 'roles' | 'apikeys' | 'connections' | 'assignments' | 'skipped' | 'gallery' | 'support_closes' | 'activity' | 'counter' | 'designs' | 'diagnostics' | 'maintenance'
 
 /**
  * Settings navigation. Grouped rather than a flat list because the panels do
@@ -78,6 +79,7 @@ const SETTINGS_NAV: {
       { id: 'pricing', label: 'Pricing Calculator', blurb: 'Costs, retail and margin across DTC and wholesale', icon: DollarSign },
       { id: 'products', label: 'Products & Prices', blurb: 'Change prices across every Shopify product at once', icon: DollarSign },
       { id: 'skipped', label: 'Skipped Products', blurb: 'Shopify products with nothing to personalize, kept out of the fulfillment tool', icon: EyeOff },
+      { id: 'gallery', label: 'Site Gallery', blurb: 'Approved customs to feature on the custom product page', icon: ImageIcon },
       { id: 'storefront', label: 'Customers Served', blurb: 'The counter shown on the Shopify storefront', icon: Users },
     ],
   },
@@ -302,6 +304,7 @@ export default function Settings() {
               {settingsPanel === 'apikeys' && isAdmin && <ApiKeysPanel />}
               {settingsPanel === 'assignments' && isAdmin && <AssignmentPanel />}
               {settingsPanel === 'skipped' && isAdmin && <SkippedProductsPanel />}
+              {settingsPanel === 'gallery' && isAdmin && <SiteGalleryPanel />}
               {settingsPanel === 'activity' && isAdmin && <ActivityPanel />}
               {settingsPanel === 'designs' && isAdmin && <RenderTemplatesPanel />}
 
