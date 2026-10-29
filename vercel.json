@@ -43,6 +43,10 @@
       "schedule": "0 14 * * *"
     },
     {
+      "path": "/api/cron/research-agent",
+      "schedule": "0 15 * * *"
+    },
+    {
       "path": "/api/cron/custom-statements",
       "schedule": "0 * 28-31 * *"
     }
@@ -52,6 +56,9 @@
       "maxDuration": 120
     },
     "api/cron/artelo-completed-check.js": {
+      "maxDuration": 300
+    },
+    "api/cron/research-agent.js": {
       "maxDuration": 300
     },
     "api/admin/**/*.js": {

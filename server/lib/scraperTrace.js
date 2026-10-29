@@ -36,7 +36,7 @@ const TIMING_HOSTS = [
   'chicagomarathon.com', 'chronotrack.com', 'marathon.tokyo',
   'tcslondonmarathon.com', 'mesamarathon.com', 'competitivetiming.com',
   'mikatiming.com', 'mikatiming.de', 'mtecresults.com', 'raceresult.com',
-  'liveplanit-api-461759013131.us-central1.run.app',
+  'liveplanit-api-461759013131.us-central1.run.app', 'hubertiming.com',
 ]
 
 const PER_HOST_PER_HOUR = 20
@@ -266,7 +266,7 @@ export async function traceScraper({ race, year, name, find = null }) {
  * Redirects are followed by hand, at most MAX_REDIRECTS, and each hop is held
  * to the same rules as the first URL. The second argument is for tests.
  */
-export async function fetchTimingPage({ url, find = null, method = 'GET', body = null, contentType = null }, { fetchImpl = fetchWithTimeout, rateLimit = checkRateLimitDurable } = {}) {
+export async function fetchTimingPage({ url, find = null, method = 'GET', body = null, contentType = null, limit = BODY_LIMIT }, { fetchImpl = fetchWithTimeout, rateLimit = checkRateLimitDurable } = {}) {
   let parsed
   try {
     parsed = new URL(url)
@@ -327,7 +327,7 @@ export async function fetchTimingPage({ url, find = null, method = 'GET', body =
       const type = resp.headers.get('content-type') || ''
       return {
         ok: resp.ok, status: resp.status, finalUrl: parsed.href, redirects: hop || undefined, contentType: type,
-        ms: Date.now() - started, ...readableBody(text, type, { find }),
+        ms: Date.now() - started, ...readableBody(text, type, { find, limit }),
       }
     } catch (err) {
       console.warn(`[scraperTrace] reading ${parsed.href} failed:`, err?.message)

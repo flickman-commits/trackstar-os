@@ -48,7 +48,7 @@ export interface Order {
   runDistance?: string | null
   researchStatus?: 'found' | 'not_found' | 'ambiguous' | 'no_scraper' | 'year_not_configured' | 'upstream_error' | 'time_unavailable' | 'race_not_run' | null
   // How the result was obtained: scraper vs. customer-confirmed in the widget
-  researchSource?: 'scraper' | 'customer_verified' | 'customer_supplied' | null
+  researchSource?: 'scraper' | 'customer_verified' | 'customer_supplied' | 'manual_entry' | 'research_agent' | null
   eventTypeSource?: 'research' | 'customer' | 'product' | null
   // Detailed Instant Lookup widget outcome — how the shopper arrived at their
   // result. See server schema Order.lookupOutcome for the enum.

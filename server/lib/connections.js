@@ -46,7 +46,7 @@ export const CONNECTIONS = [
   { id: 'instagram', label: 'Instagram', what: 'DMs to @trackstar_art in the shared inbox', env: ['INSTAGRAM_APP_ID', 'INSTAGRAM_APP_SECRET'], token: 'support_ig_access_token', asKey: 'support_ig_username', connect: '/api/support/instagram?action=connect' },
   { id: 'google_drive', label: 'Google Drive and Sheets', what: 'Approved designs to Drive, the Monopoly sheet', env: ['GOOGLE_SERVICE_ACCOUNT_EMAIL', 'GOOGLE_SERVICE_ACCOUNT_KEY'], as: () => env('GOOGLE_SERVICE_ACCOUNT_EMAIL') || null },
   { id: 'attio', label: 'Attio', what: 'The CRM behind Sales', env: ['ATTIO_API_KEY'] },
-  { id: 'claude', label: 'Claude', what: 'Support drafts, sales drafts, teaching', envAny: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'LLM_BASE_URL'] },
+  { id: 'claude', label: 'Claude', what: 'Support drafts, sales drafts, teaching, the research agent', envAny: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'LLM_BASE_URL'] },
   { id: 'resend', label: 'Resend (email)', what: 'Proof emails and designer messages to customers', env: ['RESEND_API_KEY'] },
   { id: 'slack', label: 'Slack', what: 'Team pings and alerts', envAny: ['SLACK_PROOF_WEBHOOK_URL', 'SLACK_WEBHOOK_URL', 'SLACK_CREATORS_WEBHOOK_URL'] },
   // Not a vendor: the Illustrator Mac(s) running worker/render-worker.mjs. It

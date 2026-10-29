@@ -10,6 +10,7 @@ import { acceptMatch, AcceptMatchError } from '../../../domain/research/acceptMa
 import { pipelinesFor } from '../../../domain/orders/pipelineStatus.js'
 import { findOrdersByNumber, displayNumber, pickItem, pipelineShape } from './orders.js'
 import { checkRateLimitDurable } from '../../../lib/publicRateLimit.js'
+import { researchQueue, runResearchAgent } from '../../../domain/research/researchAgent.js'
 
 const ITEM = z.number().int().min(1).optional().describe('Which item on a multi-item order; the first by default.')
 
@@ -117,6 +118,38 @@ export const researchTools = [
         accepted: { name: pick.name, bib: r.bibNumber || null, time: r.officialTime || null, pace: r.officialPace || null, event: r.eventType || null },
         status: 'ready',
       }
+    },
+  },
+  {
+    name: 'research_queue',
+    title: 'Research queue',
+    description: 'The Action queue items that are a runner result to look up (Runner not found, Timing site down, No time, No bib, Needs a scraper, Research by hand...), with what research has on each and the research agent\'s last note.',
+    scope: 'read',
+    readOnly: true,
+    input: {},
+    async handler() {
+      const q = await researchQueue()
+      return {
+        count: q.length,
+        items: q.map(i => ({ orderNumber: i.display, reason: i.reason, runner: i.runner, race: i.race, year: i.year, hasScraper: i.hasScraper, research: i.research || undefined, lastAgentNote: i.lastAgentNote?.text?.slice(0, 300) || undefined })),
+      }
+    },
+  },
+  {
+    name: 'run_research_agent',
+    title: 'Run research agent',
+    description: 'Work the research queue on the server: research again through the scraper, try other spellings of the name, and for races with no scraper look for the official results page on the web. A time is written only when our server read it off the official page (chip time, the page\'s own pace); everything else becomes a note on the order for a person. Pre-2020 years are skipped. dryRun looks without writing.',
+    scope: 'write',
+    readOnly: false,
+    openWorld: true,
+    input: {
+      orderNumbers: z.array(z.string().max(40)).max(20).optional().describe('Only these orders (and ignore the one-note-a-week rule for them).'),
+      limit: z.number().int().min(1).max(25).default(10),
+      dryRun: z.boolean().default(false),
+    },
+    async handler({ orderNumbers, limit = 10, dryRun = false }, { principal }) {
+      const actor = principal?.user ? { id: principal.user.id, email: principal.user.email } : { isSystem: true, email: 'mcp' }
+      return runResearchAgent({ orderNumbers: orderNumbers || null, limit, dryRun, actor })
     },
   },
 ]
