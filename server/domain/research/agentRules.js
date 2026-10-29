@@ -22,16 +22,18 @@ export const RESEARCH_REASONS = new Set([
 
 /**
  * What the agent does with one queue item, before any lookup:
- *   skip    not its job (pre-2020: researched by hand, never automatically)
+ *   skip    no year to look in
  *   person  only a person can settle it (several runners on one print, a real pick between same-name finishers)
- *   rerun   the race has a scraper: run research again, then try name variants
- *   web     no scraper: look for the official page on the web, then check it here
+ *   rerun   the race has a scraper for the year: run research again, then try name variants
+ *   web     no scraper, or a year before 2020: look for the official page on the web, then check it here.
+ *           No scraper is ever built for those years (Matt, 2026-10-21), but their
+ *           orders still need their result found (Matt, 2026-10-28).
  */
 export function planFor({ reason, year, runner, hasScraper }) {
-  if (!year || year < SCRAPER_MIN_YEAR) return { action: 'skip', why: `Before ${SCRAPER_MIN_YEAR}: researched by hand, never automatically.` }
+  if (!year) return { action: 'skip', why: 'The order has no race year.' }
   if (isSeveralRunners(runner)) return { action: 'person', why: `"${runner}" names more than one runner. A person decides whose result prints.` }
   if (reason === 'Pick a match') return { action: 'person', why: 'Several finishers share this name. A person picks one on the results site.' }
-  return hasScraper ? { action: 'rerun' } : { action: 'web' }
+  return hasScraper && year >= SCRAPER_MIN_YEAR ? { action: 'rerun' } : { action: 'web' }
 }
 
 /** "Owen And Bridget", "Aaron & Tara Collins": one print, two runners. */

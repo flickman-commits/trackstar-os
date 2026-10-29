@@ -5,14 +5,15 @@
  * saying what it found and why a person has to finish it.
  *
  * Per order, in this order:
- *   1. Before 2020: left alone. Those years are researched by hand.
+ *   1. Before 2020 there is never a scraper (none is built for those years),
+ *      so those orders go straight to step 3.
  *   2. The race has a scraper: run research again (ResearchService, the same
  *      lookup the import runs). A result the scraper reads is the official
  *      page through code that passed the add-race-scraper gates. Still not
  *      found: try other spellings of the name (no middle name, nickname), and
  *      save any finisher they turn up as a suggestion with an Accept button.
  *      A suggestion is never saved as the result: it is not the name ordered.
- *   3. No scraper (or the year is not wired up): ask the model to find the
+ *   3. No scraper, a year before 2020, or a year not wired up: ask the model to find the
  *      official results page and the runner's row (server/lib/llm.js, so the
  *      provider can change; web search needs Anthropic). The server fetches
  *      that page itself and agentRules.checkRowOnPage decides. Only a pass is
@@ -164,7 +165,7 @@ async function saveSuggestions(item, list, dryRun) {
 const SYSTEM = `You find one runner's race result on the race's official results page.
 Rules:
 - Only the official results: the timing company the race uses that year (Athlinks, RunSignup, ChronoTrack, MikaTiming, mychiptime, Race Roster, SportStats and the like) or the race's own results site. Never MarathonGuide, Strava, news, blogs or social media.
-- Timing companies change from year to year. Search "<race> <year> results" first.
+- Timing companies change from year to year. Search "<race> <year> results" first. Older years (before 2020) are often only on the race's own results archive or the timer's archive; those count, a copy elsewhere does not.
 - The time is the chip (net) finish time, never gun or clock time. If the page only shows one time and does not say which, say so in notes.
 - Copy the time, pace and bib exactly as the page shows them. If the page shows no pace, leave pace empty. Never calculate anything.
 - resultsUrl must be the page that shows this runner's row: their individual result page if there is one, otherwise the results list filtered to them.

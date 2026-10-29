@@ -138,7 +138,7 @@ export const researchTools = [
   {
     name: 'run_research_agent',
     title: 'Run research agent',
-    description: 'Work the research queue on the server: research again through the scraper, try other spellings of the name, and for races with no scraper look for the official results page on the web. A time is written only when our server read it off the official page (chip time, the page\'s own pace); everything else becomes a note on the order for a person. Pre-2020 years are skipped. dryRun looks without writing.',
+    description: 'Work the research queue on the server: research again through the scraper, try other spellings of the name, and for races with no scraper look for the official results page on the web. A time is written only when our server read it off the official page (chip time, the page\'s own pace); everything else becomes a note on the order for a person. Pre-2020 years go to the web step (no scraper is built for them). dryRun looks without writing.',
     scope: 'write',
     readOnly: false,
     openWorld: true,

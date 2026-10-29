@@ -2,9 +2,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { planFor, nameVariants, sameName, isSeveralRunners, checkRowOnPage, clockSeconds } from './agentRules.js'
 
-test('pre-2020 years are never researched automatically', () => {
-  assert.equal(planFor({ reason: 'Research by hand', year: 2019, runner: 'Jo Smith', hasScraper: true }).action, 'skip')
-  assert.equal(planFor({ reason: 'Runner not found', year: 2012, runner: 'Jo Smith', hasScraper: true }).action, 'skip')
+test('pre-2020 years are researched on the web, never through a scraper', () => {
+  assert.equal(planFor({ reason: 'Research by hand', year: 2019, runner: 'Jo Smith', hasScraper: true }).action, 'web')
+  assert.equal(planFor({ reason: 'Runner not found', year: 2012, runner: 'Jo Smith', hasScraper: true }).action, 'web')
+  assert.equal(planFor({ reason: 'Year missing', year: null, runner: 'Jo Smith', hasScraper: true }).action, 'skip')
   assert.equal(planFor({ reason: 'Runner not found', year: 2020, runner: 'Jo Smith', hasScraper: true }).action, 'rerun')
   assert.equal(planFor({ reason: 'Needs a scraper', year: 2025, runner: 'Jo Smith', hasScraper: false }).action, 'web')
 })
