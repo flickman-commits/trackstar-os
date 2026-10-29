@@ -14,10 +14,10 @@
  *     research    { id, limit? }             research the next batch of unresearched runners
  *     submitted   { id }                     the sheet went to Artelo
  *     new-intake-link { id }                 rotate the partner's intake token
- *     delete      { id }                     admins only; removes the runners too
+ *     delete      { id }                     admins only; refused if paid; removes the runners, and the deal and its Shopify draft with its last line
  */
 import { syncShopifyBulkOrders } from '../../server/domain/bulk/shopifyBulk.js'
-import { paymentStatus, syncDraftStatus, setPaymentStatus, attachBilling } from '../../server/domain/bulk/deals.js'
+import { paymentStatus, syncDraftStatus, setPaymentStatus, attachBilling, deleteRun } from '../../server/domain/bulk/deals.js'
 import { shopifyAdminUrl } from '../../server/lib/links.js'
 import prisma from '../_lib/prisma.js'
 import { setCors, requireAdmin } from '../_lib/auth.js'
@@ -284,12 +284,10 @@ export default async function handler(req, res) {
     if (action === 'delete') {
       const admin = await requireAdminRole(req, res, actor)
       if (!admin) return
-      const runners = await prisma.order.findMany({ where: { bulkOrderId: bulk.id }, select: { id: true } })
-      await prisma.runnerResearch.deleteMany({ where: { orderId: { in: runners.map(r => r.id) } } })
-      await prisma.order.deleteMany({ where: { bulkOrderId: bulk.id } })
-      await prisma.bulkOrder.delete({ where: { id: bulk.id } })
-      await audit(`Deleted bulk order ${bulk.number} (${bulk.partnerName}, ${runners.length} runners)`, { partnerName: bulk.partnerName, runners: runners.length })
-      return res.status(200).json({ success: true })
+      const out = await deleteRun(bulk.id)
+      const extra = [out.dealDeleted && `and its deal ${out.dealDeleted}`, out.draftDeleted && `and Shopify draft ${out.draftDeleted}`].filter(Boolean).join(' ')
+      await recordAudit({ action: 'bulk.delete', summary: `Deleted bulk order ${out.number} (${out.partnerName}, ${out.runners} runners)${extra ? ` ${extra}` : ''}`, detail: { bulkOrderId: bulk.id, ...out }, actor: admin })
+      return res.status(200).json({ success: true, ...out })
     }
 
     return res.status(400).json({ error: 'Unknown action' })

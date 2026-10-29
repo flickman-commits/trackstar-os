@@ -371,6 +371,45 @@ export async function sendInvoice(id, { message } = {}) {
   return { sentTo: deal.contactEmail }
 }
 
+/**
+ * A line that did not happen: its runners, their research, and the line go.
+ * The last line takes its deal with it, and the deal's unpaid Shopify draft
+ * is deleted too. A paid line is refused: set it back to not paid first, so a
+ * paid order cannot vanish by a misclick.
+ */
+export async function deleteRun(runId) {
+  const run = await prisma.bulkOrder.findUnique({ where: { id: String(runId || '') }, include: { deal: { include: { runs: { select: { id: true } } } } } })
+  if (!run) throw new DealError('Bulk order not found', 404)
+  if (run.paidAt || run.deal?.paidAt) throw new DealError('This order is marked paid. Set it back to not paid first if it really is off.')
+  const runners = await prisma.order.findMany({ where: { bulkOrderId: run.id }, select: { id: true } })
+  await prisma.runnerResearch.deleteMany({ where: { orderId: { in: runners.map(r => r.id) } } })
+  await prisma.order.deleteMany({ where: { bulkOrderId: run.id } })
+  await prisma.bulkOrder.delete({ where: { id: run.id } })
+
+  const deal = run.deal
+  const out = { number: run.number, partnerName: run.partnerName, runners: runners.length, dealDeleted: null, draftDeleted: null, draftLeft: null }
+  if (!deal) return out
+  if (deal.runs.length > 1) {
+    // The other lines stay; the invoice still lists this one until it is rebuilt.
+    if (deal.shopifyDraftId) out.draftLeft = deal.shopifyDraftName
+    return out
+  }
+  if (deal.shopifyDraftId) {
+    try {
+      const d = await shopifyGraphQL('mutation($input: DraftOrderDeleteInput!) { draftOrderDelete(input: $input) { deletedId userErrors { message } } }', { input: { id: deal.shopifyDraftId } })
+      const del = (d.data || d).draftOrderDelete
+      if (del?.deletedId) out.draftDeleted = deal.shopifyDraftName
+      else out.draftLeft = deal.shopifyDraftName
+    } catch (e) {
+      console.warn('[bulk] draft delete failed:', e.message)
+      out.draftLeft = deal.shopifyDraftName
+    }
+  }
+  await prisma.bulkDeal.delete({ where: { id: deal.id } })
+  out.dealDeleted = deal.number
+  return out
+}
+
 /** Shopify says the deal's order is paid: the deal and every run are paid. */
 /**
  * Where the invoice stands, from the order's billing record:

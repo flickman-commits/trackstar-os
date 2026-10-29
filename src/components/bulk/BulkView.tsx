@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { btnPrimary, btnSecondary, btnGhost, inputBase } from '@/lib/ui'
 import { useArmed } from '@/lib/useArmed'
+import { useAuth } from '@/lib/auth'
 import AssigneePicker, { Avatar, type Teammate } from '@/components/AssigneePicker'
 import { DealModal, InvoiceCard, LineTemplate, type Deal } from '@/components/bulk/DealPanels'
 import StatusPill from '@/components/orders/StatusPill'
@@ -266,6 +267,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   const [deal, setDeal] = useState<Deal | null>(null)
   const [editingOrder, setEditingOrder] = useState(false)
   const { arm, isArmed } = useArmed()
+  const { isAdmin } = useAuth()
 
   const load = useCallback(async () => {
     const res = await apiFetch(`${API_BASE}/api/bulk?id=${id}`)
@@ -288,6 +290,18 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
     } catch (err) { toast.error((err as Error).message); return null }
   }
   const update = (fields: Record<string, unknown>) => act({ action: 'update', ...fields })
+
+  // A deal that fell through. The last line of a deal takes the deal and its unpaid Shopify draft with it.
+  const lastLine = !deal || deal.runs.length <= 1
+  const remove = async () => {
+    if (!arm('delete')) return
+    const out = await act({ action: 'delete' }) as { number: string; dealDeleted: string | null; draftLeft: string | null } | null
+    if (!out) return
+    toast.success(`Deleted ${out.number}${out.dealDeleted ? ` and ${out.dealDeleted}` : ''}`)
+    if (out.draftLeft) toast.warning(`Shopify draft ${out.draftLeft} still lists it. ${lastLine ? 'Delete it in Shopify.' : 'Rebuild the invoice on the other lines.'}`)
+    refreshRunners()
+    onBack()
+  }
 
   const runIntake = async () => {
     const out = await act({ action: 'intake', text: intakeText }) as { added: number; skipped: number; problems: string[] } | null
@@ -384,6 +398,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   const collecting = b.status === 'collecting'
   const fulfilling = b.status === 'fulfillment'
   const submitted = b.status === 'submitted'
+  const deleteWarning = `Click again: deletes ${b.number}${runners.length ? ` and its ${runners.length} runners` : ''}${lastLine && deal ? `, the deal${deal.shopifyDraftName ? ` and Shopify draft ${deal.shopifyDraftName}` : ''}` : ''}`
 
   // ── Cards, so the status decides the order rather than the markup ──
   const intakeCard = (
@@ -634,6 +649,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
             )}
             {!collecting && <button onClick={() => downloadSheet(false)} disabled={runners.length === 0} className={link}><Download className="w-3.5 h-3.5" /> Download the Artelo sheet</button>}
             {fulfilling && <button onClick={() => { if (arm('submitted')) update({ status: 'submitted' }) }} className={link}><FileText className="w-3.5 h-3.5" /> {isArmed('submitted') ? 'Click again to mark uploaded to Artelo' : 'Mark uploaded to Artelo'}</button>}
+            {isAdmin && !submitted && <button onClick={remove} className={`${link} text-red-600 hover:text-red-700`}><Trash2 className="w-3.5 h-3.5" /> {isArmed('delete') ? deleteWarning : 'Delete this bulk order'}</button>}
           </div>
         </div>
       </aside>
