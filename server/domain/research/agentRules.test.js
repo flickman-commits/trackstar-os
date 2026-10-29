@@ -54,6 +54,7 @@ test('anything doubtful goes to a person', () => {
   assert.match(no({ pace: '' }), /pace/)
   assert.match(no({ eventType: 'Ultra' }), /distance/)
   assert.match(no({ text: '' }), /empty/)
+  assert.match(no({ runner: 'Jaime & Pat Eyster' }), /more than one runner/)
 })
 
 test('a per-km pace is refused even when the page shows it', () => {

@@ -10,7 +10,7 @@ import { acceptMatch, AcceptMatchError } from '../../../domain/research/acceptMa
 import { pipelinesFor } from '../../../domain/orders/pipelineStatus.js'
 import { findOrdersByNumber, displayNumber, pickItem, pipelineShape } from './orders.js'
 import { checkRateLimitDurable } from '../../../lib/publicRateLimit.js'
-import { researchQueue, runResearchAgent } from '../../../domain/research/researchAgent.js'
+import { researchQueue, runResearchAgent, submitFinding } from '../../../domain/research/researchAgent.js'
 
 const ITEM = z.number().int().min(1).optional().describe('Which item on a multi-item order; the first by default.')
 
@@ -150,6 +150,30 @@ export const researchTools = [
     async handler({ orderNumbers, limit = 10, dryRun = false }, { principal }) {
       const actor = principal?.user ? { id: principal.user.id, email: principal.user.email } : { isSystem: true, email: 'mcp' }
       return runResearchAgent({ orderNumbers: orderNumbers || null, limit, dryRun, actor })
+    },
+  },
+  {
+    name: 'submit_research_finding',
+    title: 'Submit research finding',
+    description: 'Hand in what you found for one research_queue order: the official results page and the runner\'s row as that page shows it (chip time, never gun; the page\'s own pace). The server fetches the page itself and enters the result only if the row is plainly there; otherwise it leaves a note on the order with your finding for a person. Leave resultsUrl out to record that you found nothing, with what you searched in notes.',
+    scope: 'write',
+    readOnly: false,
+    openWorld: true,
+    input: {
+      orderNumber: z.string().max(40),
+      resultsUrl: z.string().url().max(500).optional().describe('The official page showing this runner\'s row.'),
+      nameOnPage: z.string().max(120).optional(),
+      bib: z.string().max(20).optional(),
+      chipTime: z.string().max(20).optional().describe('As the page shows it.'),
+      pace: z.string().max(20).optional().describe('As the page shows it; leave out if the page shows none.'),
+      eventType: z.enum(['Marathon', 'Half Marathon', '10K', '5K', '8K', '10 Miler']).optional(),
+      timingCompany: z.string().max(60).optional(),
+      notes: z.string().max(800).optional(),
+    },
+    async handler({ orderNumber, ...claim }) {
+      const r = await submitFinding(orderNumber, claim, { by: 'Finder' })
+      if (!r) throw new ToolError(`${orderNumber} is not in the research queue.`)
+      return { summary: `Research finding for ${r.order}: ${r.outcome === 'cleared' ? 'entered' : 'left for a person'}`, ...r }
     },
   },
 ]

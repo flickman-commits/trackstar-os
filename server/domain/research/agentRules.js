@@ -126,14 +126,15 @@ function rowsFor(text, runner) {
  */
 export function checkRowOnPage({ text, url, runner, raceName, year, time, pace, bib, eventType }) {
   if (!text) return { ok: false, why: 'The page came back empty to our server (it probably draws its results with JavaScript).' }
+  if (isSeveralRunners(runner)) return { ok: false, why: `"${runner}" is more than one runner; a person decides whose result prints.` }
+  const rows = rowsFor(text, runner)
+  if (!rows.length) return { ok: false, why: `"${runner}" is not on the page as our server read it (the site may draw its results with JavaScript).` }
   const hay = `${url || ''}\n${text}`
   if (!new RegExp(`\\b${year}\\b`).test(hay)) return { ok: false, why: `The page does not mention ${year}, so it may be another year's results.` }
   const raceWords = fold(raceName).split(' ').filter(w => w.length > 2 && !/^(marathon|half|the|and|race|run|runs|international|annual)$/.test(w))
   if (raceWords.length && !raceWords.some(w => fold(hay).split(' ').includes(w))) return { ok: false, why: `The page does not mention ${raceName}.` }
   if (/\b(gun|clock)\s*(time)?\b/i.test(text)) return { ok: false, why: 'The page lists gun or clock times as well as chip times. A person checks which column is chip.' }
 
-  const rows = rowsFor(text, runner)
-  if (!rows.length) return { ok: false, why: `"${runner}" is not on the page under that name.` }
   const timeS = clockSeconds(time)
   if (timeS == null) return { ok: false, why: `"${time}" is not a finish time.` }
   const withTime = rows.filter(r => (r.match(TIME_TOKEN) || []).some(t => clockSeconds(t) === timeS))

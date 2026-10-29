@@ -33,7 +33,7 @@ import { checkRateLimitDurable } from '../../lib/publicRateLimit.js'
 import { fetchTimingPage } from '../../lib/scraperTrace.js'
 import { complete, canSearch, isLlmConfigured } from '../../lib/llm.js'
 import { recordAudit } from '../../../api/_lib/users.js'
-import { RESEARCH_REASONS, planFor, nameVariants, sameName, fold, checkRowOnPage } from './agentRules.js'
+import { RESEARCH_REASONS, planFor, nameVariants, sameName, fold, isSeveralRunners, checkRowOnPage } from './agentRules.js'
 
 export const AGENT_NAME = 'Research agent'
 const DAY = 24 * 60 * 60 * 1000
@@ -192,8 +192,30 @@ Return JSON: { "found": boolean, "resultsUrl": string|null, "nameOnPage": string
   if (!claim.found || !claim.resultsUrl) {
     return { outcome: 'person', text: `Searched the web for ${item.runner} in ${item.race} ${item.year} and did not find an official result. ${claim.notes || ''}${seen ? ` Looked at: ${seen}.` : ''} Research by hand or ask the customer.` }
   }
+  return checkFinding(item, claim, { dryRun, by: 'Model' })
+}
+
+/**
+ * A finding from whoever looked (the model above, a Claude routine through
+ * the MCP tool submit_research_finding, a script): the official page and what
+ * it says about the runner. Our server fetches the page and checkRowOnPage
+ * decides; the finding's word alone never writes a time.
+ */
+export async function checkFinding(item, claim, opts = {}) {
+  const res = await checkClaim(item, claim, opts)
+  // Not entered, but a person should only have to look and click: the
+  // finding goes on the order as a candidate with Accept beside the note.
+  if (res.outcome === 'person' && claim.chipTime && claim.nameOnPage) {
+    await saveSuggestions(item, [{ name: claim.nameOnPage, bib: claim.bib || null, time: claim.chipTime, pace: claim.pace || null, eventType: claim.eventType || null, resultsUrl: claim.resultsUrl }], opts.dryRun)
+    return { ...res, outcome: 'suggested', text: `${res.text} It is on the order as a suggestion to Accept once checked.` }
+  }
+  return res
+}
+
+async function checkClaim(item, claim, { dryRun = false, by = 'Finder' } = {}) {
   const said = `${claim.nameOnPage || item.runner}${claim.bib ? `, bib ${claim.bib}` : ''}, ${claim.chipTime || 'no time'}${claim.pace ? `, ${claim.pace}/mi` : ''}${claim.eventType ? ` (${claim.eventType})` : ''}`
-  const handOff = why => ({ outcome: 'person', text: `Found what looks like the result: ${said}, at ${claim.resultsUrl}${claim.timingCompany ? ` (${claim.timingCompany})` : ''}. Not entered because ${why} Check it on that page and enter it under Runner > Edit.${claim.notes ? ` Model notes: ${claim.notes}` : ''}` })
+  const handOff = why => ({ outcome: 'person', text: `Found what looks like the result: ${said}, at ${claim.resultsUrl}${claim.timingCompany ? ` (${claim.timingCompany})` : ''}. Not entered because ${why.charAt(0).toLowerCase()}${why.slice(1)} Check it on that page and enter it under Runner > Edit.${claim.notes ? ` ${by} notes: ${claim.notes}` : ''}` })
+  if (isSeveralRunners(item.runner)) return handOff(`"${item.runner}" is more than one runner, and a person decides whose result prints.`)
   if (!sameName(claim.nameOnPage || '', item.runner)) return handOff(`the page lists "${claim.nameOnPage}", not "${item.runner}".`)
   if (!claim.chipTime) return handOff('it has no chip time.')
 
@@ -204,6 +226,21 @@ Return JSON: { "found": boolean, "resultsUrl": string|null, "nameOnPage": string
 
   if (!dryRun) await writeVerified(item, { bib: claim.bib, time: claim.chipTime, pace: claim.pace, eventType: claim.eventType, url: page.finalUrl || claim.resultsUrl, row: check.row })
   return { outcome: 'cleared', detail: `read off ${page.finalUrl || claim.resultsUrl}: ${said}`, url: page.finalUrl || claim.resultsUrl }
+}
+
+/**
+ * Hand in one finding for one queue item: checked, then written or noted.
+ * A finding of "not found" (no resultsUrl) is a note with what was searched.
+ */
+export async function submitFinding(orderNumber, claim, { dryRun = false, by = 'Finder' } = {}) {
+  const n = String(orderNumber).replace(/^#/, '').trim()
+  const item = (await researchQueue()).find(i => i.display === n || i.orderNumber === n || i.display.split('-')[0] === n)
+  if (!item) return null
+  const res = claim.resultsUrl
+    ? await checkFinding(item, claim, { dryRun, by })
+    : { outcome: 'person', text: `Searched for ${item.runner} in ${item.race} ${item.year} and found no official result. ${claim.notes || ''}`.trim() }
+  await note(item.id, res.outcome === 'cleared' ? `Filled in the result: ${res.detail}.` : res.text, dryRun)
+  return { order: item.display, runner: item.runner, race: `${item.race} ${item.year}`, outcome: res.outcome, detail: res.detail || res.text }
 }
 
 /** The race row for an order's race and year, the way hand entry finds it (api/orders/update.js). */
