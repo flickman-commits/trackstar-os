@@ -9,9 +9,14 @@
  *   2024: 1097117 (10/13/2024) 2025: 1138722 (10/12/2025)
  * (2021 was the "Avenue 2.0" half-only edition; 2020 not held.)
  *
- * 2026 (ran Sun Oct 11 2026) is NOT wired: as of 2026-10-18 Athlinks has no
- * 2026 race and RunSignUp (race 109736) has no result sets for any year.
- * Add the Athlinks id when it appears.
+ * 2026 (ran Sun Oct 11 2026) reads Huber Timing, the race's timer, directly
+ * (yearOverrides below): as of 2026-10-28 Athlinks still has no 2026 race and
+ * RunSignUp (race 109736) has no result sets. Found by searching "humboldt
+ * redwoods marathon 2026 results"; the race site links no results page.
+ * Huber names each distance's page by a cert id: <year>HRMMar is the
+ * marathon, <year>HRM the half (<year>HRM5K the 5K). Huber also hosts
+ * 2022-2025 (the Athlinks copies are its mirror); those years stay on
+ * Athlinks, whose fixtures pass.
  *
  * Courses: "Marathon", "Half Marathon", "5K Run". Athlinks carries one time,
  * the chip: 2025 winner Breene is 2:29:09 here vs 2:29:11 (gun) on
@@ -58,5 +63,11 @@ export default {
     2023: 1088166,
     2024: 1097117,
     2025: 1138722,
+  },
+  yearOverrides: {
+    2026: {
+      platform: 'hubertiming',
+      huberCerts: { marathon: '2026HRMMar', half: '2026HRM' },
+    },
   },
 }

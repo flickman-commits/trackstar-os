@@ -27,6 +27,7 @@ import { SportstatsScraper } from './platforms/SportstatsScraper.js'
 import { RaceResultScraper } from './platforms/RaceResultScraper.js'
 import { TrueTimeScraper } from './platforms/TrueTimeScraper.js'
 import { UltraSignupScraper } from './platforms/UltraSignupScraper.js'
+import { HuberTimingScraper } from './platforms/HuberTimingScraper.js'
 
 // --- Race configs ---
 import kiawahIslandConfig from './configs/kiawahIsland.js'
@@ -126,6 +127,7 @@ const PLATFORM_MAP = {
   raceresult: RaceResultScraper,
   truetime: TrueTimeScraper,
   ultrasignup: UltraSignupScraper,
+  hubertiming: HuberTimingScraper,
 }
 
 /**
