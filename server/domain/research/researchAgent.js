@@ -32,7 +32,7 @@ import { checkRateLimitDurable } from '../../lib/publicRateLimit.js'
 import { fetchTimingPage } from '../../lib/scraperTrace.js'
 import { complete, canSearch, isLlmConfigured } from '../../lib/llm.js'
 import { recordAudit } from '../../../api/_lib/users.js'
-import { RESEARCH_REASONS, planFor, nameVariants, sameName, checkRowOnPage } from './agentRules.js'
+import { RESEARCH_REASONS, planFor, nameVariants, sameName, fold, checkRowOnPage } from './agentRules.js'
 
 export const AGENT_NAME = 'Research agent'
 const DAY = 24 * 60 * 60 * 1000
@@ -115,7 +115,26 @@ async function viaScraper(item, { dryRun }) {
   const cleared = dryRun ? (status === 'found' && (r.officialTime || r.bibNumber)) : !(after?.stage === 'action' && RESEARCH_REASONS.has(after.reason))
   if (cleared) return { outcome: 'cleared', detail: `research ran again: ${r.bibNumber ? `bib ${r.bibNumber}, ` : ''}${r.officialTime || 'no time'}${r.officialPace ? `, ${r.officialPace}/mi` : ''}`, url: r.resultsUrl || null }
   if (status === 'year_not_configured' || status === 'no_scraper') return { outcome: 'no_scraper_year' }
-  if (status === 'upstream_error') return { outcome: 'person', text: `Ran research again and the timing site still failed (${(r.researchNotes || 'no detail').slice(0, 160)}). It tries again later.`, quiet: true }
+
+  // What the site says now, for the note. The saved row keeps its candidates
+  // only when the search itself ran; a timeless result refilled in place does not.
+  const bib = r.bibNumber || item.research?.bib || item.customerBib || null
+  let look = dryRun || Array.isArray(r.possibleMatches) ? r : null
+  if (!look && (await raceBudget(item.race))) look = await researchService.findRunner(item.race, item.year, item.runner, { bib }).catch(() => null)
+  const lookStatus = look?.researchStatus || status
+  if (lookStatus === 'upstream_error' || status === 'upstream_error') return { outcome: 'person', text: `Ran research again and the timing site answered with an error: ${(look?.researchNotes || r.researchNotes || 'no detail').slice(0, 200)} If it keeps failing, the scraper may be pointed at the wrong event for ${item.year}.`, quiet: status === 'upstream_error' && /unreachable|slow|503|timed out/i.test(look?.researchNotes || r.researchNotes || '') }
+
+  // The same name (or the same bib) in the results, but not as this order's
+  // result: often another event of the same race weekend (the 8K, the half).
+  const candidates = Array.isArray(look?.possibleMatches) ? look.possibleMatches : []
+  const same = candidates.filter(c => sameName(c?.name, item.runner) || (bib && String(c?.bib || '') === String(bib)))
+  if (same.length) {
+    const list = same.slice(0, 3).map(c => `"${c.name}"${c.bib ? `, bib ${c.bib}` : ''}${c.eventType ? `, ${c.eventType}` : ''}${c.time ? `, ${c.time}` : ''}`).join('; ')
+    const otherEvent = same.some(c => c.eventType && !/^marathon$/i.test(c.eventType) && !fold(item.race).includes(fold(c.eventType)))
+    await saveSuggestions(item, same, dryRun)
+    return { outcome: 'suggested', text: `The ${item.race} ${item.year} results have ${list}, but research did not take it as this order's result.${otherEvent ? ' That looks like another event of the race weekend: check with the customer which race the print is for.' : ' Check it is the same person, then Accept.'}` }
+  }
+  if (status === 'found') return { outcome: 'person', text: `Ran research again: the timing site gives no finish time for ${item.runner}${bib ? ` (bib ${bib})` : ''}. ${after?.fix || ''}`.trim() }
   if (status !== 'not_found') return { outcome: 'person', text: `Ran research again: ${status}. ${after?.fix || r.researchNotes || ''}`.trim() }
 
   // Other spellings. Each is one more search on the timing site, so the budget applies.
@@ -125,17 +144,21 @@ async function viaScraper(item, { dryRun }) {
     const hit = await researchService.findRunner(item.race, item.year, v, { skipLastNameFallback: true }).catch(() => null)
     if (hit?.found) found.push({ name: hit.runnerName || hit.rawData?.name || v, bib: hit.bibNumber || null, time: hit.officialTime || null, pace: hit.officialPace || null, eventType: hit.eventType || null, resultsUrl: hit.resultsUrl || null, searched: v })
   }
-  if (!found.length) return { outcome: 'person', text: `Ran research again and tried ${nameVariants(item.runner).join(', ') || 'no other spellings'}: ${item.runner} is not in the ${item.race} ${item.year} results. Check the name and year with the customer.` }
-  if (!dryRun) {
-    const latest = await prisma.runnerResearch.findFirst({ where: { orderId: item.id }, orderBy: { createdAt: 'desc' }, select: { id: true, possibleMatches: true } })
-    if (latest) {
-      const have = Array.isArray(latest.possibleMatches) ? latest.possibleMatches : []
-      const merged = [...found.map(({ searched: _s, ...m }) => m), ...have.filter(h => !found.some(f => f.bib && f.bib === h.bib))]
-      await prisma.runnerResearch.update({ where: { id: latest.id }, data: { possibleMatches: merged.slice(0, 15) } })
-    }
-  }
+  const surnames = candidates.length ? ` ${candidates.length} finisher${candidates.length === 1 ? '' : 's'} with a similar name ${candidates.length === 1 ? 'is' : 'are'} on the order to check.` : ''
+  if (!found.length) return { outcome: 'person', text: `Ran research again and tried ${nameVariants(item.runner).join(', ') || 'no other spellings'}: ${item.runner} is not in the ${item.race} ${item.year} results under those names.${surnames} Check the name and year with the customer.` }
+  await saveSuggestions(item, found.map(({ searched: _s, ...m }) => m), dryRun)
   const list = found.map(f => `"${f.name}" (searched as ${f.searched})${f.bib ? `, bib ${f.bib}` : ''}${f.time ? `, ${f.time}` : ''}`).join('; ')
   return { outcome: 'suggested', text: `${item.runner} is not in the results under that name, but ${list} is. It is on the order as a suggestion: confirm it is the same person (ask the customer if unsure), then Accept.` }
+}
+
+/** Put finishers on the newest research row as candidates, so the order shows them with Accept. */
+async function saveSuggestions(item, list, dryRun) {
+  if (dryRun) return
+  const latest = await prisma.runnerResearch.findFirst({ where: { orderId: item.id }, orderBy: { createdAt: 'desc' }, select: { id: true, possibleMatches: true } })
+  if (!latest) return
+  const have = Array.isArray(latest.possibleMatches) ? latest.possibleMatches : []
+  const merged = [...list, ...have.filter(h => !list.some(f => (f.bib && f.bib === h.bib) || (f.pid && f.pid === h.pid)))]
+  await prisma.runnerResearch.update({ where: { id: latest.id }, data: { possibleMatches: merged.slice(0, 15) } })
 }
 
 const SYSTEM = `You find one runner's race result on the race's official results page.
