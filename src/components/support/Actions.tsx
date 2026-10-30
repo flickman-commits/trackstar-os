@@ -273,62 +273,103 @@ function CancelForm({ o, thread, onDone, onCancel }: FormProps) {
 type Choice = { value: string; label: string }
 type ClaimPrep = { number: string; arteloOrderId: string | null; to: string; photos: { messageId: string; index: number; filename: string; at: string }[] }
 
+type ClaimKind = 'damaged' | 'lost'
+const CLAIM_KINDS: { value: ClaimKind; label: string; sub: string }[] = [
+  { value: 'damaged', label: 'Arrived damaged', sub: 'Photos of the damage' },
+  { value: 'lost', label: 'Lost in transit', sub: 'Never arrived, waited long enough' },
+]
+
+/** The order's newest tracking, Artelo's first: a link if there is one, else carrier and number. */
+function trackingText(o: FormProps['o']) {
+  const t = [...o.tracking].reverse().find(x => x.fromArtelo && x.url) || [...o.tracking].reverse().find(x => x.url) || o.tracking[o.tracking.length - 1]
+  if (!t) return ''
+  return t.url || [t.company, t.number].filter(Boolean).join(' ')
+}
+
 /**
- * Damaged in shipping: the customer's photos to Artelo support, who file a
- * report and make a free "-R" replacement (a New Artelo order is billed).
- * Their replacement then shows under Orders on its own.
+ * Claim with Artelo: a print that arrived damaged (the customer's photos and
+ * what broke) or never arrived (the tracking link). Artelo support files a
+ * report or a carrier trace and makes a free "-R" replacement (a New Artelo
+ * order is billed). Their replacement then shows under Orders on its own.
  */
 function DamageClaimForm({ o, thread, onDone, onCancel }: FormProps) {
+  const [kind, setKind] = useState<ClaimKind>('damaged')
   const [prep, setPrep] = useState<ClaimPrep | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [picked, setPicked] = useState<string[]>([])
   const [text, setText] = useState('')
+  const [tracking, setTracking] = useState(() => trackingText(o))
   const [confirming, setConfirming] = useState(false)
   const [pressKey, setPressKey] = useState('')
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState<number | null>(null)
+  const [sent, setSent] = useState<{ kind: ClaimKind; photos: number } | null>(null)
+  const lost = kind === 'lost'
   const key = (p: { messageId: string; index: number }) => `${p.messageId}:${p.index}`
   useEffect(() => {
     supportApi.arteloOrder<ClaimPrep>({ action: 'claimPrep', id: thread.id, shopifyOrderId: o.shopifyOrderId })
       .then(r => { setPrep(r); setPicked(r.photos.slice(0, 8).map(key)) })
       .catch(e => setErr((e as Error).message))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const photosToSend = lost ? [] : (prep?.photos || []).filter(p => picked.includes(key(p)))
+  const ready = lost ? Boolean(tracking.trim()) : Boolean(text.trim())
   const send = async () => {
     if (!confirming) { setConfirming(true); setPressKey(newIdempotencyKey()); setErr(null); return }
     setBusy(true)
     try {
-      const photos = (prep?.photos || []).filter(p => picked.includes(key(p))).map(p => ({ messageId: p.messageId, index: p.index }))
-      const out = await supportApi.arteloOrder<{ photos: number }>({ action: 'claim', id: thread.id, shopifyOrderId: o.shopifyOrderId, photos, note: text, idempotencyKey: pressKey })
-      setSent(out.photos)
-      toast.success(`Damage claim sent to Artelo support with ${out.photos} photo${out.photos === 1 ? '' : 's'}`)
+      const out = await supportApi.arteloOrder<{ photos: number }>({
+        action: 'claim', id: thread.id, shopifyOrderId: o.shopifyOrderId, kind,
+        photos: photosToSend.map(p => ({ messageId: p.messageId, index: p.index })), note: text, tracking: lost ? tracking : undefined, idempotencyKey: pressKey,
+      })
+      setSent({ kind, photos: out.photos })
+      toast.success(`${lost ? 'Lost in transit' : 'Damage'} claim sent to Artelo support`)
       onDone()
     } catch (e) { setErr((e as Error).message); toast.error((e as Error).message) }
     finally { setBusy(false); setConfirming(false) }
   }
-  if (sent != null) {
+  if (sent) {
     return (
-      <ActionModal icon={MessageSquareWarning} title="Damage claim sent" sub={`#${o.number}`} onClose={onCancel}
+      <ActionModal icon={MessageSquareWarning} title={sent.kind === 'lost' ? 'Lost in transit claim sent' : 'Damage claim sent'} sub={`#${o.number}`} onClose={onCancel}
         footer={<button onClick={onCancel} className={modalPrimary}>Done</button>}>
-        <div className={doneLine}><Check className="w-4 h-4" />Claim sent to {prep?.to} with {sent} photo{sent === 1 ? '' : 's'}.</div>
+        <div className={doneLine}><Check className="w-4 h-4" />Claim sent to {prep?.to}{sent.photos ? ` with ${sent.photos} photo${sent.photos === 1 ? '' : 's'}` : ''}.</div>
         <div className="text-off-black/60">Their answer comes into Support as its own conversation. The free replacement shows under Orders once Artelo makes it.</div>
       </ActionModal>
     )
   }
+  const n = photosToSend.length
   return (
-    <ActionModal icon={MessageSquareWarning} title="Damaged: claim with Artelo" sub={`#${o.number}`} onClose={onCancel} busy={busy}
-      hint={confirming ? <span className={`${bad} font-medium`}>Send {picked.length} photo{picked.length === 1 ? '' : 's'} to Artelo support?</span> : undefined}
+    <ActionModal icon={MessageSquareWarning} title="Claim with Artelo" sub={`#${o.number}`} onClose={onCancel} busy={busy}
+      hint={confirming ? <span className={`${bad} font-medium`}>Send this {lost ? 'lost in transit' : 'damage'} claim to Artelo support{n ? ` with ${n} photo${n === 1 ? '' : 's'}` : ''}?</span> : undefined}
       footer={<>
         <button onClick={() => (confirming ? setConfirming(false) : onCancel())} disabled={busy} className={modalCancel}>{confirming ? 'Back' : 'Cancel'}</button>
-        {prep && <button onClick={send} disabled={busy || !picked.length || !text.trim()} className={modalPrimary}>{busy && <Spin />}{confirming ? 'Yes, send it' : 'Send claim to Artelo'}</button>}
+        {prep && <button onClick={send} disabled={busy || !ready} className={modalPrimary}>{busy && <Spin />}{confirming ? 'Yes, send it' : 'Send claim to Artelo'}</button>}
       </>}>
+      <div className="grid grid-cols-2 gap-2">
+        {CLAIM_KINDS.map(k => (
+          <button key={k.value} type="button" onClick={() => { setKind(k.value); setConfirming(false) }}
+            className={`text-left rounded-xl border px-3 py-2 ${kind === k.value ? 'border-[#4600D6] bg-[#4600D6]/[0.05]' : 'border-border-gray hover:bg-subtle-gray'}`}>
+            <div className={`text-sm font-semibold ${kind === k.value ? 'text-[#4600D6]' : 'text-off-black'}`}>{k.label}</div>
+            <div className="text-xs text-off-black/55">{k.sub}</div>
+          </button>
+        ))}
+      </div>
       {!prep && !err && <Loading>Finding the customer's photos</Loading>}
-      {prep && (
+      {prep && lost && (
         <>
-          <div className={note}>Emails the photos to <b>{prep.to}</b> from the support inbox. Artelo files a report and makes a free replacement of #{prep.number}.</div>
+          <div className={note}>Emails <b>{prep.to}</b> from the support inbox with the tracking. Artelo opens a trace with the carrier and makes a free replacement of #{prep.number}.</div>
+          <Field label="Tracking link">
+            <input value={tracking} onChange={e => setTracking(e.target.value)} placeholder="Paste the tracking link or number" className={modalInput} />
+          </Field>
+          {!trackingText(o) && <div className={warn}>No tracking on this order yet. Paste it from Artelo or Shopify.</div>}
+          <Field label="Anything else (optional)"><textarea value={text} onChange={e => setText(e.target.value)} rows={2} placeholder="e.g. Tracking has not moved since Oct 12" className={modalInput} /></Field>
+        </>
+      )}
+      {prep && !lost && (
+        <>
+          <div className={note}>Emails <b>{prep.to}</b> from the support inbox. Artelo files a report and makes a free replacement of #{prep.number}.</div>
           {prep.photos.length === 0
-            ? <div className={warn}>No photos from the customer in this conversation yet. Ask them for photos of the damage and the box first.</div>
+            ? <div className={warn}>No photos from the customer in this conversation. You can send the claim without them, but Artelo usually asks for photos of the damage and the box.</div>
             : (
-              <Field label="Photos to send">
+              <Field label="Photos to send (optional)">
                 <div className="grid grid-cols-4 gap-2">
                   {prep.photos.map(p => {
                     const on = picked.includes(key(p))
@@ -625,7 +666,7 @@ function DiscountForm({ thread, first, isAdmin, onInsert, onDone, onCancel }: { 
     setBusy(true)
     try {
       const out = await supportApi.action<{ code: string; percent: number }>('discount15', { id: thread.id, percent: pctNum, prefix: cleanPrefix || defaultPrefix })
-      onInsert(`Use code ${out.code} for ${out.percent}% off your next print (good for 30 days).`)
+      onInsert(`Here's a unique code for you: ${out.code} will give you ${out.percent}% off your order (good for 30 days).`)
       toast.success(`${out.code} created (one use) and added to the reply`)
       onDone(); onCancel()
     } catch (e) { toast.error((e as Error).message) } finally { setBusy(false); setConfirming(false) }
@@ -761,8 +802,8 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
             </>
           )
         })()}
-        {/* Damaged in shipping: Artelo replaces it free once its support has the photos. */}
-        {o.shopifyOrderId && o.items.length > 0 && shipped && <ActionLink icon={MessageSquareWarning} onClick={() => setOpen('claim')} title="Emails the customer's photos to Artelo support. Artelo files a report and makes a free replacement.">Damaged: claim with Artelo</ActionLink>}
+        {/* Damaged or lost in transit: Artelo replaces it free once its support has the claim. */}
+        {o.shopifyOrderId && o.items.length > 0 && shipped && <ActionLink icon={MessageSquareWarning} onClick={() => setOpen('claim')} title="Arrived damaged or lost in transit: emails Artelo support, who file a report and make a free replacement.">Damaged or lost: claim with Artelo</ActionLink>}
         {/* A reprint or replacement: the same print to this customer, built in Artelo from here. */}
         {o.shopifyOrderId && o.items.length > 0 && <ActionLink icon={Repeat} onClick={() => setOpen('reorder')} title="The same print to this customer: a reprint or a replacement. Artelo bills us for it, so damage goes through the claim instead.">New Artelo order</ActionLink>}
         {o.shopifyOrderId && o.financialStatus !== 'REFUNDED' && <ActionLink icon={Receipt} onClick={() => setOpen('refund')} title="All or part, to the card they paid with. Over $150 is Matt's call.">Refund</ActionLink>}

@@ -1,14 +1,17 @@
 /**
- * A damage claim to Artelo support, from Support. When a print arrives
- * damaged, Artelo replaces it for free once its support has the customer's
- * photos: they file a report with the carrier and make a "-R" replacement
+ * A claim to Artelo support, from Support, for a print that arrived damaged
+ * or never arrived. Artelo replaces it for free once its support has the
+ * claim: they file a report with the carrier and make a "-R" replacement
  * (4341-R, 3013-R) at no charge. A New Artelo order (arteloOrder.js) is
- * billed like any order, so damage goes this way instead.
+ * billed like any order, so these go this way instead.
  *
- * The claim is an email from fast@ to Artelo support with the photos the
- * customer sent in this conversation attached, the order numbers on both
- * sides, the prints, and where the replacement goes. It starts its own
- * Support conversation, so Artelo's answer lands there. The replacement
+ *   damaged  the customer's photos from this conversation (optional, but
+ *            Artelo usually asks for them) and what is damaged
+ *   lost     the tracking link, and how long the customer has waited
+ *
+ * The claim is an email from fast@ to Artelo support with the order numbers
+ * on both sides, the prints, and where the replacement goes. It starts its
+ * own Support conversation, so Artelo's answer lands there. The replacement
  * Artelo makes shows in the Orders panel on its own (replacements.js).
  */
 import prisma from '../../db.js'
@@ -58,14 +61,19 @@ export async function claimPrep({ thread, shopifyOrderId }) {
   return { number, arteloOrderId: artelo?.orderId || null, to: ARTELO_SUPPORT_EMAIL, photos: (await claimPhotos(thread.id)).slice(0, 30) }
 }
 
-export async function sendDamageClaim({ thread, shopifyOrderId, photos, note, actor }) {
-  const what = String(note || '').trim()
-  if (!what) throw new UserError('Say what is damaged, for example "Frame cracked at the corner, glass shattered"')
+export const CLAIM_KINDS = ['damaged', 'lost']
+
+export async function sendArteloClaim({ thread, shopifyOrderId, kind = 'damaged', photos, note, tracking, actor }) {
+  if (!CLAIM_KINDS.includes(kind)) throw new UserError('Damaged or lost in transit?')
+  const lost = kind === 'lost'
+  const what = String(note || '').trim().slice(0, 2000)
+  const track = String(tracking || '').trim().slice(0, 500)
+  if (!lost && !what) throw new UserError('Say what is damaged, for example "Frame cracked at the corner, glass shattered"')
+  if (lost && !track) throw new UserError('Add the tracking link or number so Artelo can open a trace with the carrier')
   const picked = Array.isArray(photos) ? photos.slice(0, MAX_PHOTOS) : []
-  if (!picked.length) throw new UserError('Pick at least one photo of the damage. Artelo needs them to file the report.')
 
   // Only photos from this conversation, by the same list the form showed.
-  const own = await claimPhotos(thread.id)
+  const own = picked.length ? await claimPhotos(thread.id) : []
   const files = []
   let total = 0
   for (const p of picked) {
@@ -83,18 +91,24 @@ export async function sendDamageClaim({ thread, shopifyOrderId, photos, note, ac
   const shipTo = [addr.name, addr.street1, addr.street2, [addr.city, addr.state, addr.zipcode].filter(Boolean).join(' '), addr.countryCode || addr.country].filter(Boolean).join(', ')
   const prints = rows.map(r => `- ${[r.raceName, r.raceYear].filter(Boolean).join(' ')}${r.runnerName ? `, ${r.runnerName}` : ''}${r.productSize ? `, ${r.productSize}` : ''}${r.frameType ? `, ${r.frameType}` : ''}`).join('\n')
   const link = arteloOrderUrl(artelo?.id)
-  const subject = `Damaged in shipping: order ${number}${artelo?.orderId ? ` (${artelo.orderId})` : ''}`
+  const ids = `${number}${artelo?.orderId ? ` (${artelo.orderId})` : ''}`
+  const photoLine = files.length ? ` The customer's photo${files.length === 1 ? ' is' : 's are'} attached.` : ''
+  const subject = lost ? `Lost in transit: order ${ids}` : `Damaged in shipping: order ${ids}`
   const text = [
     'Hi Artelo team,',
     '',
-    `Order ${number}${artelo?.orderId ? ` (Artelo order ${artelo.orderId})` : ''} arrived damaged. The customer's photos are attached.`,
+    lost
+      ? `Order ${number}${artelo?.orderId ? ` (Artelo order ${artelo.orderId})` : ''} has not arrived. The customer has waited long enough that it looks lost in transit.${photoLine}`
+      : `Order ${number}${artelo?.orderId ? ` (Artelo order ${artelo.orderId})` : ''} arrived damaged.${photoLine}`,
     '',
-    `What is damaged: ${what}`,
+    ...(lost ? [`Tracking: ${track}`, ...(what ? ['', what] : [])] : [`What is damaged: ${what}`]),
     '',
     `The print${rows.length > 1 ? 's' : ''}:`,
     prints,
     '',
-    shipTo ? `Please file a report and send a replacement to the same address: ${shipTo}.` : 'Please file a report and send a replacement to the same address.',
+    lost
+      ? (shipTo ? `Please open a trace with the carrier and send a replacement to the same address: ${shipTo}.` : 'Please open a trace with the carrier and send a replacement to the same address.')
+      : (shipTo ? `Please file a report and send a replacement to the same address: ${shipTo}.` : 'Please file a report and send a replacement to the same address.'),
     ...(link ? ['', link] : []),
     '',
     'Thanks,',
@@ -103,9 +117,11 @@ export async function sendDamageClaim({ thread, shopifyOrderId, photos, note, ac
 
   const sent = await sendNew({ userId: actor?.id || null, to: ARTELO_SUPPORT_EMAIL, subject, html: replyToHtml(text), text: replyToPlain(text), attachments: files })
   const by = [actor?.firstName, actor?.lastName].filter(Boolean).join(' ') || 'Someone'
+  const label = lost ? 'lost in transit claim' : 'damage claim'
+  const withPhotos = files.length ? ` with ${files.length} photo${files.length === 1 ? '' : 's'}` : ''
   await prisma.$transaction([
-    prisma.supportNote.create({ data: { threadId: thread.id, kind: 'event', body: `${by} sent a damage claim for #${number} to Artelo support with ${files.length} photo${files.length === 1 ? '' : 's'}. Artelo's free replacement shows under Orders once they make it.`, authorId: actor?.id || null, authorName: by } }),
-    ...rows.map(r => prisma.orderComment.create({ data: { orderId: r.id, text: `Damage claim sent to Artelo support (${files.length} photo${files.length === 1 ? '' : 's'}): ${what.slice(0, 300)}`, authorId: actor?.id || null, authorName: by } })),
+    prisma.supportNote.create({ data: { threadId: thread.id, kind: 'event', body: `${by} sent a ${label} for #${number} to Artelo support${withPhotos}. Artelo's free replacement shows under Orders once they make it.`, authorId: actor?.id || null, authorName: by } }),
+    ...rows.map(r => prisma.orderComment.create({ data: { orderId: r.id, text: `${lost ? 'Lost in transit' : 'Damage'} claim sent to Artelo support${withPhotos}: ${(lost ? track : what).slice(0, 300)}`, authorId: actor?.id || null, authorName: by } })),
   ])
-  return { number, photos: files.length, claimThreadId: sent?.threadId || null, summary: `Sent a damage claim for #${number} to Artelo support with ${files.length} photo${files.length === 1 ? '' : 's'}` }
+  return { number, kind, photos: files.length, claimThreadId: sent?.threadId || null, summary: `Sent a ${label} for #${number} to Artelo support${withPhotos}` }
 }

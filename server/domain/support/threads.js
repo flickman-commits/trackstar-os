@@ -283,7 +283,8 @@ export async function setStatus(id, status, actor) {
   const t = await prisma.supportThread.update({ where: { id }, data: { status, snoozedUntil: null }, ...withAssignee })
   if (before?.status !== status) {
     const verb = status === 'closed' ? 'closed this' : status === 'open' && before?.status === 'closed' ? 'reopened this'
-      : status === 'escalated' ? 'escalated this' : status === 'waiting' ? 'marked this waiting on the customer' : 'reopened this'
+      : status === 'escalated' ? 'escalated this' : status === 'waiting' ? 'marked this waiting on the customer'
+      : before?.status === 'waiting' ? 'marked this open again' : 'reopened this'
     await event(id, `${actorName(actor)} ${verb}`, actor)
   }
   return row(t)

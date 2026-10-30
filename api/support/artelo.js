@@ -3,9 +3,9 @@
  *
  *   POST { action: 'prep', id, shopifyOrderId }      the items, whether each can be copied, the next order id
  *   POST { action: 'create', id, shopifyOrderId, orderIds, changes?, files?: { [orderId]: 'upload:<path>' }, address, email, instructions, test }
- *   POST { action: 'claimPrep', id, shopifyOrderId }  the customer's photos in this conversation, for a damage claim
- *   POST { action: 'claim', id, shopifyOrderId, photos: [{ messageId, index }], note }
- *                                                    emails the photos to Artelo support for a free replacement (damageClaim.js)
+ *   POST { action: 'claimPrep', id, shopifyOrderId }  the customer's photos in this conversation, for a claim
+ *   POST { action: 'claim', id, shopifyOrderId, kind: 'damaged' | 'lost', photos?: [{ messageId, index }], note?, tracking? }
+ *                                                    emails Artelo support for a free replacement (damageClaim.js)
  *
  * id is the Support conversation, and the order has to be its customer's
  * (under their email, or linked to them). `create` carries an idempotencyKey
@@ -16,7 +16,7 @@ import { setCors } from '../_lib/auth.js'
 import { requireCapability, recordAudit } from '../_lib/users.js'
 import prisma from '../_lib/prisma.js'
 import { reorderPrep, createReorder } from '../../server/domain/support/arteloOrder.js'
-import { claimPrep, sendDamageClaim } from '../../server/domain/support/damageClaim.js'
+import { claimPrep, sendArteloClaim } from '../../server/domain/support/damageClaim.js'
 import { assertOrderInThread } from '../../server/domain/support/threads.js'
 import { claimOnce } from '../../server/domain/support/idempotency.js'
 import { publicMessage, publicStatus } from '../../server/domain/support/errors.js'
@@ -45,8 +45,8 @@ export default async function handler(req, res) {
     if (body.action === 'claimPrep') return res.status(200).json(await claimPrep({ thread, shopifyOrderId: body.shopifyOrderId }))
     if (body.action === 'claim') {
       await claimOnce('support.artelo_claim', body.idempotencyKey)
-      const out = await sendDamageClaim({ thread, shopifyOrderId: body.shopifyOrderId, photos: body.photos, note: body.note, actor: user })
-      await recordAudit({ action: 'support.artelo_claim', summary: out.summary, detail: { threadId: thread.id, shopifyOrderId: body.shopifyOrderId, photos: out.photos, claimThreadId: out.claimThreadId }, actor: user })
+      const out = await sendArteloClaim({ thread, shopifyOrderId: body.shopifyOrderId, kind: body.kind === 'lost' ? 'lost' : 'damaged', photos: body.photos, note: body.note, tracking: body.tracking, actor: user })
+      await recordAudit({ action: 'support.artelo_claim', summary: out.summary, detail: { threadId: thread.id, shopifyOrderId: body.shopifyOrderId, kind: out.kind, photos: out.photos, claimThreadId: out.claimThreadId }, actor: user })
       return res.status(200).json(out)
     }
     return res.status(400).json({ error: 'Unknown action' })

@@ -453,13 +453,14 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
           ) : (
             <div className="relative inline-flex" ref={close.ref}>
               <button onClick={() => onStatus('closed')} disabled={busy} className={`${btnPrimary} rounded-r-none`} title="Close (c)"><Archive className="w-3.5 h-3.5" /> Close <Kbd>C</Kbd></button>
-              <button onClick={() => close.setOpen(v => !v)} disabled={busy} className={`${btnPrimary} rounded-l-none px-1.5 border-l border-white/20`} title="Snooze, or mark waiting"><ChevronDown className="w-3.5 h-3.5" /></button>
+              <button onClick={() => close.setOpen(v => !v)} disabled={busy} className={`${btnPrimary} rounded-l-none px-1.5 border-l border-white/20`} title="Snooze, or mark waiting or open"><ChevronDown className="w-3.5 h-3.5" /></button>
               {close.open && (
                 <div className="absolute right-0 bottom-full mb-1 w-52 p-1 rounded-lg bg-white border border-border-gray shadow-[0_6px_24px_rgba(0,0,0,0.12)] z-20">
                   <div className="px-3 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-off-black/40">Snooze</div>
                   {SNOOZES.map(s => <button key={s.label} onClick={() => { close.setOpen(false); onSnooze(s.until().toISOString()) }} className="w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-subtle-gray">{s.label}</button>)}
                   {snoozed && <button onClick={() => { close.setOpen(false); onSnooze(null) }} className="w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-subtle-gray text-off-black/60">Unsnooze</button>}
                   {thread.status === 'open' && <><div className="my-1 border-t border-border-gray" /><button onClick={() => { close.setOpen(false); onStatus('waiting') }} className="w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-subtle-gray">Mark waiting on customer</button></>}
+                  {thread.status === 'waiting' && <><div className="my-1 border-t border-border-gray" /><button onClick={() => { close.setOpen(false); onStatus('open') }} className="w-full text-left px-3 py-1.5 text-sm rounded-md hover:bg-subtle-gray">Mark open</button></>}
                 </div>
               )}
             </div>
