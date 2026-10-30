@@ -88,9 +88,10 @@ function NoteCard({ n, team, meId, isAdmin, onDelete }: { n: Note; team: Teammat
   if (n.kind === 'event') {
     return (
       <div className="flex items-center gap-3 text-[11px] text-off-black/45 px-2">
-        <span className="flex-1 border-t border-border-gray/80" />
-        <span className="shrink-0">{n.body} · {when(n.createdAt)}</span>
-        <span className="flex-1 border-t border-border-gray/80" />
+        <span className="flex-1 min-w-4 border-t border-border-gray/80" />
+        {/* Long events (a claim, an order) wrap, centered, instead of running off the side. */}
+        <span className="min-w-0 max-w-[75%] text-center leading-snug break-words">{n.body} · <span className="whitespace-nowrap">{when(n.createdAt)}</span></span>
+        <span className="flex-1 min-w-4 border-t border-border-gray/80" />
       </div>
     )
   }
