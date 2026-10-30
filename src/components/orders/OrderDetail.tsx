@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { Plus, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
+import { shrinkImage } from '@/lib/shrinkImage'
 import type { Design } from '@/lib/useDesign'
 import { raceNotRunYet, showsRaceNotRun } from '@/lib/raceStatus'
 import { useAskText } from '@/components/useAskText'
@@ -979,8 +980,10 @@ export default function OrderDetail({
       let imageData: string | null = null
       let imageName: string | null = null
       if (commentImageFile) {
-        imageData = await fileToBase64(commentImageFile)
-        imageName = commentImageFile.name
+        // Phone photos are often past what one request can carry (shrinkImage.ts).
+        const small = await shrinkImage(commentImageFile)
+        imageData = await fileToBase64(small)
+        imageName = small.name
       }
 
       const response = await apiFetch('/api/orders/comments', {
@@ -995,8 +998,8 @@ export default function OrderDetail({
       })
 
       if (!response.ok) {
-        const err = await response.json()
-        throw new Error(err.error || 'Failed to add comment')
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.error || (response.status === 413 ? 'That image is too big. Try a smaller one or a screenshot of it.' : 'Failed to add comment'))
       }
       const data = await response.json()
       setOrderComments(prev => [data.comment, ...prev])
