@@ -21,6 +21,7 @@ import { getPlaybook } from './playbook.js'
 import { listMacros } from './macros.js'
 import { UserError } from './errors.js'
 import { getDraftModel } from './draftModel.js'
+import { reviewLinkFor } from '../../lib/reviewLinks.js'
 
 /** The quick actions a draft may point at, by the name the Actions list shows. */
 export const ACTION_NAMES = [
@@ -93,6 +94,7 @@ export function ordersBrief(orders, { unverified = false } = {}) {
       o.items.some(x => x.approvalUrl) ? `  Approval link: ${o.items.find(x => x.approvalUrl).approvalUrl}` : null,
       o.mockups?.length ? `  Mockups available to attach: ${o.mockups.map(m => m.label).join(', ')}.` : null,
       o.discountCodes.length ? `  Discount codes used: ${o.discountCodes.join(', ')}.` : null,
+      it && reviewLinkFor(it.race, it.type) ? `  Review link for this print: ${reviewLinkFor(it.race, it.type).link}` : null,
       o.shipTo ? `  Ships to: ${[o.shipTo.city, o.shipTo.province, o.shipTo.country].filter(Boolean).join(', ')}.` : null,
     ]
     return lines.filter(Boolean).join('\n')
@@ -232,6 +234,12 @@ export async function gatherFacts(threadId) {
   const first = nameCase(name.split(/\s+/)[0])
   const realName = first && /^[A-Za-z][A-Za-z'.-]{1,}$/.test(first) && !/\d/.test(name)
   const designs = await designsBrief()
+  // What the team already did or said here (a code made, a refund, a new
+  // address, a claim sent): the draft writes those as done, with the real
+  // code or amount, instead of a placeholder or a promise to check.
+  const teamNotes = await prisma.supportNote.findMany({
+    where: { threadId, kind: { in: ['note', 'event'] } }, orderBy: { createdAt: 'desc' }, take: 12, select: { kind: true, body: true, createdAt: true },
+  })
   const facts = [
     `Today is ${new Date().toDateString()}.`,
     `Customer: ${name || 'unknown name'}${realName ? ` (greet as "${first}")` : ' (no clear first name: use the name they sign with, or "Hey there,")'}, ${t.channel === 'instagram' ? `Instagram @${t.igUsername}` : t.customerEmail}.`,
@@ -246,6 +254,7 @@ export async function gatherFacts(threadId) {
     'The conversation, oldest first:',
     conversation,
     '',
+    teamNotes.length ? `The team's notes and actions on this conversation, newest first (internal: never quote a note to the customer; an action listed here has happened):\n${teamNotes.map(n => `- ${new Date(n.createdAt).toDateString()} ${n.kind === 'event' ? 'DONE' : 'NOTE'}: ${clip(n.body.replace(/\s+/g, ' '), 300)}`).join('\n')}\n` : '',
     'Designs we have (race: events). Use this to answer whether we make a race or its half; anything not listed is a custom print:',
     designs,
   ].join('\n')

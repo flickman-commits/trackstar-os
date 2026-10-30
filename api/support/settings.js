@@ -4,6 +4,7 @@
  *   GET                                               { defaultAssigneeId, playbook }
  *   POST { defaultAssigneeId, applyToOpen? }          admin: who new conversations go to; applyToOpen hands over the open unassigned ones now
  *   POST { action:'playbook', text } / { action:'playbookReset' }   admin: what Claude drafts from
+ *   POST { action:'playbookRestore', versionId }    admin: put an earlier playbook version back (undo)
  *   POST { action:'routing', routing, applyToOpen? }   admin: who new conversations go to, per channel (routing.js)
  *   POST { action:'forwarders', emails }            admin: other inboxes whose forwards to fast@ become the customer's conversation
  *   POST { action:'draftModel', model }             admin: which Claude model drafts replies (draftModel.js)
@@ -11,7 +12,7 @@
 import { setCors } from '../_lib/auth.js'
 import { requireCapability, requireAdminOnly, recordAudit } from '../_lib/users.js'
 import { defaultAssigneeId, setDefaultAssignee, getRouting, saveRouting } from '../../server/domain/support/routing.js'
-import { getPlaybook, savePlaybook, resetPlaybook } from '../../server/domain/support/playbook.js'
+import { getPlaybook, savePlaybook, resetPlaybook, playbookVersions, restorePlaybook } from '../../server/domain/support/playbook.js'
 import { listForwarders, saveForwarders } from '../../server/domain/support/forwarders.js'
 import { publicMessage, publicStatus } from '../../server/domain/support/errors.js'
 import { DRAFT_MODELS, getDraftModel, setDraftModel } from '../../server/domain/support/draftModel.js'
@@ -22,7 +23,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const user = await requireCapability(req, res, 'support')
       if (!user) return
-      return res.status(200).json({ defaultAssigneeId: await defaultAssigneeId(), routing: await getRouting(), playbook: await getPlaybook(), forwarders: await listForwarders(), draftModel: await getDraftModel(), draftModels: DRAFT_MODELS, draftModelPinned: Boolean(process.env.SUPPORT_LLM_MODEL) })
+      return res.status(200).json({ defaultAssigneeId: await defaultAssigneeId(), routing: await getRouting(), playbook: await getPlaybook(), playbookVersions: await playbookVersions(), forwarders: await listForwarders(), draftModel: await getDraftModel(), draftModels: DRAFT_MODELS, draftModelPinned: Boolean(process.env.SUPPORT_LLM_MODEL) })
     }
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
     const user = await requireAdminOnly(req, res)
@@ -45,9 +46,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ draftModel: model })
     }
     if (body.action === 'playbook' || body.action === 'playbookReset') {
-      const pb = body.action === 'playbook' ? await savePlaybook(body.text) : await resetPlaybook()
+      const pb = body.action === 'playbook' ? await savePlaybook(body.text, { source: 'edit', actor: user }) : await resetPlaybook({ actor: user })
       await recordAudit({ action: 'support.playbook', summary: body.action === 'playbook' ? 'Edited the support playbook' : 'Reset the support playbook to the default', detail: { chars: pb.text.length }, actor: user })
-      return res.status(200).json({ playbook: pb })
+      return res.status(200).json({ playbook: pb, playbookVersions: await playbookVersions() })
+    }
+    // Undo: put an earlier version back (the weekly review's included).
+    if (body.action === 'playbookRestore') {
+      const pb = await restorePlaybook(body.versionId, { actor: user })
+      await recordAudit({ action: 'support.playbook', summary: 'Restored an earlier version of the support playbook', detail: { versionId: body.versionId }, actor: user })
+      return res.status(200).json({ playbook: pb, playbookVersions: await playbookVersions() })
     }
     const out = await setDefaultAssignee(body.defaultAssigneeId ? String(body.defaultAssigneeId) : null, { applyToOpen: Boolean(body.applyToOpen), actor: user })
     await recordAudit({ action: 'support.routing', summary: out.defaultAssigneeId ? `New support conversations go to ${out.defaultAssigneeId}${out.assigned ? ` (${out.assigned} open ones handed over)` : ''}` : 'New support conversations go to nobody', detail: out, actor: user })

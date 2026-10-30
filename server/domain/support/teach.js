@@ -41,5 +41,5 @@ export async function addLessons(lessons, user) {
   const day = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' })
   const lines = list.map(l => `- ${l} (${who}, ${day})`).join('\n')
   const next = text.includes(HEADING) ? text.replace(HEADING, `${HEADING}\n${lines}`) : `${text.trim()}\n\n${HEADING}\nThese come from corrections to real drafts and win over anything above that disagrees.\n${lines}\n`
-  return savePlaybook(next)
+  return savePlaybook(next, { source: 'lesson', summary: list.join(' | '), actor: user })
 }

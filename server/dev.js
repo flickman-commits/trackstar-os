@@ -144,6 +144,8 @@ const routes = [
   { method: 'get',    path: '/api/cron/artelo-send',       handler: '../api/cron/artelo-send.js' },
   { method: 'get',    path: '/api/cron/fulfillment-check', handler: '../api/cron/fulfillment-check.js' },
   { method: 'get',    path: '/api/cron/bulk-runs',         handler: '../api/cron/bulk-runs.js' },
+  { method: 'get',    path: '/api/cron/support-playbook',  handler: '../api/cron/support-playbook.js' },
+  { method: 'post',   path: '/api/support/playbook-review', handler: '../api/support/playbook-review.js' },
   { method: 'get',    path: '/api/public/creator',         handler: '../api/public/creator.js' },
   { method: 'post',   path: '/api/public/creator',         handler: '../api/public/creator.js' },
   { method: 'get',    path: '/api/public/bulk-intake',     handler: '../api/public/bulk-intake.js' },

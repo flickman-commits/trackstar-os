@@ -38,6 +38,12 @@ export function newIdempotencyKey(): string {
 /** A Support conversation with an order's customer, as the order view lists it. */
 export interface OrderConversation { id: string; subject: string; status: ThreadStatus; snippet: string; lastMessageAt: string; snoozed: boolean; channel: string; assignee: string | null }
 
+/** A saved playbook version: an edit, a taught lesson, a reset, a restore, or the weekly review. */
+export type PlaybookVersion = { id: string; source: 'edit' | 'lesson' | 'reset' | 'weekly' | 'restore'; summary: string | null; createdAt: string }
+/** What the weekly review would change (playbookReview.js). */
+export type PlaybookReview = { status: 'proposal' | 'unchanged' | 'skipped'; reason: string | null; line: string | null; changes: { what: string; why: string }[]; playbook: string | null }
+type PlaybookSaved = { playbook: { text: string; edited: boolean }; playbookVersions?: PlaybookVersion[] }
+
 export const supportApi = {
   status: () => request<MailboxStatus>('/api/support/gmail?action=status'),
   // TrackstarOS's "Email customer": a new conversation about one order.
@@ -66,12 +72,15 @@ export const supportApi = {
   deleteNote: (id: string, noteId: string) => act<{ id: string }>(id, 'deleteNote', { noteId }),
   markUnread: (id: string) => act<{ ok: boolean }>(id, 'unread'),
   reply: (id: string, text: string, close = false, attachments: string[] = []) => post<ThreadDetail>('/api/support/reply', { id, text, close, attachments }),
-  settings: () => request<{ defaultAssigneeId: string | null; playbook?: { text: string; edited: boolean; updatedAt: string | null }; forwarders?: string[]; routing?: RoutingRules; draftModel?: string; draftModels?: { id: string; label: string; note: string }[]; draftModelPinned?: boolean }>('/api/support/settings'),
+  settings: () => request<{ defaultAssigneeId: string | null; playbook?: { text: string; edited: boolean; updatedAt: string | null }; playbookVersions?: PlaybookVersion[]; forwarders?: string[]; routing?: RoutingRules; draftModel?: string; draftModels?: { id: string; label: string; note: string }[]; draftModelPinned?: boolean }>('/api/support/settings'),
   saveDraftModel: (model: string) => post<{ draftModel: string }>('/api/support/settings', { action: 'draftModel', model }),
   saveRouting: (routing: RoutingRules, applyToOpen = false) => post<{ routing: RoutingRules; assigned: number }>('/api/support/settings', { action: 'routing', routing, applyToOpen }),
   saveForwarders: (emails: string[]) => post<{ forwarders: string[] }>('/api/support/settings', { action: 'forwarders', emails }),
-  savePlaybook: (text: string) => post<{ playbook: { text: string; edited: boolean } }>('/api/support/settings', { action: 'playbook', text }),
-  resetPlaybook: () => post<{ playbook: { text: string; edited: boolean } }>('/api/support/settings', { action: 'playbookReset' }),
+  savePlaybook: (text: string) => post<PlaybookSaved>('/api/support/settings', { action: 'playbook', text }),
+  resetPlaybook: () => post<PlaybookSaved>('/api/support/settings', { action: 'playbookReset' }),
+  restorePlaybook: (versionId: string) => post<PlaybookSaved>('/api/support/settings', { action: 'playbookRestore', versionId }),
+  previewPlaybookReview: () => post<PlaybookReview>('/api/support/playbook-review', { action: 'preview' }),
+  applyPlaybookReview: (r: PlaybookReview) => post<PlaybookSaved>('/api/support/playbook-review', { action: 'apply', playbook: r.playbook, changes: r.changes, line: r.line }),
   /** Turn a correction to a draft into playbook rules, then save the approved ones. */
   proposeLessons: (noteId: string, feedback: string) => post<{ lessons: string[] }>('/api/support/teach', { action: 'propose', noteId, feedback }),
   saveLessons: (lessons: string[]) => post<{ playbook: { text: string; edited: boolean } }>('/api/support/teach', { action: 'save', lessons }),

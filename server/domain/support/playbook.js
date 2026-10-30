@@ -9,7 +9,10 @@
  *
  * An admin can edit it from Support > Settings; the saved copy lives in
  * SystemConfig and wins over this default, so a policy change needs no
- * deploy. Keep the Notion page and this in step when either changes.
+ * deploy. Every save is kept (SupportPlaybookVersion) and can be restored.
+ * The weekly review (playbookReview.js) rewrites the saved copy from what
+ * the team actually sent, so the saved copy is the live one; this default
+ * is only the starting point.
  */
 import prisma from '../../db.js'
 import { UserError } from './errors.js'
@@ -98,16 +101,39 @@ export async function getPlaybook() {
   return { text: row?.value || DEFAULT_PLAYBOOK, edited: Boolean(row?.value), updatedAt: row?.updatedAt || null }
 }
 
-export async function savePlaybook(text) {
+/**
+ * Save the playbook and keep the version (SupportPlaybookVersion), so any
+ * change, the weekly review's included, can be undone from Settings.
+ */
+export async function savePlaybook(text, { source = 'edit', summary = null, actor = null } = {}) {
   const t = String(text || '').replace(/\r\n/g, '\n').trim()
   if (t.length < 200) throw new UserError('That is too short to be the playbook.')
   if (t.length > 60000) throw new UserError('That is too long; keep the playbook under 60,000 characters.')
-  await prisma.systemConfig.upsert({ where: { key: KEY }, update: { value: t }, create: { key: KEY, value: t } })
+  await prisma.$transaction([
+    prisma.systemConfig.upsert({ where: { key: KEY }, update: { value: t }, create: { key: KEY, value: t } }),
+    prisma.supportPlaybookVersion.create({ data: { text: t, source, summary: summary ? String(summary).slice(0, 4000) : null, createdById: actor?.id || null } }),
+  ])
   return getPlaybook()
 }
 
 /** Back to the version that ships with the code. */
-export async function resetPlaybook() {
-  await prisma.systemConfig.deleteMany({ where: { key: KEY } })
+export async function resetPlaybook({ actor = null } = {}) {
+  await prisma.$transaction([
+    prisma.systemConfig.deleteMany({ where: { key: KEY } }),
+    prisma.supportPlaybookVersion.create({ data: { text: DEFAULT_PLAYBOOK, source: 'reset', createdById: actor?.id || null } }),
+  ])
   return getPlaybook()
+}
+
+/** The saved versions, newest first, without their text. */
+export async function playbookVersions({ limit = 20 } = {}) {
+  return prisma.supportPlaybookVersion.findMany({ orderBy: { createdAt: 'desc' }, take: limit, select: { id: true, source: true, summary: true, createdAt: true, createdById: true } })
+}
+
+/** Put an earlier version back (saved as a new version, so this is undoable too). */
+export async function restorePlaybook(versionId, { actor = null } = {}) {
+  const v = await prisma.supportPlaybookVersion.findUnique({ where: { id: String(versionId || '') } })
+  if (!v) throw new UserError('That version is gone.')
+  const when = v.createdAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })
+  return savePlaybook(v.text, { source: 'restore', summary: `Restored the ${v.source} version from ${when}.`, actor })
 }

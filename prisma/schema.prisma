@@ -1378,6 +1378,20 @@ model SupportRead {
 // Saved replies, Intercom's "macros". The playbook's templates are seeded in
 // once; after that the team edits them here. {{first_name}} and {{rep}} are
 // filled when one is inserted; anything in [brackets] is left for the rep.
+// Every saved version of the support playbook (support/playbook.js): an
+// edit in Settings, a lesson taught from a draft, a reset, or the weekly
+// review (support/playbookReview.js), so any change can be undone.
+model SupportPlaybookVersion {
+  id          String   @id @default(cuid())
+  text        String
+  source      String   // edit | lesson | reset | weekly | restore
+  summary     String?  // What changed and why (the weekly review's changelog)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 model SupportMacro {
   id          String   @id @default(cuid())
   name        String

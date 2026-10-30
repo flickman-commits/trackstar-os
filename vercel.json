@@ -53,20 +53,27 @@
     {
       "path": "/api/cron/bulk-runs",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/support-playbook",
+      "schedule": "0 12 * * 1"
     }
   ],
   "functions": {
     "api/cron/bulk-runs.js": {
       "maxDuration": 300
     },
-    "api/cron/fulfillment-check.js": {
-      "maxDuration": 120
+    "api/cron/support-playbook.js": {
+      "maxDuration": 300
     },
     "api/cron/artelo-completed-check.js": {
       "maxDuration": 300
     },
     "api/cron/research-agent.js": {
       "maxDuration": 300
+    },
+    "api/cron/fulfillment-check.js": {
+      "maxDuration": 120
     },
     "api/admin/**/*.js": {
       "maxDuration": 300
@@ -80,7 +87,7 @@
     "api/sales/**/*.js": {
       "maxDuration": 300
     },
-    "api/support/{sync,backfill,instagram}.js": {
+    "api/support/{sync,backfill,instagram,playbook-review}.js": {
       "maxDuration": 300
     },
     "api/support/*.js": {
