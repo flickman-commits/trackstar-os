@@ -20,7 +20,7 @@ import { sendNew, messageAttachment } from './mailbox.js'
 import { replyToHtml, replyToPlain } from './format.js'
 import { arteloOrderUrl } from '../../lib/links.js'
 
-export const ARTELO_SUPPORT_EMAIL = 'support@artelo.io'
+export const ARTELO_SUPPORT_EMAIL = 'support@artelo.com'
 const IMAGE = /^image\/(jpe?g|png|gif|webp|heic|heif|avif)$/i
 const MAX_PHOTOS = 8
 const MAX_BYTES = 20 * 1024 * 1024 // Gmail takes 25 MB a message, encoding included
