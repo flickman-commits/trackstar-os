@@ -17,3 +17,12 @@ export function withoutRawOrderData(order) {
   const { shopifyOrderData: _s, etsyOrderData: _e, arteloOrderData: _a, ...rest } = order
   return rest
 }
+
+/** A bulk order's discount and invoice: admins only, like every price. */
+const BULK_MONEY = ['discountKind', 'discountPercent', 'discountCents', 'discountDollars', 'discountNote', 'currency', 'invoiceUrl', 'stripeInvoiceUrl', 'shopifyDraftId', 'shopifyDraftName', 'adminUrl']
+export function withoutBulkMoney(order) {
+  if (!order) return order
+  const out = { ...order }
+  for (const k of BULK_MONEY) delete out[k]
+  return out
+}

@@ -271,49 +271,7 @@ model RunnerResearch {
   @@index([researchStatus])
 }
 
-// A bulk deal: one organization's order, which may cover several races and
-// events (AHA Philadelphia: 8K x3, Half x5, Marathon x5). Who they are, what
-// we agreed (standard or co-branded prints, the discount, where it ships) and
-// the Shopify invoice live here; each race and event is a BulkOrder run below
-// it, so the runner lists, research, design and Artelo sheet work per run as
-// before (server/domain/bulk/deals.js).
-model BulkDeal {
-  id               String    @id @default(cuid())
-  number           String    @unique // "DEAL-0001"
-  partnerName      String
-  contactName      String?
-  contactEmail     String?
-  contactPhone     String?
-  // { company, name, address1, address2, city, province, zip, country }
-  billingAddress   Json?
-  // standard: our race design, rendered by the worker; cobranded: the partner's design, made by the designer
-  printKind        String    @default("standard")
-  // Money in integer units only (CLAUDE.md): a percent off, or cents off the whole order.
-  discountKind     String?   // percent | amount
-  discountPercent  Int?      // 15 = 15% off
-  discountCents    Int?      // 5000 = $50.00 off
-  currency         String    @default("USD")
-  discountNote     String?   // "Nonprofit rate", shown on the invoice
-  // runner: each print ships to its runner; organization: all to shipToAddress
-  shipping         String    @default("runner")
-  shipToAddress    Json?
-  // The Shopify draft order this deal is invoiced with, and the order it becomes once paid.
-  shopifyDraftId   String?   @unique
-  shopifyDraftName String?   // "#D12"
-  invoiceUrl       String?
-  invoiceSentAt    DateTime?
-  shopifyOrderId   String?   @unique
-  shopifyOrderName String?
-  paidAt           DateTime?
-  notes            String?
-  createdById      String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
-  runs             BulkOrder[]
-}
-
-// A partner's prepaid run of prints for one race: the invoice, the runner list,
+// A partner's bulk order of prints for one race: who pays and the invoice, the runner list,
 // the co-branded production file, and the Artelo sheet that ships it. Runners
 // are real Order rows (trackstarOrderType "bulk") so research, weather, the
 // filename convention and the order modal all work on them unchanged.
@@ -326,7 +284,7 @@ model BulkOrder {
   quantity          Int       @default(0) // What was invoiced; the runner count may differ
   frameType         String    @default("Natural Premium Oak") // Artelo framing value
   productSize       String    @default("12x18")
-  stripeInvoiceUrl  String?   // The invoice/payment link sent to the partner (Stripe before, Shopify draft invoice now)
+  stripeInvoiceUrl  String?   // Older orders: the Stripe payment link (new ones are invoiced through Shopify below)
   paidAt            DateTime?
   // The Shopify order that paid for this run: a draft order tagged "bulk"
   // (plus this run's number, e.g. "BULK-0003", to link one made here first).
@@ -343,14 +301,32 @@ model BulkOrder {
   intakeNote        String?   // Shown to the partner on the intake page
   notes             String?
   partnerOrderId    String?   // The race_partner design order this belongs to, if any
-  // The deal it is one line of, and the event at the race ("Marathon",
-  // "Half Marathon", "8K"); research searches that event for its runners.
-  dealId            String?
-  deal              BulkDeal? @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  // The event at the race ("Marathon", "Half Marathon", "8K") on older
+  // orders; research searches that event for its runners.
   eventType         String?
   // Who runs it. New ones go to the bulk default (Order Assignment settings).
   assigneeId        String?
   assignee          User?     @relation("BulkAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  // Who is paying and what we agreed, and the Shopify invoice
+  // (server/domain/bulk/billing.js). Money in integer units only (CLAUDE.md).
+  contactName       String?
+  contactEmail      String?
+  contactPhone      String?
+  billingAddress    Json?     // { company, name, address1, address2, city, province, zip, country }
+  printKind         String    @default("standard") // standard: our race design, rendered by the worker; cobranded: theirs, from its own production file
+  events            String?   // Internal: which events were sold ("Full 5, Half 5, 10K 3"); the lookup finds each runner's
+  discountKind      String?   // percent | amount
+  discountPercent   Int?      // 15 = 15% off
+  discountCents     Int?      // 5000 = $50.00 off
+  currency          String    @default("USD")
+  discountNote      String?   // Why we gave it; never on the invoice
+  shipping          String    @default("runner") // runner: each print to its runner; organization: all to shipToAddress
+  shipToAddress     Json?
+  shopifyDraftId    String?   // The Shopify draft order it is invoiced with; tagged "bulk" and this number
+  shopifyDraftName  String?   // "#D72"
+  invoiceUrl        String?   // The customer's checkout link
+  invoiceSentAt     DateTime?
+  createdById       String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 

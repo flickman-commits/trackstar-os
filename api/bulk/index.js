@@ -14,10 +14,10 @@
  *     research    { id, limit? }             research the next batch of unresearched runners
  *     submitted   { id }                     the sheet went to Artelo
  *     new-intake-link { id }                 rotate the partner's intake token
- *     delete      { id }                     admins only; refused if paid; removes the runners, and the deal and its Shopify draft with its last line
+ *     delete      { id }                     admins only; refused if paid; removes the runners and the unpaid Shopify draft
  */
 import { syncShopifyBulkOrders } from '../../server/domain/bulk/shopifyBulk.js'
-import { paymentStatus, syncDraftStatus, setPaymentStatus, attachBilling, deleteRun } from '../../server/domain/bulk/deals.js'
+import { paymentStatus, syncDraftStatus, setPaymentStatus, deleteRun } from '../../server/domain/bulk/billing.js'
 import { shopifyAdminUrl } from '../../server/lib/links.js'
 import prisma from '../_lib/prisma.js'
 import { setCors, requireAdmin } from '../_lib/auth.js'
@@ -29,7 +29,7 @@ import {
 import { getCanonicalRaceName } from '../../server/scrapers/index.js'
 import { defaultAssigneeFor } from '../../server/domain/orders/assignment.js'
 import { sendPublicError } from '../../server/lib/publicError.js'
-import { seesMoney } from '../_lib/money.js'
+import { seesMoney, withoutBulkMoney } from '../_lib/money.js'
 import { bulkNeedingAttention } from '../../server/domain/bulk/attention.js'
 
 const RUNNER_SELECT = {
@@ -60,13 +60,13 @@ function shapeRunner(r) {
 }
 
 async function loadOne(id) {
-  const bulk = await prisma.bulkOrder.findUnique({ where: { id }, include: { deal: { select: { id: true, number: true, printKind: true, invoiceSentAt: true, paidAt: true } } } })
+  const bulk = await prisma.bulkOrder.findUnique({ where: { id } })
   if (!bulk) return null
   const runners = await prisma.order.findMany({ where: { bulkOrderId: id }, orderBy: { lineItemIndex: 'asc' }, select: RUNNER_SELECT })
   const ready = await readiness(bulk, runners)
   return {
     ...bulk,
-    paymentStatus: paymentStatus(bulk, bulk.deal),
+    paymentStatus: paymentStatus(bulk),
     shopifyOrderUrl: shopifyAdminUrl(bulk.shopifyOrderId),
     runners: runners.map(shapeRunner),
     readiness: ready,
@@ -99,8 +99,8 @@ export default async function handler(req, res) {
   const actor = (await requireAdmin(req, res))
   if (!actor) return
 
-  // The old Stripe invoice link shows what the partner paid: admins only, like every price.
-  const noMoney = b => (b && !seesMoney(actor) ? { ...b, stripeInvoiceUrl: null } : b)
+  // The discount and the invoice links show what the partner paid: admins only, like every price.
+  const noMoney = b => (seesMoney(actor) ? b : withoutBulkMoney(b))
   try {
     if (req.method === 'GET') {
       if (req.query?.options) return res.status(200).json({ frames: FRAME_OPTIONS, sizes: SIZE_OPTIONS })
@@ -108,8 +108,7 @@ export default async function handler(req, res) {
       if (req.query?.attention) return res.status(200).json({ runs: await bulkNeedingAttention() })
       if (req.query?.id) {
         // The invoice's state, read back from Shopify each time the order is opened.
-        const run = await prisma.bulkOrder.findUnique({ where: { id: String(req.query.id) }, select: { dealId: true } })
-        if (run?.dealId) await syncDraftStatus(run.dealId)
+        await syncDraftStatus(String(req.query.id))
         const one = await loadOne(String(req.query.id))
         if (!one) return res.status(404).json({ error: 'Bulk order not found' })
         return res.status(200).json({ bulkOrder: noMoney(one) })
@@ -122,13 +121,13 @@ export default async function handler(req, res) {
       }
       // One round trip for the list and one for every runner, then group in
       // memory. A query per order is what exhausts the pool on a busy morning.
-      const list = await prisma.bulkOrder.findMany({ orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }], include: { deal: { select: { id: true, number: true, printKind: true, invoiceSentAt: true, paidAt: true } } } })
+      const list = await prisma.bulkOrder.findMany({ orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }], })
       const all = list.length
         ? await prisma.order.findMany({ where: { bulkOrderId: { in: list.map(b => b.id) } }, select: { bulkOrderId: true, shippingAddress: true, researchedAt: true, productionFileUrl: true, status: true, runnerResearch: { select: { researchStatus: true }, take: 1, orderBy: { createdAt: 'desc' } } } })
         : []
       const byBulk = new Map()
       for (const r of all) { if (!byBulk.has(r.bulkOrderId)) byBulk.set(r.bulkOrderId, []); byBulk.get(r.bulkOrderId).push(r) }
-      return res.status(200).json({ bulkOrders: list.map(b => ({ ...noMoney(b), paymentStatus: paymentStatus(b, b.deal), shopifyOrderUrl: shopifyAdminUrl(b.shopifyOrderId), progress: progressOf(byBulk.get(b.id) || []) })) })
+      return res.status(200).json({ bulkOrders: list.map(b => ({ ...noMoney(b), paymentStatus: paymentStatus(b), shopifyOrderUrl: shopifyAdminUrl(b.shopifyOrderId), progress: progressOf(byBulk.get(b.id) || []) })) })
     }
 
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
@@ -157,7 +156,7 @@ export default async function handler(req, res) {
           assigneeId: await defaultAssigneeFor('bulk'),
         },
       })
-      return res.status(200).json({ bulkOrder: await loadOne(bulk.id) })
+      return res.status(200).json({ bulkOrder: noMoney(await loadOne(bulk.id)) })
     }
 
     if (!body.id) return res.status(400).json({ error: 'id is required' })
@@ -198,16 +197,15 @@ export default async function handler(req, res) {
       if ('dueDate' in data) follow.dueDate = data.dueDate
       if (Object.keys(follow).length) await prisma.order.updateMany({ where: { bulkOrderId: bulk.id }, data: follow })
       await audit(`Edited bulk order ${bulk.number} (${Object.keys(data).join(', ') || 'nothing'})`, { fields: Object.keys(data) })
-      return res.status(200).json({ bulkOrder: await loadOne(updated.id) })
+      return res.status(200).json({ bulkOrder: noMoney(await loadOne(updated.id)) })
     }
 
     // Invoice not sent / sent / paid. Shopify moves it on its own (syncDraftStatus, the import); this is the hand override.
     if (action === 'payment') {
       if (!(await requireAdminRole(req, res, actor))) return
-      if (!bulk.dealId) bulk.dealId = (await attachBilling(bulk)).dealId
-      await setPaymentStatus(bulk.dealId, String(body.status || ''))
+      await setPaymentStatus(bulk.id, String(body.status || ''))
       await audit(`Set bulk order ${bulk.number} payment to ${body.status}`)
-      return res.status(200).json({ bulkOrder: await loadOne(bulk.id) })
+      return res.status(200).json({ bulkOrder: noMoney(await loadOne(bulk.id)) })
     }
 
     if (action === 'paid') {
@@ -215,7 +213,7 @@ export default async function handler(req, res) {
       if (!(await requireAdminRole(req, res, actor))) return
       await prisma.bulkOrder.update({ where: { id: bulk.id }, data: { paidAt: body.paid ? new Date() : null } })
       await audit(`Marked bulk order ${bulk.number} ${body.paid ? 'paid' : 'unpaid'}`)
-      return res.status(200).json({ bulkOrder: await loadOne(bulk.id) })
+      return res.status(200).json({ bulkOrder: noMoney(await loadOne(bulk.id)) })
     }
 
     if (action === 'intake') {
@@ -225,7 +223,7 @@ export default async function handler(req, res) {
       if (created.length && bulk.status === 'collecting' && rows.every(r => addressComplete(r.address))) {
         // Leave status alone; "collecting" ends when the person says so.
       }
-      return res.status(200).json({ added: created.length, skipped: rows.length - created.length, problems, bulkOrder: await loadOne(bulk.id) })
+      return res.status(200).json({ added: created.length, skipped: rows.length - created.length, problems, bulkOrder: noMoney(await loadOne(bulk.id)) })
     }
 
     if (action === 'update-runner') {
@@ -243,7 +241,7 @@ export default async function handler(req, res) {
       }
       await prisma.order.update({ where: { id: runner.id }, data })
       await audit(`Edited runner ${runner.orderNumber} on bulk order ${bulk.number}`, { orderNumber: runner.orderNumber, fields: Object.keys(data) })
-      return res.status(200).json({ bulkOrder: await loadOne(bulk.id) })
+      return res.status(200).json({ bulkOrder: noMoney(await loadOne(bulk.id)) })
     }
 
     if (action === 'remove-runner') {
@@ -254,7 +252,7 @@ export default async function handler(req, res) {
         prisma.order.delete({ where: { id: runner.id } }),
       ])
       await audit(`Removed runner ${runner.runnerName || runner.orderNumber} from bulk order ${bulk.number}`, { orderNumber: runner.orderNumber, runnerName: runner.runnerName })
-      return res.status(200).json({ bulkOrder: await loadOne(bulk.id) })
+      return res.status(200).json({ bulkOrder: noMoney(await loadOne(bulk.id)) })
     }
 
     if (action === 'research') {
@@ -263,13 +261,13 @@ export default async function handler(req, res) {
       // finish well inside the function's time limit.
       const out = await researchPending(bulk, { limit: Math.min(5, Math.max(1, parseInt(body.limit, 10) || 3)) })
       if (bulk.status === 'collecting') await prisma.bulkOrder.update({ where: { id: bulk.id }, data: { status: 'fulfillment' } })
-      return res.status(200).json({ ...out, bulkOrder: await loadOne(bulk.id) })
+      return res.status(200).json({ ...out, bulkOrder: noMoney(await loadOne(bulk.id)) })
     }
 
     if (action === 'submitted') {
       await prisma.bulkOrder.update({ where: { id: bulk.id }, data: { status: 'submitted', submittedAt: new Date() } })
       await audit(`Marked bulk order ${bulk.number} submitted`)
-      return res.status(200).json({ bulkOrder: await loadOne(bulk.id) })
+      return res.status(200).json({ bulkOrder: noMoney(await loadOne(bulk.id)) })
     }
 
     if (action === 'new-intake-link') {
@@ -278,15 +276,14 @@ export default async function handler(req, res) {
       const { randomUUID } = await import('crypto')
       await prisma.bulkOrder.update({ where: { id: bulk.id }, data: { intakeToken: randomUUID() } })
       await audit(`Replaced the partner intake link for bulk order ${bulk.number}`)
-      return res.status(200).json({ bulkOrder: await loadOne(bulk.id) })
+      return res.status(200).json({ bulkOrder: noMoney(await loadOne(bulk.id)) })
     }
 
     if (action === 'delete') {
       const admin = await requireAdminRole(req, res, actor)
       if (!admin) return
       const out = await deleteRun(bulk.id)
-      const extra = [out.dealDeleted && `and its deal ${out.dealDeleted}`, out.draftDeleted && `and Shopify draft ${out.draftDeleted}`].filter(Boolean).join(' ')
-      await recordAudit({ action: 'bulk.delete', summary: `Deleted bulk order ${out.number} (${out.partnerName}, ${out.runners} runners)${extra ? ` ${extra}` : ''}`, detail: { bulkOrderId: bulk.id, ...out }, actor: admin })
+      await recordAudit({ action: 'bulk.delete', summary: `Deleted bulk order ${out.number} (${out.partnerName}, ${out.runners} runners)${out.draftDeleted ? ` and Shopify draft ${out.draftDeleted}` : ''}`, detail: { bulkOrderId: bulk.id, ...out }, actor: admin })
       return res.status(200).json({ success: true, ...out })
     }
 

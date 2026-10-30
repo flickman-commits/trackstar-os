@@ -23,7 +23,7 @@ export const SIZES = ['8x10', '12x18', '16x24']
  * "Chicago Marathon / World Majors". Everything else is the race's standard print.
  */
 function isBulkCobranded(order) {
-  return order.trackstarOrderType === 'bulk' && order.bulkOrder?.deal?.printKind === 'cobranded' && Boolean(order.bulkOrder?.number)
+  return order.trackstarOrderType === 'bulk' && order.bulkOrder?.printKind === 'cobranded' && Boolean(order.bulkOrder?.number)
 }
 
 export function editionOf(order) {
@@ -90,7 +90,7 @@ export const SPEC_SELECT = {
   raceName: true, raceNameOverride: true, raceYear: true, yearOverride: true,
   runnerName: true, runnerNameOverride: true, productSize: true, hadNoTime: true,
   photoPath: true, photoAddedManually: true, photoFree: true, shopifyOrderData: true, arteloOrderData: true, lineItemIndex: true,
-  bulkOrder: { select: { number: true, paidAt: true, deal: { select: { printKind: true } } } },
+  bulkOrder: { select: { number: true, paidAt: true, printKind: true } },
   runnerResearch: { orderBy: { id: 'desc' }, select: { researchStatus: true, bibNumber: true, officialTime: true, officialPace: true, eventType: true, race: { select: { id: true, raceDate: true, raceDateSource: true, raceDateSourceUrl: true, raceDateEvidence: true, raceDateVerifiedAt: true, raceDateConfirmedByPerson: true, location: true, weatherCondition: true, weatherTemp: true, weatherFetchedAt: true, weatherConfirmedAt: true, firstPrintedAt: true } } } },
 }
 
@@ -109,10 +109,10 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
   const raceYear = order.yearOverride ?? order.raceYear
   const name = (order.runnerNameOverride ?? order.runnerName ?? '').trim()
 
-  // A bulk deal of standard prints (our race design) renders like a shop order;
-  // a co-branded one is the designer's (server/domain/bulk/deals.js).
-  // A co-branded one renders once its line has an uploaded production file (templates.js).
-  const bulkStandard = order.trackstarOrderType === 'bulk' && ['standard', 'cobranded'].includes(order.bulkOrder?.deal?.printKind)
+  // A bulk order of standard prints (our race design) renders like a shop order;
+  // a co-branded one from its own production file (server/domain/bulk/billing.js).
+  // It renders once the order has an uploaded production file (templates.js).
+  const bulkStandard = order.trackstarOrderType === 'bulk' && ['standard', 'cobranded'].includes(order.bulkOrder?.printKind)
   // An overseas sample (server/domain/samples/sampleDesign.js) is our standard race print too.
   if (!['standard', 'sample'].includes(order.trackstarOrderType) && !bulkStandard) reasons.push('Only standard race prints are rendered')
   if (!SIZES.includes(order.productSize)) reasons.push(`No artboard for size "${order.productSize}"`)

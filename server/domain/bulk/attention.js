@@ -24,7 +24,7 @@ export async function bulkNeedingAttention(now = new Date()) {
   const runs = await prisma.bulkOrder.findMany({
     where: { status: { not: 'submitted' }, raceDate: { not: null, lte: new Date(now.getTime() + LEAD_DAYS * DAY) } },
     orderBy: [{ dueDate: 'asc' }, { raceDate: 'asc' }],
-    include: { deal: { select: { printKind: true } }, assignee: { select: { firstName: true } } },
+    include: { assignee: { select: { firstName: true } } },
   })
   if (!runs.length) return []
   const runners = await prisma.order.findMany({
@@ -51,7 +51,7 @@ export async function bulkNeedingAttention(now = new Date()) {
       const d = designs.find(x => x.id === run.partnerOrderId)
       if (!d || !APPROVED.includes(d.designStatus)) blockers.push(d?.designStatus === 'in_revision' ? 'design in revision' : 'design not approved')
     }
-    if (run.deal?.printKind === 'cobranded') {
+    if (run.printKind === 'cobranded') {
       const t = templates.find(x => x.key === templateKey(run.raceName, run.number))
       if (!t) blockers.push('no co-branded production file')
       else if (t.lastCheckOk === false) blockers.push('production file failed its check')

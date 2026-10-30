@@ -100,21 +100,20 @@ export function addressComplete(a) {
 }
 
 /**
- * The address a run's prints go to when its deal ships everything to the
- * organization (deals.js), in the runner-address shape; null when each
+ * The address an order's prints go to when it ships everything to the
+ * organization (billing.js), in the runner-address shape; null when each
  * runner gets their own.
  */
 export async function orgShipTo(bulk) {
-  if (!bulk.dealId) return null
-  const deal = await prisma.bulkDeal.findUnique({ where: { id: bulk.dealId }, select: { shipping: true, shipToAddress: true } })
-  const a = deal?.shipping === 'organization' ? deal.shipToAddress : null
+  const terms = 'shipping' in bulk ? bulk : await prisma.bulkOrder.findUnique({ where: { id: bulk.id }, select: { shipping: true, shipToAddress: true } })
+  const a = terms?.shipping === 'organization' ? terms.shipToAddress : null
   return a ? { line1: a.address1 || '', line2: a.address2 || '', city: a.city || '', state: a.province || '', zip: a.zip || '', country: a.country === 'US' || !a.country ? 'United States' : a.country } : null
 }
 
 /**
  * Create runner rows under a bulk order. Skips exact duplicate names already
  * present. Each runner carries the run's event, so research searches that
- * event; when the deal ships to the organization, that is every runner's
+ * event; when the order ships to the organization, that is every runner's
  * address and the list needs names only.
  */
 export async function addRunners(bulk, rows) {

@@ -204,12 +204,12 @@ export async function autoQueueRenders({ limit = 25 } = {}) {
   const from = since?.value ? new Date(since.value) : new Date()
   const candidates = await prisma.order.findMany({
     where: {
-      // Shop orders since the switch, and runners in a paid bulk deal of
-      // standard prints (deals.js): those render like shop orders.
+      // Shop orders since the switch, and runners in a paid bulk order
+      // (billing.js): those render like shop orders.
       OR: [
         { trackstarOrderType: 'standard', createdAt: { gte: from } },
         // Co-branded lines too: spec.js only lets one through once its uploaded file is checked.
-        { trackstarOrderType: 'bulk', bulkOrder: { paidAt: { not: null }, deal: { printKind: { in: ['standard', 'cobranded'] } } } },
+        { trackstarOrderType: 'bulk', bulkOrder: { paidAt: { not: null }, printKind: { in: ['standard', 'cobranded'] } } },
       ],
       status: { notIn: ['completed', 'flagged'] },
       raceName: { in: [...new Set(templates.map(t => t.split(' / ')[0]))] },

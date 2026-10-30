@@ -9,7 +9,7 @@ import { btnPrimary, btnSecondary, btnGhost, inputBase } from '@/lib/ui'
 import { useArmed } from '@/lib/useArmed'
 import { useAuth } from '@/lib/auth'
 import AssigneePicker, { Avatar, type Teammate } from '@/components/AssigneePicker'
-import { DealModal, InvoiceCard, LineTemplate, type Deal } from '@/components/bulk/DealPanels'
+import { OrderModal, InvoiceCard, ProductionFile, type Billing } from '@/components/bulk/BillingPanels'
 import StatusPill from '@/components/orders/StatusPill'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -67,10 +67,10 @@ export interface BulkOrder {
   intakeNote: string | null
   notes: string | null
   partnerOrderId: string | null
-  /** The deal it is one line of (DealPanels), and the event at the race. */
-  dealId?: string | null
-  deal?: { id: string; number: string; printKind: 'standard' | 'cobranded'; invoiceSentAt?: string | null; paidAt?: string | null } | null
-  /** not_sent / sent / paid (deals.js paymentStatus). */
+  /** Standard (our race design) or co-branded (theirs), and the events sold (an internal note). */
+  printKind?: 'standard' | 'cobranded'
+  events?: string | null
+  /** not_sent / sent / paid (billing.js paymentStatus). */
   paymentStatus?: 'not_sent' | 'sent' | 'paid'
   eventType?: string | null
   /** Who runs it; new ones go to the bulk default in Order Assignment. */
@@ -98,7 +98,7 @@ const STATUS_STYLE: Record<string, { dot: string; color: string; bg: string; bor
   fulfillment: { dot: 'bg-blue-500', color: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' },
   submitted: { dot: 'bg-emerald-500', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
 }
-// Where the invoice stands (server/domain/bulk/deals.js paymentStatus); Shopify moves it on its own.
+// Where the invoice stands (server/domain/bulk/billing.js paymentStatus); Shopify moves it on its own.
 const PAYMENT: Record<string, { label: string; dot: string; color: string; bg: string }> = {
   not_sent: { label: 'Invoice not sent', dot: 'bg-off-black/30', color: 'text-off-black/70', bg: 'bg-off-black/5' },
   sent: { label: 'Invoice sent', dot: 'bg-amber-500', color: 'text-amber-700', bg: 'bg-amber-50' },
@@ -243,7 +243,7 @@ export default function BulkView({ onOpenRunner, refreshRunners, onCount, toolba
           </table>
         )}
       </div>
-      {creating && <DealModal onClose={() => setCreating(false)} onCreated={deal => { setCreating(false); load(); if (deal.runs[0]) setSelectedId(deal.runs[0].id) }} />}
+      {creating && <OrderModal onClose={() => setCreating(false)} onCreated={order => { setCreating(false); load(); setSelectedId(order.id) }} />}
     </div>
   )
 }
@@ -264,7 +264,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   const [intakeLinkOpen, setIntakeLinkOpen] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   // The order's billing record: customer, terms, invoice, and a co-branded file's check.
-  const [deal, setDeal] = useState<Deal | null>(null)
+  const [billing, setBilling] = useState<Billing | null>(null)
   const [editingOrder, setEditingOrder] = useState(false)
   const { arm, isArmed } = useArmed()
   const { isAdmin } = useAuth()
@@ -274,10 +274,8 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
     const data = await res.json()
     if (!res.ok) { toast.error(data.error || 'Not found'); onBack(); return }
     setB(data.bulkOrder)
-    if (data.bulkOrder?.deal?.id) {
-      const d = await apiFetch(`${API_BASE}/api/bulk/deals?id=${encodeURIComponent(data.bulkOrder.deal.id)}`).then(r => r.json()).catch(() => null)
-      setDeal(d?.deal || null)
-    }
+    const d = await apiFetch(`${API_BASE}/api/bulk/billing?id=${encodeURIComponent(id)}`).then(r => r.json()).catch(() => null)
+    setBilling(d?.order || null)
   }, [id, onBack])
   useEffect(() => { load() }, [load])
 
@@ -291,14 +289,13 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   }
   const update = (fields: Record<string, unknown>) => act({ action: 'update', ...fields })
 
-  // A deal that fell through. The last line of a deal takes the deal and its unpaid Shopify draft with it.
-  const lastLine = !deal || deal.runs.length <= 1
+  // An order that fell through; its unpaid Shopify draft goes with it.
   const remove = async () => {
     if (!arm('delete')) return
-    const out = await act({ action: 'delete' }) as { number: string; dealDeleted: string | null; draftLeft: string | null } | null
+    const out = await act({ action: 'delete' }) as { number: string; draftLeft: string | null } | null
     if (!out) return
-    toast.success(`Deleted ${out.number}${out.dealDeleted ? ` and ${out.dealDeleted}` : ''}`)
-    if (out.draftLeft) toast.warning(`Shopify draft ${out.draftLeft} still lists it. ${lastLine ? 'Delete it in Shopify.' : 'Rebuild the invoice on the other lines.'}`)
+    toast.success(`Deleted ${out.number}`)
+    if (out.draftLeft) toast.warning(`Shopify draft ${out.draftLeft} is still there. Delete it in Shopify.`)
     refreshRunners()
     onBack()
   }
@@ -398,7 +395,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   const collecting = b.status === 'collecting'
   const fulfilling = b.status === 'fulfillment'
   const submitted = b.status === 'submitted'
-  const deleteWarning = `Click again: deletes ${b.number}${runners.length ? ` and its ${runners.length} runners` : ''}${lastLine && deal ? `, the deal${deal.shopifyDraftName ? ` and Shopify draft ${deal.shopifyDraftName}` : ''}` : ''}`
+  const deleteWarning = `Click again: deletes ${b.number}${runners.length ? ` and its ${runners.length} runners` : ''}${billing?.shopifyDraftName ? ` and Shopify draft ${billing.shopifyDraftName}` : ''}`
 
   // ── Cards, so the status decides the order rather than the markup ──
   const intakeCard = (
@@ -437,9 +434,9 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   // its PDF becomes that runner's file for the Artelo sheet.
   const standardCard = (
     <div className="bg-white border border-border-gray rounded-md p-4">
-      <div className="text-[11px] font-semibold text-off-black/50 uppercase tracking-wider">{b.deal?.printKind === 'cobranded' ? 'Co-branded prints' : 'Standard prints'}</div>
+      <div className="text-[11px] font-semibold text-off-black/50 uppercase tracking-wider">{b.printKind === 'cobranded' ? 'Co-branded prints' : 'Standard prints'}</div>
       <div className="text-lg font-bold text-off-black leading-tight mt-0.5">{b.raceName} {b.raceYear}{b.eventType && b.eventType !== 'Marathon' ? ` · ${b.eventType}` : ''}</div>
-      <p className="text-xs text-off-black/60 mt-1">Each runner's print renders from {b.deal?.printKind === 'cobranded' ? 'the uploaded co-branded file' : 'the race design'} once they are researched. Open a runner to approve their design; approved prints attach to the Artelo sheet on their own ({b.progress.files} of {runners.length} so far).</p>
+      <p className="text-xs text-off-black/60 mt-1">Each runner's print renders from {b.printKind === 'cobranded' ? 'the uploaded co-branded file' : 'the race design'} once they are researched. Open a runner to approve their design; approved prints attach to the Artelo sheet on their own ({b.progress.files} of {runners.length} so far).</p>
       <div className="flex flex-wrap items-center gap-1.5 mt-2">
         <span className="inline-flex items-center px-2 py-1 bg-white border border-border-gray rounded text-xs font-semibold text-off-black">{b.productSize}</span>
         <span className="inline-flex items-center px-2 py-1 bg-white border border-border-gray rounded text-xs font-semibold text-off-black">{b.frameType}</span>
@@ -571,7 +568,6 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   )
 
   const pay = PAYMENT[b.paymentStatus || (r.paid ? 'paid' : 'not_sent')]
-  const myRun = deal?.runs.find(x => x.id === b.id) || null
   const label = 'text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1.5'
   const link = 'self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2 disabled:opacity-50'
   // A status you can change from the pill itself, as on the order view.
@@ -611,9 +607,9 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
             {b.quantity ? <span className="inline-flex items-center px-2 py-1 bg-white border border-border-gray rounded text-xs font-semibold text-off-black">{b.quantity} prints</span> : null}
             <span className="inline-flex items-center px-2 py-1 bg-white border border-border-gray rounded text-xs font-semibold text-off-black">{b.productSize}</span>
             <span className="inline-flex items-center px-2 py-1 bg-white border border-border-gray rounded text-xs font-semibold text-off-black">{b.frameType}</span>
-            <span className="inline-flex items-center px-2 py-1 bg-white border border-border-gray rounded text-xs font-semibold text-off-black">{b.deal?.printKind === 'standard' ? 'Standard' : 'Co-branded'}</span>
+            <span className="inline-flex items-center px-2 py-1 bg-white border border-border-gray rounded text-xs font-semibold text-off-black">{b.printKind === 'standard' ? 'Standard' : 'Co-branded'}</span>
           </div>
-          {myRun?.notes && <div className="text-xs text-off-black/60 mt-2">Events: {myRun.notes}</div>}
+          {b.events && <div className="text-xs text-off-black/60 mt-2">Events: {b.events}</div>}
           <div className="mt-3 pt-2 border-t border-border-gray">
             <div className="text-[11px] text-off-black/50">Fulfillment date</div>
             <div className={`text-sm font-bold ${d !== null && d < 0 ? 'text-red-600' : d !== null && d <= 3 ? 'text-amber-700' : 'text-off-black'}`}>{b.dueDate ? fmtDate(b.dueDate) : 'Not set'}{d !== null && d < 0 ? ` · ${-d}d late` : ''}</div>
@@ -630,17 +626,17 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
             </Chip>
             {b.partnerOrderId && <Chip tone={r.design.ok ? 'green' : 'amber'}>{r.design.ok ? 'Design approved' : `Design ${(r.design.status || 'not started').replace(/_/g, ' ')}`}</Chip>}
             <Chip tone={r.runners.ok ? 'green' : r.runners.total ? 'amber' : 'gray'}>{r.runners.total ? `${r.runners.withAddress} of ${r.runners.total} with address` : 'No runners yet'}</Chip>
-            {deal && <Chip tone="gray">{deal.shipping === 'organization' ? 'Ships to them' : 'Ships to each runner'}</Chip>}
+            {billing && <Chip tone="gray">{billing.shipping === 'organization' ? 'Ships to them' : 'Ships to each runner'}</Chip>}
           </div>
         </div>
 
-        {deal && <InvoiceCard deal={deal} onChanged={load} />}
+        {billing && <InvoiceCard order={billing} onChanged={load} />}
 
         {/* Smaller things you can do to the order. */}
         <div>
           <h4 className={label}>Actions</h4>
           <div className="flex flex-col items-stretch gap-1.5">
-            {deal && <button onClick={() => setEditingOrder(true)} className={link}><Pencil className="w-3.5 h-3.5" /> Edit order</button>}
+            {billing && <button onClick={() => setEditingOrder(true)} className={link}><Pencil className="w-3.5 h-3.5" /> Edit order</button>}
             {!submitted && <button onClick={() => setIntakeOpen(o => !o)} className={link}><Plus className="w-3.5 h-3.5" /> Add runners</button>}
             {fulfilling && (
               <button onClick={researchAll} disabled={!canResearch || researching || allResearched} className={link} title={!r.paid ? 'Mark paid first' : !r.scraper.ok ? 'Scraper is not ready' : allResearched ? 'Everyone is researched' : 'Research every runner without results'}>
@@ -656,11 +652,11 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
 
       {/* The work, in the order the stage needs it. */}
       <div className="order-1 md:order-none md:col-start-1 md:row-start-1 min-w-0 flex flex-col gap-4">
-        {deal?.printKind === 'cobranded' && myRun && !submitted && (
+        {billing?.printKind === 'cobranded' && !submitted && (
           <div className="border border-border-gray rounded-md p-4 space-y-1.5">
             <div className={label}>Co-branded production file</div>
             <p className="text-[11px] text-off-black/50">The Illustrator file, built like a race template (same layers and artboards). The render worker checks it, then makes every runner's print from it.</p>
-            <LineTemplate run={myRun} onChanged={load} />
+            <ProductionFile order={billing} onChanged={load} />
           </div>
         )}
         {collecting && <>{intakeCard}{runnersCard}</>}
@@ -669,7 +665,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
       </div>
       </div>
       </div>
-      {editingOrder && deal && <DealModal deal={deal} onClose={() => setEditingOrder(false)} onCreated={() => { setEditingOrder(false); load() }} />}
+      {editingOrder && billing && <OrderModal order={billing} onClose={() => setEditingOrder(false)} onCreated={() => { setEditingOrder(false); load() }} />}
     </div>
   )
 }

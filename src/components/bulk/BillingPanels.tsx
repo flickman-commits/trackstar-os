@@ -8,10 +8,9 @@ import { btnPrimary, btnSecondary, btnGhost, inputBase, fieldLabel } from '@/lib
 import { useArmed } from '@/lib/useArmed'
 
 /**
- * A bulk deal (server/domain/bulk/deals.js): one organization's order across
- * any races and events, with what we agreed (standard or co-branded prints,
- * the discount, where it ships) and its Shopify invoice. Each line becomes a
- * bulk run, which keeps its own runner list, research and Artelo sheet.
+ * A bulk order's billing (server/domain/bulk/billing.js): the organization,
+ * one race, what we agreed (standard or co-branded prints, the discount,
+ * where it ships) and its Shopify invoice, all on the bulk order itself.
  */
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -25,27 +24,27 @@ type CatalogPrint = PrintOption & { race: string }
 
 const blankLine = (prev?: Line): Line => ({ raceName: prev?.raceName || '', raceYear: prev?.raceYear || String(new Date().getFullYear()), eventNote: '', quantity: '', productSize: prev?.productSize || '8x10', frameType: prev?.frameType || 'Unframed' })
 
-export type DealRun = { id: string; number: string; raceName: string; raceYear: number; eventType: string | null; notes?: string | null; dueDate?: string | null; raceDate?: string | null; quantity: number; productSize: string; frameType: string; paidAt: string | null; status: string; _count?: { runners: number }
-  /** Co-branded deals: the line's uploaded production file and its check. */
-  template?: { uploadedAt: string | null; checkedAt: string | null; ok: boolean | null; problems: string[] } | null }
-export type Deal = {
+export type Billing = {
   id: string; number: string; partnerName: string; contactName: string | null; contactEmail: string | null; contactPhone: string | null
+  raceName: string; raceYear: number; events: string | null; quantity: number; productSize: string; frameType: string; dueDate: string | null
   billingAddress: Address | null; printKind: 'standard' | 'cobranded'; discountKind: 'percent' | 'amount' | null; discountPercent: number | null; discountCents: number | null
   discountNote: string | null; shipping: 'runner' | 'organization'; shipToAddress: Address | null
   shopifyDraftId: string | null; shopifyDraftName: string | null; invoiceUrl: string | null; invoiceSentAt: string | null
-  shopifyOrderName: string | null; paidAt: string | null; adminUrl?: string | null; notes: string | null; runs: DealRun[]
+  shopifyOrderName: string | null; paidAt: string | null; adminUrl?: string | null; notes: string | null
+  /** Co-branded: the order's uploaded production file and its check. */
+  template?: { uploadedAt: string | null; checkedAt: string | null; ok: boolean | null; problems: string[] } | null
 }
 type PastDetails = {
   partnerName: string; contactName: string | null; contactEmail: string | null; contactPhone: string | null; billingAddress: Address | null
   printKind: 'standard' | 'cobranded'; shipping: 'runner' | 'organization'; shipToAddress: Address | null
   discountKind?: 'percent' | 'amount' | null; discountPercent?: number | null; discountCents?: number | null; discountNote?: string | null
 }
-type Quote = { lines: { number: string; raceName: string; raceYear: number; eventType: string; quantity: number; productSize: string; frameType: string; unitCents?: number; subtotalCents?: number | null; missing?: string }[]; subtotalCents: number; discountCents: number; totalCents: number; missing: string[] }
+type Quote = { lines: { number: string; raceName: string; raceYear: number; quantity: number; productSize: string; frameType: string; unitCents?: number; subtotalCents?: number | null; missing?: string }[]; subtotalCents: number; discountCents: number; totalCents: number; missing: string[] }
 
 const money = (cents: number) => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-async function dealApi<T>(body: Record<string, unknown>): Promise<T> {
-  const res = await apiFetch(`${API_BASE}/api/bulk/deals`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+async function billingApi<T>(body: Record<string, unknown>): Promise<T> {
+  const res = await apiFetch(`${API_BASE}/api/bulk/billing`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || 'Request failed')
   return data as T
@@ -67,28 +66,28 @@ function AddressFields({ value, onChange, withCompany = false }: { value: Addres
 
 /**
  * New bulk order: who, the race, how many, when it ships, and the terms. With
- * `deal` (the order's billing record), the same form edits it; once the
+ * `order`, the same form edits it; once the
  * invoice is out only the fulfillment date and the notes still change.
  */
-export function DealModal({ deal, onClose, onCreated }: { deal?: Deal; onClose: () => void; onCreated: (deal: Deal) => void }) {
+export function OrderModal({ order, onClose, onCreated }: { order?: Billing; onClose: () => void; onCreated: (order: Billing) => void }) {
   // The discount is money: admins set it (api/bulk/deals.js ignores it from anyone else).
   const { isAdmin } = useAuth()
   const [opts, setOpts] = useState<{ events: string[]; sizes: string[]; frames: string[] }>({ events: ['Marathon', 'Half Marathon', '10 Miler', '10K', '8K', '5K'], sizes: ['8x10', '12x18', '16x24'], frames: ['Unframed', 'Natural Premium Oak', 'Black Premium Oak'] })
-  const [f, setF] = useState(() => deal ? {
-    partnerName: deal.partnerName, contactName: deal.contactName || '', contactEmail: deal.contactEmail || '', contactPhone: deal.contactPhone || '',
-    printKind: deal.printKind, discountKind: deal.discountKind || '', discountPercent: deal.discountPercent != null ? String(deal.discountPercent) : '',
-    discountDollars: deal.discountCents != null ? String(deal.discountCents / 100) : '', discountNote: deal.discountNote || '', shipping: deal.shipping, notes: deal.notes || '',
+  const [f, setF] = useState(() => order ? {
+    partnerName: order.partnerName, contactName: order.contactName || '', contactEmail: order.contactEmail || '', contactPhone: order.contactPhone || '',
+    printKind: order.printKind, discountKind: order.discountKind || '', discountPercent: order.discountPercent != null ? String(order.discountPercent) : '',
+    discountDollars: order.discountCents != null ? String(order.discountCents / 100) : '', discountNote: order.discountNote || '', shipping: order.shipping, notes: order.notes || '',
   } : { partnerName: '', contactName: '', contactEmail: '', contactPhone: '', printKind: 'standard', discountKind: '', discountPercent: '', discountDollars: '', discountNote: '', shipping: 'runner', notes: '' })
-  const [billing, setBilling] = useState<Address>(() => ({ ...blankAddress(), ...(deal?.billingAddress || {}) }))
-  const [shipTo, setShipTo] = useState<Address>(() => ({ ...blankAddress(), ...(deal?.shipToAddress || {}) }))
-  const [lines, setLines] = useState<Line[]>(() => deal?.runs.length
-    ? deal.runs.map(r => ({ id: r.id, raceName: r.raceName, raceYear: String(r.raceYear), eventNote: r.notes || (r.eventType && r.eventType !== 'Marathon' ? r.eventType : ''), quantity: String(r.quantity), productSize: r.productSize, frameType: r.frameType }))
+  const [billing, setBilling] = useState<Address>(() => ({ ...blankAddress(), ...(order?.billingAddress || {}) }))
+  const [shipTo, setShipTo] = useState<Address>(() => ({ ...blankAddress(), ...(order?.shipToAddress || {}) }))
+  const [lines, setLines] = useState<Line[]>(() => order
+    ? [{ id: order.id, raceName: order.raceName, raceYear: String(order.raceYear), eventNote: order.events || '', quantity: String(order.quantity), productSize: order.productSize, frameType: order.frameType }]
     : [blankLine()])
-  const [due, setDue] = useState(() => (deal?.runs[0]?.dueDate || '').slice(0, 10))
-  const locked = Boolean(deal && (deal.invoiceSentAt || deal.paidAt))
+  const [due, setDue] = useState(() => (order?.dueDate || '').slice(0, 10))
+  const locked = Boolean(order && (order.invoiceSentAt || order.paidAt))
   // Start from an earlier order's details (same organization ordering again).
   const [past, setPast] = useState<PastDetails[]>([])
-  useEffect(() => { if (!deal) apiFetch(`${API_BASE}/api/bulk/deals?past=1`).then(r => r.json()).then(d => setPast(d.past || [])).catch(() => {}) }, [deal])
+  useEffect(() => { if (!order) apiFetch(`${API_BASE}/api/bulk/billing?past=1`).then(r => r.json()).then(d => setPast(d.past || [])).catch(() => {}) }, [order])
   const applyPast = (p: PastDetails) => {
     setF(v => ({
       ...v, partnerName: p.partnerName, contactName: p.contactName || '', contactEmail: p.contactEmail || '', contactPhone: p.contactPhone || '',
@@ -99,9 +98,9 @@ export function DealModal({ deal, onClose, onCreated }: { deal?: Deal; onClose: 
     setShipTo({ ...blankAddress(), ...(p.shipToAddress || {}) })
   }
   const [busy, setBusy] = useState(false)
-  useEffect(() => { apiFetch(`${API_BASE}/api/bulk/deals?options=1`).then(r => r.json()).then(setOpts).catch(() => {}) }, [])
+  useEffect(() => { apiFetch(`${API_BASE}/api/bulk/billing?options=1`).then(r => r.json()).then(setOpts).catch(() => {}) }, [])
   const [catalog, setCatalog] = useState<CatalogPrint[] | null>(null)
-  useEffect(() => { apiFetch(`${API_BASE}/api/bulk/deals?catalog=1`).then(r => r.json()).then(d => setCatalog(d.products || [])).catch(() => setCatalog([])) }, [])
+  useEffect(() => { apiFetch(`${API_BASE}/api/bulk/billing?catalog=1`).then(r => r.json()).then(d => setCatalog(d.products || [])).catch(() => setCatalog([])) }, [])
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF(v => ({ ...v, [k]: e.target.value }))
   const setLine = (i: number, k: keyof Line, v: string) => setLines(ls => ls.map((l, j) => j === i ? { ...l, [k]: v } : l))
   const units = lines.reduce((n, l) => n + (parseInt(l.quantity, 10) || 0), 0)
@@ -112,17 +111,17 @@ export function DealModal({ deal, onClose, onCreated }: { deal?: Deal; onClose: 
     if (!due) { toast.error('Set the fulfillment date'); return }
     setBusy(true)
     try {
-      const out = await dealApi<{ deal: Deal }>({
-        action: deal ? 'update' : 'create', ...(deal ? { id: deal.id } : {}), ...f,
+      const out = await billingApi<{ order: Billing }>({
+        action: order ? 'update' : 'create', ...(order ? { id: order.id } : {}), ...f,
         discountKind: f.discountKind || null,
         billingAddress: { ...billing, company: billing.company || f.partnerName, name: f.contactName },
         shipToAddress: f.shipping === 'organization' ? { ...shipTo, company: f.partnerName, name: f.contactName } : null,
         ...(locked ? {} : { lines }),
         fulfillmentDate: due,
       })
-      if (deal) { toast.success(deal.shopifyDraftId && !locked ? 'Saved. Update the invoice so it matches.' : 'Saved'); onCreated(out.deal); return }
-      toast.success(`${out.deal.runs[0]?.number || 'Bulk order'} created`)
-      onCreated(out.deal)
+      if (order) { toast.success(order.shopifyDraftId && !locked ? 'Saved. Update the invoice so it matches.' : 'Saved'); onCreated(out.order); return }
+      toast.success(`${out.order.number} created`)
+      onCreated(out.order)
     } catch (err) { toast.error((err as Error).message) } finally { setBusy(false) }
   }
 
@@ -130,9 +129,9 @@ export function DealModal({ deal, onClose, onCreated }: { deal?: Deal; onClose: 
   return (
     <div className="fixed inset-0 z-50 bg-off-black/60 flex items-center justify-center p-4" onClick={onClose}>
       <form onSubmit={submit} onClick={e => e.stopPropagation()} className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-full overflow-y-auto p-6 space-y-4">
-        <div className="flex items-center justify-between"><h3 className="text-base font-semibold">{deal ? `Edit ${deal.runs[0]?.number || 'bulk order'}` : 'New bulk order'}</h3><button type="button" onClick={onClose} className={btnGhost}><X className="w-4 h-4" /></button></div>
+        <div className="flex items-center justify-between"><h3 className="text-base font-semibold">{order ? `Edit ${order.number}` : 'New bulk order'}</h3><button type="button" onClick={onClose} className={btnGhost}><X className="w-4 h-4" /></button></div>
 
-        {!deal && past.length > 0 && (
+        {!order && past.length > 0 && (
           <label className="block">{label('Start from an earlier bulk order (optional)')}
             <select defaultValue="" onChange={e => { const p = past[Number(e.target.value)]; if (p) applyPast(p) }} className={`${inputBase} w-full`}>
               <option value="">New organization</option>
@@ -188,7 +187,7 @@ export function DealModal({ deal, onClose, onCreated }: { deal?: Deal; onClose: 
           </div>
         </div>
 
-        {/* The deal */}
+        {/* The terms */}
         {isAdmin && <div className="grid grid-cols-2 gap-2">
           <label className="block">{label('Discount')}
             <select value={f.discountKind} onChange={set('discountKind')} className={`${inputBase} w-full`}>
@@ -224,24 +223,24 @@ export function DealModal({ deal, onClose, onCreated }: { deal?: Deal; onClose: 
 
         <div className="flex justify-end gap-2 pt-1">
           <button type="button" onClick={onClose} className={btnGhost}>Cancel</button>
-          <button type="submit" disabled={busy} className={btnPrimary}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : deal ? 'Save changes' : 'Create bulk order'}</button>
+          <button type="submit" disabled={busy} className={btnPrimary}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : order ? 'Save changes' : 'Create bulk order'}</button>
         </div>
       </form>
     </div>
   )
 }
 
-/** A co-branded line's production file: upload or replace it, and what the worker's check said. */
-export function LineTemplate({ run, onChanged }: { run: DealRun; onChanged: () => void }) {
+/** A co-branded order's production file: upload or replace it, and what the worker's check said. */
+export function ProductionFile({ order, onChanged }: { order: Billing; onChanged: () => void }) {
   const [busy, setBusy] = useState(false)
-  const t = run.template
+  const t = order.template
   const upload = async (file: File) => {
     setBusy(true)
     try {
-      const { path, uploadUrl } = await dealApi<{ path: string; uploadUrl: string }>({ action: 'template-upload', runId: run.id, fileName: file.name })
+      const { path, uploadUrl } = await billingApi<{ path: string; uploadUrl: string }>({ action: 'template-upload', id: order.id, fileName: file.name })
       const res = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'application/postscript', 'x-upsert': 'true' }, body: file })
       if (!res.ok) throw new Error(`The upload failed (${res.status})`)
-      await dealApi({ action: 'template-saved', runId: run.id, path })
+      await billingApi({ action: 'template-saved', id: order.id, path })
       toast.success('Uploaded. The render worker checks it on its next check-in.')
       onChanged()
     } catch (err) { toast.error((err as Error).message) } finally { setBusy(false) }
@@ -252,8 +251,8 @@ export function LineTemplate({ run, onChanged }: { run: DealRun; onChanged: () =
     : { text: `Check found problems: ${t.problems.slice(0, 2).join('; ') || 'see Settings > Print Templates'}`, cls: 'text-red-600' }
   return (
     <div className="flex items-center gap-2 text-xs">
-      <span className="font-medium text-off-black min-w-0 truncate">{run.raceName} {run.raceYear}{run.eventType ? ` · ${run.eventType}` : ''}</span>
-      <span className="font-mono text-[11px] text-off-black/40">{run.number}</span>
+      <span className="font-medium text-off-black min-w-0 truncate">{order.raceName} {order.raceYear}</span>
+      <span className="font-mono text-[11px] text-off-black/40">{order.number}</span>
       <span className={`flex-1 min-w-0 truncate ${status.cls}`} title={status.text}>{status.text}</span>
       <label className={`${btnSecondary} cursor-pointer shrink-0 ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
         {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}{t ? 'Replace .ai' : 'Upload .ai'}
@@ -265,10 +264,10 @@ export function LineTemplate({ run, onChanged }: { run: DealRun; onChanged: () =
 
 /**
  * Sidebar card: who is paying and the Shopify invoice (build, open, copy the
- * customer's link, email). The bulk order view loads `deal` (the order's
- * billing record) and reloads after a change.
+ * customer's link, email). The bulk order view loads `order` (its billing,
+ * from /api/bulk/billing) and reloads after a change.
  */
-export function InvoiceCard({ deal, onChanged }: { deal: Deal; onChanged: () => void }) {
+export function InvoiceCard({ order, onChanged }: { order: Billing; onChanged: () => void }) {
   const { isAdmin } = useAuth()
   const [quote, setQuote] = useState<Quote | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -277,41 +276,41 @@ export function InvoiceCard({ deal, onChanged }: { deal: Deal; onChanged: () => 
   // Prices are admins' only.
   useEffect(() => {
     if (!isAdmin) return
-    apiFetch(`${API_BASE}/api/bulk/deals?id=${encodeURIComponent(deal.id)}&quote=1`).then(r => r.ok ? r.json() : null).then(setQuote).catch(() => setQuote(null))
-  }, [deal.id, deal.shopifyDraftId, isAdmin])
+    apiFetch(`${API_BASE}/api/bulk/billing?id=${encodeURIComponent(order.id)}&quote=1`).then(r => r.ok ? r.json() : null).then(setQuote).catch(() => setQuote(null))
+  }, [order.id, order.shopifyDraftId, isAdmin])
 
   const buildInvoice = async () => {
     setBusy('invoice')
     try {
-      const out = await dealApi<{ draftName: string; quote: Quote }>({ action: 'invoice', id: deal.id })
+      const out = await billingApi<{ draftName: string; quote: Quote }>({ action: 'invoice', id: order.id })
       setQuote(out.quote)
       toast.success(`Shopify invoice ${out.draftName} is ready`)
       onChanged()
     } catch (err) { toast.error((err as Error).message) } finally { setBusy(null) }
   }
   const send = async () => {
-    if (!deal.contactEmail) { toast.error('Add the contact email first'); return }
+    if (!order.contactEmail) { toast.error('Add the contact email first'); return }
     if (!arm('send')) return
     setBusy('send')
     try {
-      const out = await dealApi<{ sentTo: string }>({ action: 'send-invoice', id: deal.id })
+      const out = await billingApi<{ sentTo: string }>({ action: 'send-invoice', id: order.id })
       toast.success(`Invoice sent to ${out.sentTo}`)
       onChanged()
     } catch (err) { toast.error((err as Error).message) } finally { setBusy(null) }
   }
 
-  const discount = deal.discountKind === 'percent' ? `${deal.discountPercent}% off` : deal.discountKind === 'amount' ? `${money(deal.discountCents || 0)} off` : 'No discount'
+  const discount = order.discountKind === 'percent' ? `${order.discountPercent}% off` : order.discountKind === 'amount' ? `${money(order.discountCents || 0)} off` : 'No discount'
   const row = 'w-full inline-flex items-center justify-center gap-1.5'
   return (
     <div className="bg-subtle-gray border border-border-gray rounded-md p-3 space-y-3">
       <div>
         <div className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-0.5">Customer &amp; invoice</div>
-        <div className="text-sm font-semibold text-off-black">{deal.contactName || 'No contact yet'}</div>
-        {deal.contactEmail && <div className="text-xs text-off-black/60 break-all">{deal.contactEmail}</div>}
+        <div className="text-sm font-semibold text-off-black">{order.contactName || 'No contact yet'}</div>
+        {order.contactEmail && <div className="text-xs text-off-black/60 break-all">{order.contactEmail}</div>}
       </div>
       {isAdmin && (
         <div className="text-xs space-y-0.5">
-          <div className="text-off-black/70">{discount}{deal.discountNote ? <span className="text-off-black/45"> · {deal.discountNote}</span> : null}</div>
+          <div className="text-off-black/70">{discount}{order.discountNote ? <span className="text-off-black/45"> · {order.discountNote}</span> : null}</div>
           {quote && (
             <>
               <div className="flex justify-between text-off-black/55"><span>Subtotal</span><span>{money(quote.subtotalCents)}</span></div>
@@ -323,26 +322,26 @@ export function InvoiceCard({ deal, onChanged }: { deal: Deal; onChanged: () => 
           {quote && quote.missing.length > 0 && <p className="text-red-600">{quote.missing.join('; ')}</p>}
         </div>
       )}
-      {isAdmin && !deal.paidAt && quote && (
+      {isAdmin && !order.paidAt && quote && (
         <div className="space-y-1.5">
-          {!deal.invoiceSentAt && (
-            <button onClick={buildInvoice} disabled={busy !== null || quote.missing.length > 0} className={`${deal.shopifyDraftId ? btnSecondary : btnPrimary} ${row}`} title={quote.missing.join('; ') || undefined}>
-              {busy === 'invoice' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Receipt className="w-3.5 h-3.5" />}{deal.shopifyDraftId ? `Update invoice ${deal.shopifyDraftName || ''}` : 'Build Shopify invoice'}
+          {!order.invoiceSentAt && (
+            <button onClick={buildInvoice} disabled={busy !== null || quote.missing.length > 0} className={`${order.shopifyDraftId ? btnSecondary : btnPrimary} ${row}`} title={quote.missing.join('; ') || undefined}>
+              {busy === 'invoice' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Receipt className="w-3.5 h-3.5" />}{order.shopifyDraftId ? `Update invoice ${order.shopifyDraftName || ''}` : 'Build Shopify invoice'}
             </button>
           )}
-          {deal.invoiceUrl && <button onClick={send} disabled={busy !== null} className={`${deal.invoiceSentAt ? btnSecondary : btnPrimary} ${row}`}>{busy === 'send' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}{isArmed('send') ? `Click again: Shopify emails it to ${deal.contactEmail}` : deal.invoiceSentAt ? 'Email it again' : 'Email invoice'}</button>}
+          {order.invoiceUrl && <button onClick={send} disabled={busy !== null} className={`${order.invoiceSentAt ? btnSecondary : btnPrimary} ${row}`}>{busy === 'send' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}{isArmed('send') ? `Click again: Shopify emails it to ${order.contactEmail}` : order.invoiceSentAt ? 'Email it again' : 'Email invoice'}</button>}
         </div>
       )}
-      {(deal.adminUrl || deal.invoiceUrl) && isAdmin && (
+      {(order.adminUrl || order.invoiceUrl) && isAdmin && (
         <div className="flex flex-col items-start gap-1">
-          {deal.adminUrl && <a href={deal.adminUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2"><ExternalLink className="w-3.5 h-3.5" /> Open in Shopify</a>}
-          {deal.invoiceUrl && !deal.paidAt && <button onClick={() => navigator.clipboard.writeText(deal.invoiceUrl!).then(() => toast.success('Customer payment link copied'))} className="inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2"><Copy className="w-3.5 h-3.5" /> Copy customer payment link</button>}
+          {order.adminUrl && <a href={order.adminUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2"><ExternalLink className="w-3.5 h-3.5" /> Open in Shopify</a>}
+          {order.invoiceUrl && !order.paidAt && <button onClick={() => navigator.clipboard.writeText(order.invoiceUrl!).then(() => toast.success('Customer payment link copied'))} className="inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2"><Copy className="w-3.5 h-3.5" /> Copy customer payment link</button>}
         </div>
       )}
-      {!isAdmin && !deal.paidAt && <p className="text-xs text-off-black/50">Matt handles the invoice.</p>}
-      {deal.invoiceSentAt && !deal.paidAt && <p className="text-[11px] text-off-black/45">Emailed {new Date(deal.invoiceSentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}. Turns paid on its own once they pay.</p>}
-      {deal.paidAt && <p className="text-xs font-medium text-green-700">Paid{deal.shopifyOrderName ? ` · ${deal.shopifyOrderName}` : ''}</p>}
-      {deal.notes && <p className="text-xs text-off-black/60 whitespace-pre-wrap border-t border-border-gray pt-2">{deal.notes}</p>}
+      {!isAdmin && !order.paidAt && <p className="text-xs text-off-black/50">Matt handles the invoice.</p>}
+      {order.invoiceSentAt && !order.paidAt && <p className="text-[11px] text-off-black/45">Emailed {new Date(order.invoiceSentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}. Turns paid on its own once they pay.</p>}
+      {order.paidAt && <p className="text-xs font-medium text-green-700">Paid{order.shopifyOrderName ? ` · ${order.shopifyOrderName}` : ''}</p>}
+      {order.notes && <p className="text-xs text-off-black/60 whitespace-pre-wrap border-t border-border-gray pt-2">{order.notes}</p>}
     </div>
   )
 }
