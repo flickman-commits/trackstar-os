@@ -39,7 +39,20 @@ const modalLink = 'inline-flex items-center gap-1.5 text-sm font-medium text-[#4
 const note = 'rounded-xl bg-subtle-gray border border-border-gray p-3 text-off-black/70'
 const warn = 'rounded-xl bg-amber-50 border border-amber-200 p-3 text-amber-800'
 const bad = 'text-red-700'
-const doneLine = 'inline-flex items-center gap-1.5 text-emerald-700 font-medium'
+/** What a finished action did: a green check, the headline, and a grey line under it. */
+function Done({ title, children }: { title: React.ReactNode; children?: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="mt-0.5 w-8 h-8 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0"><Check className="w-4 h-4" strokeWidth={2.5} /></span>
+      <div className="min-w-0 pt-1">
+        <div className="text-[15px] font-semibold text-off-black">{title}</div>
+        {children && <div className="mt-1 text-off-black/60 leading-relaxed">{children}</div>}
+      </div>
+    </div>
+  )
+}
+/** "Open in Artelo" beside Done in a finished action's footer. */
+const OpenInArtelo = ({ href }: { href: string }) => <a href={href} target="_blank" rel="noopener noreferrer" className={`${modalCancel} text-[#4600D6] hover:text-[#4600D6]`}><ArteloIcon />Open in Artelo</a>
 const Spin = () => <Loader2 className="w-4 h-4 animate-spin" />
 const Loading = ({ children }: { children: React.ReactNode }) => <div className="text-off-black/50 inline-flex items-center gap-2"><Spin />{children}</div>
 const ArteloIcon = () => <img src="/artelo-icon.png" alt="" className="w-4 h-4 rounded-[3px]" />
@@ -114,14 +127,11 @@ function AddressForm({ o, thread, onDone, onCancel }: FormProps) {
   if (saved) {
     return (
       <ActionModal icon={MapPin} title="Shipping address" sub={`#${o.number}`} onClose={onCancel}
-        footer={<button onClick={onCancel} className={modalPrimary}>Done</button>}>
-        <div className={doneLine}><Check className="w-4 h-4" />Changed in Shopify. Now paste it into Artelo:</div>
+        footer={<>{saved.arteloUrl && <OpenInArtelo href={saved.arteloUrl} />}<button onClick={onCancel} className={modalPrimary}>Done</button></>}>
+        <Done title="Changed in Shopify">Now paste it into Artelo. It is already copied.</Done>
         <pre className={`${note} whitespace-pre-wrap font-sans`}>{saved.pasted}</pre>
+        <button onClick={() => { navigator.clipboard.writeText(saved.pasted).then(() => toast.success('Copied')).catch(() => {}) }} className={modalLink}><Copy className="w-4 h-4" />Copy again</button>
         {saved.taxNote && <div className={warn}>{saved.taxNote}</div>}
-        <div className="flex items-center gap-5">
-          <button onClick={() => { navigator.clipboard.writeText(saved.pasted).then(() => toast.success('Copied')).catch(() => {}) }} className={modalLink}><Copy className="w-4 h-4" />Copy again</button>
-          {saved.arteloUrl && <a href={saved.arteloUrl} target="_blank" rel="noopener noreferrer" className={modalLink}><ArteloIcon />Open in Artelo</a>}
-        </div>
       </ActionModal>
     )
   }
@@ -239,10 +249,9 @@ function CancelForm({ o, thread, onDone, onCancel }: FormProps) {
   if (done) {
     return (
       <ActionModal icon={Ban} title="Cancelled" sub={`#${o.number}`} onClose={onCancel}
-        footer={<button onClick={onCancel} className={modalPrimary}>Done</button>}>
-        <div className={doneLine}><Check className="w-4 h-4" />Cancelled in Shopify, {done.display} refunded, off the fulfillment queue.</div>
+        footer={<>{done.arteloUrl && <OpenInArtelo href={done.arteloUrl} />}<button onClick={onCancel} className={modalPrimary}>Done</button></>}>
+        <Done title={`Cancelled, ${done.display} refunded`}>It is off the fulfillment queue.</Done>
         <div className={warn}>Now cancel it in Artelo too, or it stays there.</div>
-        {done.arteloUrl && <a href={done.arteloUrl} target="_blank" rel="noopener noreferrer" className={modalLink}><ArteloIcon />Open in Artelo</a>}
       </ActionModal>
     )
   }
@@ -330,8 +339,9 @@ function DamageClaimForm({ o, thread, onDone, onCancel }: FormProps) {
     return (
       <ActionModal icon={MessageSquareWarning} title={sent.kind === 'lost' ? 'Lost in transit claim sent' : 'Damage claim sent'} sub={`#${o.number}`} onClose={onCancel}
         footer={<button onClick={onCancel} className={modalPrimary}>Done</button>}>
-        <div className={doneLine}><Check className="w-4 h-4" />Claim sent to {prep?.to}{sent.photos ? ` with ${sent.photos} photo${sent.photos === 1 ? '' : 's'}` : ''}.</div>
-        <div className="text-off-black/60">Their answer comes into Support as its own conversation. The free replacement shows under Orders once Artelo makes it.</div>
+        <Done title={`Sent to ${prep?.to || 'Artelo support'}${sent.photos ? ` with ${sent.photos} photo${sent.photos === 1 ? '' : 's'}` : ''}`}>
+          Their answer comes into Support as its own conversation. The free replacement shows under Orders once Artelo makes it.
+        </Done>
       </ActionModal>
     )
   }
@@ -451,9 +461,10 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
   if (done) {
     return (
       <ActionModal icon={Repeat} title="Artelo order created" sub={`#${o.number}`} onClose={onCancel}
-        footer={<button onClick={onCancel} className={modalPrimary}>Done</button>}>
-        <div className={doneLine}><Check className="w-4 h-4" />{done.test ? 'Test order' : 'Artelo order'} {done.orderId} created{done.test ? ' (not produced)' : ''}.</div>
-        {done.url && <a href={done.url} target="_blank" rel="noopener noreferrer" className={modalLink}><ArteloIcon />Open in Artelo</a>}
+        footer={<>{done.url && <OpenInArtelo href={done.url} />}<button onClick={onCancel} className={modalPrimary}>Done</button></>}>
+        <Done title={`${done.test ? 'Test order' : 'Order'} ${done.orderId}`}>
+          {done.test ? 'A test order in Artelo. It is never produced.' : 'Artelo makes it and ships it to the customer.'}
+        </Done>
       </ActionModal>
     )
   }
