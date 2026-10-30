@@ -25,7 +25,12 @@ function datasourceUrl() {
   const sep = url.includes('?') ? '&' : '?'
   // Local processes (dev server, render worker, scripts) talk to the same
   // database, so they get a small cap too: uncapped, each opened ~20.
-  const limit = process.env.NODE_ENV === 'production' ? 5 : 3
+  // Production was 5 until Oct 30 2026: approving ~20 prints in four minutes
+  // (each approve uploads to Drive and Artelo while the sender runs) put
+  // enough instances up to fill the pooler's 200 client connections, and
+  // approves failed with EMAXCONN. 3 lets ~66 instances share it; a query
+  // past the cap waits (pool_timeout) instead of failing.
+  const limit = 3
   return `${url}${sep}connection_limit=${limit}&pool_timeout=30`
 }
 
