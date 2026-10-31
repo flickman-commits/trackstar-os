@@ -45,6 +45,7 @@ import WeatherService from '../../server/services/WeatherService.js'
 import { fetchWithTimeout } from '../../server/lib/fetchWithTimeout.js'
 import { sendPublicError } from '../../server/lib/publicError.js'
 import { sendEmail } from '../../server/lib/email.js'
+import { designDueDate } from '../../server/domain/orders/designDue.js'
 
 // Build the customer-facing approval/portal URL. Prod uses the Vercel
 // production URL; falls back to APP_BASE_URL for other environments.
@@ -953,10 +954,10 @@ async function handleMondayPipeline(res) {
     const total = pipelineOrders.length
     const now = new Date()
 
-    // Urgent = due within 3 days (same logic as frontend)
+    // Urgent = design due within 3 days (same logic as frontend; designDue.js)
     const urgentOrders = pipelineOrders.filter(o => {
       if (!o.dueDate) return false
-      const diffDays = Math.ceil((new Date(o.dueDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      const diffDays = Math.ceil((designDueDate(o.dueDate).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
       return diffDays <= 3
     })
 
@@ -971,7 +972,7 @@ async function handleMondayPipeline(res) {
     }
 
     const urgentSection = urgentCount > 0
-      ? `\n\n:rotating_light: *Urgent (due within 3 days):*\n${urgentOrders.map(o => `• #${o.parentOrderNumber || o.orderNumber || '?'} - ${o.runnerName || 'Unknown'} (${o.raceName || 'Custom'}) - due ${formatDate(o.dueDate)}`).join('\n')}`
+      ? `\n\n:rotating_light: *Urgent (design due within 3 days):*\n${urgentOrders.map(o => `• #${o.parentOrderNumber || o.orderNumber || '?'} - ${o.runnerName || 'Unknown'} (${o.raceName || 'Custom'}) - design due ${formatDate(designDueDate(o.dueDate))}`).join('\n')}`
       : ''
 
     const message = {
@@ -1055,7 +1056,8 @@ async function handleDailyDesignUpdate(res) {
     const dueNext7Days = []
     for (const o of customOrders) {
       if (!o.dueDate) continue
-      const due = new Date(o.dueDate)
+      // Designers work to the design due date, two days before the customer's (designDue.js).
+      const due = designDueDate(o.dueDate)
       if (due < now) overdue.push({ ...o, due })
       else if (due <= endOfWeek) dueNext7Days.push({ ...o, due })
     }
@@ -1063,7 +1065,7 @@ async function handleDailyDesignUpdate(res) {
     dueNext7Days.sort((a, b) => a.due - b.due)
 
     const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })
-    const orderLine = (o) => `• #${displayNum(o)} - ${o.runnerName || 'Unknown'} (${o.raceName || 'Custom'}) - due ${fmt(o.due)}`
+    const orderLine = (o) => `• #${displayNum(o)} - ${o.runnerName || 'Unknown'} (${o.raceName || 'Custom'}) - design due ${fmt(o.due)}`
 
     const appUrl = process.env.APP_BASE_URL || ''
     const dashboardFooter = appUrl
@@ -1078,9 +1080,9 @@ async function handleDailyDesignUpdate(res) {
 
     const customSection = [
       `*🎨 CUSTOM ORDERS*`,
-      `*${customOrders.length}* in the queue${overdue.length > 0 ? ` · *${overdue.length} overdue*` : ''}${dueNext7Days.length > 0 ? ` · ${dueNext7Days.length} due in the next 7 days` : ''}`,
-      overdue.length > 0 ? `\n:rotating_light: *Overdue (${overdue.length}):*\n${overdue.map(orderLine).join('\n')}` : '',
-      dueNext7Days.length > 0 ? `\n:date: *Due in the next 7 days (${dueNext7Days.length}):*\n${dueNext7Days.map(orderLine).join('\n')}` : '',
+      `*${customOrders.length}* in the queue${overdue.length > 0 ? ` · *${overdue.length} past design due*` : ''}${dueNext7Days.length > 0 ? ` · ${dueNext7Days.length} design due in the next 7 days` : ''}`,
+      overdue.length > 0 ? `\n:rotating_light: *Past design due (${overdue.length}):*\n${overdue.map(orderLine).join('\n')}` : '',
+      dueNext7Days.length > 0 ? `\n:date: *Design due in the next 7 days (${dueNext7Days.length}):*\n${dueNext7Days.map(orderLine).join('\n')}` : '',
     ].filter(Boolean).join('\n')
 
     const message = {

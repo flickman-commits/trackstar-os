@@ -47,6 +47,22 @@ export const isDueDateUrgent = (dateStr?: string, live = true): boolean => {
 export const dueIsLive = (o: Pick<Order, 'trackstarOrderType' | 'designStatus'>): boolean =>
   o.trackstarOrderType !== 'custom' || !o.designStatus || o.designStatus === 'not_started' || o.designStatus === 'in_progress'
 
+/**
+ * Designers work to the design due date: two days before the date the
+ * customer was promised (dueDate), so first designs go out early instead
+ * of on the day. Designers see only this date; admins see it and, beside
+ * it, the customer's date. Standard orders have no design date.
+ */
+export const DESIGN_LEAD_DAYS = 2
+export const designDueDate = (o: Pick<Order, 'trackstarOrderType' | 'dueDate'>): string | undefined => {
+  if (!o.dueDate) return undefined
+  if (o.trackstarOrderType !== 'custom') return o.dueDate
+  return new Date(new Date(o.dueDate).getTime() - DESIGN_LEAD_DAYS * 86400000).toISOString()
+}
+/** The customer's date, short ("Nov 4"), for the admin's second line. */
+export const customerDueShort = (dateStr?: string) =>
+  dateStr ? new Date(dateStr).toLocaleDateString('en-US', { timeZone: TZ, month: 'short', day: 'numeric' }) : ''
+
 // How long an order has been workable: since it was placed, or since race
 // day for an order placed before its race. Gray up to 2 days, orange 3 to 5,
 // red after 5. An order whose race has not happened yet has no age.

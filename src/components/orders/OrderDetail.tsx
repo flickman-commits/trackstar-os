@@ -34,6 +34,7 @@ import {
 import {
   TZ, formatDueDate, isDueDateUrgent, dueIsLive, orderAge, formatOrderPlacedAt, getStatusDisplay,
   generateFilename as filenameFor, orderItemCount, orderItemPosition,
+  designDueDate, customerDueShort,
 } from '@/components/orders/orderFormat'
 import {
   CollapsibleSection, CopyableField, PartnerInfoFields, CustomDetailsFields, PendingField,
@@ -1495,10 +1496,15 @@ Thank you!`
                     <div>
                       <h4 className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1.5">Tags</h4>
                       <div className="flex flex-wrap items-center gap-1.5">
-                      {!isProductionStage && <span className={`inline-flex items-center gap-1 px-2.5 py-1 bg-white border rounded text-sm ${isDueDateUrgent(selectedOrder.dueDate, dueIsLive(selectedOrder)) ? 'border-red-200 text-red-600 font-medium' : 'border-border-gray text-off-black/70'}`}>
+                      {!isProductionStage && <span className={`inline-flex items-center gap-1 px-2.5 py-1 bg-white border rounded text-sm ${isDueDateUrgent(designDueDate(selectedOrder), dueIsLive(selectedOrder)) ? 'border-red-200 text-red-600 font-medium' : 'border-border-gray text-off-black/70'}`}>
                         <span>⏳</span>
-                        <span>Due {formatDueDate(selectedOrder.dueDate, dueIsLive(selectedOrder))}</span>
+                        <span>{selectedOrder.trackstarOrderType === 'custom' ? 'Design due' : 'Due'} {formatDueDate(designDueDate(selectedOrder), dueIsLive(selectedOrder))}</span>
                       </span>}
+                      {!isProductionStage && isAdmin && selectedOrder.trackstarOrderType === 'custom' && selectedOrder.dueDate && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-border-gray rounded text-sm text-off-black/55" title="The date the customer was promised. Designers see only the design due date, two days earlier.">
+                          Customer due {customerDueShort(selectedOrder.dueDate)}
+                        </span>
+                      )}
                       {selectedOrder.orderPlacedAt && (
                         <span
                           className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-border-gray rounded text-sm text-off-black/60"

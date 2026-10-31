@@ -8,6 +8,7 @@ import { ToolError } from '../server.js'
 import { approvalUrl } from '../../../lib/links.js'
 import { setDesignStatus, DESIGN_STATUSES } from '../../../domain/orders/designStatus.js'
 import { CompleteError } from '../../../domain/orders/complete.js'
+import { designDueDate } from '../../../domain/orders/designDue.js'
 import { findOrdersByNumber, displayNumber, openWhere, shopifyNames, daysLate, mayHoldLinks, linkField } from './orders.js'
 
 const LABEL = {
@@ -34,7 +35,8 @@ function job(o, name, type, links) {
     designStatus: o.designStatus,
     assignee: o.assignee?.firstName || null,
     orderedAt: o.createdAt,
-    dueDate: o.dueDate || null,
+    dueDate: o.dueDate || null, // the customer's date
+    designDueDate: designDueDate(o.dueDate), // what designers work to, two days earlier (designDue.js)
     daysLate: o.dueDate ? daysLate(o.dueDate) : undefined,
     rush: o.isRushOrder || undefined,
     proofs: { total: proofs.length, awaiting: proofs.filter(p => p.status === 'pending').length, approved: proofs.filter(p => p.status === 'approved').length, lastSentAt: o.proofSentAt || null },

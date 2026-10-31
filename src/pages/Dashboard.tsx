@@ -23,6 +23,7 @@ import {
 import {
   formatDueDate, isDueDateUrgent, dueIsLive, workableSince, orderAge, getStatusDisplay,
   orderItemCount, orderItemPosition,
+  designDueDate, customerDueShort,
 } from '@/components/orders/orderFormat'
 
 // API calls now go to /api/* serverless functions (same origin)
@@ -1452,13 +1453,13 @@ export default function Dashboard() {
                               </>
                             ) : (
                               <>
-                                <span className={`text-xs flex items-center gap-1.5 ${isDueDateUrgent(order.dueDate, dueIsLive(order)) ? 'text-red-600 font-medium' : 'text-off-black/40'}`}>
+                                <span className={`text-xs flex items-center gap-1.5 ${isDueDateUrgent(designDueDate(order), dueIsLive(order)) ? 'text-red-600 font-medium' : 'text-off-black/40'}`}>
                                   {order.isRushOrder && (
                                     <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800" title="Customer paid to skip the line: 4-day turnaround">
                                       ⚡ Rush
                                     </span>
                                   )}
-                                  <span>Due: {formatDueDate(order.dueDate, dueIsLive(order))}</span>
+                                  <span>{order.trackstarOrderType === 'custom' ? 'Design due' : 'Due'}: {formatDueDate(designDueDate(order), dueIsLive(order))}{isAdmin && order.trackstarOrderType === 'custom' && order.dueDate ? ` · customer ${customerDueShort(order.dueDate)}` : ''}</span>
                                 </span>
                                 <span className="text-xs text-off-black/40 truncate text-right max-w-[50%]">
                                   {order.effectiveRaceName || order.raceName || '-'}
@@ -1722,7 +1723,7 @@ export default function Dashboard() {
                         <th className="text-center pl-6 pr-2 py-4 text-xs font-semibold text-off-black/60 uppercase tracking-wider w-12">Src</th>
                         <th className="text-left px-3 py-4 text-xs font-semibold text-off-black/60 uppercase tracking-wider w-48">Order #</th>
                         <th className="text-left px-3 py-4 text-xs font-semibold text-off-black/60 uppercase tracking-wider w-44">Design Status</th>
-                        <th className="text-left px-3 py-4 text-xs font-semibold text-off-black/60 uppercase tracking-wider w-40">Due Date</th>
+                        <th className="text-left px-3 py-4 text-xs font-semibold text-off-black/60 uppercase tracking-wider w-40" title="Two days before the date the customer was promised">Design Due</th>
                         <th className="text-left px-3 py-4 text-xs font-semibold text-off-black/60 uppercase tracking-wider w-52">
                           <div className="flex items-center gap-2 leading-none">
                             Assignee
@@ -1783,8 +1784,9 @@ export default function Dashboard() {
                                     ⚡ Rush
                                   </span>
                                 )}
-                                <span className={`text-sm ${isDueDateUrgent(order.dueDate, dueIsLive(order)) ? 'text-red-600 font-medium' : 'text-off-black'}`}>
-                                  {formatDueDate(order.dueDate, dueIsLive(order))}
+                                <span className={`text-sm ${isDueDateUrgent(designDueDate(order), dueIsLive(order)) ? 'text-red-600 font-medium' : 'text-off-black'}`}>
+                                  {formatDueDate(designDueDate(order), dueIsLive(order))}
+                                  {isAdmin && order.dueDate && <span className="block text-[11px] font-normal text-off-black/45">Customer {customerDueShort(order.dueDate)}</span>}
                                 </span>
                               </div>
                             </td>
@@ -1840,7 +1842,7 @@ export default function Dashboard() {
                                   </span>
                                 </td>
                                 <td className="px-3 py-4">
-                                  <span className="text-sm text-off-black/40">{order.dueDate ? formatDueDate(order.dueDate, false) : '-'}</span>
+                                  <span className="text-sm text-off-black/40">{order.dueDate ? formatDueDate(designDueDate(order), false) : '-'}</span>
                                 </td>
                                 <td className="px-3 py-4">{assigneeCell(order)}</td>
                                 <td className="px-3 py-4 hidden md:table-cell">
