@@ -48,16 +48,25 @@ export const dueIsLive = (o: Pick<Order, 'trackstarOrderType' | 'designStatus'>)
   o.trackstarOrderType !== 'custom' || !o.designStatus || o.designStatus === 'not_started' || o.designStatus === 'in_progress'
 
 /**
- * Designers work to the design due date: two days before the date the
- * customer was promised (dueDate), so first designs go out early instead
- * of on the day. Designers see only this date; admins see it and, beside
- * it, the customer's date. Standard orders have no design date.
+ * Designers work to the design due date: two business days before the date
+ * the customer was promised (dueDate), so first designs go out early
+ * instead of on the day (a Monday customer date is a Thursday design date).
+ * Designers see only this date; admins see it and, beside it, the
+ * customer's date. Standard orders have no design date. Same rule on the
+ * server: server/domain/orders/designDue.js.
  */
 export const DESIGN_LEAD_DAYS = 2
+const weekdayET = (d: Date) => new Date(d.toLocaleString('en-US', { timeZone: TZ })).getDay()
 export const designDueDate = (o: Pick<Order, 'trackstarOrderType' | 'dueDate'>): string | undefined => {
   if (!o.dueDate) return undefined
   if (o.trackstarOrderType !== 'custom') return o.dueDate
-  return new Date(new Date(o.dueDate).getTime() - DESIGN_LEAD_DAYS * 86400000).toISOString()
+  let d = new Date(o.dueDate)
+  for (let left = DESIGN_LEAD_DAYS; left > 0;) {
+    d = new Date(d.getTime() - 86400000)
+    const w = weekdayET(d)
+    if (w !== 0 && w !== 6) left--
+  }
+  return d.toISOString()
 }
 /** The customer's date, short ("Nov 4"), for the admin's second line. */
 export const customerDueShort = (dateStr?: string) =>
