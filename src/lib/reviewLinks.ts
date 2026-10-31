@@ -3,11 +3,10 @@
  * Request Reviews panel, the Support panel's review action and Claude's
  * support drafts (server/lib/reviewLinks.js), so a new race is added once.
  */
-import products from '../../server/lib/reviewLinks.json'
-
-// The list lives in server/lib/reviewLinks.json so support drafts (server)
+// The list lives in server/lib/reviewLinks.js so support drafts (server)
 // read the same links; add a race there.
-export const REVIEW_PRODUCTS: { name: string; link: string }[] = products
+import { REVIEW_PRODUCTS } from '../../server/lib/reviewLinks.js'
+export { REVIEW_PRODUCTS }
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
