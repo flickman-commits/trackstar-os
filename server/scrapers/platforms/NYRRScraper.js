@@ -74,6 +74,22 @@ export class NYRRScraper extends BaseScraper {
     }
   }
 
+  /** True when the event has no finishers at all, i.e. results are not posted. Never throws. */
+  async _eventIsEmpty() {
+    try {
+      const response = await fetchWithTimeout(`${this.baseUrl}/runners/finishers-filter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventCode: this.eventCode, searchString: '', handicap: null, sortColumn: 'overallTime', sortDescending: false, pageIndex: 1, pageSize: 1 })
+      })
+      if (!response.ok) return false
+      const data = await response.json()
+      return data.totalItems === 0
+    } catch {
+      return false
+    }
+  }
+
   async searchRunner(runnerName) {
     console.log(`\n${'='.repeat(50)}`)
     console.log(`[${this.tag} ${this.year}] Searching for: "${runnerName}"`)
@@ -114,6 +130,9 @@ export class NYRRScraper extends BaseScraper {
 
       if (!results.length) {
         console.log(`[${this.tag}] No results found for: ${runnerName}`)
+        // An event with no finishers at all has not been posted yet (NYC 2026
+        // on race day): say so, so nobody goes hunting for a missing runner.
+        if (await this._eventIsEmpty()) return this.notFoundResult(`NYRR has not posted the official ${this.year} results yet; this is looked up again on its own`)
         return this.notFoundResult()
       }
 

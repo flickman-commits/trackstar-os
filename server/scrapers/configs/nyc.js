@@ -2,12 +2,10 @@
  * NYC Marathon - NYRR platform
  * Results: https://results.nyrr.org/event/M{year}/finishers
  *
- * 2026: the official results stay on results.nyrr.org (M2026; NYRR's Race
- * Results page links it), which had nothing on race day. The live tracker,
- * liveresults.nyrr.org/e/NYRR-NY2026, is RTRT and has finish times as runners
- * cross, so it is the fallback until the official list is up, and after it
- * for anyone the official search misses. Chip time there is the FINISH
- * netTime; bib 9099 read 3:51:39 / 08:51 on the tracker (2026-11-01).
+ * 2026: results.nyrr.org only, the official list NYRR's Race Results page
+ * links. The live tracker (liveresults.nyrr.org/e/NYRR-NY2026, RTRT) is not
+ * used, Matt's call 2026-11-01: wait for the official results. For the record,
+ * the 2025 tracker matched M2025 on time and pace for all 80 runners checked.
  */
 export default {
   platform: 'nyrr',
@@ -17,16 +15,6 @@ export default {
   eventCodePattern: 'M{year}',
   eventTypes: ['Marathon'],
   defaultEventType: 'Marathon',
-  yearOverrides: {
-    2026: {
-      fallback: {
-        platform: 'rtrt',
-        tag: 'NYC',
-        buildEventId: year => `NYRR-NY${year}`,
-        distanceMiles: 26.2,
-      },
-    },
-  },
   aliases: [
     'NYC Marathon',
     'New York City Marathon',
