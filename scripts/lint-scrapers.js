@@ -187,6 +187,14 @@ for (const file of configFiles) {
     // and makes a missing source a build failure rather than a warning nobody
     // reads at 1am.
     const RULE_SHAPED = /\b(first|second|third|fourth|fifth|last)\s+\w*\s*(sun|mon|tues?|wed(nes)?|thurs?|fri|satur)day\b|\btypically\b|\balways\b/i
+    // noEdition: year -> why the race did not run. A year cannot be both.
+    if (cfg.noEdition !== undefined) {
+      if (typeof cfg.noEdition !== 'object' || Array.isArray(cfg.noEdition)) errors.push(`${file}: noEdition must be an object of year -> reason.`)
+      else for (const [year, why] of Object.entries(cfg.noEdition)) {
+        if (!/^\d{4}$/.test(year) || typeof why !== 'string' || why.trim().length < 8) errors.push(`${file}: noEdition.${year} needs a four-digit year and a reason.`)
+        if (cfg.raceDates?.[year] || cfg.eventIds?.[year] || cfg.raceIds?.[year]) errors.push(`${file}: noEdition.${year} but the year also has a race date or event id.`)
+      }
+    }
     const sources = cfg.raceDateSources
     if (sources !== undefined) {
       if (typeof sources !== 'object' || Array.isArray(sources)) {

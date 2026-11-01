@@ -23,6 +23,10 @@ export default {
     2025: 'vegasmarathon.com result page for race 167423 dated October 26, 2025 + Athlinks master 390789 event 1129402 dated 10/26/2025',
     2027: 'marathonhandbook.com listing the next edition for January 10, 2027 (no 2026 race)',
   },
+  // Years the race did not run: an order for one is the wrong year (pipeline.js).
+  noEdition: {
+    2026: 'The race moved from October 2025 to January 10, 2027; there was no 2026 edition.',
+  },
   eventTypes: ['Marathon', 'Half Marathon'],
   eventSearchOrder: ['Marathon', 'Half Marathon'],
   eventLabels: { Marathon: 'Marathon', 'Half Marathon': 'Half Marathon' },

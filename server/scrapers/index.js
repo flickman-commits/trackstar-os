@@ -605,6 +605,15 @@ export function getRaceDatesForRace(raceName) {
   return Object.keys(out).length ? out : null
 }
 
+/**
+ * Why a race did not run in a year (cancelled, moved), from the config's
+ * `noEdition` map, or null. An order for such a year has the wrong year.
+ */
+export function noEditionFor(raceName, year) {
+  const config = raceName && year ? findConfigForRace(raceName) : null
+  return config?.noEdition?.[year] || null
+}
+
 export function getVerifiedRaceDates() {
   const out = {}
   for (const config of ALL_CONFIGS) {

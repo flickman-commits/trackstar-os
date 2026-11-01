@@ -22,6 +22,7 @@ import { printBlockers } from '../races/verification.js'
 import { isTriathlon, triathlonMissing } from './triathlon.js'
 import { resolveTemplate, SIZES } from '../render/spec.js'
 import { sendStateOf } from '../render/sendState.js'
+import { noEditionFor } from '../../scrapers/index.js'
 
 const RESULT_STATES = new Set(['found'])
 // The oldest race year anyone builds a scraper for (Matt, 2026-10-21).
@@ -79,6 +80,9 @@ export function pipelineFor({ order, research, race, render, hasScraper, templat
   // Race and setup problems: things only a person (or a developer) can change.
   if (!raceName) return stage('action', 'Unknown race', { kind: 'setup', fix: 'The tool could not tell which race this is. Set the race on the order.' })
   if (!year || order.status === 'missing_year') return stage('action', 'Year missing', { kind: 'data', fix: 'The order does not say which year. Ask the customer or read it off the order, then set it.' })
+  // The race did not run that year (moved, cancelled): the year is wrong, not early.
+  const noEdition = noEditionFor(raceName, year)
+  if (noEdition) return stage('action', `No ${year} race`, { kind: 'data', fix: `${raceName} did not run in ${year}. ${noEdition.replace(/\.?$/, '.')} Ask the customer which year they ran it, then set the year.` })
 
   // Triathlons: one design for all of them, no scrapers. A person enters the
   // result; until every field is there it is manual research, never "needs a scraper".
