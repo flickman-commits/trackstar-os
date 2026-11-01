@@ -257,7 +257,10 @@ export default async function handler(req, res) {
     // recovered in two minutes still looked broken to the next shopper who
     // searched the same runner. The 9s server cap above makes that much easier
     // to trip, since "slow" now lands here too.
-    if (outcome !== 'upstream_error') setCached(cacheKey, payload)
+    // "Not posted yet" changes the moment the timer posts (resultsWatch.js),
+    // so it is not a fact to hold for the hour.
+    const pending = /has not posted the official/.test(result.researchNotes || '')
+    if (outcome !== 'upstream_error' && !pending) setCached(cacheKey, payload)
     await observe({ outcome, status: 200, raceForLog: raceCanonical })
     return res.status(200).json(payload)
   } catch (error) {

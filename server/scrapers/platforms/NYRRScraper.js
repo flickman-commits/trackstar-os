@@ -74,6 +74,21 @@ export class NYRRScraper extends BaseScraper {
     }
   }
 
+  /** Whether the official list has finishers (resultsWatch.js); null when NYRR could not be asked. */
+  async resultsPosted() {
+    try {
+      const response = await fetchWithTimeout(`${this.baseUrl}/runners/finishers-filter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventCode: this.eventCode, searchString: '', handicap: null, sortColumn: 'overallTime', sortDescending: false, pageIndex: 1, pageSize: 1 })
+      })
+      if (!response.ok) return null
+      return (await response.json()).totalItems > 0
+    } catch {
+      return null
+    }
+  }
+
   /** True when the event has no finishers at all, i.e. results are not posted. Never throws. */
   async _eventIsEmpty() {
     try {

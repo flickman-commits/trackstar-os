@@ -14,6 +14,7 @@ import { runLockedImport } from '../../server/lib/importStamp.js'
 import { syncShopifyBulkOrders } from '../../server/domain/bulk/shopifyBulk.js'
 import { applyCustomerResults, fillCustomerPace } from '../../server/domain/research/customerResults.js'
 import { autoResearchNew, autoResearchAfterRace } from '../../server/domain/research/autoResearch.js'
+import { watchOfficialResults } from '../../server/domain/research/resultsWatch.js'
 import { autoQueueRenders } from '../../server/domain/render/jobs.js'
 import { deliverPending } from '../../server/domain/render/deliver.js'
 import { uploadPending } from '../../server/domain/render/artelo.js'
@@ -38,6 +39,10 @@ export default async function handler(req, res) {
       // Orders that came in before their race, now that results should be posted.
       const caughtUp = await autoResearchAfterRace({ limit: 10 }).catch(err => { console.error('[orders.auto-import] post-race research failed:', err.message); return null })
       if (caughtUp?.researched || caughtUp?.failed) console.log(`[orders.auto-import] post-race research ${caughtUp.researched} (${caughtUp.found} found), ${caughtUp.failed} errors: ${caughtUp.orders.join(', ')}`)
+      // Official results that went up since the last run (NYRR posts a day or so late): Slack, and research those orders now.
+      const watch = await watchOfficialResults().catch(err => { console.error('[orders.auto-import] results watch failed:', err.message); return null })
+      for (const p of watch?.posted || []) console.log(`[orders.auto-import] official results posted: ${p.race} ${p.year}`)
+      if (watch?.researched) console.log(`[orders.auto-import] posted-results backlog: researched ${watch.researched} (${watch.found} found)`)
       // Prints waiting on a photo payment: re-read those orders from Shopify so a payment shows.
       const photos = await refreshUnpaidPhotoOrders().catch(err => { console.error('[orders.auto-import] photo refresh failed:', err.message); return null })
       if (photos?.updated) console.log(`[orders.auto-import] photo payments refreshed: ${photos.updated} of ${photos.checked} checked`)
