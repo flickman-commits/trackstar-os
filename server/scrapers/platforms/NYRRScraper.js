@@ -132,7 +132,7 @@ export class NYRRScraper extends BaseScraper {
         console.log(`[${this.tag}] No results found for: ${runnerName}`)
         // An event with no finishers at all has not been posted yet (NYC 2026
         // on race day): say so, so nobody goes hunting for a missing runner.
-        if (await this._eventIsEmpty()) return this.notFoundResult(`NYRR has not posted the official ${this.year} results yet; this is looked up again on its own`)
+        if (await this._eventIsEmpty()) return this.notFoundResult(`NYRR has not posted the official ${this.year} results yet. We will find this runner's result once they are up; the lookup runs again on its own.`)
         return this.notFoundResult()
       }
 

@@ -118,6 +118,9 @@ export function pipelineFor({ order, research, race, render, hasScraper, templat
   if (rs === 'upstream_error') return stage('action', 'Timing site down', { kind: 'data', fix: 'The timing site was down when the lookup ran. Run research again.' })
   if (rs === 'ambiguous') return stage('action', 'Pick a match', { kind: 'data', fix: 'More than one finisher matches. Confirm which one on the results site, then accept the match.' })
   if (rs === 'time_unavailable') return stage('action', 'Enter the time', { kind: 'data', fix: 'The runner was found but the timing site hides the finish time. Open their result and enter the time by hand.' })
+  // The official results are not posted yet (NYRR's list was empty): nothing is
+  // wrong, the lookup runs again on its own every couple of hours.
+  if (rs === 'not_found' && /has not posted the official/.test(research?.researchNotes || '')) return stage('waiting', 'Results not posted yet', { fix: `The official ${raceName} ${year} results are not posted yet. The tool finds this runner's result on its own once they are.` })
   if (rs === 'not_found') return stage('action', 'Runner not found', { kind: 'data', fix: 'The runner was not in the results. Check the name and year, research again, or look it up by hand.' })
   if (!RESULT_STATES.has(rs)) return stage('needs_research', 'Needs research', { fix: 'The lookup has not finished.' })
   if (!research.bibNumber) return stage('action', 'No bib', { kind: 'data', fix: 'The result has no bib number. Add it by hand.' })

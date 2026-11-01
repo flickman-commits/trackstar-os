@@ -653,6 +653,18 @@ export async function sync() {
 // ---------------------------------------------------------------------------
 
 /**
+ * Addresses that moved. Artelo's support became support@artelo.com in Oct
+ * 2026, but its replies still arrive from support@artelo.io, so threads keep
+ * the old address (incoming mail is matched on it) and every send is
+ * rewritten here instead.
+ */
+const MOVED_ADDRESSES = { 'support@artelo.io': 'support@artelo.com' }
+export const currentAddress = to => String(to || '').split(',').map(a => {
+  const t = a.trim()
+  return MOVED_ADDRESSES[t.toLowerCase()] || t
+}).filter(Boolean).join(', ')
+
+/**
  * Reply on a thread, as the mailbox. Threads in Gmail by the thread id and in
  * the customer's client by In-Reply-To. The sent message is read back and
  * stored at once, with who sent it, so the page shows it without waiting
@@ -663,7 +675,7 @@ export async function sendReply({ userId, thread, html, text, attachments = [] }
   const mailbox = mailboxEmail()
   const last = await prisma.supportMessage.findFirst({ where: { threadId: thread.id }, orderBy: { sentAt: 'desc' } })
   const lastIn = await prisma.supportMessage.findFirst({ where: { threadId: thread.id, direction: 'in' }, orderBy: { sentAt: 'desc' } })
-  const to = thread.customerEmail
+  const to = currentAddress(thread.customerEmail)
   if (!to) throw new UserError('This thread has no customer address to reply to.')
   const subject = last?.subject && /^\s*re:/i.test(last.subject) ? last.subject : `Re: ${thread.subject || last?.subject || ''}`.trim()
   const messageId = newMessageId()
@@ -701,7 +713,8 @@ export async function sendReply({ userId, thread, html, text, attachments = [] }
  * and stored like any sent mail, so the conversation is in Support at once,
  * waiting on the customer, and their reply lands in it.
  */
-export async function sendNew({ userId, to, subject, html, text, attachments = [] }) {
+export async function sendNew({ userId, to: given, subject, html, text, attachments = [] }) {
+  const to = currentAddress(given)
   const gmail = await client()
   const mailbox = mailboxEmail()
   const messageId = newMessageId()
