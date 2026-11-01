@@ -1031,6 +1031,18 @@ export const CHIP_TIME_FIXTURES = [
     expectedBib: '193',
     notes: 'Pace is the figure the official page shows (read from the field it renders). Bangor 2026 Half (set 660685). Chip 1:49:27, clock 1:49:41. 6567s / 13.1 = 501.3 -> 8:21.',
   },
+  // ── NYC Marathon 2026 (moved to RTRT, event NYRR-NY2026) ────────────────
+  {
+    platform: 'rtrt',
+    race: 'NYC Marathon',
+    year: 2026,
+    runner: 'Matt Hickman',
+    expectedChipTime: '3:51:39',
+    expectedChipPace: '8:51',
+    expectedBib: '9099',
+    officialPage: { url: 'https://liveresults.nyrr.org/e/NYRR-NY2026', shows: '3:51:39', readOn: '2026-11-01' },
+    notes: 'NYC 2026 on RTRT (event NYRR-NY2026). Page Finish Time 3:51:39, 08:51 min/mile (tracker screenshot). FINISH netTime 03:51:38.90 rounds up; waveTime 04:29:18 is NOT chip. Positive split: HALF 1:54:03, second half 1:57:36. 13898.9s / 26.2 = 530.5 -> 8:51.',
+  },
   // ── Brooklyn Half (NYRR, per-year event codes) ───────────────────────
   {
     platform: 'nyrr',
