@@ -15,6 +15,12 @@ import { getScraperForRace, hasScraperForRace, getCanonicalRaceName, namedEvents
 import { ensureOverridesLoaded } from '../scrapers/scraperOverrides.js'
 import WeatherService from './WeatherService.js'
 
+/** The runner's own results page from their bib, or null when the race's scraper has no such page. */
+function runnerPage(raceName, year, bib) {
+  if (!bib) return null
+  try { return getScraperForRace(raceName, year)?.runnerResultsUrl?.(bib) || null } catch { return null }
+}
+
 
 /**
  * Race distance in miles for an event type, or null when we cannot be sure.
@@ -321,6 +327,7 @@ export class ResearchService {
     const derivedPace = order.customerPace ? null : paceFromTypedTime(order.customerFinishTime, order.customerEventType)
 
     // TIER 2 (replaced): write the customer-confirmed result.
+    await ensureOverridesLoaded()
     const researchData = {
       orderId: order.id,
       raceId: race.id,
@@ -335,7 +342,8 @@ export class ResearchService {
       researchNotes: verified
         ? 'Customer-confirmed via Instant Lookup (matched official results)'
         : `Entered by the customer at checkout, not matched against official results. Their numbers, used as given.${derivedPace ? ` Pace ${derivedPace} calculated from their time.` : ''}`,
-      resultsUrl: race.resultsUrl || null,
+      // The runner's own page when the timing site has one, else the race's results list.
+      resultsUrl: runnerPage(effectiveRaceName, effectiveRaceYear, order.customerBib) || race.resultsUrl || null,
       possibleMatches: null,
     }
 

@@ -75,6 +75,12 @@ export class NYRRScraper extends BaseScraper {
   }
 
   /** Whether the official list has finishers (resultsWatch.js); null when NYRR could not be asked. */
+  /** A runner's page on results.nyrr.org is keyed by event and bib (checked: M2026 bib 60191 opens Erin Martinez, 6:14:44). */
+  runnerResultsUrl(bib) {
+    const b = String(bib || '').trim()
+    return b ? `https://results.nyrr.org/event/${this.eventCode}/result/${encodeURIComponent(b)}` : null
+  }
+
   async resultsPosted() {
     try {
       const response = await fetchWithTimeout(`${this.baseUrl}/runners/finishers-filter`, {
@@ -188,9 +194,7 @@ export class NYRRScraper extends BaseScraper {
       console.log(`  Time: ${runner.overallTime}`)
       console.log(`  Pace: ${runner.pace}`)
 
-      const resultsUrl = runner.bib
-        ? `https://results.nyrr.org/event/${this.eventCode}/result/${runner.bib}`
-        : `https://results.nyrr.org/event/${this.eventCode}/finishers`
+      const resultsUrl = this.runnerResultsUrl(runner.bib) || `https://results.nyrr.org/event/${this.eventCode}/finishers`
 
       return { ...this._extractRunnerData(runner), resultsUrl }
 
@@ -236,7 +240,7 @@ export class NYRRScraper extends BaseScraper {
       return {
         ...this._extractRunnerData(hit),
         runnerName,
-        resultsUrl: `https://results.nyrr.org/event/${this.eventCode}/result/${hit.bib}`
+        resultsUrl: this.runnerResultsUrl(hit.bib),
       }
     } catch (error) {
       console.error(`[${this.tag}] Bib lookup error for ${wanted}:`, error.message)

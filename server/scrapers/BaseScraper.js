@@ -616,6 +616,13 @@ export class BaseScraper {
    *   Use when the scraper found candidates that didn't pass namesMatch (e.g.
    *   last-name-only search → 50 Smiths to choose from).
    */
+  /**
+   * The runner's own result page, from their bib, when the timing site has
+   * one at a predictable address. Null here; a platform that has one overrides
+   * it. Instant Lookup saves this instead of the race-wide results list.
+   */
+  runnerResultsUrl(_bib) { return null }
+
   notFoundResult(reason, possibleMatches) {
     return {
       found: false,
