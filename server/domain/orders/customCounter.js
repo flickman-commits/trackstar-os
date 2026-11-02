@@ -32,12 +32,14 @@ const monthOf = d => new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'num
 
 // Words that do not tell one race's design from another: sponsors, "marathon",
 // years. "2026 Bank of America Chicago Marathon" and "Chicago Marathon" are
-// one design; "Long Beach Half" and "Long Beach Marathon" are two.
+// one design; "Long Beach Half" and "Long Beach Marathon" are two, and so are
+// "Myrtle Beach Mini Marathon" and "Myrtle Beach Marathon".
 const FILLER = new Set(['marathon', 'the', 'of', 'and', 'race', 'run', 'running', 'international', 'presented', 'by', 'bank', 'america', 'rbc', 'tcs', 'abbott', '2xu', 'guthrie', 'corning', 'new', 'york', 'custom', 'trackstar', 'print', 'any'])
 function raceKey(name) {
   const s = String(name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/['’]/g, '')
-  const half = /\bhalf\b|13\.1/.test(s)
-  const words = s.replace(/[^a-z]+/g, ' ').split(' ').filter(w => w.length > 1 && !FILLER.has(w) && w !== 'half')
+  // A "mini marathon" is a half-length race with its own design, like a half.
+  const half = /\bhalf\b|13\.1|\bmini\b/.test(s)
+  const words = s.replace(/[^a-z]+/g, ' ').split(' ').filter(w => w.length > 1 && !FILLER.has(w) && w !== 'half' && w !== 'mini')
   return { half, words: new Set(words) }
 }
 function sameDesign(a, b) {
