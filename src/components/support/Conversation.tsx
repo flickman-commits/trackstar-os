@@ -13,6 +13,7 @@ import { nameCase } from '@/lib/nameCase'
 import RichReply, { type RichReplyHandle } from './RichReply'
 import Attachments from './Attachments'
 import type { Macro, Message, Mockup, Note, Proposal, Teammate, ThreadDetail, ThreadStatus } from '@/types/support'
+import { putUpload } from '../../lib/putUpload'
 
 /**
  * The conversation, Intercom's middle column.
@@ -365,7 +366,7 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
       setUploading(n => n + 1)
       try {
         const slot = await supportApi.uploadSlot(f.name || 'pasted-image.png', f.type, f.size)
-        const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': f.type || 'application/octet-stream', 'x-upsert': 'false' }, body: f })
+        const put = await putUpload(slot.uploadUrl, { headers: { 'Content-Type': f.type || 'application/octet-stream', 'x-upsert': 'false' }, body: f })
         if (!put.ok) throw new Error(`${f.name} did not upload`)
         const thumbUrl = f.type.startsWith('image/') && !/hei[cf]/.test(f.type) ? URL.createObjectURL(f) : null
         setAttached(list => [...list, { ref: slot.ref, orderId: '', kind: 'upload', label: slot.filename, thumbUrl, at: new Date().toISOString() }])

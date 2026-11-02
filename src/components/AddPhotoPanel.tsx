@@ -4,6 +4,7 @@ import { apiFetch } from '@/lib/api'
 import { fieldLabel, modalCancel, modalPrimary } from '@/lib/ui'
 import ActionModal from './ActionModal'
 import PhotoCropper from './PhotoCropper'
+import { putUpload } from '../lib/putUpload'
 
 /**
  * Admin only: a customer emails a photo after ordering. Attach it to one or
@@ -55,7 +56,7 @@ export default function AddPhotoPanel({
       // What goes up is the 1:1 crop, the same as a customer's upload on the site.
       const cropped = !custom && cropExport.current ? await cropExport.current() : file
       const slot = await post({ action: 'upload-url', filename: cropped.name, orderId: currentId })
-      const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': cropped.type || 'application/octet-stream', 'x-upsert': 'false' }, body: cropped })
+      const put = await putUpload(slot.uploadUrl, { headers: { 'Content-Type': cropped.type || 'application/octet-stream', 'x-upsert': 'false' }, body: cropped })
       if (!put.ok) throw new Error('The photo did not upload')
       if (replace) {
         const out = await post({ action: 'replace', orderId: currentId, path: slot.path })

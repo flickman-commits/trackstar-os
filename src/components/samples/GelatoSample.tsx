@@ -12,6 +12,7 @@ import { parseAddress } from '@/lib/parseAddress'
 import { useArmed } from '@/lib/useArmed'
 import { btnPrimary, btnSecondary, sectionLabel, infoCard, segment, segmentGroup } from '@/lib/ui'
 import SampleDesigner, { type DesignPrint } from './SampleDesigner'
+import { putUpload } from '../../lib/putUpload'
 
 const field = 'w-full px-3 py-2 text-sm border border-border-gray rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-off-black/10'
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`
@@ -57,7 +58,7 @@ export default function GelatoSample({ products, prints, onSent }: { products: G
     setUploading(true)
     try {
       const { uploadUrl, fileUrl } = await post<{ uploadUrl: string; fileUrl: string }>({ action: 'gelato-upload', fileName: f.name })
-      const res = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'application/pdf', 'x-upsert': 'true' }, body: f })
+      const res = await putUpload(uploadUrl, { headers: { 'Content-Type': 'application/pdf', 'x-upsert': 'true' }, body: f })
       if (!res.ok) throw new Error(`The upload failed (${res.status})`)
       setFile({ name: f.name, url: fileUrl }); setQuote(null)
       if (!title) setTitle(f.name.replace(/\.pdf$/i, ''))

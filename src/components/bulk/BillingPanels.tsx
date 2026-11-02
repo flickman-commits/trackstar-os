@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth'
 import PrintPicker, { type PrintOption } from '@/components/PrintPicker'
 import { btnPrimary, btnSecondary, btnGhost, inputBase, fieldLabel } from '@/lib/ui'
 import { useArmed } from '@/lib/useArmed'
+import { putUpload } from '../../lib/putUpload'
 
 /**
  * A bulk order's billing (server/domain/bulk/billing.js): the organization,
@@ -238,7 +239,7 @@ export function ProductionFile({ order, onChanged }: { order: Billing; onChanged
     setBusy(true)
     try {
       const { path, uploadUrl } = await billingApi<{ path: string; uploadUrl: string }>({ action: 'template-upload', id: order.id, fileName: file.name })
-      const res = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'application/postscript', 'x-upsert': 'true' }, body: file })
+      const res = await putUpload(uploadUrl, { headers: { 'Content-Type': 'application/postscript', 'x-upsert': 'true' }, body: file })
       if (!res.ok) throw new Error(`The upload failed (${res.status})`)
       await billingApi({ action: 'template-saved', id: order.id, path })
       toast.success('Uploaded. The render worker checks it on its next check-in.')

@@ -40,6 +40,7 @@ import {
   CollapsibleSection, CopyableField, PartnerInfoFields, CustomDetailsFields, PendingField,
   MissingDateField, NotAvailableField, ApprovalEmailField,
 } from '@/components/orders/fields'
+import { putUpload } from '../../lib/putUpload'
 
 type TeamMember = { id: string; firstName: string; lastName: string }
 
@@ -282,7 +283,7 @@ export default function OrderDetail({
         return d
       }
       const slot = await post({ action: 'upload-url', filename: cropped.name })
-      const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': cropped.type, 'x-upsert': 'false' }, body: cropped })
+      const put = await putUpload(slot.uploadUrl, { headers: { 'Content-Type': cropped.type, 'x-upsert': 'false' }, body: cropped })
       if (!put.ok) throw new Error('The cropped photo did not upload')
       await post({ action: 'replace', orderId: selectedOrder.id, path: slot.path })
       setSelectedOrder(prev => prev && prev.id === selectedOrder.id ? { ...prev, photoPath: slot.path, photoPlacedAt: null } : prev)

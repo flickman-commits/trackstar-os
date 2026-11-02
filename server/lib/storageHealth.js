@@ -19,14 +19,20 @@ const REMIND_MS = 60 * 60 * 1000
 
 const hook = () => process.env.SLACK_DM_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL
 
+// Plain fetch, not storage(): that client covers for a write that saves but
+// never answers, which is exactly what this has to notice.
 async function tryUpload() {
   const path = `_health/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`
-  const bucket = storage().storage.from(BUCKET)
-  const timeout = new Promise(resolve => setTimeout(() => resolve({ error: { message: `no answer in ${TRY_MS / 1000}s` } }), TRY_MS))
+  const base = `${process.env.SUPABASE_URL}/storage/v1/object`
+  const headers = { Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, apikey: process.env.SUPABASE_SERVICE_ROLE_KEY }
   const started = Date.now()
-  const { error } = await Promise.race([bucket.upload(path, Buffer.from('ok'), { contentType: 'text/plain', upsert: true }), timeout])
-  if (error) return { ok: false, reason: error.message || String(error) }
-  await Promise.race([bucket.remove([path]), timeout]).catch(() => {})
+  try {
+    const res = await fetch(`${base}/${BUCKET}/${path}`, { method: 'POST', headers: { ...headers, 'Content-Type': 'text/plain', 'x-upsert': 'true' }, body: 'ok', signal: AbortSignal.timeout(TRY_MS) })
+    if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` }
+  } catch (err) {
+    return { ok: false, reason: err.name === 'TimeoutError' ? `no answer in ${TRY_MS / 1000}s` : err.message }
+  }
+  await storage().storage.from(BUCKET).remove([path]).catch(() => {})
   return { ok: true, ms: Date.now() - started }
 }
 

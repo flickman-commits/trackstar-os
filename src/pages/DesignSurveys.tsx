@@ -5,6 +5,7 @@ import { Loader2, Plus, Copy, ExternalLink, ImagePlus, X, Trash2, ArrowLeft, Mes
 import { apiFetch } from '@/lib/api'
 import { useArmed } from '@/lib/useArmed'
 import { btnPrimary, btnSecondary, btnGhost, inputBase, segment, segmentGroup, pageShell, fieldLabel } from '@/lib/ui'
+import { putUpload } from '../lib/putUpload'
 
 /**
  * Design Survey: put a few new design options in front of the community and
@@ -139,7 +140,7 @@ function SurveyEditor({ id, onBack }: { id: string; onBack: () => void }) {
       try {
         // Straight to storage, like proofs: no 4.5MB request limit on big files.
         const slot = await post({ action: 'upload-url', id, filename: file.name })
-        const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'false' }, body: file })
+        const put = await putUpload(slot.uploadUrl, { headers: { 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'false' }, body: file })
         if (!put.ok) throw new Error('Upload failed')
         await post({ action: 'add-option', id, path: slot.path })
       } catch (e) { toast.error(`${file.name}: ${e instanceof Error ? e.message : 'failed'}`) }

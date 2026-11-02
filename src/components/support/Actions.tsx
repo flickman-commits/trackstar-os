@@ -9,6 +9,7 @@ import ActionModal from '@/components/ActionModal'
 import { parseAddress } from '@/lib/parseAddress'
 import { fieldLabel, modalCancel, modalChip, modalDanger, modalInput, modalPrimary } from '@/lib/ui'
 import type { Address, CodeLookup, CustomerOrder, Mockup, ThreadDetail } from '@/types/support'
+import { putUpload } from '../../lib/putUpload'
 
 /**
  * The Actions list, in the dashboard's own style: purple text links with an
@@ -427,7 +428,7 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
     setUploadingFor(orderId)
     try {
       const slot = await supportApi.uploadSlot(f.name, f.type, f.size)
-      const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': f.type, 'x-upsert': 'false' }, body: f })
+      const put = await putUpload(slot.uploadUrl, { headers: { 'Content-Type': f.type, 'x-upsert': 'false' }, body: f })
       if (!put.ok) throw new Error(`${f.name} did not upload`)
       setFiles(prev => ({ ...prev, [orderId]: { ref: slot.ref, name: slot.filename } }))
       setPicked(p => p.includes(orderId) ? p : [...p, orderId])

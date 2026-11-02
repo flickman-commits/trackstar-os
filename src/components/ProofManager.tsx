@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { useIsAdmin } from '@/lib/auth'
 import { useArmed } from '@/lib/useArmed'
+import { putUpload } from '../lib/putUpload'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -301,7 +302,7 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
           continue
         }
         const slot = await slotRes.json()
-        const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'false' }, body: file })
+        const put = await putUpload(slot.uploadUrl, { headers: { 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'false' }, body: file })
         if (!put.ok) {
           const text = await put.text().catch(() => '')
           toast.error(`Failed to upload ${file.name}: storage said ${put.status}${text ? ` ${text.slice(0, 80)}` : ''}`)

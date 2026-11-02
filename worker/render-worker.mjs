@@ -181,8 +181,19 @@ async function download(url, to) {
   fs.writeFileSync(to, Buffer.from(await res.arrayBuffer()))
 }
 
+// Supabase Storage has saved a file and then never answered (a 504 after
+// 60s, 2026-11-02). That is not a failure here: the tool checks the files are
+// really there when the job is completed (completeJob), and fails it if not.
 async function upload(url, file, contentType) {
-  const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': contentType, 'x-upsert': 'true' }, body: fs.readFileSync(file) })
+  let res
+  try {
+    res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': contentType, 'x-upsert': 'true' }, body: fs.readFileSync(file), signal: AbortSignal.timeout(90000) })
+  } catch (e) {
+    if (e.name !== 'TimeoutError') throw e
+    log(`  no answer from storage for ${path.basename(file)}; the tool will check it landed`)
+    return
+  }
+  if (res.status === 504) { log(`  storage timed out on ${path.basename(file)}; the tool will check it landed`); return }
   if (!res.ok) throw new Error(`Upload failed (${res.status}): ${(await res.text()).slice(0, 200)}`)
 }
 

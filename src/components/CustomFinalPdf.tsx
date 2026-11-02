@@ -3,6 +3,7 @@ import { ArrowUpRight, Check, ExternalLink, Loader2, Pause, RotateCw, Send, Uplo
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { btnGhost } from '@/lib/ui'
+import { putUpload } from '../lib/putUpload'
 
 /**
  * The end of a custom order. Once the customer approves, the designer uploads
@@ -90,7 +91,7 @@ export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, 
     setBusy('upload')
     try {
       const slot = await post({ action: 'upload-url' })
-      const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': 'application/pdf', 'x-upsert': 'false' }, body: file })
+      const put = await putUpload(slot.uploadUrl, { headers: { 'Content-Type': 'application/pdf', 'x-upsert': 'false' }, body: file })
       if (!put.ok) throw new Error(`Storage said ${put.status}. Try again.`)
       const data = await post({ action: 'record', path: slot.path, fileName })
       setFinalPdf(data.finalPdf)

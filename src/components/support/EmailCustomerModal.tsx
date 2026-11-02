@@ -7,6 +7,7 @@ import { fieldLabel, modalCancel, modalChip, modalInput, modalPrimary } from '@/
 import ActionModal from '@/components/ActionModal'
 import { useArmed } from '@/lib/useArmed'
 import type { Address, Mockup } from '@/types/support'
+import { putUpload } from '../../lib/putUpload'
 
 /**
  * "Email customer" from an order in TrackstarOS. Usually it is the
@@ -107,7 +108,7 @@ export default function EmailCustomerModal({ order, repName, onClose }: { order:
     setUploading(true)
     try {
       const slot = await supportApi.uploadSlot(f.name, f.type, f.size)
-      const put = await fetch(slot.uploadUrl, { method: 'PUT', headers: { 'Content-Type': f.type, 'x-upsert': 'false' }, body: f })
+      const put = await putUpload(slot.uploadUrl, { headers: { 'Content-Type': f.type, 'x-upsert': 'false' }, body: f })
       if (!put.ok) throw new Error(`${f.name} did not upload`)
       setOwnFile({ ref: slot.ref, name: slot.filename, preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : null })
     } catch (e) { toast.error((e as Error).message) }

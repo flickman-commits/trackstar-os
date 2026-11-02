@@ -10,7 +10,7 @@ import prisma from '../../db.js'
 import { buildSpec, SPEC_SELECT } from './spec.js'
 import { availableTemplateKeys, noTimeGaps, onlineWorkers as onlineWorkersList } from './templates.js'
 import { getCanonicalRaceName } from '../../scrapers/index.js'
-import { storage as sharedStorage } from '../../lib/storage.js'
+import { storage as sharedStorage, storedSince } from '../../lib/storage.js'
 import { isConnectionOn } from '../../lib/connections.js'
 
 export const BUCKET = 'production-files'
@@ -147,6 +147,15 @@ export async function completeJob({ jobId, workerId, notes, output }) {
   const job = await prisma.renderJob.findUnique({ where: { id: String(jobId) } })
   if (!job || job.workerId !== String(workerId) || job.status !== 'rendering') throw new Error('That job is not yours to complete')
   const paths = pathsFor(job)
+  // The worker carries on when Storage saves a file but never answers; make
+  // sure both files really landed during this attempt before calling it done.
+  const since = job.claimedAt || job.createdAt
+  for (const p of [paths.pdf, paths.preview]) {
+    if (!(await storedSince(BUCKET, p, since))) {
+      await prisma.renderJob.update({ where: { id: job.id }, data: { status: 'failed', finishedAt: new Date(), error: `Upload failed: ${p.split('/').pop()} never reached storage` } })
+      throw new Error(`${p} never reached storage`)
+    }
+  }
   const measured = output && typeof output === 'object' ? {
     trimIn: output.trimIn ? String(output.trimIn).slice(0, 20) : null,
     bleedIn: output.bleedIn && typeof output.bleedIn === 'object' ? { left: Number(output.bleedIn.left), right: Number(output.bleedIn.right), top: Number(output.bleedIn.top), bottom: Number(output.bleedIn.bottom) } : null,
