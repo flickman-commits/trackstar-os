@@ -4,7 +4,7 @@
  *
  *   GET  ?setting=1                     whether Approve sends to production
  *   POST { action: 'hold', orderId }    keep it from sending; it stays approved
- *   POST { action: 'send-now', orderId } send it on the next pass (held, approved
+ *   POST { action: 'send-now', orderId } send it now (held, approved
  *                                       only, or fixed after Artelo refused it)
  *   POST { action: 'setting', on }      switch sending on or off (admins)
  *

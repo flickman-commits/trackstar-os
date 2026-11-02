@@ -148,7 +148,7 @@ function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; o
       </div>
       {/* Send right away: skip the rest of the hold; the sender takes it within a minute. */}
       {s.state === 'queued' && d.canManage && (
-        <button onClick={() => { void d.sendAction('send-now') }} disabled={d.busy} title="Skip the wait: it goes to Artelo within a minute" className={`inline-flex items-center gap-1.5 px-4 ${pad} rounded-md bg-[#4600D6] border-2 border-[#4600D6] text-white font-semibold hover:bg-[#3a00b3] disabled:opacity-50`}>
+        <button onClick={() => { void d.sendAction('send-now') }} disabled={d.busy} title="Skip the wait: it goes to Artelo now" className={`inline-flex items-center gap-1.5 px-4 ${pad} rounded-md bg-[#4600D6] border-2 border-[#4600D6] text-white font-semibold hover:bg-[#3a00b3] disabled:opacity-50`}>
           {d.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Send right away
         </button>
       )}

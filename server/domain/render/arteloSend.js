@@ -127,7 +127,9 @@ export async function holdForCustomer({ orderId, actor }) {
 /**
  * Send now: for a held order, one approved before Approve sent things, or one
  * Artelo refused and a person has since fixed. Tries again from the start
- * (including the attach) on the sender's next pass, within a minute.
+ * (including the attach) right here, so the person who pressed it sees the
+ * outcome, instead of waiting up to a minute for the sender's next pass.
+ * Claimed the way sendDue claims a job, so the sender never sends it twice.
  */
 export async function sendNow({ orderId, actor }) {
   const order = await prisma.order.findUnique({ where: { id: String(orderId || '') }, select: { id: true, trackstarOrderType: true, status: true, orderNumber: true, runnerName: true, raceName: true, raceYear: true } })
@@ -138,8 +140,11 @@ export async function sendNow({ orderId, actor }) {
   const job = await sendableJob(order.id)
   if (!job) throw new SendError('This order has no approved print')
   if (job.arteloSentAt) throw new SendError('This order was already sent to production')
-  const out = await prisma.renderJob.update({ where: { id: job.id }, data: { sendAfter: new Date(), sendHeldAt: null, sendHeldBy: null, sendError: null, arteloAttachedAt: null } })
+  const now = new Date()
+  const out = await prisma.renderJob.update({ where: { id: job.id }, data: { sendAfter: now, sendHeldAt: null, sendHeldBy: null, sendError: null, arteloAttachedAt: null } })
   await recordAudit({ action: 'artelo.send_now', summary: `Sent ${describeOrder(order)} to production`, detail: { jobId: job.id, orderId: order.id }, actor })
+  const claimed = await prisma.renderJob.updateMany({ where: { id: job.id, sendAfter: now, sendHeldAt: null, arteloSentAt: null }, data: { sendAfter: new Date(Date.now() + 3 * MIN) } })
+  if (claimed.count) await sendOne(out)
   return out
 }
 
