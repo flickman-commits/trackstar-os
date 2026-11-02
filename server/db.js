@@ -26,13 +26,13 @@ function datasourceUrl() {
   const sep = url.includes('?') ? '&' : '?'
   // Production was 5 until Oct 30 2026, then 3: approving ~20 prints in four
   // minutes put enough instances up to fill the pooler's 200 client
-  // connections, and approves failed with EMAXCONN. Since Nov 2 2026 the
-  // project runs on Vercel Fluid compute, where one instance serves many
-  // requests at once, so there are far fewer instances and each needs a
-  // bigger pool: 8. A query past the cap waits (pool_timeout) instead of failing.
+  // connections, and approves failed with EMAXCONN. Raising it to 8 after
+  // turning on Vercel Fluid compute (Nov 2) filled the pooler within minutes:
+  // there are still dozens of instances, more during a deploy. Keep it at 3.
+  // A query past the cap waits (pool_timeout) instead of failing.
   // Local processes (dev server, render worker, scripts) share the same
-  // pooler and each held 3 too; they do one thing at a time, so 1 is enough.
-  const limit = process.env.NODE_ENV === 'production' ? 8 : 1
+  // pooler; they do one thing at a time, so 1 is enough.
+  const limit = process.env.NODE_ENV === 'production' ? 3 : 1
   return `${url}${sep}connection_limit=${limit}&pool_timeout=30`
 }
 
