@@ -19,11 +19,14 @@ import { autoQueueRenders } from '../../server/domain/render/jobs.js'
 import { deliverPending } from '../../server/domain/render/deliver.js'
 import { uploadPending } from '../../server/domain/render/artelo.js'
 import { refreshUnpaidPhotoOrders } from '../../server/domain/orders/photoRefresh.js'
+import { checkStorageUploads } from '../../server/lib/storageHealth.js'
 
 export default async function handler(req, res) {
   if (!isCronRequest(req)) return res.status(401).json({ error: 'Unauthorized' })
   try {
     const started = new Date()
+    // Outside the import lock: an upload outage must be reported even when an import is stuck.
+    const storageCheck = checkStorageUploads().catch(err => console.error('[orders.auto-import] storage check failed:', err.message))
     // The lock is held for the whole run, not just the import: two overlapping
     // runs used to upload the same PDF to Drive twice and double-count
     // customers served.
@@ -59,6 +62,7 @@ export default async function handler(req, res) {
       if (bulk && (bulk.created || bulk.linked || bulk.paid)) console.log(`[orders.auto-import] bulk: ${bulk.created} created, ${bulk.linked} linked, ${bulk.paid} paid`)
       return imported
     })
+    await storageCheck
     if (out.skipped) return res.status(200).json({ skipped: out.skipped })
     return res.status(200).json({ imported: out.imported || 0, updated: out.updated || 0, skipped: out.skipped || 0, lastImportedAt: out.lastImportedAt || null })
   } catch (error) {
