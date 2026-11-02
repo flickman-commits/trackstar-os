@@ -405,7 +405,7 @@ function DamageClaimForm({ o, thread, onDone, onCancel }: FormProps) {
 
 type ReorderPrep = {
   number: string; nextOrderId: string; sizes: Choice[]; frames: Choice[]
-  items: { orderId: string; label: string; productLabel: string; designFrom: string | null; copyable: boolean; size: string | null; frame: string | null }[]
+  items: { orderId: string; label: string; productLabel: string; designFrom: string | null; copyable: boolean; size: string | null; frame: string | null; previewUrl?: string | null; designUrl?: string | null }[]
 }
 
 /**
@@ -497,6 +497,16 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
                         : i.copyable && i.designFrom && <span className="block text-xs text-off-black/45">Design: {i.designFrom}</span>}
                     </span>
                   </label>
+                  {/* Look before it is made again: the design that will be copied. */}
+                  {!files[i.orderId] && i.copyable && (i.previewUrl || i.designUrl) && (
+                    <div className="pl-6">
+                      {i.previewUrl
+                        ? <a href={i.designUrl || i.previewUrl} target="_blank" rel="noopener noreferrer" className="inline-block" title="Open full size">
+                            <img src={i.previewUrl} alt={`Design for ${i.label}`} className="max-h-56 rounded-md border border-border-gray bg-subtle-gray" />
+                          </a>
+                        : <a href={i.designUrl!} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-[#4600D6] hover:underline underline-offset-2">Open the design to check it</a>}
+                    </div>
+                  )}
                   <div className="pl-6 flex items-center gap-4 text-xs">
                     {uploadingFor === i.orderId
                       ? <span className="inline-flex items-center gap-1 text-off-black/50"><Loader2 className="w-3 h-3 animate-spin" />Uploading</span>

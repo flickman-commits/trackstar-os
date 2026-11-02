@@ -185,7 +185,7 @@ async function itemsFor(shopifyOrderId) {
     where: { source: 'shopify', parentOrderNumber: String(shopifyOrderId) },
     orderBy: { lineItemIndex: 'asc' },
     select: { id: true, lineItemIndex: true, runnerName: true, raceName: true, raceYear: true, arteloOrderData: true, shopifyOrderData: true,
-      renderJobs: { where: { status: 'done', review: 'approved', arteloUploadId: { not: null } }, orderBy: { version: 'desc' }, take: 1, select: { arteloUploadId: true, version: true } } },
+      renderJobs: { where: { status: 'done', review: 'approved', arteloUploadId: { not: null } }, orderBy: { version: 'desc' }, take: 1, select: { arteloUploadId: true, version: true, previewPath: true } } },
   })
   if (!rows.length) throw new UserError('That order is not in TrackstarOS, so there is nothing to copy. Build it in Artelo.')
   const stored = rows[0].arteloOrderData
@@ -208,6 +208,8 @@ async function itemsFor(shopifyOrderId) {
       productLabel: describe(product),
       designs,
       designFrom: fromArtelo.length ? 'the Artelo order' : job ? `the approved design (v${job.version})` : null,
+      artelo: fromArtelo[0]?.sourceImage?.url || null,
+      job,
     }
   })
   const number = String(rows[0].shopifyOrderData?.name || shopifyOrderId).replace(/^#/, '')
@@ -230,10 +232,27 @@ export async function reorderPrep({ shopifyOrderId }) {
   return {
     number,
     nextOrderId: await nextOrderId(number, rows.map(r => r.id)),
-    items: items.map(i => ({ orderId: i.orderId, label: i.label, productLabel: i.productLabel, designFrom: i.designFrom, copyable: copyable(i), size: i.product?.size || null, frame: i.product?.frameColor || null })),
+    items: await Promise.all(items.map(async i => ({ orderId: i.orderId, label: i.label, productLabel: i.productLabel, designFrom: i.designFrom, copyable: copyable(i), size: i.product?.size || null, frame: i.product?.frameColor || null, ...(await designPreview(i)) }))),
     sizes: REPLACEMENT_SIZES.map(v => ({ value: v, label: sizeLabel(v) })),
     frames: REPLACEMENT_FRAMES.map(v => ({ value: v, label: v === 'Unframed' ? 'Unframed' : v.replace(/([a-z])([A-Z])/g, '$1 $2') })),
   }
+}
+
+/**
+ * Something to look at before the design is copied: Artelo's own image when
+ * it is a picture, else the approved render's preview, else a link to the
+ * Drive PDF (a print made by hand has no preview of its own).
+ */
+async function designPreview(i) {
+  const isImage = u => /\.(png|jpe?g|webp)(\?|$)/i.test(u)
+  if (i.artelo && isImage(i.artelo)) return { previewUrl: i.artelo, designUrl: i.artelo }
+  if (i.job?.previewPath && (!i.artelo || i.designFrom?.startsWith('the approved'))) {
+    const { data } = await storage().storage.from(BUCKET).createSignedUrl(i.job.previewPath, 900).catch(() => ({ data: null }))
+    if (data?.signedUrl) return { previewUrl: data.signedUrl, designUrl: i.artelo || data.signedUrl }
+  }
+  if (i.artelo) return { previewUrl: null, designUrl: i.artelo }
+  if (i.driveFile) return { previewUrl: null, designUrl: `https://drive.google.com/file/d/${i.driveFile.id}/view` }
+  return { previewUrl: null, designUrl: null }
 }
 
 /** "4985-R1", then -R2: one more than the reorders already noted on the order. */
