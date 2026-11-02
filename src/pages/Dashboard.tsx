@@ -178,6 +178,13 @@ function loadView(view: ActiveView) {
   return p
 }
 
+type SortPrefs = { newestFirst: boolean; expeditedTop: boolean; bigSpenderTop: boolean }
+// Standard always put expedited and big spenders first; Custom went by due date alone.
+const DEFAULT_SORT: Record<'standard' | 'custom', SortPrefs> = {
+  standard: { newestFirst: false, expeditedTop: true, bigSpenderTop: true },
+  custom: { newestFirst: false, expeditedTop: false, bigSpenderTop: false },
+}
+
 export default function Dashboard() {
   const { user: currentUser, isAdmin, can } = useAuth()
   // The "Email customer" modal on an order: a new Support conversation about it.
@@ -217,6 +224,20 @@ export default function Dashboard() {
   const setCustomAll = useCallback((all: boolean) => setUrlParam('show', all ? 'all' : ''), [setUrlParam])
   // Team member and race pickers sit behind a Filters toggle, closed by default.
   const [filtersOpen, setFiltersOpen] = useState(false)
+  // How Standard and Custom are ordered, per view, remembered in this browser.
+  // The defaults are how each queue was always sorted.
+  const [sortPrefs, setSortPrefs] = useState<Record<'standard' | 'custom', SortPrefs>>(() => {
+    const base = { standard: { ...DEFAULT_SORT.standard }, custom: { ...DEFAULT_SORT.custom } }
+    try {
+      const saved = JSON.parse(localStorage.getItem('orderSort') || '{}')
+      return { standard: { ...base.standard, ...saved.standard }, custom: { ...base.custom, ...saved.custom } }
+    } catch { return base }
+  })
+  const setSort = (view: 'standard' | 'custom', patch: Partial<SortPrefs>) => setSortPrefs(prev => {
+    const next = { ...prev, [view]: { ...prev[view], ...patch } }
+    try { localStorage.setItem('orderSort', JSON.stringify(next)) } catch { /* private window */ }
+    return next
+  })
   const [showCompleted, setShowCompleted] = useState(false)
   // Header stat: share of standard orders out by their deadline (1.5 days), past 7 days (goal 90%), and the ones late now.
   const [onTime, setOnTime] = useState<OnTime | null>(null)
@@ -719,6 +740,8 @@ export default function Dashboard() {
   // Custom view: all items where designStatus !== 'sent_to_production', sorted oldest first (by due date)
   // Mine only applies to the two queues people actually work: standard and custom.
   const scoped = activeView === 'standard' || activeView === 'custom'
+  const sortView: 'standard' | 'custom' = activeView === 'custom' ? 'custom' : 'standard'
+  const sortChanged = (['newestFirst', 'expeditedTop', 'bigSpenderTop'] as const).some(k => sortPrefs[sortView][k] !== DEFAULT_SORT[sortView][k])
   const myId = currentUser?.id || null
   // Admins start on everyone; everyone else starts on their own orders.
   useEffect(() => { if (personFilter === null && myId) setPersonFilter(isAdmin ? '' : myId) }, [personFilter, myId, isAdmin])
@@ -768,10 +791,18 @@ export default function Dashboard() {
       if (activeView === 'race_partner') {
         return activeOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       }
+      const p = sortPrefs.custom
+      const rush = (o: Order) => !!(o.isRushOrder || o.isExpedited)
       return activeOrders.sort((a, b) => {
+        if (p.expeditedTop && rush(a) !== rush(b)) return rush(a) ? -1 : 1
+        if (p.bigSpenderTop && !!a.isBigSpender !== !!b.isBigSpender) return a.isBigSpender ? -1 : 1
+        // By due date; an order with none goes last either way.
         const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity
         const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity
-        if (dateA !== dateB) return dateA - dateB
+        if (dateA !== dateB) {
+          if (dateA === Infinity || dateB === Infinity) return dateA === Infinity ? 1 : -1
+          return p.newestFirst ? dateB - dateA : dateA - dateB
+        }
         // Same due date: the one that paid to skip the line goes first.
         return Number(b.isRushOrder || false) - Number(a.isRushOrder || false)
       })
@@ -781,20 +812,24 @@ export default function Dashboard() {
     const fulfillOrders = typeFiltered.filter(o =>
       o.status === 'flagged' || o.status === 'ready' || o.status === 'pending' || o.status === 'missing_year'
     )
+    const p = sortPrefs.standard
     return fulfillOrders.sort((a, b) => {
       // Expedited shipping first (the customer paid for speed), then big
-      // spenders whose race has happened, then everything by how long it has
-      // been workable, longest first. Orders for races not yet run sink to the
-      // bottom, soonest race first.
-      if (a.isExpedited && !b.isExpedited) return -1
-      if (!a.isExpedited && b.isExpedited) return 1
+      // spenders whose race has happened, each when its box is ticked; then
+      // everything by how long it has been workable, oldest or newest first.
+      // Orders for races not yet run sink to the bottom, soonest race first.
+      if (p.expeditedTop && !!a.isExpedited !== !!b.isExpedited) return a.isExpedited ? -1 : 1
       const now = Date.now()
-      const bigA = !!a.isBigSpender && workableSince(a) <= now, bigB = !!b.isBigSpender && workableSince(b) <= now
-      if (bigA && !bigB) return -1
-      if (!bigA && bigB) return 1
-      return workableSince(a) - workableSince(b)
+      const wa = workableSince(a), wb = workableSince(b)
+      if (p.bigSpenderTop) {
+        const bigA = !!a.isBigSpender && wa <= now, bigB = !!b.isBigSpender && wb <= now
+        if (bigA !== bigB) return bigA ? -1 : 1
+      }
+      if ((wa > now) !== (wb > now)) return wa > now ? 1 : -1
+      if (wa > now) return wa - wb
+      return p.newestFirst ? wb - wa : wa - wb
     })
-  }, [orders, activeView, byPerson])
+  }, [orders, activeView, byPerson, sortPrefs])
 
   const completedOrders = useMemo(() => {
     // Guard: ensure orders match the active view type
@@ -1071,7 +1106,7 @@ export default function Dashboard() {
           >
             <SlidersHorizontal className="w-4 h-4" />
             Filters
-            {((scoped && person ? 1 : 0) + (activeView === 'standard' && raceFilter ? 1 : 0)) > 0 && <span className="px-1.5 py-0.5 rounded-full bg-dark-fill text-white text-[10px] font-semibold tabular-nums leading-none">{(scoped && person ? 1 : 0) + (activeView === 'standard' && raceFilter ? 1 : 0)}</span>}
+            {((scoped && person ? 1 : 0) + (activeView === 'standard' && raceFilter ? 1 : 0) + (sortChanged ? 1 : 0)) > 0 && <span className="px-1.5 py-0.5 rounded-full bg-dark-fill text-white text-[10px] font-semibold tabular-nums leading-none">{(scoped && person ? 1 : 0) + (activeView === 'standard' && raceFilter ? 1 : 0) + (sortChanged ? 1 : 0)}</span>}
             <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
           </button>
         )}
@@ -1161,6 +1196,30 @@ export default function Dashboard() {
           </div>
         </div>
         )}
+        <div className="col-span-2 md:col-span-1 flex flex-wrap items-end gap-x-4 gap-y-2">
+          <div className="w-full md:w-44">
+            <div className="hidden md:block text-[10px] font-semibold uppercase tracking-wider text-off-black/40 mb-1">Sort</div>
+            <div className="relative">
+              <select
+                value={sortPrefs[sortView].newestFirst ? 'newest' : 'oldest'}
+                onChange={(e) => setSort(sortView, { newestFirst: e.target.value === 'newest' })}
+                className="w-full appearance-none pl-3 md:pl-4 pr-9 py-2 md:py-3 border rounded-md text-sm bg-subtle-gray border-border-gray text-off-black focus:outline-none focus:ring-2 focus:ring-off-black/10 focus:border-off-black/30 cursor-pointer"
+              >
+                <option value="oldest">Oldest first</option>
+                <option value="newest">Newest first</option>
+              </select>
+              <ChevronDownIcon className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-off-black/40" />
+            </div>
+          </div>
+          <label className="inline-flex items-center gap-2 text-sm text-off-black cursor-pointer select-none md:py-3">
+            <input type="checkbox" className="w-4 h-4 accent-off-black" checked={sortPrefs[sortView].expeditedTop} onChange={(e) => setSort(sortView, { expeditedTop: e.target.checked })} />
+            Expedited orders on top
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm text-off-black cursor-pointer select-none md:py-3">
+            <input type="checkbox" className="w-4 h-4 accent-off-black" checked={sortPrefs[sortView].bigSpenderTop} onChange={(e) => setSort(sortView, { bigSpenderTop: e.target.checked })} />
+            Big spender orders on top
+          </label>
+        </div>
         </div>
       </div>
       )}
