@@ -6,14 +6,15 @@ import { supportApi } from '@/lib/supportApi'
 import { fieldLabel, modalCancel, modalChip, modalInput, modalPrimary } from '@/lib/ui'
 import ActionModal from '@/components/ActionModal'
 import { useArmed } from '@/lib/useArmed'
-import type { Mockup } from '@/types/support'
+import type { Address, Mockup } from '@/types/support'
 
 /**
  * "Email customer" from an order in TrackstarOS. Usually it is the
  * same note: we need one more detail (a bib number, the last name they
  * registered under, a finish time). It sends from fast@ through the support
  * mailbox, so the conversation and their reply live in Support. Or it sends
- * the design for them to approve, and the print waits on their answer.
+ * the design for them to approve, and the print waits on their answer. Or
+ * it asks them to confirm the ship-to when Artelo could not verify it.
  */
 export interface EmailCustomerOrder {
   id: string
@@ -28,8 +29,8 @@ export interface EmailCustomerOrder {
 
 const ASK = '[what we need]'
 // Each chip writes the whole email for that one ask; picking another replaces it.
-type Pick = 'bib' | 'name' | 'time' | 'race' | 'mockup'
-const ASKS: { id: Exclude<Pick, 'mockup'>; label: string; text: string }[] = [
+type Pick = 'bib' | 'name' | 'time' | 'race' | 'mockup' | 'address'
+const ASKS: { id: Exclude<Pick, 'mockup' | 'address'>; label: string; text: string }[] = [
   { id: 'bib', label: 'Bib number', text: "their bib number from the race. It's on the race app, the confirmation email, or the bib itself" },
   { id: 'name', label: 'Last name', text: 'the full name they registered under, exactly as on the results (a maiden name, a hyphenated name or a nickname is often why we cannot find them)' },
   { id: 'time', label: 'Finish time', text: 'their official finish time (chip time if you have it)' },
@@ -41,7 +42,14 @@ function firstName(name?: string | null) {
   return f ? nameCase(f) : ''
 }
 
-function template(o: EmailCustomerOrder, rep: string, pick: Pick | null) {
+// Written in when the order has no address we can show; Send stays off until it is replaced.
+const NO_ADDRESS = '[the address on the order]'
+function addressBlock(a: Address | null) {
+  if (!a) return NO_ADDRESS
+  return [a.name, a.address1, a.address2, [a.city, a.province, a.zip].filter(Boolean).join(' '), a.country].filter(Boolean).join('\n')
+}
+
+function template(o: EmailCustomerOrder, rep: string, pick: Pick | null, shipTo: Address | null = null) {
   const who = firstName(o.customerName)
   const runner = String(o.runnerName || '').trim()
   const race = [o.raceName, o.raceYear].filter(Boolean).join(' ')
@@ -53,6 +61,15 @@ function template(o: EmailCustomerOrder, rep: string, pick: Pick | null) {
 Thanks so much for your order! Here's the design for ${forWhat}, attached. Before we send it to print, could you take a quick look and make sure everything is exactly how you want it: the name, the race and the details?
 
 Just reply "looks good" and we'll send it to print, or tell us what to change.
+
+${bye}`
+  if (pick === 'address') return `${hi}
+
+Thanks so much for your order! ${forWhat[0].toUpperCase()}${forWhat.slice(1)} is almost ready to go, but our shipping partner couldn't verify the shipping address on the order:
+
+${addressBlock(shipTo)}
+
+Could you reply to confirm it's right, or send us the correct address (including any apartment or unit number)? We'll ship it as soon as we hear back.
 
 ${bye}`
   const ask = ASKS.find(a => a.id === pick)?.text || ASK
@@ -67,7 +84,7 @@ ${bye}`
 
 export default function EmailCustomerModal({ order, repName, onClose }: { order: EmailCustomerOrder; repName: string; onClose: () => void }) {
   const number = String(order.displayNumber).replace(/^#/, '')
-  const subjects = { ask: `Trackstar Order ${number} (Action Required)`, mockup: `Trackstar Order ${number} (Please Approve Your Design)` }
+  const subjects = { ask: `Trackstar Order ${number} (Action Required)`, mockup: `Trackstar Order ${number} (Please Approve Your Design)`, address: `Trackstar Order ${number} (Please Confirm Your Address)` }
   const rep = repName || 'The team'
   const [subject, setSubject] = useState(subjects.ask)
   const [pick, setPick] = useState<Pick | null>(null)
@@ -76,6 +93,8 @@ export default function EmailCustomerModal({ order, repName, onClose }: { order:
   const [sent, setSent] = useState<{ threadId: string; to: string; held?: boolean } | null>(null)
   // The design the customer would approve: the newest render, else the newest proof.
   const [mockup, setMockup] = useState<Mockup | null>(null)
+  // Where the order ships (Artelo's copy first), for the address check.
+  const [shipTo, setShipTo] = useState<Address | null>(null)
   // Or a design made by hand: a file from the rep's computer, which replaces
   // the render for this email.
   const [ownFile, setOwnFile] = useState<{ ref: string; name: string; preview: string | null } | null>(null)
@@ -100,18 +119,20 @@ export default function EmailCustomerModal({ order, repName, onClose }: { order:
     let live = true
     supportApi.orderConversations(order.id).then(r => {
       const list = (r.mockups || []).filter(m => m.orderId === order.id)
-      if (live) setMockup(list.find(m => m.kind === 'render') || list.find(m => m.kind === 'proof') || null)
+      if (!live) return
+      setMockup(list.find(m => m.kind === 'render') || list.find(m => m.kind === 'proof') || null)
+      setShipTo(r.shipTo || null)
     }).catch(() => {})
     return () => { live = false }
   }, [order.id])
 
-  const unfilled = text.includes(ASK)
+  const unfilled = text.includes(ASK) || text.includes(NO_ADDRESS)
   const choose = (next: Pick) => {
     // Anything typed into the email since the last template would be lost.
-    if (text !== template(order, rep, pick) && !arm(`replace:${next}`)) return
+    if (text !== template(order, rep, pick, shipTo) && !arm(`replace:${next}`)) return
     setPick(next)
-    setText(template(order, rep, next))
-    if (subject === subjects.ask || subject === subjects.mockup) setSubject(next === 'mockup' ? subjects.mockup : subjects.ask)
+    setText(template(order, rep, next, shipTo))
+    if (Object.values(subjects).includes(subject)) setSubject(next === 'mockup' || next === 'address' ? subjects[next] : subjects.ask)
     box.current?.focus()
   }
   // What goes attached: a file made by hand wins over the render.
@@ -158,8 +179,10 @@ export default function EmailCustomerModal({ order, repName, onClose }: { order:
               ))}
               <button onClick={() => choose('mockup')} className={modalChip(pick === 'mockup')}
                 title={mockup ? `Attach ${mockup.label} for them to approve, and hold the print until they do` : 'Attach a mockup you made for them to approve'}>Approve mockup</button>
+              <button onClick={() => choose('address')} className={modalChip(pick === 'address')}
+                title="Ask them to confirm the ship-to when Artelo says the address does not exist">Confirm address</button>
             </div>
-            {[...ASKS.map(a => a.id), 'mockup' as Pick].some(id => isArmed(`replace:${id}`)) && <p className="mt-2 text-amber-700">Click it again to replace what you wrote with the template.</p>}
+            {[...ASKS.map(a => a.id), 'mockup' as Pick, 'address' as Pick].some(id => isArmed(`replace:${id}`)) && <p className="mt-2 text-amber-700">Click it again to replace what you wrote with the template.</p>}
           </div>
           <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,application/pdf" className="hidden" onChange={e => attachOwn(e.target.files?.[0])} />
           {pick === 'mockup' && (
@@ -183,7 +206,7 @@ export default function EmailCustomerModal({ order, repName, onClose }: { order:
           <label className="block"><span className={fieldLabel}>Email</span>
             <textarea ref={box} value={text} onChange={e => setText(e.target.value)} rows={11} className={`${modalInput} leading-relaxed`} />
           </label>
-          {unfilled && <p className="text-amber-700">Pick what we need above, or replace {ASK} yourself.</p>}
+          {unfilled && <p className="text-amber-700">{text.includes(NO_ADDRESS) ? <>This order has no address we can show. Replace {NO_ADDRESS} with it.</> : <>Pick what we need above, or replace {ASK} yourself.</>}</p>}
         </>
       )}
     </ActionModal>

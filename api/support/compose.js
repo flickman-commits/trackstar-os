@@ -1,7 +1,7 @@
 /**
  * /api/support/compose - Support, seen from an order in TrackstarOS.
  *
- *   GET  ?orderId=                    the customer's conversations that are not closed, and the order's mockups
+ *   GET  ?orderId=                    the customer's conversations that are not closed, the order's mockups and where it ships
  *   POST { orderId, subject, text, mockupRef? }   "Email customer": sends from fast@; returns { threadId, to, subject, held }
  *        With mockupRef (render:, proof: or upload: from /api/support/upload), the mockup goes attached for the customer
  *        to approve and the print is held from production.
@@ -12,6 +12,7 @@ import { setCors } from '../_lib/auth.js'
 import { requireCapability, recordAudit } from '../_lib/users.js'
 import { emailCustomer, conversationsForOrder } from '../../server/domain/support/compose.js'
 import { listMockups } from '../../server/domain/support/mockups.js'
+import { shipToForOrder } from '../../server/domain/support/threads.js'
 
 const SAFE = /^(No such order|Unknown attachment|That attachment is gone|That mockup is not on this order|That design is not ready|That proof is gone|This order has no customer email to write to|Write the email first|Fill in what we need from them first|The support mailbox|Gmail is rate limiting us)/
 
@@ -23,8 +24,8 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const orderId = String(req.query?.orderId || '')
-      const [threads, mockups] = await Promise.all([conversationsForOrder(orderId), orderId ? listMockups([orderId]).catch(() => []) : []])
-      return res.status(200).json({ threads, mockups })
+      const [threads, mockups, shipTo] = await Promise.all([conversationsForOrder(orderId), orderId ? listMockups([orderId]).catch(() => []) : [], shipToForOrder(orderId).catch(() => null)])
+      return res.status(200).json({ threads, mockups, shipTo })
     } catch (error) {
       console.error('[API /support/compose GET]', error)
       return res.status(500).json({ error: 'Could not read Support conversations' })

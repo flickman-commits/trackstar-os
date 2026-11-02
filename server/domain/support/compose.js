@@ -45,7 +45,7 @@ export async function emailCustomer({ orderId, subject, text, actor, mockupRef =
   if (!EMAIL.test(to)) throw new UserError('This order has no customer email to write to')
   const body = String(text || '').replace(/\r\n/g, '\n').trim()
   if (!body) throw new UserError('Write the email first')
-  if (/\[[^\]\n]*what we need[^\]\n]*\]/i.test(body)) throw new UserError('Fill in what we need from them first')
+  if (/\[[^\]\n]*(what we need|the address on the order)[^\]\n]*\]/i.test(body)) throw new UserError('Fill in what we need from them first')
   const number = customerOrderNumber(order)
   // A page loaded before the fix filled in our internal id; the customer only knows the display number.
   let subj = String(subject || '').trim().slice(0, 200) || defaultSubject(number)

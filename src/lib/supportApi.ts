@@ -3,7 +3,7 @@
  * shapes, so the Support screens never touch fetch or JSON directly.
  */
 import { apiFetch } from '@/lib/api'
-import type { SenderFilter, BackfillResult, InboxPayload, InboxSort, InboxView, InstagramBackfillResult, InstagramStatus, Macro, MailboxStatus, Mockup, Note, SyncResult, ThreadDetail, ThreadRow, ThreadStatus, RoutingRules } from '@/types/support'
+import type { Address, SenderFilter, BackfillResult, InboxPayload, InboxSort, InboxView, InstagramBackfillResult, InstagramStatus, Macro, MailboxStatus, Mockup, Note, SyncResult, ThreadDetail, ThreadRow, ThreadStatus, RoutingRules } from '@/types/support'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -47,7 +47,7 @@ type PlaybookSaved = { playbook: { text: string; edited: boolean }; playbookVers
 export const supportApi = {
   status: () => request<MailboxStatus>('/api/support/gmail?action=status'),
   // TrackstarOS's "Email customer": a new conversation about one order.
-  orderConversations: (orderId: string) => request<{ threads: OrderConversation[]; mockups?: Mockup[] }>(`/api/support/compose?orderId=${encodeURIComponent(orderId)}`),
+  orderConversations: (orderId: string) => request<{ threads: OrderConversation[]; mockups?: Mockup[]; shipTo?: Address | null }>(`/api/support/compose?orderId=${encodeURIComponent(orderId)}`),
   // A place to PUT one attachment from the rep's computer; the reply names it by ref.
   uploadSlot: (filename: string, contentType: string, size: number) => post<{ ref: string; uploadUrl: string; filename: string }>('/api/support/upload', { filename, contentType, size }),
   emailCustomer: (orderId: string, subject: string, text: string, mockupRef?: string | null) => post<{ threadId: string; to: string; subject: string; held?: boolean }>('/api/support/compose', { orderId, subject, text, mockupRef: mockupRef || undefined }),

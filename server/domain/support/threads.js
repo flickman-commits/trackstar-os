@@ -407,6 +407,17 @@ function fromOurAddress(a) {
   return { name: a.name || '', address1: a.line1 || a.address1 || '', address2: a.line2 || a.address2 || '', city: a.city || '', province: a.state || a.province || '', zip: a.zip || '', country: a.country || '', phone: a.phone || '' }
 }
 
+/**
+ * Where an order ships, for "Email customer": Artelo's copy first, since an
+ * address question usually comes from Artelo not being able to verify it,
+ * then the address we imported. Null when neither is known.
+ */
+export async function shipToForOrder(orderId) {
+  if (!orderId) return null
+  const o = await prisma.order.findUnique({ where: { id: orderId }, select: { shippingAddress: true, arteloOrderData: true } })
+  return fromArteloAddress(o?.arteloOrderData?.customerAddress) || fromOurAddress(o?.shippingAddress) || null
+}
+
 /** Our row for a line item, as the panel shows it: what was ordered, where it is, and its picture. */
 function itemRow(o, catalog) {
   const info = getProductInfo(o, catalog)
