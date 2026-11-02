@@ -430,7 +430,7 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
-export default function Details({ thread, tagSuggestions, onOpenThread, onMerge, merging = [], onPriority, onTags, onInsert, onAttach, onChanged, width, filters, onFiltersChanged }: {
+export default function Details({ thread, tagSuggestions, onOpenThread, onMerge, merging = [], onPriority, onTags, onInsert, onAttach, onChanged, width, filters, onFiltersChanged, drawer = false }: {
   thread: ThreadDetail | null
   tagSuggestions: string[]
   onOpenThread: (id: string) => void
@@ -449,11 +449,13 @@ export default function Details({ thread, tagSuggestions, onOpenThread, onMerge,
   width?: number
   filters: SenderFilter[]
   onFiltersChanged: () => void
+  /** Drawn in the slide-out drawer on narrow windows (split screen) rather than as the right column. */
+  drawer?: boolean
 }) {
   // Merging takes a second click, in the page (Arc blocks window.confirm).
   const { arm, isArmed } = useArmed()
   return (
-    <aside style={width ? { width } : undefined} className="hidden lg:block w-full lg:w-[272px] xl:w-[300px] shrink-0 lg:overflow-y-auto overflow-x-hidden border-t lg:border-t-0 lg:border-l border-border-gray min-h-0 bg-white">
+    <aside style={!drawer && width ? { width } : undefined} className={drawer ? 'block h-full w-full overflow-y-auto overflow-x-hidden bg-white' : 'hidden lg:block w-full lg:w-[272px] xl:w-[300px] shrink-0 lg:overflow-y-auto overflow-x-hidden border-t lg:border-t-0 lg:border-l border-border-gray min-h-0 bg-white'}>
       {!thread && <div className="px-4 py-6 text-xs text-off-black/45">Pick a conversation to see the customer, their orders and the actions.</div>}
       {thread && (
         <>

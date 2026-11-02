@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ChevronLeft, Inbox, Keyboard, Loader2, Mail, RefreshCw, Search, X } from 'lucide-react'
+import { ChevronLeft, Inbox, Keyboard, Loader2, Mail, PanelRight, RefreshCw, Search, X } from 'lucide-react'
 import PageHeader from '@/components/PageHeader'
 import { btnGhost, btnSecondary, pageShell } from '@/lib/ui'
 import { supportApi } from '@/lib/supportApi'
@@ -98,6 +98,15 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
   const [macrosOpen, setMacrosOpen] = useState(false)
   const [featureOpen, setFeatureOpen] = useState(false)
   const [keysOpen, setKeysOpen] = useState(false)
+  // Below the laptop breakpoint (a phone, or a split-screen window) the customer
+  // and actions column has no room; it opens as a drawer from the conversation's bar.
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  useEffect(() => {
+    if (!drawerOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDrawerOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [drawerOpen])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const replyRef = useRef<RichReplyHandle>(null)
   const noteRef = useRef<HTMLTextAreaElement>(null)
@@ -382,7 +391,10 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
               <div className="flex-1 min-w-0 flex flex-col min-h-0">
               <div className="lg:hidden flex items-center gap-2 px-2 py-2 border-b border-border-gray bg-white shrink-0">
                 <button onClick={() => { setSelectedId(null); setThread(null) }} className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-sm font-medium text-off-black hover:bg-subtle-gray"><ChevronLeft className="w-4 h-4" /> Inbox</button>
-                <span className="text-sm font-medium text-off-black truncate">{thread.subject}</span>
+                <span className="flex-1 min-w-0 text-sm font-medium text-off-black truncate">{thread.subject}</span>
+                <button onClick={() => setDrawerOpen(true)} className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border-gray text-sm font-medium text-off-black hover:bg-subtle-gray" title="The customer, their orders and the quick actions">
+                  <PanelRight className="w-4 h-4" /><span className="hidden sm:inline">Customer &amp; actions</span>
+                </button>
               </div>
               <Conversation
                 key={thread.id} thread={thread} team={inbox?.team || []} me={me} isAdmin={isAdmin} busy={busy} macros={macros} expectedHandle={instagram?.expectedHandle}
@@ -414,6 +426,25 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
         </section>
       </div>
 
+      {drawerOpen && thread && (
+        <div className="lg:hidden fixed inset-0 z-40 flex justify-end">
+          <button aria-label="Close" onClick={() => setDrawerOpen(false)} className="absolute inset-0 bg-black/25" />
+          <div className="relative h-full w-[min(380px,92vw)] bg-white shadow-[0_8px_30px_rgba(0,0,0,0.18)] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-gray shrink-0">
+              <span className="text-sm font-semibold text-off-black">Customer &amp; actions</span>
+              <button onClick={() => setDrawerOpen(false)} className="p-1.5 rounded-md text-off-black/55 hover:text-off-black hover:bg-subtle-gray" title="Close (Esc)"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="flex-1 min-h-0">
+              <Details drawer
+                thread={thread} tagSuggestions={inbox?.tagSuggestions || []} onOpenThread={id => { setDrawerOpen(false); openThread(id) }} onMerge={ids => { merge(ids) }} merging={merging}
+                onPriority={setPriority} onTags={setTags}
+                filters={filters} onFiltersChanged={() => { loadFilters(); loadInbox(true); if (selectedId) refreshThread(selectedId) }}
+                onInsert={t => { insertRef.current?.(t); setDrawerOpen(false) }} onAttach={m => { attachRef.current?.(m); setDrawerOpen(false) }} onChanged={() => { if (selectedId) refreshThread(selectedId); loadInbox(true) }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
       {macrosOpen && <MacrosModal macros={macros} onChanged={loadMacros} onClose={() => setMacrosOpen(false)} />}
       {featureOpen && <RequestFeatureModal onClose={() => setFeatureOpen(false)} />}
       {settingsOpen && <SettingsModal team={inbox?.team || []} unassignedCount={inbox?.counts.unassigned || 0} status={status} instagram={instagram} isAdmin={isAdmin} filters={filters} onChanged={() => { loadStatus(); loadFilters(); loadInbox(true) }} onClose={() => setSettingsOpen(false)} />}
