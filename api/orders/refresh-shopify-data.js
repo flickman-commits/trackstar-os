@@ -85,7 +85,8 @@ async function refreshOrderFromShopify(shopifyOrderId) {
         raceName: lineItemData.raceName || existing.raceName,
         runnerName: lineItemData.runnerName || existing.runnerName,
         raceYear: lineItemData.raceYear || existing.raceYear,
-        hadNoTime: lineItemData.hadNoTime || false,
+        // A print converted to NO TIME here stays that way; Shopify only ever adds it.
+        hadNoTime: lineItemData.hadNoTime || existing.hadNoTime || false,
         notes: notes || existing.notes,
         shopifyOrderData: shopifyOrder,
         // A year a person set answers the missing year; the order text never will.

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw } from 'lucide-react'
+import { Plus, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { shrinkImage } from '@/lib/shrinkImage'
@@ -2132,6 +2132,30 @@ Thank you!`
                         }}
                         className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2">
                         <X className="w-3.5 h-3.5" /> Remove photo &amp; re-render
+                      </button>
+                    )}
+                    {/* The customer wants the print without their time (or asked for it back). */}
+                    {design.canManage && selectedOrder.status !== 'completed' && !isEditing && (
+                      <button onClick={async () => {
+                          const toNoTime = !selectedOrder.hadNoTime
+                          if (!(await confirm(toNoTime
+                            ? { title: 'Convert to NO TIME?', body: 'The design renders again with NO TIME instead of the finish time and pace.', action: 'Convert and re-render' }
+                            : { title: 'Put the time back?', body: 'The design renders again with the finish time and pace.', action: 'Put it back and re-render' }))) return
+                          try {
+                            const res = await apiFetch('/api/orders/no-time', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: selectedOrder.id, noTime: toNoTime }) })
+                            const data = await res.json().catch(() => ({}))
+                            if (!res.ok) throw new Error(data.error || 'Could not change the print')
+                            setSelectedOrder(prev => prev && prev.id === selectedOrder.id ? { ...prev, hadNoTime: toNoTime } : prev)
+                            setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, hadNoTime: toNoTime } : o))
+                            await design.reload()
+                            setToast(data.rendering
+                              ? { message: toNoTime ? 'Converted to NO TIME. Re-rendering the design.' : 'Time put back. Re-rendering the design.', type: 'success' }
+                              : { message: `${toNoTime ? 'Converted to NO TIME' : 'Time put back'}, but the design did not re-render: ${(data.reasons || []).join('. ') || 'press Re-render.'}`, type: 'error' })
+                          } catch (e) { setToast({ message: e instanceof Error ? e.message : 'Could not change the print', type: 'error' }) }
+                        }}
+                        className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2"
+                        title={selectedOrder.hadNoTime ? 'Render the print with the finish time and pace again' : 'The customer wants the print without their time: render it with NO TIME'}>
+                        <TimerOff className="w-3.5 h-3.5" /> {selectedOrder.hadNoTime ? 'Put the time back' : 'Convert to NO TIME'}
                       </button>
                     )}
                     {/* A runner who ran a race we do not carry: design it as a custom print instead of refunding. */}

@@ -35,6 +35,7 @@ const routes = [
   { method: 'post', path: '/api/creators/ads', handler: '../api/creators/ads.js' },
   { method: 'delete', path: '/api/creators/ads', handler: '../api/creators/ads.js' },
   { method: 'post', path: '/api/orders/photo',               handler: '../api/orders/photo.js' },
+  { method: 'post', path: '/api/orders/no-time',             handler: '../api/orders/no-time.js' },
   { method: 'get',  path: '/api/render/jobs',                handler: '../api/render/jobs.js' },
   { method: 'post', path: '/api/render/jobs',                handler: '../api/render/jobs.js' },
   { method: 'post', path: '/api/render/worker',              handler: '../api/render/worker.js' },
