@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Sparkles, Search, Copy, Loader2, FlaskConical, Check, Settings as SettingsIcon, ChevronLeft, ChevronRight, Star, Users, CloudSun, DollarSign, UserCog, ScrollText, BarChart3, ShieldCheck, KeyRound, Plug, PencilRuler, Lightbulb, EyeOff, Image as ImageIcon } from 'lucide-react'
+import { Sparkles, Search, Copy, Loader2, FlaskConical, Check, Settings as SettingsIcon, ChevronLeft, ChevronRight, Star, Users, CloudSun, DollarSign, UserCog, ScrollText, BarChart3, ShieldCheck, KeyRound, Plug, PencilRuler, Lightbulb, EyeOff, Image as ImageIcon, Calculator } from 'lucide-react'
 import { REVIEW_PRODUCTS } from '@/lib/reviewLinks'
 import { apiFetch } from '@/lib/api'
 import { btnPrimary, inputBase } from '@/lib/ui'
@@ -18,6 +18,7 @@ import AssignmentPanel from '@/components/AssignmentPanel'
 import SkippedProductsPanel from '@/components/SkippedProductsPanel'
 import SiteGalleryPanel from '@/components/SiteGalleryPanel'
 import StatsHub from '@/components/StatsHub'
+import CustomCounter from '@/components/CustomCounter'
 import ProductsBulkEdit from '@/pages/ProductsBulkEdit'
 import PageHeader from '@/components/PageHeader'
 import LookupHealthPanel from '@/components/LookupHealthPanel'
@@ -68,7 +69,7 @@ const SETTINGS_NAV: {
     group: 'Reports',
     adminOnly: true,
     items: [
-      { id: 'stats', label: 'Stats', blurb: 'How fast orders go out, Shopify numbers, the Custom Counter and Tickets Resolved', icon: BarChart3 },
+      { id: 'stats', label: 'Stats', blurb: 'How fast orders go out, Shopify numbers and Tickets Resolved', icon: BarChart3 },
       { id: 'activity', label: 'Activity Log', blurb: 'Who did what, and when', icon: ScrollText },
     ],
   },
@@ -89,6 +90,7 @@ const SETTINGS_NAV: {
     items: [
       { id: 'people', label: 'People', blurb: 'Who can sign in and what they are allowed to do', icon: Users },
       { id: 'roles', label: 'Roles', blurb: 'What each role can see and use', icon: ShieldCheck },
+      { id: 'counter', label: 'Custom Counter', blurb: 'The customs each designer made in a month, new or repeat, and what they are owed', icon: Calculator },
       { id: 'assignments', label: 'Order Assignment', blurb: 'Who new orders go to, and extra help for busy stretches', icon: UserCog },
     ],
   },
@@ -125,11 +127,10 @@ export default function Settings() {
 
   const goToSettings = useNavigate()
   const { pathname: currentPath } = useLocation()
-  // The Custom Counter and Tickets Resolved are tabs of Stats now; their old
-  // addresses (/settings/counter, /settings/support_closes) still open them.
+  // Tickets Resolved is a tab of Stats; its old address (/settings/support_closes) still opens it.
   const pathPanel = currentPath.split('/')[2]
   const settingsPanelInUrl = visibleItems.find(i => i.id === pathPanel)?.id
-    || (isAdmin && (pathPanel === 'counter' || pathPanel === 'support_closes') ? pathPanel as SettingsPanel : null)
+    || (isAdmin && pathPanel === 'support_closes' ? pathPanel as SettingsPanel : null)
   // A phone opens on the list of sections; a desktop opens on the first one this role can see.
   const isPhone = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
   const settingsPanel: SettingsPanel = settingsPanelInUrl || visibleItems[0]?.id || 'account'
@@ -254,7 +255,7 @@ export default function Settings() {
                         <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-off-black/35">{group.group}</p>
                         {items.map((item) => {
                           const Icon = item.icon
-                          const active = settingsPanel === item.id || (item.id === 'stats' && (settingsPanel === 'counter' || settingsPanel === 'support_closes'))
+                          const active = settingsPanel === item.id || (item.id === 'stats' && settingsPanel === 'support_closes')
                           return (
                             <button
                               key={item.id}
@@ -284,17 +285,18 @@ export default function Settings() {
                   </button>
                   <div className="min-w-0">
                     <h2 className="text-base font-semibold text-off-black truncate">
-                      {visibleItems.find((i) => i.id === (settingsPanel === 'counter' || settingsPanel === 'support_closes' ? 'stats' : settingsPanel))?.label ?? 'Settings'}
+                      {visibleItems.find((i) => i.id === (settingsPanel === 'support_closes' ? 'stats' : settingsPanel))?.label ?? 'Settings'}
                     </h2>
                     <p className="hidden md:block text-xs text-off-black/45 truncate">
-                      {visibleItems.find((i) => i.id === (settingsPanel === 'counter' || settingsPanel === 'support_closes' ? 'stats' : settingsPanel))?.blurb ?? ''}
+                      {visibleItems.find((i) => i.id === (settingsPanel === 'support_closes' ? 'stats' : settingsPanel))?.blurb ?? ''}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex-1 overflow-auto p-3 md:p-5">
               {settingsPanel === 'pricing' && isAdmin && <PricingCalculator />}
-              {(settingsPanel === 'stats' || settingsPanel === 'counter' || settingsPanel === 'support_closes') && isAdmin && <StatsHub initial={settingsPanel === 'counter' ? 'counter' : settingsPanel === 'support_closes' ? 'tickets' : 'overview'} />}
+              {(settingsPanel === 'stats' || settingsPanel === 'support_closes') && isAdmin && <StatsHub initial={settingsPanel === 'support_closes' ? 'tickets' : 'overview'} />}
+              {settingsPanel === 'counter' && isAdmin && <CustomCounter />}
               {settingsPanel === 'design_needs' && can('settings.design_needs') && <DesignNeedsPanel />}
               {settingsPanel === 'features' && <FeatureRequestsPanel />}
               {settingsPanel === 'account' && <AccountPanel />}
