@@ -212,7 +212,6 @@ export async function autoQueueRenders({ limit = 25 } = {}) {
         { trackstarOrderType: 'bulk', bulkOrder: { paidAt: { not: null }, printKind: { in: ['standard', 'cobranded'] } } },
       ],
       status: { notIn: ['completed', 'flagged'] },
-      raceName: { in: [...new Set(templates.map(t => t.split(' / ')[0]))] },
       renderJobs: { none: {} },
     },
     orderBy: { createdAt: 'asc' },
@@ -223,8 +222,13 @@ export async function autoQueueRenders({ limit = 25 } = {}) {
     select: SPEC_SELECT,
   })
   const ctx = { templates, gaps: await noTimeGaps(), raceCache: new Map() }
+  // Match on the canonical race: Etsy calls NYC "New York City Map Marathon",
+  // and an exact-name filter left those orders queued forever.
+  const races = new Set(templates.map(t => t.split(' / ')[0]))
   let queued = 0, skipped = 0
   for (const o of candidates) {
+    const name = o.raceNameOverride ?? o.raceName
+    if (!races.has(name) && !races.has(getCanonicalRaceName(name))) continue
     if (queued >= limit) break
     const { ok } = await checkOrder(o.id, { ...ctx, order: o })
     if (!ok) { skipped++; continue }
