@@ -54,6 +54,16 @@ export class SVETimingScraper extends BaseScraper {
     return `${BASE}/${this.config.organizer}/events/${this.year}/${this.config.eventSlug}`
   }
 
+  /**
+   * The entrant's own page, keyed by bib: /{organizer}/events/{year}/{slug}/{bib}/entrant
+   * (the page the results table's row click loads; checked: Baltimore 2025
+   * bib 1076 opens ADAM SMITH, MARATHON, Elapsed 03:15:09).
+   */
+  runnerResultsUrl(bib) {
+    const b = String(bib ?? '').trim()
+    return b ? `${this.eventUrl}/${encodeURIComponent(b)}/entrant` : null
+  }
+
   async getRaceInfo() {
     let scraped = null
     try {
@@ -222,7 +232,7 @@ export class SVETimingScraper extends BaseScraper {
         yearFound: this.year,
         researchStatus: 'found',
         researchNotes: null,
-        resultsUrl: `${this.eventUrl}/results`,
+        resultsUrl: this.runnerResultsUrl(runner.bib) || `${this.eventUrl}/results`,
       }
     } catch (error) {
       console.error(`[${this.tag}] Error searching for ${runnerName}:`, error.message)

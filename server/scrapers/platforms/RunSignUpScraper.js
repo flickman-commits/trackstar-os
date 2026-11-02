@@ -66,6 +66,19 @@ export class RunSignUpScraper extends BaseScraper {
     this.tag = config.tag || config.raceName
   }
 
+  /**
+   * The runner's own Individual Result page. A numeric-or-text fragment after
+   * the hash is looked up as a bib by RunSignUp's page script (checked: Carmel
+   * 2023 /Race/Results/130921/IndividualResult/?resultSetId=376743#3 opens
+   * Jack Beakas, 2:18:18.55). Falls back to the result set's list without a bib.
+   */
+  runnerPageUrl(resultSetId, bib) {
+    const list = `${this.baseUrl}/Race/Results/${this.raceId}/${resultSetId}#resultSetId-${resultSetId}`
+    const b = String(bib ?? '').trim()
+    if (!b) return list
+    return `${this.baseUrl}/Race/Results/${this.raceId}/IndividualResult/?resultSetId=${resultSetId}#${encodeURIComponent(b)}`
+  }
+
   async getRaceInfo() {
     console.log(`[${this.tag} ${this.year}] Fetching race info...`)
 
@@ -182,7 +195,7 @@ export class RunSignUpScraper extends BaseScraper {
         state: r.state || null
       }
       console.log(`[${this.tag} ${this.year}] BIB MATCH: ${match.name} bib ${match.bib} ${eventLabel} ${chip || 'no chip time'}`)
-      const resultsUrl = `${this.baseUrl}/Race/Results/${this.raceId}/${resultSetId}#resultSetId-${resultSetId}`
+      const resultsUrl = this.runnerPageUrl(resultSetId, match.bib)
       return { ...this.extractRunnerData(match, eventLabel), runnerName: match.name, resultsUrl }
     }
     return this.notFoundResult(`No bib ${wanted} in ${this.raceName} ${this.year} results`)
@@ -280,7 +293,7 @@ export class RunSignUpScraper extends BaseScraper {
       console.log(`  Pace: ${match.pace}`)
       console.log(`  Place: ${match.placeOverall}`)
 
-      const resultsUrl = `${this.baseUrl}/Race/Results/${this.raceId}/${resultSetId}#resultSetId-${resultSetId}`
+      const resultsUrl = this.runnerPageUrl(resultSetId, match.bib)
       return { ...this.extractRunnerData(match, eventType), resultsUrl }
 
     } catch (error) {
@@ -426,7 +439,7 @@ export class RunSignUpScraper extends BaseScraper {
       console.log(`  Pace: ${match.pace}`)
       console.log(`  Place: ${match.placeOverall}`)
 
-      return { ...this.extractRunnerData(match, eventType), resultsUrl }
+      return { ...this.extractRunnerData(match, eventType), resultsUrl: this.runnerPageUrl(resultSetId, match.bib) }
 
     } catch (error) {
       console.error(`[${this.tag} ${this.year}] Error searching for ${runnerName}:`, error.message)

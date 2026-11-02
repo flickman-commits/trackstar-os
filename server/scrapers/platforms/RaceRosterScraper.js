@@ -152,7 +152,7 @@ export class RaceRosterScraper extends BaseScraper {
         console.log(`[${this.tag} ${this.year}] Could not fetch detail for result ${match.id}`)
         return this.upstreamErrorResult(`could not load detail ${match.id} for ${match.name}`)
       }
-      return this.extractRunnerData(result, eventLabel, eventCode, eventKey)
+      return this.extractRunnerData(result, eventLabel, eventCode, eventKey, match.id)
     }
 
     console.log(`[${this.tag} ${this.year}] Runner not found in any event type`)
@@ -196,7 +196,7 @@ export class RaceRosterScraper extends BaseScraper {
         if (!this.bibsEqual(result.bib, wanted)) {
           return this.notFoundResult(`Bib ${wanted} detail returned bib ${result.bib}`)
         }
-        const out = this.extractRunnerData(result, eventLabel, eventCode, eventKey)
+        const out = this.extractRunnerData(result, eventLabel, eventCode, eventKey, match.id)
         return { ...out, runnerName: result.name || match.name, bibNumber: String(result.bib).trim() }
       }
       return this.notFoundResult(`Bib ${wanted} is entered in a ${this.raceName} ${this.year} event this race does not sell`)
@@ -209,7 +209,7 @@ export class RaceRosterScraper extends BaseScraper {
   /**
    * Extract standardized data from a RaceRoster detail result
    */
-  extractRunnerData(result, eventType, eventCode, eventKey) {
+  extractRunnerData(result, eventType, eventCode, eventKey, participantId = null) {
     // Some events publish tenths (Charlotte: "3:22:15.8"). The print shows the
     // whole seconds the page shows, so the tenth is dropped, never rounded:
     // rounding printed 3:22:16, a time not on the page, for about half of
@@ -233,9 +233,15 @@ export class RaceRosterScraper extends BaseScraper {
     console.log(`  Gender Place: ${result.genderPlaceLabel}`)
     console.log(`  Division: ${result.division}`)
 
-    const resultsUrl = eventCode
+    // The participant's own page, keyed by the search hit's id (checked: Air
+    // Force 2025 /v3/events/4n6ka3mtc4j5vnag/race/241362/participant/e3djk2t3d9334dfq
+    // opens Zachary Keller #9151, 16:35.5). The distance's list without an id.
+    const raceList = eventCode
       ? `${this.baseUrl}/v3/events/${eventCode}/race/${result.resultSubEventId}`
       : null
+    const resultsUrl = raceList && participantId
+      ? `${raceList}/participant/${encodeURIComponent(participantId)}`
+      : raceList
 
     return {
       found: true,

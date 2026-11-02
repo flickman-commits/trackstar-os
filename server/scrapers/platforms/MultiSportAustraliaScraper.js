@@ -186,6 +186,20 @@ export class MultiSportAustraliaScraper extends BaseScraper {
     }
   }
 
+  /**
+   * The runner's own result page, keyed by the marathon event and bib: the
+   * address the site's search links each name to (Sydney 2026 bib 57497 ->
+   * /races/sydney-marathon-2026/events/1/results/individuals/57497). Lets
+   * Instant Lookup link the runner without launching a browser. The site puts
+   * a Cloudflare browser check in front of these pages; a person passes it.
+   */
+  runnerResultsUrl(bib) {
+    const b = String(bib ?? '').trim()
+    if (!b) return null
+    const eventId = this.config.eventIds?.[this.year]?.marathon ?? this.config.defaultMarathonEventId ?? 1
+    return `${this.baseUrl}/races/${this.raceSlug}/events/${eventId}/results/individuals/${encodeURIComponent(b)}`
+  }
+
   async searchRunner(runnerName) {
     console.log(`\n${'='.repeat(50)}`)
     console.log(`[${this.tag} ${this.year}] Searching for: "${runnerName}"`)

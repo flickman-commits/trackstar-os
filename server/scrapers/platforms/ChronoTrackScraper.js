@@ -399,7 +399,12 @@ export class ChronoTrackScraper extends BaseScraper {
       // Label from the distance, not the race's marketing name ("CHINA
       // AIRLINES BRIDGE HALF MARATHON" is not what we print on a poster).
       eventType,
-      resultsUrl: this._resultsUrl(res.data?.race?.id || entry.azpEventCourseId),
+      // The entry's own page, keyed by the search hit's entry id (checked:
+      // Detroit 2026 /event/95042/results/entry/80964654 opens Andy Bowman,
+      // chip 2:12:11); the distance's list only if there is no event id.
+      resultsUrl: this.eventId
+        ? `https://live.chronotrack.com/event/${this.eventId}/results/entry/${entryId}`
+        : this._resultsUrl(res.data?.race?.id || entry.azpEventCourseId),
     }
   }
 }

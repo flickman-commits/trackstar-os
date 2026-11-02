@@ -188,6 +188,13 @@ export class CompetitiveTimingScraper extends BaseScraper {
 
     const r = matches[0]
     const time = this.chipToTime(r.finish_time_seconds)
+    // The runner's own page is keyed by bib under the distance (checked:
+    // Missoula 2026 /events/missoula-marathon/2026/marathon/runners/1308 opens
+    // Mark Thompson, chip 2:33:37). The distance list is the fallback.
+    const bib = r.bib != null ? String(r.bib).trim() : ''
+    const runnerUrl = bib
+      ? `https://competitivetiming.com/events/${this.raceSlug}/${this.year}/${distSlug}/runners/${encodeURIComponent(bib)}`
+      : resultsUrl
     console.log(`[${this.tag} ${this.year}] FOUND: ${r.name} bib=${r.bib} chip=${time}`)
     return {
       found: true,
@@ -197,7 +204,7 @@ export class CompetitiveTimingScraper extends BaseScraper {
       eventType: eventLabel,
       yearFound: this.year,
       researchNotes: null,
-      resultsUrl,
+      resultsUrl: runnerUrl,
       rawData: {
         name: r.name, gender: r.gender, age: r.age,
         city: r.city, state: r.state,

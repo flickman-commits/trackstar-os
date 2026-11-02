@@ -257,7 +257,10 @@ export class BrookseeScraper extends BaseScraper {
     let match
     while ((match = rowPattern.exec(html)) !== null) {
       const clean = (s) => s.replace(/<[^>]*>/g, '').trim()
+      // The name links to the runner's own page, {baseUrl}/results?pk={id}.
+      const pk = (match[0].match(/class='individual lastname'[^>]*href='[^']*[?&]pk=(\d+)/) || [])[1] || null
       rows.push({
+        participantId: pk,
         overallPlace: clean(match[1]),
         genderPlace: clean(match[2]),
         divisionPlace: clean(match[3]),
@@ -297,7 +300,9 @@ export class BrookseeScraper extends BaseScraper {
       eventType,
       yearFound: this.year,
       researchNotes: null,
-      resultsUrl: `${this.baseUrl}/results`,
+      // The runner's own page when the row linked one (checked: Las Vegas 2025
+      // /results?pk=8382388 opens Jennifer Smith #1242, 2:42:50), else the list.
+      resultsUrl: result.participantId ? `${this.baseUrl}/results?pk=${result.participantId}` : `${this.baseUrl}/results`,
       rawData: {
         name,
         gender: result.gender,

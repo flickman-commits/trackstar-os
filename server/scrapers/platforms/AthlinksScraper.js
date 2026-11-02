@@ -48,6 +48,17 @@ export class AthlinksScraper extends BaseScraper {
     return this.eventId ? `https://www.athlinks.com/event/${this.config.masterEventId}/results/Event/${this.eventId}/Results` : null
   }
 
+  /**
+   * One entry's own result page, by course and bib (checked: Detroit 2023
+   * /event/154412/results/Event/1064221/Course/2410004/Bib/1264 opens Mitch
+   * Klingler, 2:22:51). The event's results list without a course or bib.
+   */
+  runnerPageUrl(eventCourseId, bib) {
+    const b = String(bib ?? '').trim()
+    if (!this.eventId || !this.config.masterEventId || !eventCourseId || !b) return this.resultsUrl()
+    return `https://www.athlinks.com/event/${this.config.masterEventId}/results/Event/${this.eventId}/Course/${eventCourseId}/Bib/${encodeURIComponent(b)}`
+  }
+
   async getRaceInfo() {
     return {
       // Deliberately NOT the master API's raceDate: that field is the event
@@ -128,6 +139,7 @@ export class AthlinksScraper extends BaseScraper {
     return {
       displayName: d.displayName || e.displayName,
       bib: d.bib || e.bib,
+      eventCourseId: e.eventCourseId,
       courseName: (await this._courseNames()).get(e.eventCourseId) || d.raceName || '',
       finished: d.racerHasFinished !== false,
       chipMs: ms > 0 ? ms : null,
@@ -158,7 +170,7 @@ export class AthlinksScraper extends BaseScraper {
       eventType: this.namedEvent(r.courseName, eventLabel),
       yearFound: this.year,
       researchNotes: null,
-      resultsUrl: this.resultsUrl(),
+      resultsUrl: this.runnerPageUrl(r.eventCourseId, r.bib),
       rawData: { displayName: r.displayName, bib: r.bib, age: r.age, gender: r.gender, city: r.city, stateProv: r.state, courseName: r.courseName },
     }
   }
