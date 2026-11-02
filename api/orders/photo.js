@@ -47,6 +47,15 @@ const DESIGN_ROLES = ['head_designer', 'designer']
  * @returns {Promise<{ rendering: number|null, reasons: string[] }>}
  */
 async function renderWithPhoto(orderId, note) {
+  // The photo is saved by now. A render that cannot start (the database pooler
+  // full, Oct 30 and Nov 2) must not turn that into "Photo update failed":
+  // say the photo is in and the design needs Re-render.
+  try { return await startRender(orderId, note) } catch (err) {
+    console.error('[API /orders/photo] render did not start', err.message)
+    return { rendering: null, reasons: ['The photo is saved, but the new design did not start. Press Re-render.'] }
+  }
+}
+async function startRender(orderId, note) {
   const o = await prisma.order.findUnique({ where: { id: orderId }, select: { trackstarOrderType: true, status: true } })
   if (!o || o.trackstarOrderType === 'custom' || o.status === 'completed') return { rendering: null, reasons: [] }
   await prisma.renderJob.updateMany({ where: { orderId, status: 'done', review: 'pending' }, data: { review: 'closed', reviewNote: note, reviewedAt: new Date() } })
