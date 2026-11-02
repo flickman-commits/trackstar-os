@@ -152,8 +152,10 @@ function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; o
           {d.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Send right away
         </button>
       )}
-      {/* Its design is on the Artelo item, so it can be done here while the others catch up. */}
-      {s.state === 'waiting' && onComplete && (
+      {/* Its design is on the Artelo item, so it can be done here while the others catch up.
+          Sent too: an order reopened after sending (Artelo held it for an address
+          review) is completed here once that is sorted. Only passed while the order is open. */}
+      {(s.state === 'waiting' || s.state === 'sent') && onComplete && (
         <button onClick={onComplete} className={`inline-flex items-center gap-1.5 px-4 ${pad} rounded-md bg-green-600 border-2 border-green-600 text-white font-semibold hover:bg-green-700`}>
           <Check className="w-4 h-4" /> {compact ? 'Complete' : 'Mark as complete'}
         </button>

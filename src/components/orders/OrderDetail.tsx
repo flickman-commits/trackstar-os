@@ -2919,7 +2919,7 @@ Thank you!`
                     </button>
                     <div className="flex-1 min-w-0">
                       {(design.job?.status === 'done' && (design.job.review === 'pending' || design.job.review === 'approved')) ? (
-                        <DesignReview compact d={design} arteloOrderUrl={selectedOrder.status !== 'completed' ? selectedOrder.arteloUrl : null} onComplete={() => markAsCompleted(selectedOrder.orderNumber)} />
+                        <DesignReview compact d={design} arteloOrderUrl={selectedOrder.status !== 'completed' ? selectedOrder.arteloUrl : null} onComplete={selectedOrder.status !== 'completed' ? () => markAsCompleted(selectedOrder.orderNumber) : undefined} />
                       ) : (
                         <div className="h-full flex items-center justify-center text-[13px] text-off-black/55 text-center px-1">
                           {selectedOrder.pipeline?.reason || getStatusDisplay(selectedOrder).label}
@@ -2986,7 +2986,7 @@ Thank you!`
               {/* Reviewing the automated print is the main action here, so it is big.
                   Once approved, the same spot sends you to Artelo to attach the file. */}
               <div className="space-y-2">
-                <div className="hidden md:block"><DesignReview d={design} arteloOrderUrl={selectedOrder.status !== 'completed' ? selectedOrder.arteloUrl : null} onComplete={() => markAsCompleted(selectedOrder.orderNumber)} /></div>
+                <div className="hidden md:block"><DesignReview d={design} arteloOrderUrl={selectedOrder.status !== 'completed' ? selectedOrder.arteloUrl : null} onComplete={selectedOrder.status !== 'completed' ? () => markAsCompleted(selectedOrder.orderNumber) : undefined} /></div>
               </div>
 
               </div>
