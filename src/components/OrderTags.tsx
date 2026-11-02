@@ -126,11 +126,11 @@ export function getOrderTags(o: TaggableOrder): OrderTag[] {
   if (o.isSample) {
     tags.push({ key: 'sample', label: '🎁 Sample', tone: 'purple', weight: 2, title: 'A sample we sent: a creator sample, or an order from Tools > Samples.' })
   }
-  if (o.isExpedited && o.trackstarOrderType === 'standard') {
+  if (o.isExpedited && (o.trackstarOrderType === 'standard' || o.trackstarOrderType === 'custom')) {
     tags.push({ key: 'expedited', label: '🚀 Expedited', tone: 'red', weight: -2,
       title: `Customer paid for ${o.shippingMethod || 'expedited'} shipping. Move this to the front of the queue.` })
   }
-  if (o.isBigSpender && o.trackstarOrderType === 'standard') {
+  if (o.isBigSpender && (o.trackstarOrderType === 'standard' || o.trackstarOrderType === 'custom')) {
     tags.push({ key: 'big-spender', label: '💰 Big Spender', tone: 'amber', weight: -1,
       sublabel: o.orderTotalUsd ? `$${Math.round(o.orderTotalUsd).toLocaleString()}` : undefined,
       title: o.orderTotalUsd ? `Customer spent $${Math.round(o.orderTotalUsd)}. Prioritize this order.` : 'High value order. Prioritize this order.' })

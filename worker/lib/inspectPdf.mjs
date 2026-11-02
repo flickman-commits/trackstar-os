@@ -24,11 +24,16 @@ export function inspectPdf(file) {
     if (end < 0) break
     try { inflated += zlib.inflateSync(buf.subarray(start, end)).toString('latin1') } catch { /* not deflated, or an image */ }
   }
-  const all = raw + inflated
+  // Stream bodies (compressed images above all) are binary: by chance they
+  // contain text like "1\rRG", which read as an RGB colour and flagged CMYK
+  // prints with a customer photo as mixed. Only the PDF's own text and the
+  // inflated streams are searched, and an operator needs its full operands.
+  const all = raw.replace(/stream\r?\n[\s\S]*?endstream/g, 'stream endstream') + '\n' + inflated
   const media = box(all, 'MediaBox'), trim = box(all, 'TrimBox') || media, bleed = box(all, 'BleedBox') || media
   const count = re2 => (all.match(re2) || []).length
-  const rgbOps = count(/[\d.]\s+(rg|RG)\b/g)
-  const cmykOps = count(/[\d.]\s+(k|K)\b/g)
+  const num = String.raw`-?(?:\d+\.?\d*|\.\d+)`
+  const rgbOps = count(new RegExp(String.raw`(?<![\w.-])${num}\s+${num}\s+${num}\s+(?:rg|RG)(?![\w.])`, 'g'))
+  const cmykOps = count(new RegExp(String.raw`(?<![\w.-])${num}\s+${num}\s+${num}\s+${num}\s+(?:k|K)(?![\w.])`, 'g'))
   const rgbSpaces = count(/\/DeviceRGB|\/ICCBased[^>]*\/N\s+3|\/N\s+3\b[^>]*\/ICCBased/g)
   return {
     trimIn: trim ? `${inches(trim[2] - trim[0])}x${inches(trim[3] - trim[1])}` : null,
