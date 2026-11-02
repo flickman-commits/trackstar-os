@@ -11,7 +11,7 @@
  */
 import { paceFromTypedTime } from '../domain/research/customerPace.js'
 import prisma from '../db.js'
-import { getScraperForRace, hasScraperForRace, getCanonicalRaceName, namedEventsFor } from '../scrapers/index.js'
+import { getScraperForRace, hasScraperForRace, getCanonicalRaceName, namedEventsFor, isRacePublicSafe } from '../scrapers/index.js'
 import { ensureOverridesLoaded } from '../scrapers/scraperOverrides.js'
 import WeatherService from './WeatherService.js'
 
@@ -19,6 +19,25 @@ import WeatherService from './WeatherService.js'
 function runnerPage(raceName, year, bib) {
   if (!bib) return null
   try { return getScraperForRace(raceName, year)?.runnerResultsUrl?.(bib) || null } catch { return null }
+}
+
+/**
+ * Otherwise, the page the race's scraper links when it finds this runner by
+ * name: most timing sites have one (RTRT, MTEC, Race Result, Laurel...).
+ * Only for scrapers that need no browser, within 10 seconds, and only when the
+ * bib it found is the bib on the order. Null when that gives nothing better
+ * than the race-wide list.
+ */
+export async function runnerPageFromSearch(raceName, year, runnerName, bib, raceUrl) {
+  if (!runnerName || !isRacePublicSafe(raceName)) return null
+  let timer
+  try {
+    const scraper = getScraperForRace(raceName, year)
+    const r = await Promise.race([scraper.searchRunner(runnerName), new Promise(res => { timer = setTimeout(() => res(null), 10_000) })])
+    if (!r?.found || !r.resultsUrl || r.resultsUrl === raceUrl) return null
+    if (bib && r.bibNumber && String(r.bibNumber).trim() !== String(bib).trim()) return null
+    return r.resultsUrl
+  } catch { return null } finally { clearTimeout(timer) }
 }
 
 
@@ -328,6 +347,8 @@ export class ResearchService {
 
     // TIER 2 (replaced): write the customer-confirmed result.
     await ensureOverridesLoaded()
+    const ownPage = runnerPage(effectiveRaceName, effectiveRaceYear, order.customerBib)
+      || await runnerPageFromSearch(effectiveRaceName, effectiveRaceYear, effectiveRunnerName, order.customerBib, race.resultsUrl)
     const researchData = {
       orderId: order.id,
       raceId: race.id,
@@ -343,7 +364,7 @@ export class ResearchService {
         ? 'Customer-confirmed via Instant Lookup (matched official results)'
         : `Entered by the customer at checkout, not matched against official results. Their numbers, used as given.${derivedPace ? ` Pace ${derivedPace} calculated from their time.` : ''}`,
       // The runner's own page when the timing site has one, else the race's results list.
-      resultsUrl: runnerPage(effectiveRaceName, effectiveRaceYear, order.customerBib) || race.resultsUrl || null,
+      resultsUrl: ownPage || race.resultsUrl || null,
       possibleMatches: null,
     }
 
