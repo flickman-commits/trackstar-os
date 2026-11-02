@@ -933,26 +933,32 @@ export default function Dashboard() {
   // completed list so j/k scroll through all completed orders. Otherwise use the
   // active queue (filteredOrders), inserting the selected order if it isn't
   // already there so j/k keep working right after marking an order complete.
+  // Where the open order last sat in the queue. Approving it (or anything else
+  // that changes its status) drops it out of a view like "Ready for review";
+  // it is put back at that same spot, so D goes to the order that was below it
+  // instead of jumping near the top. It used to be put back by orderNumber,
+  // a Shopify id that has nothing to do with the list's sort.
+  const lastQueuePos = useRef<{ id: string; index: number } | null>(null)
   const navigableOrders = useMemo(() => {
     if (!selectedOrder) return filteredOrders
     // Completed order open → cycle through the completed list.
-    if (filteredCompletedOrders.some(o => o.id === selectedOrder.id)) {
+    if (filteredCompletedOrders.some(o => o.id === selectedOrder.id) && !(lastQueuePos.current?.id === selectedOrder.id)) {
       return filteredCompletedOrders
     }
     const inFiltered = filteredOrders.some(o => o.id === selectedOrder.id)
     if (inFiltered) return filteredOrders
-    // Insert selected order at its natural position (by orderNumber) so j/k feel consistent
     const result = [...filteredOrders]
-    const insertIdx = result.findIndex(o =>
-      (o.orderNumber || '').localeCompare(selectedOrder.orderNumber || '') > 0
-    )
-    if (insertIdx === -1) {
-      result.push(selectedOrder)
-    } else {
-      result.splice(insertIdx, 0, selectedOrder)
-    }
+    const at = lastQueuePos.current?.id === selectedOrder.id
+      ? Math.min(lastQueuePos.current.index, result.length)
+      : result.length
+    result.splice(at, 0, selectedOrder)
     return result
   }, [filteredOrders, filteredCompletedOrders, selectedOrder])
+  useEffect(() => {
+    if (!selectedOrder) return
+    const i = filteredOrders.findIndex(o => o.id === selectedOrder.id)
+    if (i >= 0) lastQueuePos.current = { id: selectedOrder.id, index: i }
+  }, [selectedOrder, filteredOrders])
 
   const currentOrderIndex = useMemo(() => {
     if (!selectedOrder) return -1
