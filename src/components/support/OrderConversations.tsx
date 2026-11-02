@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowUpRight, Inbox, Instagram } from 'lucide-react'
+import { ArrowUpRight, Hourglass, Inbox, Instagram, Loader2 } from 'lucide-react'
 import { supportApi, type OrderConversation } from '@/lib/supportApi'
 import { STATUS_LABEL, STATUS_TONE } from '@/lib/supportStatus'
 import { ago } from '@/lib/supportDates'
@@ -19,6 +19,20 @@ export default function OrderConversations({ orderId, enabled, variant = 'list' 
     supportApi.orderConversations(orderId).then(r => { if (live) setThreads(r.threads) }).catch(() => {})
     return () => { live = false }
   }, [orderId, enabled])
+  const [marking, setMarking] = useState<string | null>(null)
+  // We asked the customer something from Support: park it until they answer.
+  const markWaiting = async (id: string) => {
+    setMarking(id)
+    try {
+      await supportApi.setStatus(id, 'waiting')
+      setThreads(prev => prev.map(t => t.id === id ? { ...t, status: 'waiting', snoozed: false } : t))
+    } catch { /* the button stays; Support has the same control */ } finally { setMarking(null) }
+  }
+  const waitButton = (t: OrderConversation, cls: string) => t.status === 'open' && (
+    <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); markWaiting(t.id) }} disabled={marking === t.id} className={cls}>
+      {marking === t.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Hourglass className="w-3.5 h-3.5" />} Mark waiting on customer
+    </button>
+  )
   if (!enabled || threads.length === 0) return null
   // Above the design, amber: a customer writing in is often asking to change
   // something on the print, so it is seen before anyone approves.
@@ -39,10 +53,13 @@ export default function OrderConversations({ orderId, enabled, variant = 'list' 
               {t.snippet && <p className="text-[13px] text-amber-900/80 line-clamp-2 mt-0.5">{t.snippet}</p>}
               <div className="text-[11px] text-amber-800/60 mt-0.5">{t.assignee ? `${t.assignee} · ` : ''}{ago(t.lastMessageAt)}</div>
             </div>
-            <a href={`/support?thread=${encodeURIComponent(t.id)}`} target="_blank" rel="noopener noreferrer"
-              className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700">
-              Open in Support <ArrowUpRight className="w-3.5 h-3.5" />
-            </a>
+            <div className="shrink-0 flex flex-col items-end gap-1.5">
+              <a href={`/support?thread=${encodeURIComponent(t.id)}`} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700">
+                Open in Support <ArrowUpRight className="w-3.5 h-3.5" />
+              </a>
+              {waitButton(t, 'inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-amber-400 bg-white text-amber-900 text-xs font-semibold hover:bg-amber-100 disabled:opacity-50')}
+            </div>
           </div>
         ))}
       </div>
@@ -68,6 +85,7 @@ export default function OrderConversations({ orderId, enabled, variant = 'list' 
               {t.assignee && <span>{t.assignee}</span>}
               <span className="ml-auto tabular-nums">{ago(t.lastMessageAt)}</span>
             </div>
+            {waitButton(t, 'mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-off-black/60 hover:text-off-black disabled:opacity-50')}
           </a>
         ))}
       </div>

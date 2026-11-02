@@ -623,10 +623,10 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
               {hasEmDash && <span className="text-[11px] text-red-600 inline-flex items-center gap-1"><AlertTriangle className="w-3 h-3" />No em dashes in anything a customer sees</span>}
               {ig && window?.open && window.mode === 'standard' && window.closesAt && <span className="text-[11px] text-off-black/45 inline-flex items-center gap-1" title="Instagram allows a reply within 24 hours of their last message"><Clock className="w-3 h-3" />Window closes {when(window.closesAt)}</span>}
             </div>
-            {/* One row, left to right: Send, Send and close (the usual), Escalate, Close. */}
+            {/* One row, left to right: Send and wait (for a question), Send and close (the usual), Escalate, Close. */}
             <div className="mt-2 flex items-center gap-2">
-              <button onClick={() => send(false)} disabled={!canSend} className={btnSecondary} title="Send and keep it open (⌘⇧↵)">
-                {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Send
+              <button onClick={() => send(false)} disabled={!canSend} className={`${btnSecondary} whitespace-nowrap`} title="Send and mark it waiting on the customer (⌘⇧↵)">
+                {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Send and wait
               </button>
               <button onClick={() => send(true)} disabled={!canSend} className={`${btnPrimary} whitespace-nowrap`}>Send and close <Kbd>⌘↵</Kbd></button>
               <span className="w-px h-6 bg-border-gray mx-0.5 shrink-0" />

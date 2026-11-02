@@ -60,6 +60,10 @@ export default async function handler(req, res) {
     })
     // Send and close: Intercom's one-click for a conversation that is done.
     if (body.close) await setStatus(id, 'closed', user)
+    // Plain Send: the ball is in the customer's court now. The mailbox sync
+    // would do this when the sent message comes back, minutes later; the
+    // order page reads it right away.
+    else if (thread.status === 'open') await setStatus(id, 'waiting', user)
     const fresh = await getThread(id, { userId: user.id, money: seesMoney(user) })
     return res.status(200).json(fresh)
   } catch (error) {
