@@ -32,7 +32,7 @@
     },
     {
       "path": "/api/cron/artelo-send",
-      "schedule": "* * * * *"
+      "schedule": "*/2 * * * *"
     },
     {
       "path": "/api/cron/fulfillment-check",

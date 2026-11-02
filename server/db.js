@@ -9,6 +9,7 @@
  * api/_lib/prisma.js re-exports this so existing handlers keep working.
  */
 import { PrismaClient } from '@prisma/client'
+import { postSlack } from './lib/slack.js'
 
 /**
  * On Vercel every function instance has its own pool, and Prisma's default
@@ -23,27 +24,60 @@ function datasourceUrl() {
   if (!url) return undefined
   if (/connection_limit=/.test(url)) return url
   const sep = url.includes('?') ? '&' : '?'
-  // Local processes (dev server, render worker, scripts) talk to the same
-  // database, so they get a small cap too: uncapped, each opened ~20.
-  // Production was 5 until Oct 30 2026: approving ~20 prints in four minutes
-  // (each approve uploads to Drive and Artelo while the sender runs) put
-  // enough instances up to fill the pooler's 200 client connections, and
-  // approves failed with EMAXCONN. 3 lets ~66 instances share it; a query
-  // past the cap waits (pool_timeout) instead of failing.
-  const limit = 3
+  // Production was 5 until Oct 30 2026, then 3: approving ~20 prints in four
+  // minutes put enough instances up to fill the pooler's 200 client
+  // connections, and approves failed with EMAXCONN. Since Nov 2 2026 the
+  // project runs on Vercel Fluid compute, where one instance serves many
+  // requests at once, so there are far fewer instances and each needs a
+  // bigger pool: 8. A query past the cap waits (pool_timeout) instead of failing.
+  // Local processes (dev server, render worker, scripts) share the same
+  // pooler and each held 3 too; they do one thing at a time, so 1 is enough.
+  const limit = process.env.NODE_ENV === 'production' ? 8 : 1
   return `${url}${sep}connection_limit=${limit}&pool_timeout=30`
+}
+
+/**
+ * The pooler turning a connection away (EMAXCONN: its client limit is full)
+ * is a burst, not an outage: a second try a moment later usually gets in.
+ * Each query gets one retry, and Slack hears about it (at most once every
+ * ten minutes per instance, straight to the webhook: the usual alert reads
+ * the Connections table, which is the database that just refused us).
+ */
+const POOL_FULL = /max client connections|EMAXCONN/i
+const ALERT_EVERY_MS = 10 * 60_000
+let lastAlertAt = 0
+function alertPoolFull(err, retried) {
+  const now = Date.now()
+  if (now - lastAlertAt < ALERT_EVERY_MS) return
+  lastAlertAt = now
+  const hook = process.env.SLACK_PROOF_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL
+  if (!hook) return
+  postSlack(hook, `:rotating_light: *Supabase pooler full (EMAXCONN)* ${retried ? 'The retry got through.' : 'The retry failed too, so someone saw an error.'} If this keeps up, bump the Supabase compute tier (client connections are 200 on Micro). \`${String(err?.message || err).split('\n').pop().trim().slice(0, 200)}\``).catch(() => {})
+}
+function withRetry(client) {
+  return client.$extends({
+    query: {
+      async $allOperations({ args, query }) {
+        try { return await query(args) } catch (err) {
+          if (!POOL_FULL.test(String(err?.message || ''))) throw err
+          await new Promise(r => setTimeout(r, 750))
+          try { const out = await query(args); alertPoolFull(err, true); return out } catch (again) { alertPoolFull(again, false); throw again }
+        }
+      },
+    },
+  })
 }
 
 let prisma
 
 if (process.env.NODE_ENV === 'production') {
   const url = datasourceUrl()
-  prisma = new PrismaClient(url ? { datasources: { db: { url } } } : undefined)
+  prisma = withRetry(new PrismaClient(url ? { datasources: { db: { url } } } : undefined))
 } else {
   // Reuse across dev hot-reloads instead of leaking a client per reload.
   if (!globalThis.__prisma) {
     const url = datasourceUrl()
-    globalThis.__prisma = new PrismaClient(url ? { datasources: { db: { url } } } : undefined)
+    globalThis.__prisma = withRetry(new PrismaClient(url ? { datasources: { db: { url } } } : undefined))
   }
   prisma = globalThis.__prisma
 }
