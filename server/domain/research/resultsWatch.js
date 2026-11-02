@@ -70,6 +70,9 @@ export async function watchOfficialResults() {
       if (Date.now() - started > RESEARCH_BUDGET_MS) return out
       try {
         const { runnerResearch } = await researchService.researchOrder(o.orderNumber)
+        // Research stamps researchedAt only on a find; stamp the rest (several
+        // runners share the name, no match) so they leave the backlog for a person.
+        await prisma.order.updateMany({ where: { orderNumber: o.orderNumber }, data: { researchedAt: new Date() } })
         out.researched++
         if (runnerResearch?.researchStatus === 'found') out.found++
       } catch (err) {
