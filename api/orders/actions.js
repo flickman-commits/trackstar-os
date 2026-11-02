@@ -179,6 +179,8 @@ export default async function handler(req, res) {
     // Role gates (api/_lib/roles.js): discount codes belong to some roles only. Read fresh from the database.
     const CAPABILITY_FOR = {
       'create-discount': 'tools.discounts',
+      // Designers ask custom-order customers their own questions (admins always can).
+      'message-customer': 'orders.message_customer',
     }
     if (CAPABILITY_FOR[action] && !(await requireCapability(req, res, CAPABILITY_FOR[action]))) return
 
@@ -192,21 +194,21 @@ export default async function handler(req, res) {
       'clear-race-cache',
       'clear-research',
       'merge-race',
-      'message-customer',
       'notify-custom-delay',
       'customers-served-set',
       'set-race-shorthand',
     ])
     // The audit line is written after the action succeeds, so the log never
     // claims something happened that returned an error. A discount code is
-    // money, so it is logged too, though anyone with the capability may make one.
+    // money, so it is logged too, though anyone with the capability may make one;
+    // so is a message to a customer.
     let auditAs = null
     if (ADMIN_ONLY_ACTIONS.has(action)) {
       auditAs = await requireAdminRole(req, res, actor)
       if (!auditAs) return
     } else if (ADMIN_NO_AUDIT_ACTIONS.has(action)) {
       if (!(await requireAdminRole(req, res, actor))) return
-    } else if (action === 'create-discount') {
+    } else if (action === 'create-discount' || action === 'message-customer') {
       auditAs = actor
     }
 
