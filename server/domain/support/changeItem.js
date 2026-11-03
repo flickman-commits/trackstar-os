@@ -72,7 +72,10 @@ export async function frameChoices({ orderRowId }) {
   const size = opt(li.variant, 'size'), frame = opt(li.variant, 'frame')
   const frames = li.variant.product.variants.nodes
     .filter(v => opt(v, 'size') === size && opt(v, 'frame') && opt(v, 'frame') !== frame && v.availableForSale !== false)
-    .map(v => ({ frame: opt(v, 'frame'), difference: Math.round((Number(v.price) - Number(li.variant.price)) * 100) / 100 }))
+    // What the swap bills: the new price less what this item sold for (its old
+    // discount carries over), not less today's price of the old variant. 4104
+    // paid $205 for an item now $230, so framing it is $85, not $60.
+    .map(v => ({ frame: opt(v, 'frame'), difference: Math.round((Number(v.price) - Number(li.originalUnitPriceSet?.shopMoney?.amount ?? li.variant.price)) * 100) / 100 }))
   return { size, current: frame, frames }
 }
 
