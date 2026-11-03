@@ -6,6 +6,7 @@
  */
 import prisma from '../../db.js'
 import { pipelineFor } from './pipeline.js'
+import { waitingOnCustomers } from '../support/compose.js'
 import { unpaidPhotoRows } from './photoPayment.js'
 import { noTimeGaps, onlineWorkers } from '../render/templates.js'
 import { getCanonicalRaceName, hasScraperForRace } from '../../scrapers/index.js'
@@ -66,6 +67,9 @@ export async function pipelinesFor(ids) {
     }
   }
 
+  // Support conversations waiting on these customers' replies.
+  const waiting = await waitingOnCustomers(orders.filter(o => o.status !== 'completed').map(o => o.customerEmail)).catch(() => new Map())
+
   for (const o of orders) {
     const research = o.runnerResearch?.find(r => r.researchStatus === 'found') || o.runnerResearch?.[0] || null
     const race = research?.race || ctx.raceFor(o.raceNameOverride ?? o.raceName, o.yearOverride ?? o.raceYear)
@@ -73,6 +77,7 @@ export async function pipelinesFor(ids) {
       order: o, research, race, render: o.renderJobs?.[0] || null,
       hasScraper: hasScraperForRace(o.raceNameOverride ?? o.raceName),
       templates: ctx.templateKeys, noTimeGaps: ctx.gaps, photoUnpaid: unpaid.has(o.id), workerOnline: ctx.workerOnline,
+      waitingOnCustomer: o.status !== 'completed' ? waiting.get(String(o.customerEmail || '').trim().toLowerCase()) || null : null,
     }))
   }
   return out

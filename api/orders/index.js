@@ -494,7 +494,7 @@ export default async function handler(req, res) {
       if (!o || o.trackstarOrderType !== 'standard') continue
       const research = o.runnerResearch?.find(r => r.researchStatus === 'found') || o.runnerResearch?.[0] || null
       const race = research?.race || raceFor(o.raceNameOverride ?? o.raceName, o.yearOverride ?? o.raceYear)
-      t.pipeline = pipelineFor({ order: o, research, race, render: o.renderJobs?.[0] || null, hasScraper: t.hasScraperAvailable, templates: templateKeys, noTimeGaps: gaps, photoUnpaid: t.photoUnpaid, workerOnline })
+      t.pipeline = pipelineFor({ order: o, research, race, render: o.renderJobs?.[0] || null, hasScraper: t.hasScraperAvailable, templates: templateKeys, noTimeGaps: gaps, photoUnpaid: t.photoUnpaid, workerOnline, waitingOnCustomer: t.waitingOnCustomerSince || null })
     }
 
     return res.status(200).json({ orders: transformedOrders, ...(openOnly ? { completedCount } : {}) })

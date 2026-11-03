@@ -44,6 +44,7 @@ function raceRun(race, year) {
  * @param {Set<string>} p.noTimeGaps "template|size" pairs that cannot print a no-time order
  * @param {boolean} p.photoUnpaid
  * @param {boolean} p.workerOnline
+ * @param {Date|string|null} [p.waitingOnCustomer] since when Support has been waiting on this customer's reply
  */
 /** An approved print: where it is on the way to production (server/domain/render/sendState.js). */
 function approvedStage(render, stage) {
@@ -56,7 +57,7 @@ function approvedStage(render, stage) {
   return stage('attach', 'Attach in Artelo', { fix: 'The print is approved and in the Artelo library (Orders folder), but was not sent. Send it to production, or attach it in Artelo by hand and mark the order done.' })
 }
 
-export function pipelineFor({ order, research, race, render, hasScraper, templates, noTimeGaps, photoUnpaid, workerOnline }) {
+export function pipelineFor({ order, research, race, render, hasScraper, templates, noTimeGaps, photoUnpaid, workerOnline, waitingOnCustomer = null }) {
   const raceName = order.raceNameOverride ?? order.raceName
   const year = order.yearOverride ?? order.raceYear
   const stage = (s, reason, extra = {}) => ({ stage: s, reason, ...extra })
@@ -68,6 +69,11 @@ export function pipelineFor({ order, research, race, render, hasScraper, templat
   if (order.arteloHold === 'Missing Designs') return stage('action', 'Not sent in Artelo', { kind: 'artelo', fix: 'This was marked complete, but Artelo still has the order as Missing Designs. Attach the design in Artelo (or Send to production if it was approved here), then complete it.' })
   if (order.arteloHold) return stage('action', `Artelo: ${order.arteloHold}`, { kind: 'artelo', fix: /address/i.test(order.arteloHold) ? 'Artelo could not verify the shipping address and will not print until it is reviewed. Open the order in Artelo, fix or confirm the address, then send it to production.' : `Artelo is holding this order (${order.arteloHold}). Sort it out in Artelo; nothing prints until then.` })
 
+  // We asked the customer something (Support has the conversation waiting on
+  // them): nothing to review or fix until they answer. An approved print
+  // already on its way to Artelo keeps its own status. Their reply reopens the
+  // conversation, and the order's real status comes back.
+  if (waitingOnCustomer && !(render?.status === 'done' && render.review === 'approved')) return stage('waiting', 'Waiting on customer', { fix: 'Support is waiting on the customer\'s reply. This goes back to its usual status when they answer; open the conversation from the order to see what was asked.' })
   // A design waiting for review comes first: it is the one thing the tool wants from a person.
   if (render?.status === 'done' && render.review === 'pending') return stage('review', 'Ready for review')
   if (render?.status === 'queued' || render?.status === 'rendering') return stage('waiting', workerOnline ? 'Rendering' : 'Waiting for the renderer', { fix: workerOnline ? 'Illustrator is making the print.' : 'No render worker is online. The print renders when one checks in.' })

@@ -379,7 +379,10 @@ export async function draftPending({ limit = 6 } = {}) {
   const candidates = await prisma.supportThread.findMany({
     where: { status: 'open', filtered: false, mergedIntoId: null, lastInboundAt: { gte: since } },
     orderBy: { lastInboundAt: 'asc' },
-    take: 40,
+    // All of them, filtered below: taking the 40 oldest first meant that once
+    // those were drafted or answered, nothing newer was ever drafted (56 of
+    // 111 open conversations had no draft on 2026-11-03).
+    take: 500,
     select: {
       id: true, lastInboundAt: true, lastOutboundAt: true,
       notes: { where: { kind: 'draft' }, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true, data: true } },
