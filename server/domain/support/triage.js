@@ -11,7 +11,7 @@
  *
  * It only adds stars: a star a person set or removed is theirs, and a thread
  * is read again only after the customer writes something new. Each star
- * leaves its reason on the thread and an event in the timeline, and the
+ * leaves its reason as a note from Claude in the timeline, and the
  * run's list goes to Slack. api/cron/support-triage.js runs it.
  */
 import prisma from '../../db.js'
@@ -131,7 +131,8 @@ export async function triagePending({ dryRun = false } = {}) {
         if (dryRun) continue
         if (d.urgent && !t.priority) {
           await prisma.supportThread.update({ where: { id: t.id }, data: { priority: true, priorityReason: d.reason, triagedAt: new Date() } })
-          await prisma.supportNote.create({ data: { threadId: t.id, kind: 'event', body: `Claude marked this priority: ${d.reason || URGENT[d.category]}`, authorName: 'Claude' } })
+          // A note in the timeline, where the team reads what is going on, not a line under the header.
+          await prisma.supportNote.create({ data: { threadId: t.id, kind: 'note', body: `Marked this priority (${URGENT[d.category]}): ${d.reason || URGENT[d.category]}`, authorName: 'Claude' } })
         } else {
           await prisma.supportThread.update({ where: { id: t.id }, data: { triagedAt: new Date() } })
         }

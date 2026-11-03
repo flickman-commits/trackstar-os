@@ -484,11 +484,6 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
                 thread.igUsername ? <a href={`https://instagram.com/${thread.igUsername}`} target="_blank" rel="noopener noreferrer" className="hover:text-off-black hover:underline">{thread.customerName && thread.customerName !== `@${thread.igUsername}` ? `@${thread.igUsername} · ` : ''}Instagram</a> : <span>Instagram DM</span>
               ) : <span>{thread.subject || '(no subject)'}</span>}
             </div>
-            {thread.priority && thread.priorityReason && (
-              <div className="mt-1 text-xs text-amber-700 inline-flex items-start gap-1.5" title="Starred by the support triage pass">
-                <Star className="w-3 h-3 mt-0.5 text-amber-500 fill-amber-500 shrink-0" />{thread.priorityReason}
-              </div>
-            )}
           </div>
           <div className="shrink-0 flex items-center gap-0.5 -mt-0.5">
             {snoozed && <span className="mr-1 text-[11px] text-off-black/50 inline-flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(thread.snoozedUntil as string).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</span>}
