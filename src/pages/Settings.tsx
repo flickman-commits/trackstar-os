@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { Sparkles, Search, Copy, Loader2, FlaskConical, Check, Settings as SettingsIcon, ChevronLeft, ChevronRight, Star, Users, CloudSun, DollarSign, UserCog, ScrollText, BarChart3, ShieldCheck, KeyRound, Plug, PencilRuler, Lightbulb, EyeOff, Image as ImageIcon, Calculator, CalendarClock } from 'lucide-react'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Sparkles, Search, Copy, Loader2, FlaskConical, Check, Settings as SettingsIcon, ChevronLeft, ChevronRight, Star, Users, CloudSun, DollarSign, UserCog, ScrollText, BarChart3, ShieldCheck, KeyRound, Plug, PencilRuler, Lightbulb, EyeOff, Image as ImageIcon, CalendarClock } from 'lucide-react'
 import { REVIEW_PRODUCTS } from '@/lib/reviewLinks'
 import { apiFetch } from '@/lib/api'
 import { btnPrimary, inputBase } from '@/lib/ui'
@@ -19,7 +19,6 @@ import AssignmentPanel from '@/components/AssignmentPanel'
 import SkippedProductsPanel from '@/components/SkippedProductsPanel'
 import SiteGalleryPanel from '@/components/SiteGalleryPanel'
 import StatsHub from '@/components/StatsHub'
-import CustomCounter from '@/components/CustomCounter'
 import ProductsBulkEdit from '@/pages/ProductsBulkEdit'
 import PageHeader from '@/components/PageHeader'
 import LookupHealthPanel from '@/components/LookupHealthPanel'
@@ -91,7 +90,6 @@ const SETTINGS_NAV: {
     items: [
       { id: 'people', label: 'People', blurb: 'Who can sign in and what they are allowed to do', icon: Users },
       { id: 'roles', label: 'Roles', blurb: 'What each role can see and use', icon: ShieldCheck },
-      { id: 'counter', label: 'Custom Counter', blurb: 'The customs each designer made in a month, new or repeat, and what they are owed', icon: Calculator },
       { id: 'assignments', label: 'Order Assignment', blurb: 'Who new orders go to, and extra help for busy stretches', icon: UserCog },
     ],
   },
@@ -298,7 +296,8 @@ export default function Settings() {
                 <div className="flex-1 overflow-auto p-3 md:p-5">
               {settingsPanel === 'pricing' && isAdmin && <PricingCalculator />}
               {(settingsPanel === 'stats' || settingsPanel === 'support_closes') && isAdmin && <StatsHub initial={settingsPanel === 'support_closes' ? 'tickets' : 'overview'} />}
-              {settingsPanel === 'counter' && isAdmin && <CustomCounter />}
+              {/* The Custom Counter lives in Finance > Payouts now; old links still land there. */}
+              {settingsPanel === 'counter' && <Navigate to="/finance/payouts?tab=customs" replace />}
               {settingsPanel === 'design_needs' && can('settings.design_needs') && <DesignNeedsPanel />}
               {settingsPanel === 'features' && <FeatureRequestsPanel />}
               {settingsPanel === 'account' && <AccountPanel />}

@@ -16,6 +16,7 @@ import MacrosModal from '@/components/support/MacrosModal'
 import RequestFeatureModal from '@/components/support/RequestFeatureModal'
 import SettingsModal from '@/components/support/SettingsModal'
 import ResizeHandle from '@/components/support/ResizeHandle'
+import HoursModal from '@/components/hours/HoursModal'
 import type { RichReplyHandle } from '@/components/support/RichReply'
 import { useColumnWidth, useWide } from '@/lib/useColumnWidth'
 
@@ -75,7 +76,9 @@ const CONNECT_REASONS: Record<string, string> = {
  */
 export default function Support({ active = true }: { active?: boolean } = {}) {
   useDocumentHead({ title: 'Support · Trackstar' })
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, can } = useAuth()
+  // Hours: the rep's own week, from the left column (people with the hours capability).
+  const [hoursOpen, setHoursOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -381,7 +384,8 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
 
         <section className="flex-1 min-h-0 pb-3">
           <div className="h-full bg-white border border-border-gray rounded-lg shadow-sm overflow-hidden flex flex-col lg:flex-row">
-            <ViewsColumn view={view} counts={inbox?.counts || null} team={inbox?.team || []} me={me} onView={v => { setView(v); setSelectedId(null); setThread(null) }} onMacros={() => setMacrosOpen(true)} onSettings={() => setSettingsOpen(true)} onRequestFeature={() => setFeatureOpen(true)} />
+            <ViewsColumn view={view} counts={inbox?.counts || null} team={inbox?.team || []} me={me} onView={v => { setView(v); setSelectedId(null); setThread(null) }} onMacros={() => setMacrosOpen(true)} onSettings={() => setSettingsOpen(true)} onRequestFeature={() => setFeatureOpen(true)} onHours={can('hours') ? () => setHoursOpen(true) : undefined} />
+            <HoursModal open={hoursOpen} onClose={() => setHoursOpen(false)} />
             {/* On the phone the list and the conversation take turns: the list until one is picked, then the conversation alone. */}
             <div className={`${thread ? 'hidden lg:contents' : 'contents'}`}>
             <ConversationList title={title} threads={threads} selectedId={selectedId} onSelect={openThread} loading={loading && !inbox} emptyLabel={empty} sort={sort} onSort={setSort} width={wide ? listCol.width : undefined} />

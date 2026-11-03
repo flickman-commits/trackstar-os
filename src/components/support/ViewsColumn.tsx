@@ -27,7 +27,7 @@ function ViewRow({ row, active, onClick }: { row: Row; active: boolean; onClick:
   )
 }
 
-export default function ViewsColumn({ view, counts, team, me, onView, onMacros, onSettings, onRequestFeature }: {
+export default function ViewsColumn({ view, counts, team, me, onView, onMacros, onSettings, onRequestFeature, onHours }: {
   view: InboxView
   counts: InboxCounts | null
   team: Teammate[]
@@ -36,6 +36,8 @@ export default function ViewsColumn({ view, counts, team, me, onView, onMacros, 
   onMacros: () => void
   onSettings: () => void
   onRequestFeature: () => void
+  /** Log and submit your own hours (people with the hours capability). */
+  onHours?: () => void
 }) {
   const c = counts
   const top: Row[] = [
@@ -77,6 +79,11 @@ export default function ViewsColumn({ view, counts, team, me, onView, onMacros, 
         </div>
       )}
       <div className="mt-auto px-2 py-3 border-t border-border-gray">
+        {onHours && (
+          <button onClick={onHours} className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] text-off-black/70 hover:bg-off-black/[0.04] hover:text-off-black transition-colors">
+            <Clock className="w-4 h-4 text-off-black/45" /><span className="flex-1 text-left">Hours</span>
+          </button>
+        )}
         <button onClick={onMacros} className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] text-off-black/70 hover:bg-off-black/[0.04] hover:text-off-black transition-colors">
           <Zap className="w-4 h-4 text-off-black/45" /><span className="flex-1 text-left">Macros</span>
         </button>

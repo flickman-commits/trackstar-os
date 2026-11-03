@@ -801,6 +801,9 @@ model User {
   // $50 / $25 repeat, junior designer $40 / $20). Set in Settings > Custom Counter.
   customRateCents       Int?
   customRepeatRateCents Int?
+  // Pay per hour, in cents (USD), for approved timesheets (Finance > Payouts >
+  // Rates). Null = not paid by the hour.
+  hourlyRateCents       Int?
   isActive     Boolean   @default(true)
   // Bumped to sign this person out everywhere: on deactivation, a password
   // change or reset, or an admin's "Sign out everywhere". Carried in the
@@ -829,6 +832,8 @@ model User {
   supportNotes     SupportNote[]     @relation("SupportNoteAuthor")
   supportReads     SupportRead[]
   supportMacros    SupportMacro[]    @relation("SupportMacroAuthor")
+  timesheets       Timesheet[]       @relation("TimesheetOwner")
+  payoutLines      PayoutLine[]      @relation("PayoutRecipient")
 
   @@index([email])
 }
@@ -1500,4 +1505,161 @@ model GalleryPick {
   order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([status])
+}
+
+// -----------------------------------------------------------------------------
+// Finance (docs/finance-panel-plan.md)
+// -----------------------------------------------------------------------------
+// One row per day of the Daily Tracker's raw tabs. Every money column is
+// integer cents (USD); counts are plain integers. Null means the feed has not
+// landed for that day. The columns hold what the sheet said at `readAt`;
+// `overrides` holds what Matt typed over a feed's value ({ column: cents }),
+// and a reader takes the override first. Nothing derived (gross profit,
+// contribution margin, ROAS) is stored: server/domain/finance/scoreboard.js
+// computes it, so a rule change recomputes history.
+model FinanceDay {
+  day                      String   @id // YYYY-MM-DD, Eastern
+  shopifyGrossCents        Int?
+  shopifyDiscountsCents    Int?
+  shopifyReturnsCents      Int?
+  shopifyShippingCents     Int?
+  shopifyTaxCents          Int?
+  shopifyNetCents          Int?
+  shopifyOrders            Int?
+  shopifySessions          Int?
+  shopifyAddToCart         Int?
+  shopifyReachedCheckout   Int?
+  shopifyCompletedCheckout Int?
+  shopifyFeesCents         Int?
+  etsyGrossCents           Int?
+  etsyDiscountsCents       Int?
+  etsyReturnsCents         Int?
+  etsyShippingCents        Int?
+  etsyTaxCents             Int?
+  etsyNetCents             Int?
+  etsyOrders               Int?
+  etsyVisits               Int?
+  etsyFeesCents            Int?
+  productionCents          Int?
+  shippingCostCents        Int?
+  unitsProduced            Int?
+  metaSpendCents           Int?
+  metaImpressions          Int?
+  metaClicks               Int?
+  metaPurchases            Int?
+  metaPurchaseValueCents   Int?
+  metaAddToCarts           Int?
+  googleSpendCents         Int?
+  googleImpressions        Int?
+  googleClicks             Int?
+  googleConversions        Int?
+  googleConversionValueCents Int?
+  overrides                Json?
+  readAt                   DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+// An effective-dated constant the scoreboard math uses: the designer fee's
+// share and base ("gp" before November 2026, "cm" from it), the break-even
+// ROAS. Code defaults cover what is not in the table (rules.js).
+model FinanceRule {
+  id            String   @id @default(cuid())
+  key           String
+  effectiveFrom String   // YYYY-MM-DD
+  value         Json
+  note          String?
+  createdAt     DateTime @default(now())
+
+  @@index([key, effectiveFrom])
+}
+
+// A person's week of hours (Monday to Sunday, Eastern). Draft while they fill
+// it in, submitted when they press Submit week (locked), approved or rejected
+// by an admin. The hourly rate is frozen on approval so a later rate change
+// never rewrites an approved week.
+model Timesheet {
+  id              String    @id @default(cuid())
+  userId          String
+  weekStart       String    // YYYY-MM-DD, a Monday
+  status          String    @default("draft") // draft | submitted | approved | rejected
+  submittedAt     DateTime?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  reviewNote      String?
+  hourlyRateCents Int?
+  payoutLineId    String?   @unique
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user    User        @relation("TimesheetOwner", fields: [userId], references: [id], onDelete: Cascade)
+  entries TimeEntry[]
+
+  @@unique([userId, weekStart])
+  @@index([status, weekStart])
+}
+
+// One block of time on one day: a typed duration, or a timer (startedAt set,
+// endedAt null while it runs). Minutes is what counts; the timer fills it in
+// when it stops.
+model TimeEntry {
+  id          String    @id @default(cuid())
+  timesheetId String
+  userId      String
+  day         String    // YYYY-MM-DD, Eastern
+  minutes     Int       @default(0)
+  startedAt   DateTime?
+  endedAt     DateTime?
+  note        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  timesheet Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
+
+  @@index([userId, day])
+  @@index([timesheetId])
+}
+
+// What the team is paid. A run is one period's payments (a two-week hours
+// run, or a month-end run of customs and Dan's fee); its lines are what each
+// person is owed, from approved timesheets, the custom counter, the designer
+// fee, or typed by hand. The app records payments; it never makes them.
+model PayRun {
+  id          String    @id @default(cuid())
+  kind        String    // hours | monthly
+  periodStart String    // YYYY-MM-DD
+  periodEnd   String    // YYYY-MM-DD
+  label       String
+  status      String    @default("draft") // draft | approved | paid
+  note        String?
+  createdById String?
+  approvedAt  DateTime?
+  paidAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  lines PayoutLine[]
+
+  @@index([kind, periodStart])
+}
+
+model PayoutLine {
+  id          String    @id @default(cuid())
+  payRunId    String
+  userId      String
+  kind        String    // customs | hours | designer_fee | bonus | reimbursement | other
+  quantity    Int?      // customs, or minutes for hours
+  rateCents   Int?
+  amountCents Int
+  currency    String    @default("USD")
+  sourceRef   String?   @unique // "customs:2026-10:<userId>", "fee:2026-10:<userId>", "timesheet:<id>"
+  note        String?
+  paidAt      DateTime?
+  paidRef     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  payRun PayRun @relation(fields: [payRunId], references: [id], onDelete: Cascade)
+  user   User   @relation("PayoutRecipient", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
 }

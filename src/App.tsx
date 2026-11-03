@@ -41,6 +41,7 @@ const Sales = lazyPage(() => import('@/pages/Sales'))
 const SalesWorkspace = lazyPage(() => import('@/pages/SalesWorkspace'))
 const Support = lazyPage(() => import('@/pages/Support'))
 const Settings = lazyPage(() => import('@/pages/Settings'))
+const Finance = lazyPage(() => import('@/pages/Finance'))
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -305,6 +306,9 @@ export default function App() {
                 {/* Support: the shared inbox for fast@trackstar.art. */}
                 {/* Rendered by SupportKeepAlive below, so the open conversation survives a trip to Fulfillment. */}
                 <Route path="/support" element={null} />
+                {/* Finance: where the money goes, payouts, hours and forecasts. Admin only. */}
+                <Route path="/finance" element={<RequireAdmin><Finance /></RequireAdmin>} />
+                <Route path="/finance/:section" element={<RequireAdmin><Finance /></RequireAdmin>} />
                 <Route path="/monopoly/model" element={<RedirectToMonopolyHost path="/model" />} />
               </Routes>
               <SalesKeepAlive />

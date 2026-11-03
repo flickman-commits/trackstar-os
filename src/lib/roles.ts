@@ -8,7 +8,7 @@
 export type Role = 'admin' | 'sales' | 'fulfillment' | 'support' | 'head_designer' | 'designer'
 
 export type Capability =
-  | 'sales' | 'support' | 'creators' | 'orders.assign_custom' | 'orders.render' | 'orders.message_customer'
+  | 'sales' | 'support' | 'creators' | 'hours' | 'orders.assign_custom' | 'orders.render' | 'orders.message_customer'
   | 'tools.discounts' | 'tools.pace' | 'tools.weather' | 'tools.surveys' | 'tools.samples'
   | 'settings.pricing' | 'settings.reviews' | 'settings.stats' | 'settings.design_needs' | 'settings.data' | 'settings.admin'
 
@@ -29,6 +29,7 @@ export const CAPABILITY_LABEL: Partial<Record<Capability, string>> = {
   sales: 'Sales',
   support: 'Support',
   creators: 'Creators',
+  hours: 'Hours',
   'orders.assign_custom': 'Assign customs',
   'orders.render': 'Automated designs',
   'orders.message_customer': 'Email customers',
@@ -46,7 +47,7 @@ const DEFAULT_CAPS: Record<Role, Caps> = {
   admin: '*',
   sales: ['sales', 'creators', 'tools.discounts', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.reviews', 'settings.stats'],
   fulfillment: ['support', 'creators', 'orders.render', 'tools.discounts', 'tools.pace', 'tools.weather', 'settings.stats', 'settings.design_needs'],
-  support: ['support', 'tools.discounts', 'tools.pace', 'tools.weather'],
+  support: ['support', 'hours', 'tools.discounts', 'tools.pace', 'tools.weather'],
   head_designer: ['orders.assign_custom', 'orders.message_customer', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.stats', 'settings.design_needs'],
   designer: ['orders.message_customer', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.stats', 'settings.design_needs'],
 }

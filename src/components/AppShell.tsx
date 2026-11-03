@@ -5,6 +5,7 @@ import AppSidebar, { MobileToolBar } from '@/components/AppSidebar'
 import CustomTools from '@/components/CustomTools'
 import StandardTools from '@/components/StandardTools'
 import CommandSearch from '@/components/CommandSearch'
+import HoursModal from '@/components/hours/HoursModal'
 
 /**
  * Everything that has to outlive a page change.
@@ -28,7 +29,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { can } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const [railPanel, setRailPanel] = useState<null | 'discounts' | 'pace'>(null)
+  const [railPanel, setRailPanel] = useState<null | 'discounts' | 'pace' | 'hours'>(null)
   // Cmd+D (Ctrl+D elsewhere) opens the Discounts tool from anywhere in the app.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -47,6 +48,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     settingsOpen ? 'settings'
     : railPanel === 'discounts' ? 'discounts'
     : railPanel === 'pace' ? 'pace'
+    : railPanel === 'hours' ? 'hours'
+    : path.startsWith('/finance') ? 'finance'
     : path.startsWith('/creators') || path.startsWith('/briefs') ? 'creators'
     : path.startsWith('/sales') || path.startsWith('/send') ? 'sales'
     : path.startsWith('/support') ? 'support'
@@ -72,16 +75,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         can={can}
         activeId={activeId}
         onOpenSettings={openSettings}
+        onOpenHours={() => setRailPanel(p => (p === 'hours' ? null : 'hours'))}
       />
       <AppSidebar
         can={can}
         activeId={activeId}
         onOpenDiscounts={() => setRailPanel(p => (p === 'discounts' ? null : 'discounts'))}
         onOpenPaceConverter={() => setRailPanel(p => (p === 'pace' ? null : 'pace'))}
+        onOpenHours={() => setRailPanel(p => (p === 'hours' ? null : 'hours'))}
         onOpenSettings={openSettings}
       />
       <CustomTools open={railPanel === 'pace'} onClose={() => setRailPanel(null)} />
       <StandardTools open={railPanel === 'discounts'} onClose={() => setRailPanel(null)} />
+      <HoursModal open={railPanel === 'hours'} onClose={() => setRailPanel(null)} />
       <CommandSearch can={can} onOpenSettings={openSettings} />
       {children}
     </div>

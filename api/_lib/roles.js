@@ -39,6 +39,7 @@ export const CAPABILITIES = [
   { id: 'sales', group: 'Pages', label: 'Sales' },
   { id: 'support', group: 'Pages', label: 'Support' },
   { id: 'creators', group: 'Pages', label: 'Creators' },
+  { id: 'hours', group: 'Pages', label: 'Hours (log and submit your own time)' },
   { id: 'orders.assign_custom', group: 'Orders', label: 'Assign custom orders' },
   { id: 'orders.render', group: 'Orders', label: 'Create and approve automated designs' },
   { id: 'orders.message_customer', group: 'Orders', label: 'Email customers on custom orders' },
@@ -57,7 +58,7 @@ const EDITABLE_ROLES = ROLES.filter(r => r !== 'admin')
 export const DEFAULT_CAPS = {
   sales: ['sales', 'creators', 'tools.discounts', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.reviews', 'settings.stats'],
   fulfillment: ['support', 'creators', 'orders.render', 'tools.discounts', 'tools.pace', 'tools.weather', 'settings.stats', 'settings.design_needs'],
-  support: ['support', 'tools.discounts', 'tools.pace', 'tools.weather'],
+  support: ['support', 'hours', 'tools.discounts', 'tools.pace', 'tools.weather'],
   head_designer: ['orders.assign_custom', 'orders.message_customer', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.stats', 'settings.design_needs'],
   designer: ['orders.message_customer', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.stats', 'settings.design_needs'],
 }

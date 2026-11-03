@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation } from 'react-router-dom'
-import { Package, Users, Ticket, Calculator, Settings, Wrench, Send, FileText, ListOrdered, Braces, Vote, Inbox, Gift } from 'lucide-react'
+import { Package, Users, Ticket, Calculator, Settings, Wrench, Send, FileText, ListOrdered, Braces, Vote, Inbox, Gift, Landmark, Clock } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Capability } from '@/lib/roles'
 
@@ -125,11 +125,13 @@ function ToolsTile({
   active,
   onOpenDiscounts,
   onOpenPaceConverter,
+  onOpenHours,
 }: {
   can: (c: Capability) => boolean
   active: boolean
   onOpenDiscounts: () => void
   onOpenPaceConverter: () => void
+  onOpenHours: () => void
 }) {
   const [open, setOpen] = useState(false)
   const anchor = useRef<HTMLDivElement>(null)
@@ -144,6 +146,7 @@ function ToolsTile({
   const tools = [
     { id: 'discounts', cap: 'tools.discounts' as Capability, label: 'Discounts', hint: 'One-time discount code', icon: Ticket, onClick: onOpenDiscounts },
     { id: 'pace', cap: 'tools.pace' as Capability, label: 'Pace Converter', hint: 'Finish time to pace', icon: Calculator, onClick: onOpenPaceConverter },
+    { id: 'hours', cap: 'hours' as Capability, label: 'Hours', hint: 'Log and submit your time', icon: Clock, onClick: onOpenHours },
   ].filter(t => can(t.cap))
 
   // Nothing to offer this role: no Tools tile at all.
@@ -168,7 +171,7 @@ function ToolsTile({
   return (
     <div ref={anchor} className="relative" onMouseEnter={show} onMouseLeave={hide}>
       <Tile
-        item={{ id: 'tools', label: 'Tools', icon: Wrench, onClick: () => setOpen(o => !o), title: 'Discounts and pace converter' }}
+        item={{ id: 'tools', label: 'Tools', icon: Wrench, onClick: () => setOpen(o => !o), title: tools.map(t => t.label).join(', ') }}
         active={active || open}
       />
       {open && (
@@ -240,16 +243,20 @@ function SalesTile({ item, active }: { item: Item; active: boolean }) {
 export function MobileToolBar({
   can,
   onOpenSettings,
+  onOpenHours,
   activeId,
 }: {
   can: (c: Capability) => boolean
   onOpenSettings: () => void
+  onOpenHours: () => void
   activeId?: string
 }) {
   const fulfillmentTo = useFulfillmentReturn()
   const items: Item[] = [
     ...railItems(can, fulfillmentTo),
     // Discounts, Pace and Weather are desktop tools; the phone bar keeps to the pages.
+    // Hours is the exception: a rep logs time from a phone.
+    ...(can('hours') ? [{ id: 'hours', label: 'Hours', icon: Clock, onClick: onOpenHours, title: 'Log and submit your time' } as Item] : []),
     ...(can('tools.surveys') ? [{ id: 'surveys', label: 'Survey', icon: Vote, to: '/surveys', title: 'Design Survey' } as Item] : []),
     { id: 'settings', label: 'Settings', icon: Settings, onClick: onOpenSettings, title: 'Settings' },
   ]
@@ -325,6 +332,8 @@ function railItems(can: (c: Capability) => boolean, fulfillmentTo = '/'): Item[]
     // on the Attio workspace; the API says no to everyone else.
     ...(can('creators') ? [{ id: 'creators', label: 'Creators', icon: Users, to: '/creators', title: 'The creator programme' } as Item] : []),
     ...(can('sales') ? [{ id: 'sales', label: 'Sales', icon: Send, to: '/sales', title: 'Outreach: the emails to send today, read from Attio' } as Item] : []),
+    // Finance is admin only, like Settings > Admin; settings.admin is only ever true for an admin.
+    ...(can('settings.admin') ? [{ id: 'finance', label: 'Finance', icon: Landmark, to: '/finance', title: 'Where the money goes, payouts, hours and forecasts' } as Item] : []),
   ]
 }
 
@@ -332,12 +341,14 @@ export default function AppSidebar({
   can,
   onOpenDiscounts,
   onOpenPaceConverter,
+  onOpenHours,
   onOpenSettings,
   activeId,
 }: {
   can: (c: Capability) => boolean
   onOpenDiscounts: () => void
   onOpenPaceConverter: () => void
+  onOpenHours: () => void
   onOpenSettings: () => void
   /** Which tile reads as current. 'fulfillment' on the dashboard. */
   activeId?: string
@@ -362,9 +373,10 @@ export default function AppSidebar({
         ))}
         <ToolsTile
           can={can}
-          active={activeId === 'discounts' || activeId === 'pace'}
+          active={activeId === 'discounts' || activeId === 'pace' || activeId === 'hours'}
           onOpenDiscounts={onOpenDiscounts}
           onOpenPaceConverter={onOpenPaceConverter}
+          onOpenHours={onOpenHours}
         />
       </div>
       {/* Pinned, and separated so it does not read as one of the tools. */}
