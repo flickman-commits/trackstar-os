@@ -18,7 +18,8 @@ import { draftPending } from '../../server/domain/support/draft.js'
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, POST, OPTIONS' })) return
-  if (!isCronRequest(req)) {
+  const cron = isCronRequest(req)
+  if (!cron) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
     const user = await requireCapability(req, res, 'support')
     if (!user) return
@@ -42,7 +43,11 @@ export default async function handler(req, res) {
     // Claude's drafts for what just came in (and anything still waiting on one). Never fails the sync.
     let drafts = null
     try {
-      drafts = await draftPending({ limit: 6 })
+      // The cron drafts four at a time for up to three minutes of this
+      // five-minute function; a person's Refresh only waits for a couple.
+      drafts = cron
+        ? await draftPending({ limit: 30, concurrency: 4, budgetMs: 180_000 })
+        : await draftPending({ limit: 2, concurrency: 2 })
       if (drafts.drafted || drafts.failed) console.log(`[support.draft] drafted ${drafts.drafted}, failed ${drafts.failed}, waiting ${drafts.waiting}`)
     } catch (err) {
       console.warn(`[support.draft] ${err.message}`)

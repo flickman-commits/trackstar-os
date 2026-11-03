@@ -373,7 +373,7 @@ export async function storeDraft({ threadId, body, data = null, actor = null, au
  * draft that came over was written for its own email). A few per run,
  * oldest first, so a burst of mail spreads over a couple of syncs.
  */
-export async function draftPending({ limit = 6 } = {}) {
+export async function draftPending({ limit = 6, concurrency = 1, budgetMs = Infinity } = {}) {
   if (!isLlmConfigured() || process.env.SUPPORT_DRAFTS === 'off') return { drafted: 0, skipped: 'off' }
   const since = new Date(Date.now() - 3 * 86400000)
   const candidates = await prisma.supportThread.findMany({
@@ -397,11 +397,19 @@ export async function draftPending({ limit = 6 } = {}) {
     const forId = d.data?.forMessageId
     return Boolean(forId && t.messages[0] && forId !== t.messages[0].id)
   })
-  let drafted = 0
+  let drafted = 0, next = 0
   const failed = []
-  for (const t of due.slice(0, limit)) {
-    try { await draftThread(t.id); drafted++ }
-    catch (err) { failed.push(t.id); console.warn(`[support.draft] ${t.id}: ${err.message}`) }
+  const started = Date.now()
+  const todo = due.slice(0, limit)
+  // A few at a time: one draft is 15 to 30 seconds of model time, and a busy
+  // inbox (56 waiting, 2026-11-03) took an hour and a half at one per turn.
+  async function worker() {
+    while (next < todo.length && Date.now() - started < budgetMs) {
+      const t = todo[next++]
+      try { await draftThread(t.id); drafted++ }
+      catch (err) { failed.push(t.id); console.warn(`[support.draft] ${t.id}: ${err.message}`) }
+    }
   }
-  return { drafted, failed: failed.length, waiting: Math.max(0, due.length - limit) }
+  await Promise.all(Array.from({ length: Math.max(1, concurrency) }, worker))
+  return { drafted, failed: failed.length, waiting: Math.max(0, due.length - drafted - failed.length) }
 }
