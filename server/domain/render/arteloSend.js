@@ -183,7 +183,7 @@ async function pingStuck(job, error) {
   const order = await prisma.order.findUnique({ where: { id: job.orderId }, select: ORDER_SELECT }).catch(() => null)
   if (!order) return
   const link = arteloOrderUrl(order.arteloOrderData?.id)
-  await slackTo('proofs', [
+  await slackTo('alerts', [
     `⚠️ Approved order *${slackText(displayNumber(order))}*${order.runnerName ? ` (${slackText(order.runnerName)})` : ''} did not go to production: ${slackText(error, 300)}`,
     link ? `<${link}|Open the Artelo order>; once it is sorted, Send now on the order in the tool.` : null,
   ].filter(Boolean).join('\n')).catch(() => {})

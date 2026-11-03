@@ -569,9 +569,9 @@ async function handleNotifyCustomDelay({ orderNumber, daysLate }, res) {
     }
   })
 
-  // Slack DM to Matt, fire-and-forget; the proof channel if his DM is not set up.
+  // Slack DM to Matt, fire-and-forget; #trackstar-alerts if his DM does not go through.
   const dueDateText = originalDueDate ? ` (was due ${originalDueDate})` : ''
-  slackTo('matt', `⏰ *Custom-order delay notice sent* - order *${displayNum}* for ${existing.customerName || 'customer'} (${existing.raceName || 'custom design'}). Promised *${days} day${days === 1 ? '' : 's'}* late${dueDateText}. Email went to ${existing.customerEmail}.`, { or: 'proofs' })
+  slackTo('matt', `⏰ *Custom-order delay notice sent* - order *${displayNum}* for ${existing.customerName || 'customer'} (${existing.raceName || 'custom design'}). Promised *${days} day${days === 1 ? '' : 's'}* late${dueDateText}. Email went to ${existing.customerEmail}.`, { or: 'alerts' })
 
   console.log(`[actions/notify-custom-delay] Order ${orderNumber}: delay email sent (${days} days late)`)
   return res.status(200).json({ success: true, order: withoutRawOrderData(order) })
@@ -669,7 +669,7 @@ async function handleMessageCustomer({ orderId, body }, res) {
   // Note: we intentionally do NOT change designStatus here. A question is
   // orthogonal to design progress — the order stays in Dan's queue until he
   // actually sends proofs.
-  slackTo('proofs', `💬 Question sent to *${existing.customerName || 'customer'}* for order *${displayNum}* - emailed ${existing.customerEmail}. I'll ping you here when they reply.`)
+  slackTo('alerts', `💬 Question sent to *${existing.customerName || 'customer'}* for order *${displayNum}* - emailed ${existing.customerEmail}. I'll ping you here when they reply.`)
 
   console.log(`[actions/message-customer] Order ${existing.orderNumber}: question sent to ${existing.customerEmail}`)
   return res.status(200).json({ success: true, message, portalUrl })
@@ -1514,7 +1514,7 @@ async function handleHealthCheck(res, { sendSlack = false } = {}) {
   if (statuses.some(s => s === 'error')) results.overall = 'degraded'
   if (statuses.filter(s => s === 'error').length >= 3) results.overall = 'critical'
 
-  // Send to Matt's DM (the proof channel if that is not set up)
+  // Send to Matt's DM (#trackstar-alerts if that does not go through)
   if (sendSlack) {
     const emoji = { healthy: '✅', degraded: '⚠️', critical: '🚨' }
     const checkLines = Object.entries(results.checks).map(([name, check]) => {
@@ -1527,7 +1527,7 @@ async function handleHealthCheck(res, { sendSlack = false } = {}) {
       '', ...checkLines, '', `_${results.timestamp}_`
     ].join('\n')
 
-    if (!(await slackTo('matt', text, { or: 'proofs' }))) console.error('[health] Failed to send Slack report')
+    if (!(await slackTo('matt', text, { or: 'alerts' }))) console.error('[health] Failed to send Slack report')
   }
 
   const httpStatus = results.overall === 'healthy' ? 200 : 503

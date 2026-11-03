@@ -148,7 +148,7 @@ function stats(w) {
 /** The cron: run the review and tell Matt what changed. */
 export async function weeklyPlaybookReview() {
   const out = await reviewPlaybook()
-  const post = text => slackTo('matt', text, { or: 'team' })
+  const post = text => slackTo('matt', text, { or: 'alerts' })
   if (out.status === 'saved') {
     const lines = out.changes.map(c => `• ${slackText(c.what, 300)} _(${slackText(c.why, 200)})_`).join('\n')
     await post(`:memo: *Support playbook, weekly review.* ${slackText(out.line)} Claude's drafts now follow these changes:\n${lines}\n\nUndo: Support > Settings > Drafting playbook > History > Restore.`)

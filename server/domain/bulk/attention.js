@@ -96,7 +96,7 @@ export async function bulkMorning({ budgetMs = 240_000, now = new Date() } = {})
       const did = researched[r.number] ? ` Researched ${researched[r.number]} this morning.` : ''
       return `• *${slackText(r.number)} ${slackText(r.partnerName)}*, ${slackText(r.race)}, ${when}${r.owner ? `, ${slackText(r.owner)}` : ''}: ${r.blockers.length ? slackText(r.blockers.join(', ')) : 'ready to submit to Artelo'}.${did}`
     })
-    await slackTo('proofs', `:package: *Bulk orders this week* (Fulfillment > Bulk):\n${lines.join('\n')}`)
+    await slackTo('alerts', `:package: *Bulk orders this week* (Fulfillment > Bulk):\n${lines.join('\n')}`)
   }
   return { researched, runs: runs.map(r => ({ number: r.number, blockers: r.blockers })) }
 }

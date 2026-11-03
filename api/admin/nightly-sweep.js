@@ -131,7 +131,7 @@ async function storeFailedRun(notes) {
 }
 
 async function postToSlack(text) {
-  if (await slackTo('matt', text, { or: 'proofs' })) return { sent: true }
+  if (await slackTo('matt', text, { or: 'alerts' })) return { sent: true }
   console.warn('[nightly-sweep] Slack did not take the report')
   return { sent: false, reason: 'Slack is not set up or did not answer' }
 }

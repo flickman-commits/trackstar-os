@@ -28,7 +28,7 @@ const BACKLOG_DAYS = 3
 const POSTED = 'results_posted:'
 
 // Matt's DM, or the team channel if that is not set up.
-const post = text => slackTo('matt', text, { or: 'team' })
+const post = text => slackTo('matt', text, { or: 'alerts' })
 
 export async function watchOfficialResults() {
   await ensureOverridesLoaded()

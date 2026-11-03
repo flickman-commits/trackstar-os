@@ -95,8 +95,9 @@ const TESTS = {
     const me = await slackApi('auth.test')
     const notIn = []
     let unchecked = false
-    for (const d of Object.values(DESTINATIONS)) {
-      if (!d.channel) continue
+    for (const d of new Map(Object.values(DESTINATIONS).filter(d => d.channel).map(d => [d.channel, d])).values()) {
+      // A channel routed by #name cannot be looked up without its id; posting finds it.
+      if (d.channel.startsWith('#')) continue
       try {
         const info = await slackApi('conversations.info', { channel: d.channel })
         if (!info.channel?.is_member) notIn.push(d.label)

@@ -72,7 +72,7 @@ export async function setDesignStatus(existing, designStatus, completedById = nu
     const shopifyData = existing.shopifyOrderData
     const displayNum = (shopifyData && typeof shopifyData === 'object' && 'name' in shopifyData)
       ? String(shopifyData.name) : `#${existing.parentOrderNumber}`
-    slackTo('proofs', `🖨️ <@U09UVEP1N3Y> Final PDF ready for order *${displayNum}* - ready for production!`)
+    slackTo('alerts', `🖨️ <@U09UVEP1N3Y> Final PDF ready for order *${displayNum}* - ready for production!`)
   }
   return order
 }

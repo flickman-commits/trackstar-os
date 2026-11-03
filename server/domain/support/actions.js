@@ -383,7 +383,7 @@ export async function slackMatt({ thread, text, actor }) {
   await requireConnection('slack')
   const who = thread.customerName || thread.customerEmail || 'a customer'
   const msg = `:rotating_light: *Support escalation* from ${actorName(actor)}\n*${who}*: ${thread.subject || '(no subject)'}\n${String(text || '').trim() || 'Needs your call.'}\n${threadUrl(thread.id)}`
-  if (!(await slackTo('matt', msg, { or: 'proofs' }))) throw new UserError('Slack did not take the message. Check Settings > Connections > Slack.')
+  if (!(await slackTo('matt', msg, { or: 'alerts' }))) throw new UserError('Slack did not take the message. Check Settings > Connections > Slack.')
   if (thread.status !== 'escalated') await setStatus(thread.id, 'escalated', actor)
   await event(thread.id, `${actorName(actor)} pinged Matt in Slack${text ? `: ${String(text).trim()}` : ''}`, actor)
   return { ok: true }

@@ -116,7 +116,7 @@ async function pingToAttach(order, fp, actor) {
     fp.driveUrl ? `• <${fp.driveUrl}|Saved to Drive>` : `• ⚠️ Not in Drive yet${fp.driveError ? `: ${slackText(fp.driveError, 200)}` : ''}`,
     artelo ? `• <${artelo}|Open the Artelo order>` : null,
   ].filter(Boolean)
-  await slackTo('proofs', lines.join('\n'))
+  await slackTo('alerts', lines.join('\n'))
 }
 
 /** The newest final PDF for the order: where it went, and a link to open it. */

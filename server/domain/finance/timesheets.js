@@ -24,7 +24,7 @@ const hours = m => `${(m / 60).toFixed(m % 60 ? 2 : 0)}h`
 
 /** DM a person through the Slack bot (their own DM webhook if the bot cannot). Never throws. */
 const dm = (user, text) => slackDm(user, text).catch(() => false)
-const dmMatt = text => slackTo('matt', text, { or: 'team' }).catch(() => false)
+const dmMatt = text => slackTo('matt', text, { or: 'alerts' }).catch(() => false)
 
 export function weekFor(day) {
   const weekStart = mondayOf(day)

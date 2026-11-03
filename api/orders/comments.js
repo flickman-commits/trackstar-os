@@ -94,7 +94,7 @@ export default async function handler(req, res) {
         const displayNum = (shopifyData && typeof shopifyData === 'object' && 'name' in shopifyData)
           ? String(shopifyData.name) : `#${order.parentOrderNumber}`
         const truncated = text.length > 200 ? text.substring(0, 200) + '...' : text
-        slackTo('proofs', `💬 <@U04KBDJH5C3> New comment on order *${displayNum}*:\n> _"${truncated}"_`)
+        slackTo('alerts', `💬 <@U04KBDJH5C3> New comment on order *${displayNum}*:\n> _"${truncated}"_`)
       }
 
       return res.status(201).json({ success: true, comment })

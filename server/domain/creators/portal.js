@@ -165,5 +165,5 @@ async function pingSampleRequested(creator) {
     `Ships to: ${slackText([creator.shippingCity, creator.shippingState].filter(Boolean).join(', ') || 'address on file')}`,
     appUrl ? `\n\nReview & approve → ${appUrl}/creators` : '',
   ].filter(Boolean)
-  await slackTo('creators', lines.join('\n'), { or: 'team' })
+  await slackTo('creators', lines.join('\n'))
 }

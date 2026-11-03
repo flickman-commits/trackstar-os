@@ -59,7 +59,7 @@ async function exactCheck() {
 }
 
 async function post(text) {
-  if (!(await slackTo('proofs', text, { timeoutMs: 10000 }))) console.log('[fulfillment-hookup]', text)
+  if (!(await slackTo('alerts', text, { timeoutMs: 10000 }))) console.log('[fulfillment-hookup]', text)
 }
 
 /**

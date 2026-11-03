@@ -114,7 +114,7 @@ export async function checkCompletedNotSent() {
   if (fresh.length) {
     const lines = fresh.slice(0, 20).map(o => `• #${slackText(o.number)} (${slackText(o.artelo)}, ordered ${o.ordered}): ${slackText(o.completed.map(c => `${c.race} / ${c.runner}`).join('; '))}`)
     if (fresh.length > 20) lines.push(`• and ${fresh.length - 20} more`)
-    await slackTo('proofs', `:rotating_light: *${fresh.length === 1 ? 'An order was' : `${fresh.length} orders were`} marked complete in TrackstarOS but never sent to production in Artelo.* The customer is waiting. ${fresh.length === 1 ? 'It is' : 'They are'} back in the Action queue:\n${lines.join('\n')}\nSort it out in Artelo (attach the design, check the address), then complete it.`)
+    await slackTo('alerts', `:rotating_light: *${fresh.length === 1 ? 'An order was' : `${fresh.length} orders were`} marked complete in TrackstarOS but never sent to production in Artelo.* The customer is waiting. ${fresh.length === 1 ? 'It is' : 'They are'} back in the Action queue:\n${lines.join('\n')}\nSort it out in Artelo (attach the design, check the address), then complete it.`)
   }
   await prisma.systemConfig.upsert({ where: { key: STATE_KEY }, update: { value: JSON.stringify(stuck.map(o => o.arteloId)) }, create: { key: STATE_KEY, value: JSON.stringify(stuck.map(o => o.arteloId)) } })
   return { checked: out.checked, remaining: out.remaining, stuck: stuck.length, waitingOnAnotherPrint: out.orders.length - stuck.length, newlyReported: fresh.length }
@@ -157,7 +157,7 @@ export async function alertArteloHolds(arteloOrders, { link } = {}) {
       const url = link ? link(o.id) : null
       return `• *${slackText(o.productionStatus)}*: #${slackText(name)}${r ? ` (${slackText(r.raceName || '')}${r.runnerName ? ` / ${slackText(r.runnerName)}` : ''})` : ''}${url ? ` <${url}|Open in Artelo>` : ''}`
     })
-    await slackTo('proofs', `:octagonal_sign: *Artelo is holding ${fresh.length === 1 ? 'an order' : `${fresh.length} orders`}* and will not print until someone sorts it out in Artelo:\n${lines.join('\n')}`)
+    await slackTo('alerts', `:octagonal_sign: *Artelo is holding ${fresh.length === 1 ? 'an order' : `${fresh.length} orders`}* and will not print until someone sorts it out in Artelo:\n${lines.join('\n')}`)
   }
   // Remember the newest 500, so a hold is told once even after it scrolls out of the page.
   const value = JSON.stringify([...new Set([...holds.map(key), ...told])].slice(0, 500))

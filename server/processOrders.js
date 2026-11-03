@@ -1448,9 +1448,9 @@ export async function processOrders(options = {}) {
                     `• Verify all personalization is complete\n` +
                     `• Send it to production now (no need to wait for Matt)\n` +
                     `• In the Artelo order, under Shipping, click *Change shipping method* and pick *UPS Next Day Air Saver*, as long as it is under $40 (what the customer paid). If it is $40 or more, pick the fastest option under $40, and tell Matt if there is none`
-                  // Eli's DM, or the proof channel if that does not go through.
+                  // Eli's DM, or #trackstar-alerts if that does not go through.
                   slackDm({ slackId: 'U09UVEP1N3Y', firstName: 'Eli' }, text)
-                    .then(sent => sent || slackTo('proofs', text))
+                    .then(sent => sent || slackTo('alerts', text))
                     .catch(e => log(`[processOrders] Expedited Slack notification failed: ${e.message}`))
                   log(`[processOrders] 🚀 Expedited shipping detected on ${order.orderId}-${lineItemIndex} - Slack sent`)
                 }

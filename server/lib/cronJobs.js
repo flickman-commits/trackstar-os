@@ -19,17 +19,17 @@ const JOBS = {
   '/api/support/sync': { name: 'Support mailbox sync', what: 'Brings new fast@ email into Support, then Claude drafts replies for new messages.' },
   '/api/orders/auto-import': { name: 'Order import', what: 'Pulls new orders from Artelo, and checks that photo and file uploads to storage still work.' },
   '/api/sales/send-due': { name: 'Sales: send later', what: 'Sends scheduled sales emails whose time has come.' },
-  '/api/cron/fulfillment-check': { name: 'Artelo hookup check', what: 'Pings Slack when a print variant comes unhooked from Artelo, and when it is back.' },
+  '/api/cron/fulfillment-check': { name: 'Artelo hookup check', what: 'Pings #trackstar-alerts when a print variant comes unhooked from Artelo, and when it is back.' },
   '/api/cron/custom-statements': { name: 'Designer statements', what: 'At the end of the month, each designer gets their custom statement in a Slack DM.' },
   '/api/cron/support-triage': { name: 'Support triage', what: 'Claude stars the urgent Support conversations and reports the count in #trackstar-reports.' },
   '/api/cron/retention': { name: 'Log cleanup', what: 'Deletes old rows from the log tables.' },
-  '/api/orders/actions?action=daily-design-update': { name: 'Daily design update', what: 'Posts the custom and standard design standup to #design.' },
+  '/api/orders/actions?action=daily-design-update': { name: 'Daily design update', what: 'Posts the custom and standard design standup to #all-hands.' },
   '/api/cron/bulk-runs': { name: 'Bulk runs', what: 'Researches runners for bulk runs whose race is over and posts runs within a week of their race.' },
-  '/api/cron/artelo-completed-check': { name: 'Artelo completed check', what: 'Flags orders complete here that Artelo never sent to production.' },
+  '/api/cron/artelo-completed-check': { name: 'Artelo completed check', what: 'Flags orders complete here that Artelo never sent to production, in #trackstar-alerts.' },
   '/api/cron/research-agent': { name: 'Research agent', what: 'Works the research queue: fills in results read off the official page, leaves a note on the rest.' },
   '/api/orders/actions?action=health-check': { name: 'Health check', what: 'Tests every connection and scraper fixture and reports to Slack.' },
   '/api/cron/support-playbook': { name: 'Support playbook review', what: 'Revises the drafting playbook from the week\'s replies and posts the changes.' },
-  '/api/orders/actions?action=monday-pipeline': { name: 'Monday design pipeline', what: 'Posts the custom design pipeline, with what is due soon, to Slack.' },
+  '/api/orders/actions?action=monday-pipeline': { name: 'Monday design pipeline', what: 'Posts the custom design pipeline, with what is due soon, to #all-hands.' },
 }
 
 /** The key a run is stamped under: the path, plus ?action= for the shared actions handler. */

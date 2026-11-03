@@ -18,20 +18,24 @@ import { isConnectionOn } from './connections.js'
 
 /**
  * Where each destination goes. `channel` is a Slack channel id (ids survive
- * a rename); the bot posts there. `user` is a Slack user id for a DM.
+ * a rename) or, for a channel made after this was written, its #name; the
+ * bot posts there. `user` is a Slack user id for a DM.
  * `env` is the webhook used when there is no bot token, no channel, or the
  * bot's post fails. The bot must be invited to a private channel once.
  */
 export const DESTINATIONS = {
+  // Customers approving a custom design, and nothing else.
   proofs: { label: '#proof-approvals', channel: 'C0AMW4YKY9L', env: 'SLACK_PROOF_WEBHOOK_URL' },
+  // Everything the team should see that is not an approval: errors, Artelo
+  // problems, proofs sent, comments, questions, bulk runs, files ready.
+  alerts: { label: '#trackstar-alerts', channel: '#trackstar-alerts', env: 'SLACK_PROOF_WEBHOOK_URL' },
   reports: { label: '#trackstar-reports', channel: 'C0CD55QHYJU', env: 'SLACK_REPORTS_WEBHOOK_URL' },
+  team: { label: '#all-hands', channel: 'C0A6NQD4PLH', env: 'SLACK_WEBHOOK_URL' },
   design: { label: '#all-hands (design standup)', channel: 'C0A6NQD4PLH', env: 'SLACK_DESIGN_WEBHOOK_URL' },
-  matt: { label: "Matt's DM", user: () => process.env.SLACK_USER_ID_MATT, env: 'SLACK_DM_WEBHOOK_URL' },
-  // Not yet routed to a channel: their webhooks carry on until one is set here.
-  team: { label: 'Team channel', env: 'SLACK_WEBHOOK_URL' },
-  creators: { label: 'Creators', env: 'SLACK_CREATORS_WEBHOOK_URL' },
-  lookup: { label: 'Instant Lookup alerts', env: 'SLACK_LOOKUP_WEBHOOK_URL' },
-  support: { label: 'Support team', env: 'SLACK_SUPPORT_WEBHOOK_URL' },
+  creators: { label: '#trackstar-creators', channel: 'C0B5X29BLRE', env: 'SLACK_CREATORS_WEBHOOK_URL' },
+  lookup: { label: '#trackstar-alerts (Instant Lookup)', channel: '#trackstar-alerts', env: 'SLACK_LOOKUP_WEBHOOK_URL' },
+  support: { label: '#customer-support', channel: 'C0CEB1ANUJX', env: 'SLACK_SUPPORT_WEBHOOK_URL' },
+  matt: { label: "Matt's DM", user: () => process.env.SLACK_USER_ID_MATT || 'U01CQFPL78E', env: 'SLACK_DM_WEBHOOK_URL' },
 }
 
 const botToken = () => String(process.env.SLACK_BOT_TOKEN || '').trim()
