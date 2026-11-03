@@ -84,7 +84,7 @@
     "api/cron/research-agent.js": {
       "maxDuration": 300
     },
-    "api/cron/fulfillment-check.js": {
+    "api/cron/{fulfillment-check,artelo-send}.js": {
       "maxDuration": 120
     },
     "api/admin/**/*.js": {
