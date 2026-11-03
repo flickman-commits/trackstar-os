@@ -1,7 +1,7 @@
 /**
  * GET /api/cron/support-triage - twice a day (7am and noon Eastern in winter,
  * 8am and 1pm in summer): Claude reads the open conversations the customer
- * wrote last, stars the urgent ones and posts the list to Slack
+ * wrote last, stars the urgent ones and reports the run in #trackstar-reports
  * (server/domain/support/triage.js). Cron only.
  */
 import { isCronRequest } from '../_lib/auth.js'

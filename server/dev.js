@@ -110,6 +110,7 @@ const routes = [
   { method: 'post',   path: '/api/gallery',                handler: '../api/gallery/index.js' },
   { method: 'post',   path: '/api/admin/custom-counter',   handler: '../api/admin/custom-counter.js' },
   { method: 'get',    path: '/api/admin/support-closes',   handler: '../api/admin/support-closes.js' },
+  { method: 'get',    path: '/api/admin/cron-jobs',        handler: '../api/admin/cron-jobs.js' },
   { method: 'get',    path: '/api/admin/roles',            handler: '../api/admin/roles.js' },
   { method: 'put',    path: '/api/admin/roles',            handler: '../api/admin/roles.js' },
   // Nightly health sweep (cron runs it; admins can pull the JSON any time)

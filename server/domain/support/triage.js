@@ -154,27 +154,40 @@ export async function triagePending({ dryRun = false } = {}) {
   }
 }
 
-/** The cron: triage, then post the urgent list where the support team starts its day. */
+const whoOf = t => slackText(t.customerName || t.customerEmail || (t.igUsername ? `@${t.igUsername}` : 'Unknown'), 60)
+
+/**
+ * The cron: triage, then say so in #trackstar-reports (SLACK_REPORTS_WEBHOOK_URL,
+ * Matt's DM until that is set): that it ran, how many it read and how many it
+ * marked urgent, by kind. With SLACK_SUPPORT_WEBHOOK_URL set, the support
+ * channel also gets every starred open conversation, where to start.
+ */
 export async function scheduledTriage() {
   const out = await triagePending()
   if (out.status !== 'done') return out
-  // Every starred open conversation, not only this pass's: the list is where to start.
   const starred = await prisma.supportThread.findMany({
     where: { status: 'open', priority: true, filtered: false, mergedIntoId: null },
     orderBy: { lastInboundAt: 'asc' },
     select: { id: true, customerName: true, customerEmail: true, igUsername: true, subject: true, priorityReason: true },
   })
-  const hook = process.env.SLACK_SUPPORT_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL
   const base = appBaseUrl()
-  const head = `:rotating_light: *Support triage.* Read ${out.read} new conversation${out.read === 1 ? '' : 's'}, marked ${out.starred} priority.${out.left ? ` ${out.left} more wait for the next pass.` : ''}${out.failed ? ` ${out.failed} could not be read.` : ''}`
-  if (!starred.length) {
-    await postSlack(hook, `${head} Nothing urgent is open.`)
-    return out
+  const link = t => `<${base}/support?thread=${encodeURIComponent(t.id)}|${whoOf(t)}>`
+  const when = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+
+  const fresh = out.urgent.filter(u => !u.alreadyStarred)
+  const kinds = Object.entries(URGENT).map(([k, label]) => [label, fresh.filter(u => u.category === k).length]).filter(([, n]) => n)
+  const report = [
+    `_Support Triage_ · ${when} ET`,
+    `Read ${out.read} new conversation${out.read === 1 ? '' : 's'}, marked *${out.starred} urgent*. ${starred.length} starred conversation${starred.length === 1 ? ' is' : 's are'} open in <${base}/support|Support>.${out.left ? ` ${out.left} more wait for the next pass.` : ''}${out.failed ? ` ${out.failed} could not be read.` : ''}`,
+    kinds.length ? kinds.map(([label, n]) => `${label}: ${n}`).join(' · ') : null,
+    ...fresh.slice(0, 15).map(u => `• ${link({ id: u.id, customerName: u.who })}: ${slackText(u.reason || URGENT[u.category], 200)}`),
+    fresh.length > 15 ? `…and ${fresh.length - 15} more.` : null,
+  ].filter(Boolean).join('\n')
+  await postSlack(process.env.SLACK_REPORTS_WEBHOOK_URL || process.env.SLACK_DM_WEBHOOK_URL, report)
+
+  if (process.env.SLACK_SUPPORT_WEBHOOK_URL && starred.length) {
+    const lines = starred.slice(0, 40).map(t => `• ${link(t)}: ${slackText(t.priorityReason || t.subject || 'Marked priority', 200)}`)
+    await postSlack(process.env.SLACK_SUPPORT_WEBHOOK_URL, `:rotating_light: *Start with these ${starred.length}* (Support, sort Priority first):\n${lines.join('\n')}${starred.length > 40 ? `\n…and ${starred.length - 40} more.` : ''}`)
   }
-  const lines = starred.slice(0, 40).map(t => {
-    const who = slackText(t.customerName || t.customerEmail || (t.igUsername ? `@${t.igUsername}` : 'Unknown'), 60)
-    return `• <${base}/support?thread=${encodeURIComponent(t.id)}|${who}>: ${slackText(t.priorityReason || t.subject || 'Marked priority', 200)}`
-  })
-  await postSlack(hook, `${head} Start with these ${starred.length} (Support, sort Priority first):\n${lines.join('\n')}${starred.length > 40 ? `\n…and ${starred.length - 40} more.` : ''}`)
   return out
 }

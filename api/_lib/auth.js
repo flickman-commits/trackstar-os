@@ -11,6 +11,7 @@
 
 import crypto from 'crypto'
 import prisma from './prisma.js'
+import { recordCronRun } from '../../server/lib/cronJobs.js'
 
 export const SESSION_COOKIE = 'ts_session'
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
@@ -274,5 +275,9 @@ export function isCronRequest(req) {
   if (!secret) return false
   const header = req.headers?.['authorization'] || ''
   if (typeof header !== 'string' || !header.startsWith('Bearer ')) return false
-  return safeEqual(header.slice('Bearer '.length), secret)
+  const ok = safeEqual(header.slice('Bearer '.length), secret)
+  // Stamp the run for Settings > Scheduled Jobs. Not awaited: the job's own
+  // work outlasts this one write, and a failed stamp never stops the job.
+  if (ok) recordCronRun(req.url)
+  return ok
 }

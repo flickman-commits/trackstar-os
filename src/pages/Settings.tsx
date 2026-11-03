@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Sparkles, Search, Copy, Loader2, FlaskConical, Check, Settings as SettingsIcon, ChevronLeft, ChevronRight, Star, Users, CloudSun, DollarSign, UserCog, ScrollText, BarChart3, ShieldCheck, KeyRound, Plug, PencilRuler, Lightbulb, EyeOff, Image as ImageIcon, Calculator } from 'lucide-react'
+import { Sparkles, Search, Copy, Loader2, FlaskConical, Check, Settings as SettingsIcon, ChevronLeft, ChevronRight, Star, Users, CloudSun, DollarSign, UserCog, ScrollText, BarChart3, ShieldCheck, KeyRound, Plug, PencilRuler, Lightbulb, EyeOff, Image as ImageIcon, Calculator, CalendarClock } from 'lucide-react'
 import { REVIEW_PRODUCTS } from '@/lib/reviewLinks'
 import { apiFetch } from '@/lib/api'
 import { btnPrimary, inputBase } from '@/lib/ui'
@@ -13,6 +13,7 @@ import PricingCalculator from '@/components/PricingCalculator'
 import { PeoplePanel, RolesPanel, ActivityPanel, AccountPanel } from '@/components/TeamPanel'
 import ApiKeysPanel from '@/components/ApiKeysPanel'
 import ConnectionsPanel from '@/components/ConnectionsPanel'
+import CronJobsPanel from '@/components/CronJobsPanel'
 import RaceDatabasePanel from '@/components/RaceDatabasePanel'
 import AssignmentPanel from '@/components/AssignmentPanel'
 import SkippedProductsPanel from '@/components/SkippedProductsPanel'
@@ -25,7 +26,7 @@ import LookupHealthPanel from '@/components/LookupHealthPanel'
 import ClearResearchCard from '@/components/ClearResearchCard'
 import Toast, { type ToastMessage } from '@/components/orders/Toast'
 
-export type SettingsPanel = 'features' | 'design_needs' | 'products' | 'pricing' | 'reviews' | 'stats' | 'races' | 'lookup' | 'storefront' | 'account' | 'people' | 'roles' | 'apikeys' | 'connections' | 'assignments' | 'skipped' | 'gallery' | 'support_closes' | 'activity' | 'counter' | 'designs' | 'diagnostics' | 'maintenance'
+export type SettingsPanel = 'features' | 'design_needs' | 'products' | 'pricing' | 'reviews' | 'stats' | 'races' | 'lookup' | 'storefront' | 'account' | 'people' | 'roles' | 'apikeys' | 'connections' | 'crons' | 'assignments' | 'skipped' | 'gallery' | 'support_closes' | 'activity' | 'counter' | 'designs' | 'diagnostics' | 'maintenance'
 
 /**
  * Settings navigation. Grouped rather than a flat list because the panels do
@@ -100,6 +101,7 @@ const SETTINGS_NAV: {
     items: [
       { id: 'connections', label: 'Connections', blurb: 'Shopify, Artelo, Gmail and every other service, on or off', icon: Plug },
       { id: 'apikeys', label: 'API Keys', blurb: 'Keys for Claude and other integrations', icon: KeyRound },
+      { id: 'crons', label: 'Scheduled Jobs', blurb: 'Every job the tool runs on a schedule, when, and when it last ran', icon: CalendarClock },
       { id: 'designs', label: 'Designs', blurb: 'Automated prints: which races have a template, the workers and the queue', icon: Sparkles },
       { id: 'diagnostics', label: 'Diagnostics', blurb: 'Test connections and run a full health check', icon: FlaskConical },
       { id: 'maintenance', label: 'Maintenance', blurb: 'Cache and research resets - destructive', icon: SettingsIcon },
@@ -303,6 +305,7 @@ export default function Settings() {
               {settingsPanel === 'people' && isAdmin && <PeoplePanel />}
               {settingsPanel === 'roles' && isAdmin && <RolesPanel />}
               {settingsPanel === 'connections' && isAdmin && <ConnectionsPanel />}
+              {settingsPanel === 'crons' && isAdmin && <CronJobsPanel />}
               {settingsPanel === 'apikeys' && isAdmin && <ApiKeysPanel />}
               {settingsPanel === 'assignments' && isAdmin && <AssignmentPanel />}
               {settingsPanel === 'skipped' && isAdmin && <SkippedProductsPanel />}
