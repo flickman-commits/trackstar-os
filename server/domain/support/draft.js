@@ -368,8 +368,10 @@ export async function storeDraft({ threadId, body, data = null, actor = null, au
 
 /**
  * Draft the conversations that need one: open, not filtered, the customer
- * wrote last within three days, and no draft since. A few per run, oldest
- * first, so a burst of mail spreads over a couple of syncs.
+ * wrote last within three days, and no draft for their newest message (a
+ * draft newer than it can still answer an older one: after a merge, each
+ * draft that came over was written for its own email). A few per run,
+ * oldest first, so a burst of mail spreads over a couple of syncs.
  */
 export async function draftPending({ limit = 6 } = {}) {
   if (!isLlmConfigured() || process.env.SUPPORT_DRAFTS === 'off') return { drafted: 0, skipped: 'off' }
@@ -378,11 +380,20 @@ export async function draftPending({ limit = 6 } = {}) {
     where: { status: 'open', filtered: false, mergedIntoId: null, lastInboundAt: { gte: since } },
     orderBy: { lastInboundAt: 'asc' },
     take: 40,
-    select: { id: true, lastInboundAt: true, lastOutboundAt: true, notes: { where: { kind: 'draft' }, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } } },
+    select: {
+      id: true, lastInboundAt: true, lastOutboundAt: true,
+      notes: { where: { kind: 'draft' }, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true, data: true } },
+      messages: { where: { direction: 'in' }, orderBy: { sentAt: 'desc' }, take: 1, select: { id: true } },
+    },
   })
-  const due = candidates.filter(t =>
-    (!t.lastOutboundAt || t.lastOutboundAt < t.lastInboundAt) &&
-    (!t.notes[0] || t.notes[0].createdAt < t.lastInboundAt))
+  const due = candidates.filter(t => {
+    if (t.lastOutboundAt && t.lastOutboundAt >= t.lastInboundAt) return false
+    const d = t.notes[0]
+    if (!d || d.createdAt < t.lastInboundAt) return true
+    // Drafts written through MCP carry no forMessageId; one that names another message is stale.
+    const forId = d.data?.forMessageId
+    return Boolean(forId && t.messages[0] && forId !== t.messages[0].id)
+  })
   let drafted = 0
   const failed = []
   for (const t of due.slice(0, limit)) {

@@ -81,6 +81,8 @@ export default async function handler(req, res) {
       case 'merge': {
         const out = await mergeThreads(id, Array.isArray(body.sourceIds) ? body.sourceIds : [], user)
         await audit(`Merged ${out.merged} conversation${out.merged === 1 ? '' : 's'} into one`, { sourceIds: body.sourceIds })
+        // Each draft that came over answered one email on its own; write one for the whole conversation.
+        if (out.customerWroteLast) await draftThread(id).catch(err => console.warn(`[support/merge] draft ${id}: ${err.message}`))
         return res.status(200).json(await getThread(id, { userId: user.id, money: seesMoney(user) }))
       }
       case 'redraft': {

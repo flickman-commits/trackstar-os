@@ -10,6 +10,8 @@
  * so a reply the customer sends on their old email chain still lands in
  * the merged conversation (mailbox.js follows the pointer). They appear in
  * no view and no list. Email only, same customer only; there is no unmerge.
+ * The drafts that come over each answered one email alone, so the merge
+ * (api/support/thread.js) has Claude draft again for the whole conversation.
  */
 import prisma from '../../db.js'
 import { refreshThread, mailboxEmail } from './mailbox.js'
@@ -50,5 +52,5 @@ export async function mergeThreads(targetId, sourceIds, actor) {
   // Counts, snippet, last-from-them and status follow the combined timeline.
   const newest = await prisma.supportMessage.findFirst({ where: { threadId: target.id }, orderBy: { sentAt: 'desc' } })
   if (newest) await refreshThread({ ...target, lastMessageAt: new Date(0) }, newest, { mailbox: mailboxEmail() })
-  return { merged: sources.length, messages: sources.reduce((a, s) => a + s._count.messages, 0) }
+  return { merged: sources.length, messages: sources.reduce((a, s) => a + s._count.messages, 0), customerWroteLast: newest?.direction === 'in' }
 }
