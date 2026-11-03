@@ -446,15 +446,15 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
 
   // Escalate, Close (with snooze and waiting) and Reopen: down with Send, so every action on the conversation sits in one row.
   const statusActions = (
-    <span className="inline-flex items-center gap-2">
+    <span className="inline-flex flex-wrap items-center gap-2">
           {thread.status !== 'escalated' && thread.status !== 'closed' && (
-            <button onClick={() => onStatus('escalated')} disabled={busy} className={btnSecondary} title="Pull Matt in"><AlertTriangle className="w-3.5 h-3.5" /> Escalate</button>
+            <button onClick={() => onStatus('escalated')} disabled={busy} className={`${btnSecondary} whitespace-nowrap`} title="Pull Matt in"><AlertTriangle className="w-3.5 h-3.5" /> Escalate</button>
           )}
           {thread.status === 'closed' ? (
-            <button onClick={() => onStatus('open')} disabled={busy} className={btnPrimary}><RotateCcw className="w-3.5 h-3.5" /> Reopen</button>
+            <button onClick={() => onStatus('open')} disabled={busy} className={`${btnPrimary} whitespace-nowrap`}><RotateCcw className="w-3.5 h-3.5" /> Reopen</button>
           ) : (
             <div className="relative inline-flex" ref={close.ref}>
-              <button onClick={() => onStatus('closed')} disabled={busy} className={`${btnPrimary} rounded-r-none`} title="Close (c)"><Archive className="w-3.5 h-3.5" /> Close <Kbd>C</Kbd></button>
+              <button onClick={() => onStatus('closed')} disabled={busy} className={`${btnPrimary} rounded-r-none whitespace-nowrap`} title="Close (c)"><Archive className="w-3.5 h-3.5" /> Close <Kbd>C</Kbd></button>
               <button onClick={() => close.setOpen(v => !v)} disabled={busy} className={`${btnPrimary} rounded-l-none px-1.5 border-l border-white/20`} title="Snooze, or mark waiting or open"><ChevronDown className="w-3.5 h-3.5" /></button>
               {close.open && (
                 <div className="absolute right-0 bottom-full mb-1 w-52 p-1 rounded-lg bg-white border border-border-gray shadow-[0_6px_24px_rgba(0,0,0,0.12)] z-20">
@@ -623,8 +623,8 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
               {hasEmDash && <span className="text-[11px] text-red-600 inline-flex items-center gap-1"><AlertTriangle className="w-3 h-3" />No em dashes in anything a customer sees</span>}
               {ig && window?.open && window.mode === 'standard' && window.closesAt && <span className="text-[11px] text-off-black/45 inline-flex items-center gap-1" title="Instagram allows a reply within 24 hours of their last message"><Clock className="w-3 h-3" />Window closes {when(window.closesAt)}</span>}
             </div>
-            {/* One row, left to right: Send and wait (for a question), Send and close (the usual), Escalate, Close. */}
-            <div className="mt-2 flex items-center gap-2">
+            {/* One row, left to right: Send and wait (for a question), Send and close (the usual), Escalate, Close. Wraps in a narrow column. */}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <button onClick={() => send(false)} disabled={!canSend} className={`${btnSecondary} whitespace-nowrap`} title="Send and mark it waiting on the customer (⌘⇧↵)">
                 {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Send and wait
               </button>
@@ -658,7 +658,7 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
                 ))}
               </div>
             )}
-            <div className="mt-2 flex items-center gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="text-[11px] text-amber-900/60">Mentioned teammates see it under Mentions.</span>
               <span className="flex-1" />
               {statusActions}
