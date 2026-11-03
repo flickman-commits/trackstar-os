@@ -286,6 +286,7 @@ export async function setStatus(id, status, actor) {
   if (before?.status !== status) {
     const verb = status === 'closed' ? 'closed this' : status === 'open' && before?.status === 'closed' ? 'reopened this'
       : status === 'escalated' ? 'escalated this' : status === 'waiting' ? 'marked this waiting on the customer'
+      : before?.status === 'escalated' ? 'de-escalated this'
       : before?.status === 'waiting' ? 'marked this open again' : 'reopened this'
     await event(id, `${actorName(actor)} ${verb}`, actor)
   }

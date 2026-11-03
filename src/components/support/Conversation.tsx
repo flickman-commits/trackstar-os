@@ -450,6 +450,9 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
           {thread.status !== 'escalated' && thread.status !== 'closed' && (
             <button onClick={() => onStatus('escalated')} disabled={busy} className={`${btnSecondary} whitespace-nowrap`} title="Pull Matt in"><AlertTriangle className="w-3.5 h-3.5" /> Escalate</button>
           )}
+          {thread.status === 'escalated' && (
+            <button onClick={() => onStatus('open')} disabled={busy} className={`${btnSecondary} whitespace-nowrap`} title="Back to the open inbox"><RotateCcw className="w-3.5 h-3.5" /> De-escalate</button>
+          )}
           {thread.status === 'closed' ? (
             <button onClick={() => onStatus('open')} disabled={busy} className={`${btnPrimary} whitespace-nowrap`}><RotateCcw className="w-3.5 h-3.5" /> Reopen</button>
           ) : (
