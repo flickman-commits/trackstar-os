@@ -148,5 +148,7 @@ export function summarize(rows, rules) {
   const landedDays = days.filter(d => d.landed)
   const sums = Object.fromEntries(SUM_KEYS.map(k => [k, 0]))
   for (const d of landedDays) for (const k of SUM_KEYS) sums[k] += d[k]
-  return { ...sums, ...ratios(sums), dayCount: landedDays.length, days, first: rows[0]?.day || null, last: rows[rows.length - 1]?.day || null, lastLanded: landedDays[landedDays.length - 1]?.day || null }
+  // Which rule the period ended under, for the label on a fee line.
+  const designerFeeBase = landedDays.length ? landedDays[landedDays.length - 1].designerFeeBase : null
+  return { ...sums, ...ratios(sums), designerFeeBase, dayCount: landedDays.length, days, first: rows[0]?.day || null, last: rows[rows.length - 1]?.day || null, lastLanded: landedDays[landedDays.length - 1]?.day || null }
 }

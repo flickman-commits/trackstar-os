@@ -70,11 +70,19 @@ export function normalizeRole(role) {
   return ROLES.includes(role) ? role : 'designer'
 }
 
+// Capabilities added after the first saved table (a saved table without
+// `_known` predates all of these). A role gets a new capability's default
+// until an admin saves the table again, so "on by default" holds for a
+// workspace whose roles were set up before the capability existed.
+const ADDED_LATER = ['hours']
+
 function clean(map) {
+  const known = new Set(Array.isArray(map?._known) ? map._known : [...GRANTABLE].filter(c => !ADDED_LATER.includes(c)))
   const out = {}
   for (const r of EDITABLE_ROLES) {
     const list = Array.isArray(map?.[r]) ? map[r] : DEFAULT_CAPS[r]
-    out[r] = [...new Set(list.filter(c => GRANTABLE.has(c)))]
+    const fresh = DEFAULT_CAPS[r].filter(c => !known.has(c))
+    out[r] = [...new Set([...list, ...fresh].filter(c => GRANTABLE.has(c)))]
   }
   return out
 }
@@ -93,7 +101,8 @@ export async function loadRoleCaps({ force = false } = {}) {
 
 export async function saveRoleCaps(map) {
   const value = clean(map)
-  const v = JSON.stringify(value)
+  // Saved with every capability that exists now, so a later addition reads as new.
+  const v = JSON.stringify({ ...value, _known: [...GRANTABLE] })
   await prisma.systemConfig.upsert({ where: { key: KEY }, update: { value: v }, create: { key: KEY, value: v } })
   cache = { at: Date.now(), value }
   return value

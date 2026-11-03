@@ -16,7 +16,8 @@ const PERIOD_KEY = 'finance.period'
  * money went, the 90-day trend with race days, the levers, and Needs you.
  */
 export default function Overview() {
-  const [period, setPeriod] = useState<string>(() => { try { return localStorage.getItem(PERIOD_KEY) || 'today' } catch { return 'today' } })
+  // Yesterday by default: the feeds land the next morning, so Today is empty until tomorrow.
+  const [period, setPeriod] = useState<string>(() => { try { return localStorage.getItem(PERIOD_KEY) || 'yesterday' } catch { return 'yesterday' } })
   const [data, setData] = useState<OverviewPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -65,7 +66,12 @@ export default function Overview() {
         </div>
       </div>
 
-      {error ? <ErrorCard text={error} /> : !data || !t || !c ? <Spinner /> : (
+      {error ? <ErrorCard text={error} /> : !data || !t || !c ? <Spinner /> : t.dayCount === 0 ? (
+        <div className={`${card} p-6 text-sm text-off-black/60`}>
+          <p className="font-semibold text-off-black mb-1">Nothing has landed for {data.period.label.toLowerCase()} yet.</p>
+          <p>The feeds write a day into the Daily Tracker the next morning. Pick Yesterday, or press Refresh once the sheet has it.</p>
+        </div>
+      ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Tile label="Revenue" value={usd(t.revenue)} sub={`Shopify ${usd(t.shopifyRevenue)} · Etsy ${usd(t.etsyRevenue)}`} delta={<Delta now={t.revenue} before={c.revenue} fmt={usd} />} spark={spark && <Spark values={spark.revenue} color={SERIES.revenue} />} title="Shopify net sales plus Etsy net sales, as the raw tabs report them." />
@@ -238,11 +244,12 @@ function Levers({ data }: { data: OverviewPayload }) {
 
 function Pacing({ data }: { data: OverviewPayload }) {
   const p = data.pacing
-  const rows: [string, number, number][] = [
-    [`Same days last month`, p.lastMonthSameDays.revenue, p.lastMonthSameDays.cm],
-    [`All of last month`, p.lastMonth.revenue, p.lastMonth.cm],
-    [`Same month last year`, p.lastYear.revenue, p.lastYear.cm],
-  ]
+  // A reference with no landed days (last year before the sheet started) is left out rather than shown as $0.
+  const rows: [string, number, number][] = ([
+    [`Same days last month`, p.lastMonthSameDays],
+    [`All of last month`, p.lastMonth],
+    [`Same month last year`, p.lastYear],
+  ] as [string, typeof p.mtd][]).filter(([, t]) => t.dayCount > 0).map(([label, t]) => [label, t.revenue, t.cm])
   const max = Math.max(p.mtd.revenue, ...rows.map(r => r[1]), 1)
   return (
     <div className={`${card} p-4`}>

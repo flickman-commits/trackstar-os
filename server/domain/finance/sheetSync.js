@@ -100,7 +100,8 @@ export async function syncFromSheet({ since = null, now = new Date() } = {}) {
   present.forEach((tab, i) => {
     const parsed = parseTab(tab, grids[i])
     for (const [day, vals] of parsed) {
-      if (day > today) continue
+      // A stray row (a date of 0 renders as 12/31/1969) is not a day of ours.
+      if (day > today || day < '2020-01-01') continue
       if (since && day < since) continue
       const row = byDay.get(day) || { day }
       Object.assign(row, vals)
@@ -110,12 +111,14 @@ export async function syncFromSheet({ since = null, now = new Date() } = {}) {
   })
   // A day with nothing in any tab is not a row yet.
   const days = [...byDay.values()].filter(r => FIELDS.some(f => r[f] != null)).sort((a, b) => a.day.localeCompare(b.day))
+  await prisma.financeDay.deleteMany({ where: { day: { lt: '2020-01-01' } } })
   const existing = new Map((await prisma.financeDay.findMany({ where: { day: { in: days.map(d => d.day) } } })).map(r => [r.day, r]))
   let created = 0, updated = 0
   for (const r of days) {
     const data = Object.fromEntries(FIELDS.map(f => [f, r[f] ?? null]))
     const was = existing.get(r.day)
-    if (!was) { await prisma.financeDay.create({ data: { day: r.day, ...data } }); created++; continue }
+    // Upsert, not create: two runs can overlap (the cron and a Refresh), and the second must not fail on the first's rows.
+    if (!was) { await prisma.financeDay.upsert({ where: { day: r.day }, create: { day: r.day, ...data }, update: { ...data, readAt: now } }); created++; continue }
     if (FIELDS.some(f => (was[f] ?? null) !== (data[f] ?? null))) {
       await prisma.financeDay.update({ where: { day: r.day }, data: { ...data, readAt: now } })
       updated++
