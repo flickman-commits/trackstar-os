@@ -1357,4 +1357,27 @@ export const CHIP_TIME_FIXTURES = [
     officialPage: { url: 'https://www.hubertiming.com/results/2026HRM', shows: '1:23:51', readOn: '2026-10-28' },
     notes: 'Humboldt Redwoods 2026 Half Marathon. Page Chip Pace 6:23 although 5031s / 13.1 = 384.05 -> 6:24: the raw time is just under the shown 1:23:51 (rounded up for display). Gun 1:24:17.',
   },
+  // ── MTEC (Columbus 2021) ──────────────────────────────────────────────
+  {
+    platform: 'mtec',
+    race: 'Columbus Marathon',
+    year: 2021,
+    runner: 'Tiffany Krotke',
+    expectedChipTime: '5:31:12',
+    expectedChipPace: '12:39',
+    expectedBib: '950',
+    officialPage: { url: 'https://www.mtecresults.com/runner/show?rid=950&race=12016', shows: '5:31:12', readOn: '2026-11-03' },
+    notes: "Columbus 2021 Marathon (raceId 12016). Uneven splits: 20M at 4:14:17 (13:35/mi between), so the page's Finish 'Pace Between' 12:25 is the last segment only. The page's Average Pace (chip) is 12:39 / mi: 19872s / 26.2 = 758.5s, which MTEC rounds up.",
+  },
+  {
+    platform: 'mtec',
+    race: 'Columbus Marathon',
+    year: 2021,
+    runner: 'Molly Bookmyer',
+    expectedChipTime: '1:12:28',
+    expectedChipPace: '5:32',
+    expectedBib: '15487',
+    officialPage: { url: 'https://www.mtecresults.com/runner/show?rid=15487&race=12017', shows: '1:12:28', readOn: '2026-11-03' },
+    notes: "Columbus 2021 Half Marathon (raceId 12017), women's winner. The page's Finish 'Pace Between' 5:42 is the last segment; overall 4348s / 13.1 = 331.9s, 5:32.",
+  },
 ]

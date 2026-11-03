@@ -3,7 +3,8 @@
  * marathon + half. MTEC Results; each distance is a separate raceId under the
  * same event slug.
  *
- * Per-year raceIds:
+ * Per-year raceIds (read off the year menu on any MTEC Columbus race page):
+ *   2021: M=12016  H=12017  (no 2020: that edition was virtual and MTEC has no results)
  *   2022: M=14101  H=14102  (read off MTEC's year menus on the 2023 race pages)
  *   2023: M=15918  H=15919
  *   2024: M=17889  H=17890
@@ -18,6 +19,7 @@ export default {
   tag: 'Columbus',
   location: 'Columbus, OH',
   raceDates: {
+    2021: '2021-10-17',
     2022: '2022-10-16',
     2023: '2023-10-15',
     2024: '2024-10-20',
@@ -25,6 +27,7 @@ export default {
     2026: '2026-10-18',
   },
   raceDateSources: {
+    2021: 'MTEC race page (its startDate reads a day early, as it does for 2022: 2021-10-16 vs Sunday 2021-10-17)',
     2022: 'columbusmarathon.com + findmymarathon.com',
     2023: 'columbusmarathon.com + runguides.com',
     2024: 'columbusmarathon.com + vdoto2.com',
@@ -43,6 +46,7 @@ export default {
   keywords: ['columbus'],
   keywordRequiresMarathon: true,
   raceIds: {
+    2021: { marathon: 12016, half: 12017 },
     2022: { marathon: 14101, half: 14102 },
     2023: { marathon: 15918, half: 15919 },
     2024: { marathon: 17889, half: 17890 },
@@ -50,6 +54,7 @@ export default {
     2026: { marathon: 21870, half: 21871 },
   },
   raceSlugs: {
+    2021: { marathon: '2021_Columbus_Marathon-Marathon', half: '2021_Columbus_Marathon-Half_Marathon' },
     2022: { marathon: '2022_Columbus_Marathon-Marathon', half: '2022_Columbus_Marathon-Half_Marathon' },
     2023: { marathon: '2023_Columbus_Marathon-Marathon', half: '2023_Columbus_Marathon-Half_Marathon' },
     2024: { marathon: '2024_Columbus_Marathon-Marathon', half: '2024_Columbus_Marathon-Half_Marathon' },
