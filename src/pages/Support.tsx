@@ -80,7 +80,7 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
   const navigate = useNavigate()
 
   const [view, setView] = useState<InboxView>(() => { try { const v = localStorage.getItem('support.view') as InboxView | null; return v && v !== 'mentions' && v !== 'unassigned' ? v : 'all' } catch { return 'all' } })
-  const [sort, setSort] = useState<InboxSort>(() => { try { return (localStorage.getItem('support.sort') as InboxSort) || 'waiting' } catch { return 'waiting' } })
+  const [sort, setSort] = useState<InboxSort>(() => { try { return (localStorage.getItem('support.sort') as InboxSort) || 'priority' } catch { return 'priority' } })
   const [query, setQuery] = useState('')
   const [inbox, setInbox] = useState<InboxPayload | null>(null)
   const [inboxError, setInboxError] = useState<string | null>(null)

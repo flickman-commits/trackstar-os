@@ -51,12 +51,14 @@ function Row({ t, active, onClick }: { t: ThreadRow; active: boolean; onClick: (
         <div className="flex items-center gap-2">
           <ChannelMark channel={t.channel} />
           <span className={`text-[13px] truncate ${bold ? 'font-semibold text-off-black' : 'font-medium text-off-black/85'}`}>{who}</span>
-          {t.priority && <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />}
+          {t.priority && <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" aria-label={t.priorityReason ? `Priority: ${t.priorityReason}` : 'Priority'} />}
           <span className="ml-auto shrink-0 text-[11px] text-off-black/40 tabular-nums">{ago(t.lastMessageAt)}</span>
         </div>
         <div className={`text-[13px] truncate ${bold ? 'text-off-black' : 'text-off-black/70'}`}>{line}</div>
         <div className="mt-0.5 flex items-center gap-2 min-w-0">
-          <span className="text-xs text-off-black/50 truncate flex-1">{t.snippet || ' '}</span>
+          {t.priorityReason
+            ? <span className="text-xs text-amber-700 truncate flex-1" title={`Triage: ${t.priorityReason}`}>{t.priorityReason}</span>
+            : <span className="text-xs text-off-black/50 truncate flex-1">{t.snippet || ' '}</span>}
           <span className="shrink-0 inline-flex items-center gap-1.5 text-[11px] text-off-black/45">
             {wait && wait !== 'just now' && <span className={/d$/.test(wait) ? 'text-red-600 font-medium' : ''} title="Waiting on us">{wait}</span>}
             {snoozed && <Moon className="w-3 h-3" />}

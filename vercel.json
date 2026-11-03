@@ -57,13 +57,17 @@
     {
       "path": "/api/cron/support-playbook",
       "schedule": "0 12 * * 1"
+    },
+    {
+      "path": "/api/cron/support-triage",
+      "schedule": "0 12,17 * * *"
     }
   ],
   "functions": {
     "api/cron/bulk-runs.js": {
       "maxDuration": 300
     },
-    "api/cron/support-playbook.js": {
+    "api/cron/support-*.js": {
       "maxDuration": 300
     },
     "api/cron/artelo-completed-check.js": {

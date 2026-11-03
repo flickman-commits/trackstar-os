@@ -1,7 +1,7 @@
 /**
  * Support: the conversations still open with an order's customer, and a
- * draft reply left on one for a person to read, edit and send from Support.
- * Nothing here sends. Gated on the support capability, like the Support page.
+ * draft reply left on one for a person to read, edit and send from Support,
+ * and the triage pass that stars the urgent ones. Nothing here sends. Gated on the support capability, like the Support page.
  */
 import { z } from 'zod'
 import prisma from '../../../../api/_lib/prisma.js'
@@ -9,6 +9,7 @@ import { ToolError } from '../server.js'
 import { conversationsForOrder } from '../../../domain/support/compose.js'
 import { storeDraft } from '../../../domain/support/draft.js'
 import { findOrdersByNumber, displayNumber } from './orders.js'
+import { triagePending } from '../../../domain/support/triage.js'
 
 export const supportTools = [
   {
@@ -56,6 +57,24 @@ export const supportTools = [
         authorName: `${principal.user.firstName || ''} ${principal.user.lastName || ''}`.trim() || principal.user.email,
       })
       return { summary: `Drafted a reply on "${t.subject || '(no subject)'}"`, threadId: t.id, draftId: note.id, sent: false, next: 'A person reviews and sends it from Support.' }
+    },
+  },
+  {
+    name: 'triage_support',
+    title: 'Triage Support',
+    description: 'Run the support triage pass now: read the open conversations the customer wrote last (and nothing new since the last pass) and star the urgent ones in Support. dryRun returns the decisions without starring anything. It runs on its own twice a day.',
+    scope: 'write',
+    cap: 'support',
+    readOnly: false,
+    input: { dryRun: z.boolean().default(true).describe('true: decide and report, change nothing.') },
+    async handler({ dryRun }) {
+      const out = await triagePending({ dryRun })
+      if (out.status === 'skipped') throw new ToolError(out.reason)
+      return {
+        summary: dryRun ? `Triage dry run: ${out.urgent.length} of ${out.read} urgent` : `Triaged ${out.read} Support conversations, starred ${out.starred}`,
+        dryRun, read: out.read, failed: out.failed, left: out.left, starred: dryRun ? 0 : out.starred,
+        urgent: out.urgent.slice(0, 60).map(u => ({ threadId: u.id, who: u.who, subject: u.subject.slice(0, 120), category: u.category, reason: u.reason, alreadyStarred: u.alreadyStarred })),
+      }
     },
   },
 ]

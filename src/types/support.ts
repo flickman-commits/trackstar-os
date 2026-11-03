@@ -21,6 +21,8 @@ export interface ThreadRow {
   snoozedUntil: string | null
   assignee: Teammate | null
   priority: boolean
+  /** Why the triage pass starred it; empty when a person did. */
+  priorityReason: string
   tags: string[]
   snippet: string
   messageCount: number

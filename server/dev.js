@@ -146,6 +146,7 @@ const routes = [
   { method: 'get',    path: '/api/cron/fulfillment-check', handler: '../api/cron/fulfillment-check.js' },
   { method: 'get',    path: '/api/cron/bulk-runs',         handler: '../api/cron/bulk-runs.js' },
   { method: 'get',    path: '/api/cron/support-playbook',  handler: '../api/cron/support-playbook.js' },
+  { method: 'get',    path: '/api/cron/support-triage',    handler: '../api/cron/support-triage.js' },
   { method: 'post',   path: '/api/support/playbook-review', handler: '../api/support/playbook-review.js' },
   { method: 'get',    path: '/api/public/creator',         handler: '../api/public/creator.js' },
   { method: 'post',   path: '/api/public/creator',         handler: '../api/public/creator.js' },

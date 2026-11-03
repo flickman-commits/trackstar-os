@@ -128,6 +128,8 @@ function row(t, readAt) {
     filtered: Boolean(t.filtered),
     assignee: t.assignee || null,
     priority: t.priority,
+    // Why triage starred it; empty when a person did.
+    priorityReason: t.priority ? t.priorityReason || '' : '',
     tags: t.tags || [],
     snippet: t.snippet,
     messageCount: t.messageCount,
@@ -311,7 +313,7 @@ export async function snooze(id, until, actor) {
 }
 
 export async function setPriority(id, priority, actor) {
-  const t = await prisma.supportThread.update({ where: { id }, data: { priority: Boolean(priority) }, ...withAssignee })
+  const t = await prisma.supportThread.update({ where: { id }, data: { priority: Boolean(priority), priorityReason: '' }, ...withAssignee })
   await event(id, `${actorName(actor)} ${priority ? 'marked this priority' : 'removed priority'}`, actor)
   return row(t)
 }

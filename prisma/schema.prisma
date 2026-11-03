@@ -1247,8 +1247,13 @@ model SupportThread {
   snoozedUntil    DateTime?
   assigneeId      String?
   assignee        User?     @relation("SupportAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  // Starred, the way Intercom marks a priority conversation. A person sets it.
+  // Starred, the way Intercom marks a priority conversation. A person sets
+  // it, or the twice-daily triage pass (support/triage.js) does, with its
+  // one-line reason in priorityReason. Triage never removes a star.
   priority        Boolean   @default(false)
+  priorityReason  String    @default("")
+  // When triage last read this thread; it reads it again once the customer writes after that.
+  triagedAt       DateTime?
   // Free-form labels; the playbook's scenario names are offered as suggestions.
   tags            String[]  @default([])
   // From a sender the team filtered out (vendors, alerts, newsletters): kept,
