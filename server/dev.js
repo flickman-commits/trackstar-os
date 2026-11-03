@@ -190,6 +190,8 @@ const routes = [
   { method: 'post',   path: '/api/finance/timesheets',     handler: '../api/finance/timesheets.js' },
   { method: 'get',    path: '/api/finance/payouts',        handler: '../api/finance/payouts.js' },
   { method: 'post',   path: '/api/finance/payouts',        handler: '../api/finance/payouts.js' },
+  { method: 'get',    path: '/api/finance/race-payouts',   handler: '../api/finance/race-payouts.js' },
+  { method: 'post',   path: '/api/finance/race-payouts',   handler: '../api/finance/race-payouts.js' },
   { method: 'get',    path: '/api/cron/finance-sync',      handler: '../api/cron/finance-sync.js' },
   { method: 'get',    path: '/api/cron/hours-reminders',   handler: '../api/cron/hours-reminders.js' },
   { method: 'post',   path: '/api/support/backfill',       handler: '../api/support/backfill.js' },

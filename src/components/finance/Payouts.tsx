@@ -4,13 +4,14 @@ import { toast } from 'sonner'
 import { Check, DollarSign, Plus, Trash2 } from 'lucide-react'
 import ActionModal from '@/components/ActionModal'
 import CustomCounter from '@/components/CustomCounter'
+import RacePayouts from '@/components/finance/RacePayouts'
 import { btnPrimary, btnSecondary, btnGhost, inputBase, modalInput, modalPrimary, modalCancel, segment, segmentGroup } from '@/lib/ui'
 import { financeApi, usd, hoursText, dayLabel, todayET, mondayOf, addDays } from '@/lib/financeApi'
 import type { PayoutsPayload, PayRun, Rate } from '@/types/finance'
 import { card, ErrorCard, Spinner, StatusChip, tableHead, num } from './bits'
 
-type Tab = 'owed' | 'runs' | 'customs' | 'rates'
-const TABS: [Tab, string][] = [['owed', 'Owed'], ['runs', 'Pay runs'], ['customs', 'Customs'], ['rates', 'Rates']]
+type Tab = 'owed' | 'runs' | 'customs' | 'races' | 'rates'
+const TABS: [Tab, string][] = [['owed', 'Owed'], ['runs', 'Pay runs'], ['customs', 'Customs'], ['races', 'Races'], ['rates', 'Rates']]
 const KIND: Record<string, string> = { customs: 'Customs', hours: 'Hours', designer_fee: 'Designer fee', bonus: 'Bonus', reimbursement: 'Reimbursement', other: 'Other' }
 
 /**
@@ -30,7 +31,7 @@ export default function Payouts() {
   return (
     <div className="space-y-4">
       <div className={segmentGroup}>{TABS.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={segment(tab === k, 'sm')}>{l}{k === 'owed' && data?.owed.totalCents ? <span className="ml-1.5 text-[10px] opacity-70">{usd(data.owed.totalCents)}</span> : null}</button>)}</div>
-      {tab === 'customs' ? <CustomCounter /> : error ? <ErrorCard text={error} /> : !data ? <Spinner /> : tab === 'owed' ? <Owed data={data} reload={load} /> : tab === 'runs' ? <Runs runs={data.runs} rates={data.rates} reload={load} /> : <Rates rates={data.rates} onSaved={setData} />}
+      {tab === 'customs' ? <CustomCounter /> : tab === 'races' ? <RacePayouts /> : error ? <ErrorCard text={error} /> : !data ? <Spinner /> : tab === 'owed' ? <Owed data={data} reload={load} /> : tab === 'runs' ? <Runs runs={data.runs} rates={data.rates} reload={load} /> : <Rates rates={data.rates} onSaved={setData} />}
     </div>
   )
 }

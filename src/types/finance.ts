@@ -47,3 +47,14 @@ export type Owed = { hours: { userId: string; name: string; weeks: OwedWeek[]; m
 export type PayoutLine = { id: string; userId: string; name: string; kind: string; quantity: number | null; rateCents: number | null; amountCents: number; note: string | null; paidAt: string | null; paidRef: string | null; sourceRef: string | null }
 export type PayRun = { id: string; kind: 'hours' | 'monthly'; periodStart: string; periodEnd: string; label: string; status: 'draft' | 'approved' | 'paid'; note: string | null; approvedAt: string | null; paidAt: string | null; createdAt: string; totalCents: number; lines: PayoutLine[] }
 export type PayoutsPayload = { owed: Owed; runs: PayRun[]; rates: Rate[] }
+
+export type RaceTerms = { structure: 'percent' | 'per_order'; pct: number | null; perOrderCents: number | null; assumed: boolean }
+export type RaceSales = { grossCents: number; discountCents: number; refundCents: number; netSalesCents: number; unitsSold: number; orders: number; computedAt: string; products: string[]; canonical: string | null }
+export type RaceReport = { report: string; subject: string; to: string | null; email: string; window: string }
+export type RacePayout = {
+  dealId: string; name: string; stage: string; raceDate: string | null; window: { start: string; end: string } | null; dueDate: string | null; daysToDue: number | null; windowClosed: boolean
+  terms: RaceTerms; termsUsed: RaceTerms | null; poc: { name: string | null; email: string | null } | null; contractUrl: string | null; webUrl: string | null; runners: number | string | null
+  status: 'pending' | 'sent' | 'paid'; sales: RaceSales | null; payoutCents: number | null; sentAt: string | null; paidAt: string | null; paidRef: string | null; note: string | null
+  report: RaceReport | null; attio?: string | null
+}
+export type RacePayoutsPayload = { races: RacePayout[]; rules: { daysBefore: number; daysAfter: number; dueDays: number; defaultPct: number } }

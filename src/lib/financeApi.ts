@@ -1,6 +1,6 @@
 /** Typed client for /api/finance/*, and the money and time spellings the pages share. */
 import { apiFetch } from '@/lib/api'
-import type { DailyPayload, DayInput, HoursPayload, OverviewPayload, PayoutsPayload, PayRun, Person, Rate, SyncInfo, Timesheet } from '@/types/finance'
+import type { DailyPayload, DayInput, HoursPayload, OverviewPayload, PayoutsPayload, PayRun, Person, RacePayout, RacePayoutsPayload, Rate, SyncInfo, Timesheet } from '@/types/finance'
 
 export class FinanceApiError extends Error {}
 
@@ -24,6 +24,9 @@ export const financeApi = {
   review: (id: string, action: 'approve' | 'reject' | 'withdraw', note = '') => post<{ timesheet: Timesheet }>('/api/finance/timesheets', { action, id, note }),
   payouts: () => request<PayoutsPayload>('/api/finance/payouts'),
   payoutAction: <T = PayRun,>(body: Record<string, unknown>) => post<T>('/api/finance/payouts', body),
+  racePayouts: () => request<RacePayoutsPayload>('/api/finance/race-payouts'),
+  racePayoutAction: (body: Record<string, unknown>) => post<{ race: RacePayout }>('/api/finance/race-payouts', body),
+  racePayoutsDue: () => post<{ computed: number; failed: { name: string; error: string }[] }>('/api/finance/race-payouts', { action: 'compute_due' }),
   setHourlyRate: (userId: string, cents: number | null) => post<{ rates: Rate[] }>('/api/finance/payouts', { action: 'set_hourly_rate', userId, cents }),
 }
 

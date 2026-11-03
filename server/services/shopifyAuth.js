@@ -106,6 +106,15 @@ export async function shopifyFetch(endpoint, options = {}) {
     throw new Error(`Shopify API error (${response.status}): ${errorText}`)
   }
 
+  // Cursor pagination: REST lists hand the next page back in the Link
+  // header (since_id is not honored beside a created_at filter). With
+  // `withLink` the caller gets the body and the next page's endpoint, or null.
+  if (options.withLink) {
+    const link = response.headers.get('link') || ''
+    const m = /<([^>]+)>;\s*rel="next"/.exec(link)
+    const next = m ? m[1].replace(/^https?:\/\/[^/]+\/admin\/api\/[^/]+/, '') : null
+    return { data: await response.json(), next }
+  }
   return response.json()
 }
 

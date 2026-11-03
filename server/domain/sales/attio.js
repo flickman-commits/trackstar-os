@@ -215,6 +215,12 @@ export function dealView(record) {
     // Optional: only present if someone adds these to the workspace.
     courseLandmark: val(record, 'course_landmark'),
     identity: val(record, 'identity'),
+    // Race payouts (Finance > Payouts > Races): the share of net sales the
+    // race gets (default 15 when empty), or a flat amount per order when
+    // the workspace has payout_per_order set; the signed contract.
+    revSharePct: val(record, 'rev_share_pct'),
+    payoutPerOrder: val(record, 'payout_per_order'),
+    contractUrl: val(record, 'contract_url'),
     createdAt: record.created_at || null,
     webUrl: record.web_url || null,
   }
