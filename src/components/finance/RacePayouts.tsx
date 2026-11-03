@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Check, Copy, ExternalLink, FileText, RefreshCw, Send, Undo2 } from 'lucide-react'
+import { Check, Copy, ExternalLink, FileText, PencilLine, RefreshCw, Send, Undo2 } from 'lucide-react'
 import ActionModal from '@/components/ActionModal'
 import { btnPrimary, btnSecondary, btnGhost, modalInput, modalPrimary, modalCancel } from '@/lib/ui'
 import { financeApi, usd, dayLabel } from '@/lib/financeApi'
@@ -19,12 +19,13 @@ export default function RacePayouts() {
   const [busy, setBusy] = useState<string | null>(null)
   const [open, setOpen] = useState<RacePayout | null>(null)
   const [paying, setPaying] = useState<RacePayout | null>(null)
+  const [editing, setEditing] = useState<RacePayout | null>(null)
   const load = useCallback(async () => { try { setData(await financeApi.racePayouts()); setError(null) } catch (e) { setError((e as Error).message) } }, [])
   useEffect(() => { load() }, [load])
 
   const act = async (body: Record<string, unknown>, key: string, done: (r: RacePayout) => string) => {
     setBusy(key)
-    try { const { race } = await financeApi.racePayoutAction(body); toast.success(done(race)); setPaying(null); if (open?.dealId === race.dealId) setOpen(race); await load() }
+    try { const { race } = await financeApi.racePayoutAction(body); toast.success(done(race)); setPaying(null); setEditing(null); if (open?.dealId === race.dealId) setOpen(race); await load() }
     catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
   }
   const pullDue = async () => {
@@ -59,7 +60,7 @@ export default function RacePayouts() {
                     <td className="px-3 py-2"><span className="font-medium">{r.name}</span>{r.poc?.name && <span className="block text-off-black/50">{r.poc.name}{r.poc.email ? ` · ${r.poc.email}` : ''}</span>}</td>
                     <td className="px-3 py-2">{r.raceDate ? dayLabel(r.raceDate) : <span className="text-amber-700">no date in Attio</span>}</td>
                     <td className={`px-3 py-2 ${overdue ? 'text-red-600 font-semibold' : ''}`}>{r.dueDate ? <>{dayLabel(r.dueDate)}{r.status === 'pending' && r.daysToDue != null && <span className="block font-normal text-off-black/50">{r.daysToDue > 0 ? `in ${r.daysToDue}d` : r.daysToDue === 0 ? 'today' : `${-r.daysToDue}d ago`}{!r.windowClosed && r.daysToDue <= 0 ? ' · window open' : ''}</span>}</> : '–'}</td>
-                    <td className="px-3 py-2">{termsText(r)}</td>
+                    <td className="px-3 py-2"><button onClick={() => setEditing(r)} className="inline-flex items-center gap-1 hover:underline" title="Change the terms (written to the Attio deal)">{termsText(r)}<PencilLine className="w-3 h-3 text-off-black/40" /></button></td>
                     <td className={`px-3 py-2 ${num}`}>{r.sales ? r.sales.unitsSold.toLocaleString('en-US') : '–'}</td>
                     <td className={`px-3 py-2 ${num}`}>{r.sales ? usd(r.sales.netSalesCents, { cents: true }) : '–'}</td>
                     <td className={`px-3 py-2 ${num} font-semibold`}>{r.payoutCents != null ? usd(r.payoutCents, { cents: true }) : '–'}</td>
@@ -82,6 +83,7 @@ export default function RacePayouts() {
         </div>
       )}
       {open && open.report && <ReportModal r={open} onClose={() => setOpen(null)} />}
+      {editing && <TermsModal r={editing} busy={busy === editing.dealId} onClose={() => setEditing(null)} onSave={b => act({ action: 'set_terms', dealId: editing.dealId, ...b }, editing.dealId, x => `${x.name}: terms saved to Attio`)} />}
       {paying && <PaidModal r={paying} busy={busy === paying.dealId} onClose={() => setPaying(null)} onPay={ref => act({ action: 'paid', dealId: paying.dealId, paidRef: ref }, paying.dealId, x => `${x.name} marked paid${x.attio ? `: ${x.attio}` : ''}`)} />}
     </div>
   )
@@ -114,6 +116,26 @@ function PaidModal({ r, busy, onClose, onPay }: { r: RacePayout; busy: boolean; 
     <ActionModal icon={Check} title="Mark paid" sub={r.name} description={`${usd(r.payoutCents ?? 0, { cents: true })} to the race. Units and net sales are written to the Attio deal.`} onClose={onClose} busy={busy} size="sm"
       footer={<><button onClick={onClose} className={modalCancel} disabled={busy}>Cancel</button><button onClick={() => onPay(ref)} disabled={busy} className={modalPrimary}>Mark paid</button></>}>
       <input value={ref} onChange={e => setRef(e.target.value)} placeholder="How: check number, invoice, transfer" className={modalInput} autoFocus />
+    </ActionModal>
+  )
+}
+
+/** The share or the flat fee, typed here and written to the Attio deal. */
+function TermsModal({ r, busy, onClose, onSave }: { r: RacePayout; busy: boolean; onClose: () => void; onSave: (b: { structure: 'percent' | 'per_order'; pct?: number; perOrder?: number }) => void }) {
+  const [structure, setStructure] = useState<'percent' | 'per_order'>(r.terms.structure)
+  const [pct, setPct] = useState(r.terms.pct != null ? String(r.terms.pct) : '15')
+  const [perOrder, setPerOrder] = useState(r.terms.perOrderCents != null ? String(r.terms.perOrderCents / 100) : '10')
+  const ok = structure === 'percent' ? Number(pct) > 0 : Number(perOrder) > 0
+  return (
+    <ActionModal icon={PencilLine} title="Payout terms" sub={r.name} description="Saved to the deal in Attio (rev_share_pct, or payout_per_order for a flat fee). Sales already pulled are re-priced." onClose={onClose} busy={busy} size="sm"
+      footer={<><button onClick={onClose} className={modalCancel} disabled={busy}>Cancel</button><button onClick={() => onSave(structure === 'percent' ? { structure, pct: Number(pct) } : { structure, perOrder: Number(perOrder) })} disabled={busy || !ok} className={modalPrimary}>Save to Attio</button></>}>
+      <div className="flex gap-2">
+        <button onClick={() => setStructure('percent')} className={`${btnSecondary} flex-1 ${structure === 'percent' ? '!bg-dark-fill !text-white' : ''}`}>Share of net sales</button>
+        <button onClick={() => setStructure('per_order')} className={`${btnSecondary} flex-1 ${structure === 'per_order' ? '!bg-dark-fill !text-white' : ''}`}>Flat fee per order</button>
+      </div>
+      {structure === 'percent'
+        ? <div className="flex items-center gap-2"><input value={pct} onChange={e => setPct(e.target.value)} inputMode="decimal" className={modalInput} autoFocus /><span className="text-off-black/50">%</span></div>
+        : <div className="flex items-center gap-2"><span className="text-off-black/50">$</span><input value={perOrder} onChange={e => setPerOrder(e.target.value)} inputMode="decimal" className={modalInput} autoFocus /><span className="text-off-black/50 whitespace-nowrap">per order</span></div>}
     </ActionModal>
   )
 }

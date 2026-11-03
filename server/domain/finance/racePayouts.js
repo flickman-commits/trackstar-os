@@ -204,3 +204,34 @@ export function reportFor(r) {
   const email = [`Hey ${first},`, '', `Had a great time working with you guys. Here's our sales report for the ${r.name} prints:`, '', report, '', `What's the easiest way to get you guys paid? Do you want a check or do you want to send me an invoice?`, '', `Additionally, would love to hop on a quick post-mortem call and see what we can improve and talk about ideas for next year!`, '', 'Thanks,', 'Matt'].join('\n')
   return { report, subject: `${r.name} Sales Report + Payout | Trackstar`, to: r.poc?.email || null, email, window: `${dayLabel(r.window.start, 'long')} to ${dayLabel(r.window.end, 'long')}` }
 }
+
+/**
+ * Type the terms here and they land on the Attio deal (rev_share_pct, or
+ * payout_per_order for a flat fee), so Attio stays the one place terms live.
+ * Sales already pulled are re-priced at the new terms.
+ */
+export async function setRaceTerms(dealId, { structure, pct, perOrder }, { today = todayET() } = {}) {
+  const deal = await getDeal(dealId, { fresh: true })
+  if (!deal) throw new RacePayoutError('No such deal in Attio', 404)
+  let values
+  if (structure === 'percent') {
+    const n = Number(pct)
+    if (!Number.isFinite(n) || n <= 0 || n > 100) throw new RacePayoutError('The share must be between 0 and 100 percent')
+    values = { rev_share_pct: n, ...(deal.payoutPerOrder != null ? { payout_per_order: null } : {}) }
+  } else if (structure === 'per_order') {
+    const n = Number(perOrder)
+    if (!Number.isFinite(n) || n <= 0 || n > 1000) throw new RacePayoutError('The amount per order must be between $0 and $1,000')
+    values = { payout_per_order: Math.round(n * 100) / 100 }
+  } else throw new RacePayoutError('structure must be percent or per_order')
+  try {
+    await patchDeal(dealId, values)
+  } catch (err) {
+    const msg = String(err?.message || '')
+    if (/payout_per_order/.test(msg) || err?.status === 400) throw new RacePayoutError(`Attio refused the write${/payout_per_order/.test(msg) || structure === 'per_order' ? ': add a "payout_per_order" number attribute to deals in Attio first' : ''}.`)
+    throw err
+  }
+  const fresh = await getDeal(dealId, { fresh: true })
+  const prev = (await loadState([dealId]))[dealId]
+  const state = prev?.sales ? await saveState(dealId, { ...prev, termsUsed: termsFor(fresh) }) : prev
+  return view(fresh, state, today)
+}

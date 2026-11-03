@@ -28,12 +28,12 @@ export const DESTINATIONS = {
   proofs: { label: '#proof-approvals', channel: 'C0AMW4YKY9L', env: 'SLACK_PROOF_WEBHOOK_URL' },
   // Everything the team should see that is not an approval: errors, Artelo
   // problems, proofs sent, comments, questions, bulk runs, files ready.
-  alerts: { label: '#trackstar-alerts', channel: '#trackstar-alerts', env: 'SLACK_PROOF_WEBHOOK_URL' },
+  alerts: { label: '#trackstar-alerts', channel: 'C0CELD9LGNM', env: 'SLACK_PROOF_WEBHOOK_URL' },
   reports: { label: '#trackstar-reports', channel: 'C0CD55QHYJU', env: 'SLACK_REPORTS_WEBHOOK_URL' },
   team: { label: '#all-hands', channel: 'C0A6NQD4PLH', env: 'SLACK_WEBHOOK_URL' },
   design: { label: '#all-hands (design standup)', channel: 'C0A6NQD4PLH', env: 'SLACK_DESIGN_WEBHOOK_URL' },
   creators: { label: '#trackstar-creators', channel: 'C0B5X29BLRE', env: 'SLACK_CREATORS_WEBHOOK_URL' },
-  lookup: { label: '#trackstar-alerts (Instant Lookup)', channel: '#trackstar-alerts', env: 'SLACK_LOOKUP_WEBHOOK_URL' },
+  lookup: { label: '#trackstar-alerts (Instant Lookup)', channel: 'C0CELD9LGNM', env: 'SLACK_LOOKUP_WEBHOOK_URL' },
   support: { label: '#customer-support', channel: 'C0CEB1ANUJX', env: 'SLACK_SUPPORT_WEBHOOK_URL' },
   matt: { label: "Matt's DM", user: () => process.env.SLACK_USER_ID_MATT || 'U01CQFPL78E', env: 'SLACK_DM_WEBHOOK_URL' },
 }

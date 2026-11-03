@@ -5,10 +5,11 @@
  * POST /api/finance/race-payouts { action: 'compute', dealId }     pull the race's sales from Shopify
  *                               { action: 'compute_due' }          every race due and not yet sent
  *                               { action: 'sent' | 'paid' | 'reopen', dealId, paidRef?, note? }
+ *                               { action: 'set_terms', dealId, structure: 'percent' | 'per_order', pct?, perOrder? }   written to the Attio deal
  */
 import { setCors } from '../_lib/auth.js'
 import { requireAdminOnly, recordAudit } from '../_lib/users.js'
-import { listRacePayouts, computeRacePayout, computeDue, setRacePayoutStatus, reportFor, DAYS_BEFORE, DAYS_AFTER, DUE_DAYS, DEFAULT_PCT } from '../../server/domain/finance/racePayouts.js'
+import { listRacePayouts, computeRacePayout, computeDue, setRacePayoutStatus, setRaceTerms, reportFor, DAYS_BEFORE, DAYS_AFTER, DUE_DAYS, DEFAULT_PCT } from '../../server/domain/finance/racePayouts.js'
 import { answerError, body } from '../_lib/finance.js'
 
 const withReport = r => ({ ...r, report: reportFor(r) })
@@ -34,6 +35,12 @@ export default async function handler(req, res) {
       const out = await computeDue()
       await recordAudit({ action: 'race_payout.compute_due', summary: `Pulled sales for ${out.computed} race${out.computed === 1 ? '' : 's'} due a payout${out.failed.length ? ` (${out.failed.length} failed)` : ''}`, detail: out, actor })
       return res.status(200).json(out)
+    }
+    if (b.action === 'set_terms') {
+      const r = withReport(await setRaceTerms(String(b.dealId || ''), { structure: b.structure, pct: b.pct, perOrder: b.perOrder }))
+      const t = r.terms.structure === 'per_order' ? `${usd(r.terms.perOrderCents)} per order` : `${r.terms.pct}% of net sales`
+      await recordAudit({ action: 'race_payout.set_terms', summary: `Set ${r.name}'s payout terms to ${t} (written to the Attio deal)`, detail: { dealId: r.dealId, terms: r.terms }, actor })
+      return res.status(200).json({ race: r })
     }
     if (['sent', 'paid', 'reopen'].includes(b.action)) {
       const r = withReport(await setRacePayoutStatus(String(b.dealId || ''), b.action, { paidRef: b.paidRef, note: b.note }))
