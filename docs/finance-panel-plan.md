@@ -79,24 +79,24 @@ The Daily Scoreboard and The Levers as one table, month picker, a day opens to i
 
 - **Pay runs.** One per period (a month for customs and the designer fee, a week or two for hours, whatever the cadence is). Lines: person, kind (customs, hours, designer fee, bonus, reimbursement, other), quantity x rate, amount, note. Status draft -> approved -> paid; Mark paid records the date and a reference (Venmo, Wise, bank). Nothing moves money; this is the record Matt pays from, and the reason "did I pay Creed for October" has an answer.
 - **Lines come from:** the Custom Counter (customs x rate, new and repeat), approved timesheets (hours x the person's hourly rate, frozen at approval), the designer fee (7.5% of the month's contribution margin, computed from the ledger once Daily has the month; typed until then), and anything else by hand.
-- **Customs** is the Custom Counter moved here wholesale: same UI, same rates editor, same month-end Slack statement cron. `/settings/counter` redirects. The rates editor also gets each person's hourly rate (new column `User.hourlyRateCents`).
+- **Customs** is the Custom Counter moved here wholesale: same UI, same rates editor, same month-end Slack statement cron. `/settings/counter` redirects. The rates editor becomes **Payouts > Rates**: every person's custom rates (new and repeat) and hourly rate side by side, because the rates differ person to person. A change is audited and never touches a week already approved.
 - **Per person:** history of every line and payment, a statement for a period (what the Slack DM already says, as a page), CSV export.
 - **Partner payouts** (race revenue share, the 30/45-day payout the `race-payouts` skill runs from Attio and ClickUp today) belong here too, as a later tab: deal terms from Attio, sales in the race window from the ledger, the report and the email draft. Phase 4.
 
-### Timesheets: hours in Support, approval in Finance
+### Timesheets: everyone logs their own hours, Matt sees them all
 
-**The rep's side, inside Support.** An "Hours" row at the bottom of the views column, next to Macros and Settings, and a small running-timer mark in the header when one is going. It opens the week: seven day columns, each entry a duration and a note (what they were on), typed or from a start/stop timer, a daily totals bar and the week total. "Submit week" asks once, then the week is locked and Matt is pinged. A rejected week comes back unlocked with his note on it. Works on a phone, since that is where a rep may be. Reminders by Slack DM through the per-person webhooks: Monday morning if last week is not submitted; on reject.
+**The team's side.** Every team member with the capability logs their own hours and submits them. Support reps get an "Hours" row at the bottom of the Support views column, next to Macros and Settings, and a small running-timer mark in the header when one is going; everyone else reaches the same week from Hours in the rail's Tools popup, beside Discounts and Pace Converter. Either way it opens the week: seven day columns, each entry a duration and a note (what they were on), typed or from a start/stop timer, a daily totals bar and the week total. "Submit week" asks once, then the week is locked and Matt is pinged. A rejected week comes back unlocked with his note on it. Works on a phone, since that is where a rep may be. Reminders by Slack DM through the per-person webhooks: Monday morning if last week is not submitted; on reject.
 
-**Matt's side, Finance > Timesheets.** Every person's weeks with status and filters (submitted, approved, rejected, by person), per-row Approve or Reject with a note, Approve all for the period. Before approval the row flags what Homebase flags: a day over 12 hours, a working day with nothing, overlapping entries. Approved is locked for everyone; "withdraw approval" is the only way to reopen, and it is audited. Hours x rate land as a payout line the moment a week is approved. A report: hours by person by week, and cost.
+**Matt's side, Finance > Timesheets.** Every person's weeks with status and filters (draft, submitted, approved, rejected, by person), per-row Approve or Reject with a note, Approve all for the period. Draft weeks are in the list with the hours logged so far, so Matt sees anyone's hours at any time, not only once they are submitted. Before approval the row flags what Homebase flags: a day over 12 hours, a working day with nothing, overlapping entries. Approved is locked for everyone; "withdraw approval" is the only way to reopen, and it is audited. Hours x rate land as a payout line the moment a week is approved. A report: hours by person by week, and cost.
 
-**Who can log hours** is a capability (`hours`) in the Roles panel, on by default for Customer Support, so Fulfillment or anyone else hourly can be given it without code. A rep sees only their own hours; Finance sees all. Help shifts (Order Assignment) are a different thing and stay where they are.
+**Who can log hours** is a capability (`hours`) in the Roles panel, on by default for Customer Support and given to anyone else paid by the hour from the Roles panel, no code. A person sees only their own hours; admins see everyone's, drafts included. Matt will add the live team members in Settings > People; their rates go in Payouts > Rates. Help shifts (Order Assignment) are a different thing and stay where they are.
 
 ### Forecast
 
 Two models, both driver-based, both with scenarios as toggles and drivers editable inline (the Runway shape):
 
 1. **Race-driven revenue.** Trackstar's revenue is a calendar of races. For the next 90 days: each race from the Race table x last year's orders for that race (the Order table has them) x a growth factor x AOV, plus a baseline for days with no race. Expected orders and revenue by week; actuals fill in as days pass; variance shown. This is the forecast nobody else can give Matt, because it needs our order history.
-2. **13-week cash flow.** The template Matt opened, in the app: opening balance (manual snapshot, bank API later), cash in from the revenue forecast net of fees with Shopify's payout lag, cash out from Artelo as a share of revenue, the ad spend plan, payouts due, subscriptions and fixed costs, taxes, owner draws. Lowest projected cash and the week it happens. Scenarios: base, push ads, pull back.
+2. **13-week cash flow.** The template Matt opened, in the app: opening balance (a snapshot typed in per bank; Trackstar uses several banks and connecting them is for later, when Matt is ready), cash in from the revenue forecast net of fees with Shopify's payout lag, cash out from Artelo as a share of revenue, the ad spend plan, payouts due, subscriptions and fixed costs, taxes, owner draws. Lowest projected cash and the week it happens. Scenarios: base, push ads, pull back.
 
 Targets (monthly revenue, CM, ad spend) live here and drive the pacing on Overview.
 
@@ -112,7 +112,7 @@ Money is integer cents with a currency (CLAUDE.md). Nothing derived is stored.
 - `PayoutLine`: `payRunId`, `userId`, kind, `quantity`, `rateCents`, `amountCents`, `currency`, `sourceRef` (the month, the timesheet ids), note, `paidAt`, `paidRef`.
 - `FinanceTarget`: month, revenue, CM, ad spend.
 - `ForecastDriver`: scenario, key, value, effective from. `CashSnapshot`: date, cents, source.
-- `User.hourlyRateCents` (nullable).
+- `User.hourlyRateCents` (nullable): the person's own hourly rate, set in Payouts > Rates next to the existing `customRateCents` and `customRepeatRateCents`. A changed rate applies from the next approval; approved weeks keep the rate they were approved at.
 - Audit events for every approval, rejection, withdrawal, mark-paid, rate change and manual cell edit.
 
 ## Data sources, and when each one leaves the sheet
@@ -124,9 +124,9 @@ Money is integer cents with a currency (CLAUDE.md). Nothing derived is stored.
 | Etsy revenue, orders, fees | pasted | 2 | the Etsy client we have (receipts) plus the payment ledger for fees |
 | Production and shipping (Artelo) | pasted | 2 | per order from the order data the import already stores, cross-checked with the landed-cost lookup; Artelo's invoice stays the reference |
 | Meta spend, purchases, value | pasted | 2 | Marketing API insights with a system-user token; a new `meta_ads` Connection with a read-only test |
-| Google Ads | pasted | 4, maybe never | the API needs a developer-token application and the spend is a sliver of Meta's; keep typing it |
-| Cash in the bank | nowhere | 3 | a manual snapshot first; the bank's API if it has one (Mercury does) |
-| Fixed costs, software, the full P&L | QuickBooks | 4 | QuickBooks Online API, P&L by month, read-only |
+| Google Ads spend, conversions, value | pasted | 2 | the Google Ads API: OAuth through the existing Google client plus a developer token (apply for Basic access in Phase 0; the token lives on a manager account); a `google_ads` Connection with a read-only test |
+| Cash in the bank | nowhere | 3 (snapshot) | a balance typed in when it changes, one line per bank; connecting the banks is deliberately later, when Matt is ready |
+| Fixed costs, software, the full P&L | QuickBooks (the books) | 4 | QuickBooks Online API, P&L by month, read-only |
 
 While any column is still manual, the nightly sync reads the sheet's raw tabs into `FinanceDay`. A Refresh button runs it on demand. Automated columns are also written back to the sheet during the transition so the sheet keeps working for anyone used to it; when nothing is manual any more, the write-back stops and the sheet is archived.
 
@@ -138,34 +138,42 @@ While any column is still manual, the nightly sync reads the sheet's raw tabs in
 
 Each one ships on its own and is useful without the next.
 
-**Phase 0, prerequisites (Matt, about an hour).** Who is hourly, their rates, and the pay cadence. Who the designer fee goes to and whether the app should compute it. Which bank, and whether a manual balance is fine to start. Whether QuickBooks is the bookkeeping system of record. Add `read_reports` and `read_shopify_payments` to the Shopify app's scopes. A Meta system-user token with ads_read. Monthly targets for November and December.
+**Phase 0, prerequisites (Matt, about an hour).** Add the live team members in Settings > People and, once Payouts > Rates exists, their rates (or send the rates and I set them). The pay cadence for hours. Who the designer fee goes to and whether the app should compute it. Add `read_reports` and `read_shopify_payments` to the Shopify app's scopes. A Meta system-user token with ads_read. Apply for a Google Ads developer token (Basic access) on the manager account, because approval takes days and Phase 2 needs it. Monthly targets for November and December.
 
-**Phase 1, the hub over the sheet.** The `/finance` route and tile, the sub-nav, `FinanceDay` filled from the sheet nightly and on Refresh, the scoreboard math in `server/domain/finance/`, Overview (tiles, waterfall, trend, levers, needs-you), Daily (table, roll-ups, CSV), the Custom Counter moved to Payouts > Customs with the redirect, the payouts ledger with rates and Mark paid, Timesheets end to end (hours in Support, submit, Slack reminders, approval and locking in Finance, hours into payouts), the `hours` capability, audit events, the MCP tools. Day one value: one place for the scoreboard, the first approved timesheet, and the first pay run.
+**Phase 1, the hub over the sheet.** The `/finance` route and tile, the sub-nav, `FinanceDay` filled from the sheet nightly and on Refresh, the scoreboard math in `server/domain/finance/`, Overview (tiles, waterfall, trend, levers, needs-you), Daily (table, roll-ups, CSV), the Custom Counter moved to Payouts > Customs with the redirect, the payouts ledger with rates and Mark paid, Timesheets end to end (hours from Support and from the rail, drafts visible to admins, submit, Slack reminders, approval and locking in Finance, hours into payouts), per-person rates for customs and hours in Payouts > Rates, the `hours` capability, audit events, the MCP tools. Day one value: one place for the scoreboard, the first approved timesheet, and the first pay run.
 
-**Phase 2, automate the inputs.** Shopify (ShopifyQL and Payments fees), Etsy, Artelo, Meta, each as a Connection with a test; source flags flip from sheet to api; the reconciliation view; mismatch alerts in Needs you; the sheet write-back; the daily Slack scoreboard.
+**Phase 2, automate the inputs.** Shopify (ShopifyQL and Payments fees), Etsy, Artelo, Meta and Google Ads, each as a Connection with a test; source flags flip from sheet to api; the reconciliation view; mismatch alerts in Needs you; the sheet write-back; the daily Slack scoreboard.
 
-**Phase 3, forecast.** The race-driven revenue forecast, the 13-week cash flow with scenarios, targets and pacing on Overview, the cash snapshot.
+**Phase 3, forecast.** The race-driven revenue forecast, the 13-week cash flow with scenarios, targets and pacing on Overview, the cash snapshot typed per bank.
 
-**Phase 4, the rest of the money.** The bank connection, QuickBooks P&L and fixed costs for a full P&L view, partner payouts as a tab, and retiring the sheet once every column is automated and the history is in the ledger.
+**Phase 4, the rest of the money.** QuickBooks P&L and fixed costs for a full P&L view (QuickBooks is the books), partner payouts as a tab, the bank connections when Matt is ready for them (several banks, so one adapter per bank), and retiring the sheet once every column is automated and the history is in the ledger.
 
 ## Decisions this plan makes
 
-- Finance is admin-only as a whole. The one non-admin surface is Hours inside Support.
+- Finance is admin-only as a whole. The one non-admin surface is Hours: in Support for the reps, in the rail's Tools for anyone else with the capability.
+- Everyone logs their own hours and submits them; admins see every week, draft or not, at any time.
+- Rates are per person, for hours as well as customs, set in one place and audited.
 - Hours are weeks of durations with notes and an optional timer, not clock-in and clock-out punches: the reps work remotely and asynchronously, and Matt approves a week, not a shift.
 - Approval locks. The only way to change an approved week is to withdraw the approval, and that is audited.
 - The Custom Counter moves as it is. Same rules, same month-end statement; it gains a home and a pay-run line, not a rewrite.
 - The app records payments; it does not make them. No payroll or bank transfers.
 - One chart dependency (Recharts), styled from the app's tokens.
 
-## Open questions for Matt
+## Answered by Matt, 2026-11-03
 
-1. Who logs hours today (Eli and who else), at what rates, paid weekly, every two weeks or monthly?
+- Team members log their own hours in the tracker and submit them; admins can see everyone's hours as well, at any time.
+- Rates differ by person, so rates are assigned per team member.
+- QuickBooks is the books.
+- Several banks, and not ready to connect them yet. Cash stays a typed snapshot until then.
+- Google Ads gets automated, not typed.
+- The live team members will be added soon.
+
+## Still open
+
+1. Pay cadence for hours: weekly, every two weeks, or monthly?
 2. The designer fee, 7.5% of contribution margin: who receives it, and should the app compute and post it to the pay run, or stay a line Matt types?
-3. Which bank? If Mercury, a read-only connection is a phase 3 item; otherwise the balance is a number typed when it changes.
-4. Is QuickBooks the books? If so phase 4 pulls the P&L from it instead of hand-entering fixed costs.
-5. Google Ads: keep pasting, or is it worth the developer-token application?
-6. November and December targets for revenue, contribution margin and ad spend, so pacing has something to pace against from day one.
-7. Should the daily scoreboard also go to Slack each morning?
+3. November and December targets for revenue, contribution margin and ad spend, so pacing has something to pace against from day one.
+4. Should the daily scoreboard also go to Slack each morning?
 
 ## Not in this plan
 
