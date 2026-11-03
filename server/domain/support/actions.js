@@ -22,7 +22,7 @@ import { appBaseUrl, arteloOrderUrl } from '../../lib/links.js'
 import { setStatus } from './threads.js'
 import { UserError } from './errors.js'
 import { requireConnection } from '../../lib/connections.js'
-import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js'
+import { slackTo } from '../../lib/slack.js'
 
 function actorName(actor) {
   return [actor?.firstName, actor?.lastName].filter(Boolean).join(' ') || 'Someone'
@@ -380,13 +380,10 @@ export async function cancelOrder({ thread, shopifyOrderId, reason, customerConf
 
 /** A line to Matt in Slack with the thread link, and the thread marked escalated. */
 export async function slackMatt({ thread, text, actor }) {
-  const url = process.env.SLACK_DM_WEBHOOK_URL || process.env.SLACK_PROOF_WEBHOOK_URL
-  if (!url) throw new UserError('No Slack webhook is set (SLACK_DM_WEBHOOK_URL)')
   await requireConnection('slack')
   const who = thread.customerName || thread.customerEmail || 'a customer'
   const msg = `:rotating_light: *Support escalation* from ${actorName(actor)}\n*${who}*: ${thread.subject || '(no subject)'}\n${String(text || '').trim() || 'Needs your call.'}\n${threadUrl(thread.id)}`
-  const res = await fetchWithTimeout(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: msg }) })
-  if (!res.ok) throw new Error(`Slack said ${res.status}`)
+  if (!(await slackTo('matt', msg, { or: 'proofs' }))) throw new UserError('Slack did not take the message. Check Settings > Connections > Slack.')
   if (thread.status !== 'escalated') await setStatus(thread.id, 'escalated', actor)
   await event(thread.id, `${actorName(actor)} pinged Matt in Slack${text ? `: ${String(text).trim()}` : ''}`, actor)
   return { ok: true }

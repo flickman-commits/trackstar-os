@@ -23,6 +23,7 @@ import { parseRaceNameFromTitle } from './scrapers/raceNameNormalization.js'
 import { incrementCustomersServed, syncCustomersServedToShopify, getCountedOrderIds, saveCountedOrderIds } from './services/customersServed.js'
 import { isExpeditedShipping, getShippingMethod } from './lib/shipping.js'
 import { fetchWithTimeout } from './lib/fetchWithTimeout.js'
+import { slackTo, slackDm } from './lib/slack.js'
 import { buildShopifyMatchMap, buildEtsyMatchMap, isRushAddonLineItem, isRemovedLineItem, normalizeShopifyLines } from './lib/lineItemMatching.js'
 import { isBulkShopifyOrder } from './domain/bulk/shopifyBulk.js'
 import { assigneeForNewOrder, isAutoAssignee, endExpiredShifts } from './domain/orders/assignment.js'
@@ -1439,25 +1440,19 @@ export async function processOrders(options = {}) {
                 ) {
                   const shippingMethod = getShippingMethod(lineItemShopifyData)
                   const displayNum = lineItemShopifyData?.name || `#${order.orderId}`
-                  const eliDmUrl = process.env.SLACK_ELI_DM_WEBHOOK_URL
-                  const fallbackUrl = process.env.SLACK_PROOF_WEBHOOK_URL
-                  const slackUrl = eliDmUrl || fallbackUrl
-                  if (slackUrl) {
-                    // Artelo lets us pick the shipping label on the order now, so
-                    // nobody has to ask their support. The customer pays $40 for
-                    // expedited, so the label has to come in under that.
-                    const text = `🚀 <@U09UVEP1N3Y> *EXPEDITED ORDER* - *${displayNum}* (${raceName}, ${runnerName})\n` +
-                      `Customer paid for *${shippingMethod || 'expedited'}* shipping. Put this one through right away:\n` +
-                      `• Verify all personalization is complete\n` +
-                      `• Send it to production now (no need to wait for Matt)\n` +
-                      `• In the Artelo order, under Shipping, click *Change shipping method* and pick *UPS Next Day Air Saver*, as long as it is under $40 (what the customer paid). If it is $40 or more, pick the fastest option under $40, and tell Matt if there is none`
-                    fetchWithTimeout(slackUrl, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ text })
-                    }).catch(e => log(`[processOrders] Expedited Slack notification failed: ${e.message}`))
-                    log(`[processOrders] 🚀 Expedited shipping detected on ${order.orderId}-${lineItemIndex} - Slack sent`)
-                  }
+                  // Artelo lets us pick the shipping label on the order now, so
+                  // nobody has to ask their support. The customer pays $40 for
+                  // expedited, so the label has to come in under that.
+                  const text = `🚀 <@U09UVEP1N3Y> *EXPEDITED ORDER* - *${displayNum}* (${raceName}, ${runnerName})\n` +
+                    `Customer paid for *${shippingMethod || 'expedited'}* shipping. Put this one through right away:\n` +
+                    `• Verify all personalization is complete\n` +
+                    `• Send it to production now (no need to wait for Matt)\n` +
+                    `• In the Artelo order, under Shipping, click *Change shipping method* and pick *UPS Next Day Air Saver*, as long as it is under $40 (what the customer paid). If it is $40 or more, pick the fastest option under $40, and tell Matt if there is none`
+                  // Eli's DM, or the proof channel if that does not go through.
+                  slackDm({ slackId: 'U09UVEP1N3Y', firstName: 'Eli' }, text)
+                    .then(sent => sent || slackTo('proofs', text))
+                    .catch(e => log(`[processOrders] Expedited Slack notification failed: ${e.message}`))
+                  log(`[processOrders] 🚀 Expedited shipping detected on ${order.orderId}-${lineItemIndex} - Slack sent`)
                 }
               } catch (e) {
                 log(`[processOrders] Error checking expedited shipping: ${e.message}`)

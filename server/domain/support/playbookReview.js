@@ -17,7 +17,7 @@
  */
 import prisma from '../../db.js'
 import { complete, isLlmConfigured } from '../../lib/llm.js'
-import { postSlack, slackText } from '../../lib/slack.js'
+import { slackTo, slackText } from '../../lib/slack.js'
 import { stripQuoted } from './mailbox.js'
 import { getPlaybook, savePlaybook } from './playbook.js'
 
@@ -148,12 +148,12 @@ function stats(w) {
 /** The cron: run the review and tell Matt what changed. */
 export async function weeklyPlaybookReview() {
   const out = await reviewPlaybook()
-  const hook = process.env.SLACK_DM_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL
+  const post = text => slackTo('matt', text, { or: 'team' })
   if (out.status === 'saved') {
     const lines = out.changes.map(c => `• ${slackText(c.what, 300)} _(${slackText(c.why, 200)})_`).join('\n')
-    await postSlack(hook, `:memo: *Support playbook, weekly review.* ${slackText(out.line)} Claude's drafts now follow these changes:\n${lines}\n\nUndo: Support > Settings > Drafting playbook > History > Restore.`)
+    await post(`:memo: *Support playbook, weekly review.* ${slackText(out.line)} Claude's drafts now follow these changes:\n${lines}\n\nUndo: Support > Settings > Drafting playbook > History > Restore.`)
   } else if (out.status === 'unchanged') {
-    await postSlack(hook, `:memo: *Support playbook, weekly review.* ${slackText(out.line)} Nothing worth changing this week.`)
+    await post(`:memo: *Support playbook, weekly review.* ${slackText(out.line)} Nothing worth changing this week.`)
   }
   return out
 }

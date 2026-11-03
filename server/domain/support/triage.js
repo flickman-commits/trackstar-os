@@ -16,7 +16,7 @@
  */
 import prisma from '../../db.js'
 import { complete, isLlmConfigured } from '../../lib/llm.js'
-import { postSlack, slackText } from '../../lib/slack.js'
+import { slackTo, slackText } from '../../lib/slack.js'
 import { appBaseUrl } from '../../lib/links.js'
 import { customerContext, linkedOrderNumbers, orderNumberWhere } from './threads.js'
 import { ordersBrief, quotedOrderNumbers } from './draft.js'
@@ -157,10 +157,10 @@ export async function triagePending({ dryRun = false } = {}) {
 const whoOf = t => slackText(t.customerName || t.customerEmail || (t.igUsername ? `@${t.igUsername}` : 'Unknown'), 60)
 
 /**
- * The cron: triage, then say so in #trackstar-reports (SLACK_REPORTS_WEBHOOK_URL,
- * Matt's DM until that is set): that it ran, how many it read and how many it
- * marked urgent, by kind. With SLACK_SUPPORT_WEBHOOK_URL set, the support
- * channel also gets every starred open conversation, where to start.
+ * The cron: triage, then say so in #trackstar-reports: that it ran, how many
+ * it read and how many it marked urgent, by kind. Once the 'support'
+ * destination has a channel (server/lib/slack.js), the support team also
+ * gets every starred open conversation there, where to start.
  */
 export async function scheduledTriage() {
   const out = await triagePending()
@@ -183,11 +183,11 @@ export async function scheduledTriage() {
     ...fresh.slice(0, 15).map(u => `• ${link({ id: u.id, customerName: u.who })}: ${slackText(u.reason || URGENT[u.category], 200)}`),
     fresh.length > 15 ? `…and ${fresh.length - 15} more.` : null,
   ].filter(Boolean).join('\n')
-  await postSlack(process.env.SLACK_REPORTS_WEBHOOK_URL || process.env.SLACK_DM_WEBHOOK_URL, report)
+  await slackTo('reports', report, { or: 'matt' })
 
-  if (process.env.SLACK_SUPPORT_WEBHOOK_URL && starred.length) {
+  if (starred.length) {
     const lines = starred.slice(0, 40).map(t => `• ${link(t)}: ${slackText(t.priorityReason || t.subject || 'Marked priority', 200)}`)
-    await postSlack(process.env.SLACK_SUPPORT_WEBHOOK_URL, `:rotating_light: *Start with these ${starred.length}* (Support, sort Priority first):\n${lines.join('\n')}${starred.length > 40 ? `\n…and ${starred.length - 40} more.` : ''}`)
+    await slackTo('support', `:rotating_light: *Start with these ${starred.length}* (Support, sort Priority first):\n${lines.join('\n')}${starred.length > 40 ? `\n…and ${starred.length - 40} more.` : ''}`)
   }
   return out
 }

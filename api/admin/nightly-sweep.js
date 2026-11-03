@@ -31,7 +31,7 @@ import { requireAdminOnly } from '../_lib/users.js'
 import { agentActor } from '../_lib/agentToken.js'
 import { runNightlySweep, combineSweepPasses, NIGHTLY_REPORT_KEY } from '../../server/services/nightlySweep.js'
 import { formatSweepForSlack, formatSweepAsMarkdown, formatSweepBrief } from '../../server/services/nightlySweepReport.js'
-import { fetchWithTimeout } from '../../server/lib/fetchWithTimeout.js'
+import { slackTo } from '../../server/lib/slack.js'
 
 /**
  * Park a rendered report where the morning digest reads it.
@@ -131,22 +131,9 @@ async function storeFailedRun(notes) {
 }
 
 async function postToSlack(text) {
-  const url = process.env.SLACK_DM_WEBHOOK_URL || process.env.SLACK_PROOF_WEBHOOK_URL
-  if (!url) {
-    console.warn('[nightly-sweep] no Slack webhook configured - skipping the report')
-    return { sent: false, reason: 'no webhook configured' }
-  }
-  const resp = await fetchWithTimeout(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
-  })
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => '')
-    console.error(`[nightly-sweep] Slack rejected the report (${resp.status}): ${body.slice(0, 200)}`)
-    return { sent: false, reason: `Slack ${resp.status}` }
-  }
-  return { sent: true }
+  if (await slackTo('matt', text, { or: 'proofs' })) return { sent: true }
+  console.warn('[nightly-sweep] Slack did not take the report')
+  return { sent: false, reason: 'Slack is not set up or did not answer' }
 }
 
 export default async function handler(req, res) {

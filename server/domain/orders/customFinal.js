@@ -18,7 +18,7 @@ import { BUCKET } from '../render/jobs.js'
 import { deliverEverywhere } from '../render/review.js'
 import { setDesignStatus } from './designStatus.js'
 import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js'
-import { postSlack, slackText } from '../../lib/slack.js'
+import { slackTo, slackText } from '../../lib/slack.js'
 import { arteloOrderUrl } from '../../lib/links.js'
 import { queueSend, sendState } from '../render/arteloSend.js'
 
@@ -116,7 +116,7 @@ async function pingToAttach(order, fp, actor) {
     fp.driveUrl ? `• <${fp.driveUrl}|Saved to Drive>` : `• ⚠️ Not in Drive yet${fp.driveError ? `: ${slackText(fp.driveError, 200)}` : ''}`,
     artelo ? `• <${artelo}|Open the Artelo order>` : null,
   ].filter(Boolean)
-  await postSlack(process.env.SLACK_PROOF_WEBHOOK_URL, lines.join('\n'))
+  await slackTo('proofs', lines.join('\n'))
 }
 
 /** The newest final PDF for the order: where it went, and a link to open it. */

@@ -42,7 +42,7 @@ import { getCustomersServedInfo, syncCustomersServedToShopify, setCustomersServe
 import { shopifyFetch, shopifyGraphQL } from '../../server/services/shopifyAuth.js'
 import { getRaceShorthands } from '../../server/scrapers/index.js'
 import WeatherService from '../../server/services/WeatherService.js'
-import { fetchWithTimeout } from '../../server/lib/fetchWithTimeout.js'
+import { slackTo, slackApi } from '../../server/lib/slack.js'
 import { sendPublicError } from '../../server/lib/publicError.js'
 import { sendEmail } from '../../server/lib/email.js'
 import { designDueDate } from '../../server/domain/orders/designDue.js'
@@ -569,18 +569,9 @@ async function handleNotifyCustomDelay({ orderNumber, daysLate }, res) {
     }
   })
 
-  // Slack DM to Matt — fire-and-forget. Uses the DM webhook if set, falls
-  // back to the proof channel webhook.
-  const slackUrl = process.env.SLACK_DM_WEBHOOK_URL || process.env.SLACK_PROOF_WEBHOOK_URL
-  if (slackUrl) {
-    const dueDateText = originalDueDate ? ` (was due ${originalDueDate})` : ''
-    const text = `⏰ *Custom-order delay notice sent* - order *${displayNum}* for ${existing.customerName || 'customer'} (${existing.raceName || 'custom design'}). Promised *${days} day${days === 1 ? '' : 's'}* late${dueDateText}. Email went to ${existing.customerEmail}.`
-    fetchWithTimeout(slackUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    }).catch(e => console.warn('[actions/notify-custom-delay] Slack notify failed:', e.message))
-  }
+  // Slack DM to Matt, fire-and-forget; the proof channel if his DM is not set up.
+  const dueDateText = originalDueDate ? ` (was due ${originalDueDate})` : ''
+  slackTo('matt', `⏰ *Custom-order delay notice sent* - order *${displayNum}* for ${existing.customerName || 'customer'} (${existing.raceName || 'custom design'}). Promised *${days} day${days === 1 ? '' : 's'}* late${dueDateText}. Email went to ${existing.customerEmail}.`, { or: 'proofs' })
 
   console.log(`[actions/notify-custom-delay] Order ${orderNumber}: delay email sent (${days} days late)`)
   return res.status(200).json({ success: true, order: withoutRawOrderData(order) })
@@ -678,16 +669,7 @@ async function handleMessageCustomer({ orderId, body }, res) {
   // Note: we intentionally do NOT change designStatus here. A question is
   // orthogonal to design progress — the order stays in Dan's queue until he
   // actually sends proofs.
-  const slackUrl = process.env.SLACK_PROOF_WEBHOOK_URL
-  if (slackUrl) {
-    fetchWithTimeout(slackUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: `💬 Question sent to *${existing.customerName || 'customer'}* for order *${displayNum}* - emailed ${existing.customerEmail}. I'll ping you here when they reply.`,
-      }),
-    }).catch(e => console.warn('[actions/message-customer] Slack notify failed:', e.message))
-  }
+  slackTo('proofs', `💬 Question sent to *${existing.customerName || 'customer'}* for order *${displayNum}* - emailed ${existing.customerEmail}. I'll ping you here when they reply.`)
 
   console.log(`[actions/message-customer] Order ${existing.orderNumber}: question sent to ${existing.customerEmail}`)
   return res.status(200).json({ success: true, message, portalUrl })
@@ -917,16 +899,8 @@ async function handleFeatureRequest({ type, description }, res) {
     ]
   }
 
-  try {
-    const slackResponse = await fetchWithTimeout(process.env.SLACK_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(message)
-    })
-
-    if (!slackResponse.ok) throw new Error('Failed to send message to Slack')
-  } catch (slackErr) {
-    console.error(`[actions/feature-request] Slack send failed:`, slackErr.message)
+  if (!(await slackTo('team', message))) {
+    console.error('[actions/feature-request] Slack send failed')
     return res.status(500).json({ error: 'Failed to send request to Slack' })
   }
 
@@ -993,13 +967,7 @@ async function handleMondayPipeline(res) {
       ]
     }
 
-    const slackResponse = await fetchWithTimeout(process.env.SLACK_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(message)
-    })
-
-    if (!slackResponse.ok) throw new Error('Failed to send Slack message')
+    if (!(await slackTo('team', message))) throw new Error('Failed to send Slack message')
 
     console.log(`[actions/monday-pipeline] Sent pipeline summary: ${total} orders, ${urgentCount} urgent`)
     return res.status(200).json({ success: true, total, urgentCount, revisionCount, awaitingCustomerCount })
@@ -1109,18 +1077,7 @@ async function handleDailyDesignUpdate(res) {
       ]
     }
 
-    const webhookUrl = process.env.SLACK_DESIGN_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL
-    if (!webhookUrl) {
-      console.warn('[actions/daily-design-update] No webhook URL configured - skipping post')
-      return res.status(200).json({ success: false, error: 'no webhook configured' })
-    }
-
-    const slackResponse = await fetchWithTimeout(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(message),
-    })
-    if (!slackResponse.ok) throw new Error(`Slack post failed: ${slackResponse.status}`)
+    if (!(await slackTo('design', message, { or: 'team' }))) throw new Error('Slack post failed')
 
     console.log(`[actions/daily-design-update] Posted standup: ${customOrders.length} custom (${overdue.length} overdue, ${dueNext7Days.length} due next 7 days), ${standardCount} standard`)
     return res.status(200).json({
@@ -1490,12 +1447,20 @@ async function handleHealthCheck(res, { sendSlack = false } = {}) {
     }
   })()
 
-  // 5. Slack webhook
-  results.checks.slack = (() => {
+  // 5. Slack: the bot's token (asks Slack who it is), else the proof channel's webhook
+  results.checks.slack = await (async () => {
+    if (process.env.SLACK_BOT_TOKEN) {
+      try {
+        const me = await slackApi('auth.test')
+        return { status: 'ok', detail: `Bot @${me.user} in ${me.team}` }
+      } catch (err) {
+        return { status: 'error', detail: String(err.message).slice(0, 120) }
+      }
+    }
     const url = process.env.SLACK_PROOF_WEBHOOK_URL
-    if (!url) return { status: 'error', detail: 'Missing SLACK_PROOF_WEBHOOK_URL' }
+    if (!url) return { status: 'error', detail: 'Missing SLACK_BOT_TOKEN' }
     if (!url.startsWith('https://hooks.slack.com/')) return { status: 'error', detail: 'Webhook URL format invalid' }
-    return { status: 'ok', detail: 'Webhook URL configured' }
+    return { status: 'ok', detail: 'Webhook URL configured (no bot token)' }
   })()
 
   // 5b. Scrapers (chip-time fixtures) — catches gun-time regressions early
@@ -1536,7 +1501,7 @@ async function handleHealthCheck(res, { sendSlack = false } = {}) {
       'DATABASE_URL', 'ADMIN_SECRET', 'CRON_SECRET',
       'SHOPIFY_STORE', 'SHOPIFY_CLIENT_ID', 'SHOPIFY_CLIENT_SECRET',
       'ETSY_API_KEY', 'ETSY_SHARED_SECRET', 'ETSY_SHOP_ID',
-      'RESEND_API_KEY', 'SLACK_PROOF_WEBHOOK_URL', 'SLACK_DM_WEBHOOK_URL',
+      'RESEND_API_KEY', 'SLACK_BOT_TOKEN',
       'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY',
     ]
     const missing = required.filter(k => !process.env[k])
@@ -1549,9 +1514,8 @@ async function handleHealthCheck(res, { sendSlack = false } = {}) {
   if (statuses.some(s => s === 'error')) results.overall = 'degraded'
   if (statuses.filter(s => s === 'error').length >= 3) results.overall = 'critical'
 
-  // Send to Slack DM (falls back to team channel if DM webhook not set)
-  const slackHealthUrl = process.env.SLACK_DM_WEBHOOK_URL || process.env.SLACK_PROOF_WEBHOOK_URL
-  if (sendSlack && slackHealthUrl) {
+  // Send to Matt's DM (the proof channel if that is not set up)
+  if (sendSlack) {
     const emoji = { healthy: '✅', degraded: '⚠️', critical: '🚨' }
     const checkLines = Object.entries(results.checks).map(([name, check]) => {
       const icon = check.status === 'ok' ? '✅' : check.status === 'warn' ? '⚠️' : '❌'
@@ -1563,15 +1527,7 @@ async function handleHealthCheck(res, { sendSlack = false } = {}) {
       '', ...checkLines, '', `_${results.timestamp}_`
     ].join('\n')
 
-    try {
-      await fetchWithTimeout(slackHealthUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
-      })
-    } catch (err) {
-      console.error('[health] Failed to send Slack report:', err.message)
-    }
+    if (!(await slackTo('matt', text, { or: 'proofs' }))) console.error('[health] Failed to send Slack report')
   }
 
   const httpStatus = results.overall === 'healthy' ? 200 : 503

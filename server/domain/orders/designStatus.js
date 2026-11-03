@@ -18,7 +18,7 @@ import prisma from '../../db.js'
 import { ensureApprovalToken } from '../../../api/_lib/approvalToken.js'
 import { recordAudit } from '../../../api/_lib/users.js'
 import { describeOrder, assertArteloHasIt } from './complete.js'
-import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js'
+import { slackTo } from '../../lib/slack.js'
 
 export const DESIGN_STATUSES = ['not_started', 'in_progress', 'awaiting_review', 'in_revision', 'approved_by_customer', 'final_pdf_uploaded', 'sent_to_production']
 
@@ -68,15 +68,11 @@ export async function setDesignStatus(existing, designStatus, completedById = nu
     })
   }
 
-  if (designStatus === 'sent_to_production' && existing.trackstarOrderType === 'race_partner' && process.env.SLACK_PROOF_WEBHOOK_URL) {
+  if (designStatus === 'sent_to_production' && existing.trackstarOrderType === 'race_partner') {
     const shopifyData = existing.shopifyOrderData
     const displayNum = (shopifyData && typeof shopifyData === 'object' && 'name' in shopifyData)
       ? String(shopifyData.name) : `#${existing.parentOrderNumber}`
-    fetchWithTimeout(process.env.SLACK_PROOF_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: `🖨️ <@U09UVEP1N3Y> Final PDF ready for order *${displayNum}* - ready for production!` }),
-    }).catch(e => console.warn('[designStatus] Slack failed:', e.message))
+    slackTo('proofs', `🖨️ <@U09UVEP1N3Y> Final PDF ready for order *${displayNum}* - ready for production!`)
   }
   return order
 }

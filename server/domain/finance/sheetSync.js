@@ -15,7 +15,8 @@ import prisma from '../../db.js'
 import { readRanges, listTabTitles } from '../../services/googleSheets.js'
 import { todayET, isValidDay } from './periods.js'
 
-export const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1yKe9O8XAHXRxBPlOFKN4pMNlH-eYTsdsLNJsw6Tctwg'
+export const SHEET_ID = '1yKe9O8XAHXRxBPlOFKN4pMNlH-eYTsdsLNJsw6Tctwg'
+export const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}`
 
 /** Each tab: its header names -> FinanceDay field, and whether it is money. */
 export const TABS = [
@@ -90,10 +91,10 @@ const STATUS_KEY = 'finance_sheet_sync'
  */
 export async function syncFromSheet({ since = null, now = new Date() } = {}) {
   const today = todayET(now)
-  const titles = await listTabTitles()
+  const titles = await listTabTitles(SHEET_ID)
   const missingTabs = TABS.filter(t => !titles.includes(t.title)).map(t => t.title)
   const present = TABS.filter(t => titles.includes(t.title))
-  const grids = await readRanges(present.map(t => `'${t.title}'!A3:Z400`))
+  const grids = await readRanges(present.map(t => `'${t.title}'!A3:Z400`), { spreadsheetId: SHEET_ID })
   const byDay = new Map()
   const latest = {}
   present.forEach((tab, i) => {

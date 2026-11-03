@@ -1,9 +1,9 @@
-
-import { fetchWithTimeout } from '../../server/lib/fetchWithTimeout.js'/**
-import { isConnectionOn } from '../../server/lib/connections.js'
- * Real-time error alerting to Slack.
- * Call alertError() when a critical operation fails — sends immediately to Slack.
+/**
+ * Real-time error alerting to Slack (#proof-approvals, where the team looks).
+ * Call alertError() when a critical operation fails. Never throws: an alert
+ * that cannot reach Slack is logged and the caller carries on.
  */
+import { slackTo } from '../../server/lib/slack.js'
 
 /**
  * Send an alert to Slack when something breaks in production.
@@ -12,32 +12,10 @@ import { isConnectionOn } from '../../server/lib/connections.js'
  * @param {Object} [meta] - Optional metadata (orderId, etc.)
  */
 export async function alertError(context, error, meta = {}) {
-  const webhookUrl = process.env.SLACK_PROOF_WEBHOOK_URL
-  if (!webhookUrl) {
-    console.error(`[alert] No Slack webhook configured. Error in ${context}:`, error)
-    return
-  }
-
-  if (!(await isConnectionOn('slack'))) {
-    console.error(`[alert] Slack is switched off. Error in ${context}:`, error)
-    return
-  }
-
   const errorMsg = error instanceof Error ? error.message : String(error)
   const metaStr = Object.keys(meta).length
     ? '\n' + Object.entries(meta).map(([k, v]) => `• ${k}: ${v}`).join('\n')
     : ''
-
-  const text = `🚨 *System Alert - ${context}*\n\`${errorMsg}\`${metaStr}`
-
-  try {
-    await fetchWithTimeout(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
-    })
-  } catch (slackErr) {
-    // If Slack itself is down, just log — don't throw
-    console.error('[alert] Failed to send Slack alert:', slackErr.message)
-  }
+  const sent = await slackTo('proofs', `🚨 *System Alert - ${context}*\n\`${errorMsg}\`${metaStr}`).catch(() => false)
+  if (!sent) console.error(`[alert] Could not reach Slack. Error in ${context}:`, error)
 }

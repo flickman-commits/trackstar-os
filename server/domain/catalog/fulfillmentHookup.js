@@ -21,8 +21,7 @@
 import prisma from '../../db.js'
 import { shopifyGraphql } from '../../services/shopifyProducts.js'
 import { clearTokenCache } from '../../services/shopifyAuth.js'
-import { isConnectionOn } from '../../lib/connections.js'
-import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js'
+import { slackTo } from '../../lib/slack.js'
 
 export const ARTELO_LOCATION_ID = 'gid://shopify/Location/110232568091'
 const IGNORE_SKUS = new Set([])
@@ -60,9 +59,7 @@ async function exactCheck() {
 }
 
 async function post(text) {
-  const url = process.env.SLACK_PROOF_WEBHOOK_URL
-  if (!url || !(await isConnectionOn('slack'))) { console.log('[fulfillment-hookup]', text); return }
-  await fetchWithTimeout(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) }, 10000).catch(e => console.error('[fulfillment-hookup] Slack', e.message))
+  if (!(await slackTo('proofs', text, { timeoutMs: 10000 }))) console.log('[fulfillment-hookup]', text)
 }
 
 /**

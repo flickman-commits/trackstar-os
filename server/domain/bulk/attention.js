@@ -11,7 +11,7 @@
 import prisma from '../../db.js'
 import { addressComplete, orgShipTo, researchPending } from './bulkOrders.js'
 import { templateKey } from '../render/templates.js'
-import { postSlack, slackText } from '../../lib/slack.js'
+import { slackTo, slackText } from '../../lib/slack.js'
 
 const DAY = 864e5
 const LEAD_DAYS = 7
@@ -90,13 +90,13 @@ export async function bulkMorning({ budgetMs = 240_000, now = new Date() } = {})
     }
   }
   const runs = await bulkNeedingAttention(now)
-  if (runs.length && process.env.SLACK_PROOF_WEBHOOK_URL) {
+  if (runs.length) {
     const lines = runs.map(r => {
       const when = r.raced ? `due ${r.dueDate ? day(r.dueDate) : 'unset'}${r.overdue ? ' (OVERDUE)' : ''}` : `race ${day(r.raceDate)}`
       const did = researched[r.number] ? ` Researched ${researched[r.number]} this morning.` : ''
       return `• *${slackText(r.number)} ${slackText(r.partnerName)}*, ${slackText(r.race)}, ${when}${r.owner ? `, ${slackText(r.owner)}` : ''}: ${r.blockers.length ? slackText(r.blockers.join(', ')) : 'ready to submit to Artelo'}.${did}`
     })
-    await postSlack(process.env.SLACK_PROOF_WEBHOOK_URL, `:package: *Bulk orders this week* (Fulfillment > Bulk):\n${lines.join('\n')}`)
+    await slackTo('proofs', `:package: *Bulk orders this week* (Fulfillment > Bulk):\n${lines.join('\n')}`)
   }
   return { researched, runs: runs.map(r => ({ number: r.number, blockers: r.blockers })) }
 }

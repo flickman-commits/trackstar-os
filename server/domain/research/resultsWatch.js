@@ -18,7 +18,7 @@ import prisma from '../../db.js'
 import { researchService } from '../../services/ResearchService.js'
 import { getScraperForRace, getCanonicalRaceName } from '../../scrapers/index.js'
 import { ensureOverridesLoaded } from '../../scrapers/scraperOverrides.js'
-import { postSlack, slackText } from '../../lib/slack.js'
+import { slackTo, slackText } from '../../lib/slack.js'
 
 const DAY = 24 * 60 * 60 * 1000
 const WATCH_DAYS = 14
@@ -27,7 +27,8 @@ const RESEARCH_BUDGET_MS = 120 * 1000
 const BACKLOG_DAYS = 3
 const POSTED = 'results_posted:'
 
-const hook = () => process.env.SLACK_DM_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL
+// Matt's DM, or the team channel if that is not set up.
+const post = text => slackTo('matt', text, { or: 'team' })
 
 export async function watchOfficialResults() {
   await ensureOverridesLoaded()
@@ -54,7 +55,7 @@ export async function watchOfficialResults() {
     await prisma.systemConfig.create({ data: { key, value: at } })
     out.posted.push({ race: name, year: r.year })
     const waiting = (await waitingOrders(name, r.year, new Date(at))).length
-    await postSlack(hook(), `:checkered_flag: *Official ${slackText(name)} ${r.year} results are posted.* Instant Lookup finds runners now. Looking up the ${waiting} waiting order${waiting === 1 ? '' : 's'} over the next runs; found ones render on their own.`).catch(() => {})
+    await post(`:checkered_flag: *Official ${slackText(name)} ${r.year} results are posted.* Instant Lookup finds runners now. Looking up the ${waiting} waiting order${waiting === 1 ? '' : 's'} over the next runs; found ones render on their own.`).catch(() => {})
   }
 
   // 2. The backlog of every race year posted in the last few days, time boxed.
@@ -85,7 +86,7 @@ export async function watchOfficialResults() {
       if (!(await prisma.systemConfig.findUnique({ where: { key: doneKey } }))) {
         await prisma.systemConfig.create({ data: { key: doneKey, value: new Date().toISOString() } })
         const missing = await stillMissing(name, year)
-        await postSlack(hook(), `:white_check_mark: *${slackText(name)} ${year}: every waiting order has been looked up* in the official results.${missing ? ` ${missing} still have no result (name or year mismatch); they are under Runner not found.` : ''}`).catch(() => {})
+        await post(`:white_check_mark: *${slackText(name)} ${year}: every waiting order has been looked up* in the official results.${missing ? ` ${missing} still have no result (name or year mismatch); they are under Runner not found.` : ''}`).catch(() => {})
       }
     }
   }

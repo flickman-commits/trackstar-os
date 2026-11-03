@@ -11,6 +11,7 @@
 import { google } from './google.js'
 import { fetchWithTimeout } from './fetchWithTimeout.js'
 import { requireConnection } from './connections.js'
+import { slackApi, DESTINATIONS } from './slack.js'
 
 const short = err => String(err?.message || err || 'failed').split('\n')[0].slice(0, 160)
 
@@ -88,8 +89,26 @@ const TESTS = {
   },
   async slack() {
     await requireConnection('slack')
-    const set = Object.keys(process.env).filter(k => /^SLACK_.*WEBHOOK_URL$/.test(k) && process.env[k])
-    return `${set.length} webhook${set.length === 1 ? '' : 's'} set (not pinged, to keep channels quiet)`
+    const hooks = Object.keys(process.env).filter(k => /^SLACK_.*WEBHOOK_URL$/.test(k) && process.env[k]).length
+    if (!process.env.SLACK_BOT_TOKEN) return `No bot token; ${hooks} webhook${hooks === 1 ? '' : 's'} set (not pinged, to keep channels quiet)`
+    // Who the token is, and whether the bot is in each channel it posts to (read-only, nothing is posted).
+    const me = await slackApi('auth.test')
+    const notIn = []
+    let unchecked = false
+    for (const d of Object.values(DESTINATIONS)) {
+      if (!d.channel) continue
+      try {
+        const info = await slackApi('conversations.info', { channel: d.channel })
+        if (!info.channel?.is_member) notIn.push(d.label)
+      } catch (err) {
+        // Reading channel membership needs channels:read and groups:read; posting does not.
+        if (/missing_scope/.test(err.message)) { unchecked = true; break }
+        notIn.push(d.label)
+      }
+    }
+    const where = unchecked ? ' (add the channels:read and groups:read scopes to see which channels it is in)'
+      : notIn.length ? `. Not in ${notIn.join(', ')}: /invite it there` : ', in every channel it posts to'
+    return `Bot @${me.user} in ${me.team}${where}`
   },
 }
 

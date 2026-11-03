@@ -48,7 +48,7 @@ export const CONNECTIONS = [
   { id: 'attio', label: 'Attio', what: 'The CRM behind Sales', env: ['ATTIO_API_KEY'] },
   { id: 'claude', label: 'Claude', what: 'Support drafts, sales drafts, teaching, the research agent', envAny: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'LLM_BASE_URL'] },
   { id: 'resend', label: 'Resend (email)', what: 'Proof emails and designer messages to customers', env: ['RESEND_API_KEY'] },
-  { id: 'slack', label: 'Slack', what: 'Team pings and alerts', envAny: ['SLACK_PROOF_WEBHOOK_URL', 'SLACK_WEBHOOK_URL', 'SLACK_CREATORS_WEBHOOK_URL'] },
+  { id: 'slack', label: 'Slack', what: 'Team pings, alerts and DMs, through the TrackstarOS bot', envAny: ['SLACK_BOT_TOKEN', 'SLACK_PROOF_WEBHOOK_URL', 'SLACK_WEBHOOK_URL'], as: () => (env('SLACK_BOT_TOKEN') ? 'TrackstarOS bot' : 'Webhooks only (no SLACK_BOT_TOKEN)') },
   // Not a vendor: the Illustrator Mac(s) running worker/render-worker.mjs. It
   // is started on the Mac (npm run worker); a web page cannot launch it. Off
   // pauses the queue: workers keep checking in but are handed no jobs, and

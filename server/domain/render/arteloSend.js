@@ -36,7 +36,7 @@ import { recordAudit } from '../../../api/_lib/users.js'
 import { completeOrder, describeOrder } from '../orders/complete.js'
 import { setDesignStatus } from '../orders/designStatus.js'
 import { unpaidPhotoRows } from '../orders/photoPayment.js'
-import { postSlack, slackText } from '../../lib/slack.js'
+import { slackTo, slackText } from '../../lib/slack.js'
 import { arteloOrderUrl } from '../../lib/links.js'
 import { sendStateOf, WAITING, EXPEDITED } from './sendState.js'
 import { isExpeditedShipping } from '../../lib/shipping.js'
@@ -183,7 +183,7 @@ async function pingStuck(job, error) {
   const order = await prisma.order.findUnique({ where: { id: job.orderId }, select: ORDER_SELECT }).catch(() => null)
   if (!order) return
   const link = arteloOrderUrl(order.arteloOrderData?.id)
-  await postSlack(process.env.SLACK_PROOF_WEBHOOK_URL, [
+  await slackTo('proofs', [
     `⚠️ Approved order *${slackText(displayNumber(order))}*${order.runnerName ? ` (${slackText(order.runnerName)})` : ''} did not go to production: ${slackText(error, 300)}`,
     link ? `<${link}|Open the Artelo order>; once it is sorted, Send now on the order in the tool.` : null,
   ].filter(Boolean).join('\n')).catch(() => {})

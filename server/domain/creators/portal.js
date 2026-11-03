@@ -11,7 +11,7 @@ import prisma from '../../db.js'
 import { linkCreatorSamples } from './creatorSample.js'
 import { listWinningAds } from './winningAds.js'
 import { publicPrintCatalog } from '../catalog/printCatalog.js'
-import { postSlack, slackText } from '../../lib/slack.js'
+import { slackTo, slackText } from '../../lib/slack.js'
 import { productionStatus } from '../orders/productionStatus.js'
 
 /** A mistake the applicant can fix; the message is safe to show them. */
@@ -155,8 +155,6 @@ export async function submitOnboarding(token, data) {
 }
 
 async function pingSampleRequested(creator) {
-  const webhookUrl = process.env.SLACK_CREATORS_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL
-  if (!webhookUrl) return
   const mention = process.env.SLACK_USER_ID_MATT ? `<@${process.env.SLACK_USER_ID_MATT}> ` : ''
   const appUrl = process.env.APP_BASE_URL || ''
   const lines = [
@@ -167,5 +165,5 @@ async function pingSampleRequested(creator) {
     `Ships to: ${slackText([creator.shippingCity, creator.shippingState].filter(Boolean).join(', ') || 'address on file')}`,
     appUrl ? `\n\nReview & approve → ${appUrl}/creators` : '',
   ].filter(Boolean)
-  await postSlack(webhookUrl, lines.join('\n'))
+  await slackTo('creators', lines.join('\n'), { or: 'team' })
 }

@@ -9,7 +9,7 @@
  * api/_lib/prisma.js re-exports this so existing handlers keep working.
  */
 import { PrismaClient } from '@prisma/client'
-import { postSlack } from './lib/slack.js'
+import { slackTo } from './lib/slack.js'
 
 /**
  * On Vercel every function instance has its own pool, and Prisma's default
@@ -50,9 +50,7 @@ function alertPoolFull(err, retried) {
   const now = Date.now()
   if (now - lastAlertAt < ALERT_EVERY_MS) return
   lastAlertAt = now
-  const hook = process.env.SLACK_PROOF_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL
-  if (!hook) return
-  postSlack(hook, `:rotating_light: *Supabase pooler full (EMAXCONN)* ${retried ? 'The retry got through.' : 'The retry failed too, so someone saw an error.'} If this keeps up, bump the Supabase compute tier (client connections are 200 on Micro). \`${String(err?.message || err).split('\n').pop().trim().slice(0, 200)}\``).catch(() => {})
+  slackTo('proofs', `:rotating_light: *Supabase pooler full (EMAXCONN)* ${retried ? 'The retry got through.' : 'The retry failed too, so someone saw an error.'} If this keeps up, bump the Supabase compute tier (client connections are 200 on Micro). \`${String(err?.message || err).split('\n').pop().trim().slice(0, 200)}\``, { or: 'team' }).catch(() => {})
 }
 function withRetry(client) {
   return client.$extends({

@@ -17,7 +17,7 @@
  *                     buffer in one is invisible to the other.
  */
 import prisma from '../../api/_lib/prisma.js'
-import { fetchWithTimeout } from './fetchWithTimeout.js'
+import { slackTo } from './slack.js'
 
 // An outage: in the last hour, at least OUTAGE_MIN shopper lookups for one race
 // failed and they were at least half of its lookups. One ping per race per 6 hours.
@@ -143,11 +143,6 @@ export async function maybeAlertLookupError({ race, year, errorType, detail }) {
   const now = Date.now()
   if (now - (lastAlertAt.get(race) || 0) < ALERT_DEDUPE_MS) return
 
-  const slackUrl =
-    process.env.SLACK_LOOKUP_WEBHOOK_URL ||
-    process.env.SLACK_DM_WEBHOOK_URL ||
-    process.env.SLACK_PROOF_WEBHOOK_URL
-  if (!slackUrl) return
 
   // Shoppers only, as in the sweep: local testing logs to the same table.
   const where = { race, createdAt: { gte: new Date(now - OUTAGE_WINDOW_MS) }, ip: { notIn: ['::…', '', 'unknown'] } }
@@ -166,13 +161,5 @@ export async function maybeAlertLookupError({ race, year, errorType, detail }) {
     `_The nightly sweep looks into it either way. One ping per race every 6 hours._`,
   ].filter(Boolean).join('\n')
 
-  try {
-    await fetchWithTimeout(slackUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    })
-  } catch (err) {
-    console.warn('[lookupObservability] Slack alert failed:', err.message)
-  }
+  if (!(await slackTo('lookup', text, { or: ['matt', 'proofs'] }))) console.warn('[lookupObservability] Slack alert failed')
 }

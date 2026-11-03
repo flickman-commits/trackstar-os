@@ -8,7 +8,7 @@
  * again with the reviewer's note; the next edit puts it back in draft.
  */
 import prisma from '../../db.js'
-import { postSlack, slackText } from '../../lib/slack.js'
+import { slackTo, slackDm, slackText } from '../../lib/slack.js'
 import { loadRoleCaps } from '../../../api/_lib/roles.js'
 import { todayET, mondayOf, addDays, isValidDay, eachDay, dayLabel } from './periods.js'
 
@@ -22,16 +22,9 @@ export const LONG_DAY_MINUTES = 12 * 60
 const name = u => [u?.firstName, u?.lastName].filter(Boolean).join(' ') || 'Someone'
 const hours = m => `${(m / 60).toFixed(m % 60 ? 2 : 0)}h`
 
-/** Slack DM webhook for a person (SLACK_<FIRSTNAME>_DM_WEBHOOK_URL), if set. */
-export function dmWebhookFor(user) {
-  const key = `SLACK_${String(user?.firstName || '').toUpperCase().replace(/[^A-Z0-9]/g, '')}_DM_WEBHOOK_URL`
-  return process.env[key] || null
-}
-const mattHook = () => process.env.SLACK_DM_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL || null
-async function dm(url, text) {
-  if (!url) return false
-  try { await postSlack(url, text); return true } catch (err) { console.warn('[hours] Slack DM failed:', err?.message); return false }
-}
+/** DM a person through the Slack bot (their own DM webhook if the bot cannot). Never throws. */
+const dm = (user, text) => slackDm(user, text).catch(() => false)
+const dmMatt = text => slackTo('matt', text, { or: 'team' }).catch(() => false)
 
 export function weekFor(day) {
   const weekStart = mondayOf(day)
@@ -149,7 +142,7 @@ export async function submitWeek(userId, weekStart, { today = todayET() } = {}) 
   if (!ts.totalMinutes) throw new HoursError('Nothing to submit: add your hours first')
   if (ts.entries.some(e => e.startedAt && !e.endedAt)) throw new HoursError('Stop the timer first')
   const saved = await prisma.timesheet.update({ where: { id: ts.id }, data: { status: 'submitted', submittedAt: new Date(), reviewNote: null }, include: { user: true, entries: { select: ENTRY_SELECT } } })
-  await dm(mattHook(), `*${slackText(name(saved.user))}* submitted ${hours(ts.totalMinutes)} for the week of ${dayLabel(weekStart)}. Review it in Finance > Timesheets.`)
+  await dmMatt(`*${slackText(name(saved.user))}* submitted ${hours(ts.totalMinutes)} for the week of ${dayLabel(weekStart)}. Review it in Finance > Timesheets.`)
   return shape(saved, saved.user)
 }
 
@@ -175,8 +168,8 @@ export async function review(id, action, { note = '', reviewer }) {
   } else throw new HoursError('action must be approve, reject or withdraw')
   const saved = await prisma.timesheet.update({ where: { id }, data, include: { user: true, entries: { select: ENTRY_SELECT, orderBy: [{ day: 'asc' }, { createdAt: 'asc' }] } } })
   const first = saved.user.firstName
-  if (action === 'approve') await dm(dmWebhookFor(saved.user), `Hey ${slackText(first)}! Your ${hours(summarizeEntries(saved.entries).totalMinutes)} for the week of ${dayLabel(saved.weekStart)} are approved.${n ? ` Note from Matt: ${slackText(n)}` : ''}`)
-  if (action === 'reject') await dm(dmWebhookFor(saved.user), `Hey ${slackText(first)}, Matt sent back your hours for the week of ${dayLabel(saved.weekStart)}: ${slackText(n)}. Fix them up and submit the week again.`)
+  if (action === 'approve') await dm(saved.user, `Hey ${slackText(first)}! Your ${hours(summarizeEntries(saved.entries).totalMinutes)} for the week of ${dayLabel(saved.weekStart)} are approved.${n ? ` Note from Matt: ${slackText(n)}` : ''}`)
+  if (action === 'reject') await dm(saved.user, `Hey ${slackText(first)}, Matt sent back your hours for the week of ${dayLabel(saved.weekStart)}: ${slackText(n)}. Fix them up and submit the week again.`)
   return shape(saved, saved.user)
 }
 
@@ -192,7 +185,7 @@ export async function listTimesheets({ status = null, userId = null, limit = 200
 /** Everyone whose role includes hours (for the admin's filters and the reminders). */
 export async function hourlyPeople() {
   const caps = await loadRoleCaps()
-  const users = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, firstName: true, lastName: true, role: true, hourlyRateCents: true }, orderBy: { firstName: 'asc' } })
+  const users = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, firstName: true, lastName: true, email: true, role: true, hourlyRateCents: true }, orderBy: { firstName: 'asc' } })
   return users.filter(u => u.role === 'admin' ? false : (caps[u.role] || []).includes('hours'))
 }
 
@@ -212,10 +205,10 @@ export async function remindUnsubmitted({ now = new Date() } = {}) {
   for (const p of people) {
     const st = by.get(p.id)
     if (st === 'submitted' || st === 'approved') continue
-    const ok = await dm(dmWebhookFor(p), `Hey ${slackText(p.firstName)}! Your hours for the week of ${dayLabel(lastWeek)} are not submitted yet. Open Hours in Support (or Tools > Hours), check the week, and press Submit week.`)
+    const ok = await dm(p, `Hey ${slackText(p.firstName)}! Your hours for the week of ${dayLabel(lastWeek)} are not submitted yet. Open Hours in Support (or Tools > Hours), check the week, and press Submit week.`)
     if (ok) reminded.push(p.firstName); else noWebhook.push(p.firstName)
   }
-  if (noWebhook.length) await dm(mattHook(), `Hours not submitted for the week of ${dayLabel(lastWeek)} and no Slack DM set up for: ${noWebhook.map(slackText).join(', ')}.`)
+  if (noWebhook.length) await dmMatt(`Hours not submitted for the week of ${dayLabel(lastWeek)} and no Slack DM set up for: ${noWebhook.map(slackText).join(', ')}.`)
   await prisma.systemConfig.create({ data: { key, value: JSON.stringify({ at: now.toISOString(), reminded, noWebhook }) } })
   return { week: lastWeek, reminded, noWebhook }
 }

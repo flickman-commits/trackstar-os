@@ -10,14 +10,13 @@
  */
 import prisma from '../db.js'
 import { storage } from './storage.js'
-import { postSlack } from './slack.js'
+import { slackTo } from './slack.js'
 
 const KEY = 'storage_upload_health'
 const BUCKET = 'order-comments'
 const TRY_MS = 15000
 const REMIND_MS = 60 * 60 * 1000
 
-const hook = () => process.env.SLACK_DM_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL
 
 // Plain fetch, not storage(): that client covers for a write that saves but
 // never answers, which is exactly what this has to notice.
@@ -48,7 +47,7 @@ export async function checkStorageUploads() {
   if (result.ok) {
     if (state.failingSince) {
       const mins = Math.round((now - new Date(state.failingSince).getTime()) / 60000)
-      await postSlack(hook(), `:white_check_mark: *Uploads are working again* (Supabase Storage). They were down about ${mins} minutes. Re-render any orders that failed with "Upload failed" in that window.`)
+      await slackTo('matt', `:white_check_mark: *Uploads are working again* (Supabase Storage). They were down about ${mins} minutes. Re-render any orders that failed with "Upload failed" in that window.`, { or: 'team' })
       await save({})
     }
     return result
@@ -58,7 +57,7 @@ export async function checkStorageUploads() {
   const lastAlert = state.alertedAt ? new Date(state.alertedAt).getTime() : 0
   if (now - lastAlert >= REMIND_MS) {
     const first = !state.alertedAt
-    await postSlack(hook(), `:rotating_light: *${first ? 'Uploads are failing' : 'Uploads are still failing'}* (Supabase Storage, since ${new Date(failingSince).toUTCString()}). Customer photo uploads, comment images and render PDFs will not save. Error: ${String(result.reason).slice(0, 200)}. Check the Supabase dashboard (usage, restart project) or status.supabase.com.`)
+    await slackTo('matt', `:rotating_light: *${first ? 'Uploads are failing' : 'Uploads are still failing'}* (Supabase Storage, since ${new Date(failingSince).toUTCString()}). Customer photo uploads, comment images and render PDFs will not save. Error: ${String(result.reason).slice(0, 200)}. Check the Supabase dashboard (usage, restart project) or status.supabase.com.`, { or: 'team' })
     await save({ failingSince, alertedAt: new Date(now).toISOString() })
   } else if (!state.failingSince) {
     await save({ ...state, failingSince })

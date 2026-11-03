@@ -4,14 +4,13 @@
  * (customCounter.js), the rate for each, and the total, and is asked to check
  * it; Matt pays. One message per designer per month (SystemConfig records it).
  *
- * Each designer's DM is an incoming webhook, the same as Eli's:
- * SLACK_<FIRSTNAME>_DM_WEBHOOK_URL (SLACK_DAN_DM_WEBHOOK_URL,
- * SLACK_CREED_DM_WEBHOOK_URL, ...). A designer without one is listed in a
- * note to Matt (SLACK_DM_WEBHOOK_URL) so nobody is skipped quietly.
+ * The Slack bot DMs each designer, found by their email (slackDm); their old
+ * SLACK_<FIRSTNAME>_DM_WEBHOOK_URL still works if the bot cannot. A designer
+ * it cannot reach is listed in a note to Matt so nobody is skipped quietly.
  */
 import prisma from '../../db.js'
 import { customCounter } from './customCounter.js'
-import { postSlack, slackText } from '../../lib/slack.js'
+import { slackTo, slackDm, slackText } from '../../lib/slack.js'
 
 const TZ = 'America/New_York'
 const usd = cents => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 })}`
@@ -66,14 +65,12 @@ export async function sendCustomStatements({ now = new Date(), force = false } =
   const missingWebhook = []
   for (const d of data.designers) {
     if (!d.userId || !d.rateCents || !d.count) continue
-    const first = d.name.split(' ')[0]
-    const url = process.env[`SLACK_${first.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()}_DM_WEBHOOK_URL`]
-    if (!url) { missingWebhook.push(d.name); continue }
-    if (await postSlack(url, statementText(d, monthLabel))) sent.push(d.name)
-    else missingWebhook.push(`${d.name} (Slack refused)`)
+    const user = await prisma.user.findUnique({ where: { id: d.userId }, select: { email: true, firstName: true } })
+    if (await slackDm(user, statementText(d, monthLabel))) sent.push(d.name)
+    else missingWebhook.push(d.name)
   }
-  if (missingWebhook.length && process.env.SLACK_DM_WEBHOOK_URL) {
-    await postSlack(process.env.SLACK_DM_WEBHOOK_URL, `The ${monthLabel} custom statements could not reach ${missingWebhook.join(', ')}: add SLACK_<FIRSTNAME>_DM_WEBHOOK_URL for each (a Slack incoming webhook to their DM). Settings > Custom Counter has their totals.`)
+  if (missingWebhook.length) {
+    await slackTo('matt', `The ${monthLabel} custom statements could not reach ${missingWebhook.join(', ')} in Slack: their TrackstarOS email must match their Slack email for the bot to find them. Settings > Custom Counter has their totals.`)
   }
   await prisma.systemConfig.upsert({ where: { key }, update: { value: JSON.stringify({ sent, missingWebhook, at: new Date().toISOString() }) }, create: { key, value: JSON.stringify({ sent, missingWebhook, at: new Date().toISOString() }) } })
   return { month, sent, missingWebhook }

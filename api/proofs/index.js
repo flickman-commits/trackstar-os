@@ -22,7 +22,7 @@ import { setCors, requireAdmin } from '../_lib/auth.js'
 import { alertError } from '../_lib/alerts.js'
 import { recordAudit, requireAdminRole } from '../_lib/users.js'
 import { checkRateLimitDurable } from '../../server/lib/publicRateLimit.js'
-import { postSlack, slackText } from '../../server/lib/slack.js'
+import { slackTo, slackText } from '../../server/lib/slack.js'
 import crypto from 'crypto'
 import formidable from 'formidable'
 import fs from 'fs'
@@ -391,19 +391,17 @@ export default async function handler(req, res) {
         }
 
         // Send Slack notification (fire and forget)
-        if (process.env.SLACK_PROOF_WEBHOOK_URL) {
-          const shopifyData = approvalToken.order.shopifyOrderData
-          const displayNum = (shopifyData && typeof shopifyData === 'object' && 'name' in shopifyData)
-            ? String(shopifyData.name) : `#${approvalToken.order.parentOrderNumber}`
-          const customerName = approvalToken.order.customerName || 'Customer'
-          const emoji = approval === 'approve' ? '✅' : '🔄'
-          const action_text = approval === 'approve'
-            ? `approved Option ${proof.version}`
-            : `requested revisions on Option ${proof.version}`
-          const suffix = approval === 'approve' ? ' - the file is ready to upload to orders.' : ''
-          await postSlack(process.env.SLACK_PROOF_WEBHOOK_URL,
-            `${emoji} <@U04KBDJH5C3> *${slackText(customerName)}* ${action_text} for order *${slackText(displayNum)}*${suffix}${feedback ? `\n> _"${slackText(feedback)}"_` : ''}`)
-        }
+        const shopifyData = approvalToken.order.shopifyOrderData
+        const displayNum = (shopifyData && typeof shopifyData === 'object' && 'name' in shopifyData)
+          ? String(shopifyData.name) : `#${approvalToken.order.parentOrderNumber}`
+        const customerName = approvalToken.order.customerName || 'Customer'
+        const emoji = approval === 'approve' ? '✅' : '🔄'
+        const action_text = approval === 'approve'
+          ? `approved Option ${proof.version}`
+          : `requested revisions on Option ${proof.version}`
+        const suffix = approval === 'approve' ? ' - the file is ready to upload to orders.' : ''
+        await slackTo('proofs',
+          `${emoji} <@U04KBDJH5C3> *${slackText(customerName)}* ${action_text} for order *${slackText(displayNum)}*${suffix}${feedback ? `\n> _"${slackText(feedback)}"_` : ''}`)
 
         return res.status(200).json({ success: true, proof: updatedProof })
       }
@@ -442,14 +440,12 @@ export default async function handler(req, res) {
       console.log(`[customer-message] Customer replied on order ${approvalToken.order.parentOrderNumber}`)
 
       // Ping Dan so he sees the reply without checking the portal.
-      if (process.env.SLACK_PROOF_WEBHOOK_URL) {
-        const shopifyData = approvalToken.order.shopifyOrderData
-        const displayNum = (shopifyData && typeof shopifyData === 'object' && 'name' in shopifyData)
-          ? String(shopifyData.name) : `#${approvalToken.order.parentOrderNumber}`
-        const customerName = approvalToken.order.customerName || 'Customer'
-        await postSlack(process.env.SLACK_PROOF_WEBHOOK_URL,
-          `💬 <@U04KBDJH5C3> *${slackText(customerName)}* replied to your question on order *${slackText(displayNum)}*:\n> _"${slackText(text)}"_`)
-      }
+      const shopifyData = approvalToken.order.shopifyOrderData
+      const displayNum = (shopifyData && typeof shopifyData === 'object' && 'name' in shopifyData)
+        ? String(shopifyData.name) : `#${approvalToken.order.parentOrderNumber}`
+      const customerName = approvalToken.order.customerName || 'Customer'
+      await slackTo('proofs',
+        `💬 <@U04KBDJH5C3> *${slackText(customerName)}* replied to your question on order *${slackText(displayNum)}*:\n> _"${slackText(text)}"_`)
 
       return res.status(200).json({ success: true, message })
     }
@@ -619,9 +615,7 @@ export default async function handler(req, res) {
       await recordAudit({ action: 'proof.send', summary: `Emailed proofs for ${order.orderNumber} to the customer`, detail: { orderId, orderNumber: order.orderNumber, proofs: order.proofs.length }, actor })
 
       // Slack notification (fire and forget)
-      if (process.env.SLACK_PROOF_WEBHOOK_URL) {
-        await postSlack(process.env.SLACK_PROOF_WEBHOOK_URL, `📧 Proofs sent to *${slackText(order.customerName || 'customer')}* for order *${slackText(displayNum)}*`)
-      }
+      await slackTo('proofs', `📧 Proofs sent to *${slackText(order.customerName || 'customer')}* for order *${slackText(displayNum)}*`)
 
       return res.status(200).json({ success: true, approvalUrl })
     }
@@ -646,7 +640,7 @@ export default async function handler(req, res) {
       const text = isPartner
         ? `📋 <@U09UVEP1N3Y> Production file + photo uploaded for *${slackText(order.raceName || displayNum)}* - ready for production.`
         : `📋 <@U09UVEP1N3Y> Final PDF uploaded for order *${displayNum}* - ready for production.`
-      await postSlack(process.env.SLACK_PROOF_WEBHOOK_URL, text)
+      await slackTo('proofs', text)
 
       console.log(`[notify-production] Eli notified for order ${order.orderNumber}`)
       return res.status(200).json({ success: true })
