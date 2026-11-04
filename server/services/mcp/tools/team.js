@@ -21,7 +21,7 @@ export async function resolveTeammate(who, principal) {
     if (!principal.user) throw new ToolError('"me" needs a key that acts as a person.')
     return principal.user
   }
-  const users = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, firstName: true, lastName: true, email: true, role: true, extraRoles: true } })
+  const users = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, firstName: true, lastName: true, email: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true } })
   const full = u => `${u.firstName} ${u.lastName || ''}`.trim().toLowerCase()
   const hits = users.filter(u => u.firstName.toLowerCase() === w || full(u) === w)
   if (hits.length === 1) return hits[0]

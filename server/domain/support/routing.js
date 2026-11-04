@@ -71,7 +71,7 @@ export function pickByShare(people, loads) {
 /** Who can still receive: active, and their role includes Support. */
 async function eligible(people) {
   if (!people.length) return []
-  const users = await prisma.user.findMany({ where: { id: { in: people.map(p => p.userId) }, isActive: true }, select: { id: true, role: true, extraRoles: true } })
+  const users = await prisma.user.findMany({ where: { id: { in: people.map(p => p.userId) }, isActive: true }, select: { id: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true } })
   const ok = new Set()
   for (const u of users) if (await can(u, 'support')) ok.add(u.id)
   return people.filter(p => ok.has(p.userId))
@@ -104,7 +104,7 @@ export async function saveRouting(input, { applyToOpen = false, actor } = {}) {
   const rules = Object.fromEntries(CHANNELS.map(c => [c, normalizeRule(input?.[c])]))
   const ids = [...new Set(CHANNELS.flatMap(c => rules[c].people.map(p => p.userId)))]
   if (ids.length) {
-    const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, firstName: true, isActive: true, role: true, extraRoles: true } })
+    const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, firstName: true, isActive: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true } })
     for (const id of ids) {
       const u = users.find(x => x.id === id)
       if (!u?.isActive) throw new UserError('One of those teammates is not active')

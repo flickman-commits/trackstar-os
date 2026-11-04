@@ -76,7 +76,7 @@ export async function customCounter(month) {
   // Every custom designed before, oldest first, for the repeat check.
   const history = all.map(o => ({ id: o.id, at: designedAt(o), key: raceKey(o.raceName) })).filter(h => h.at).sort((a, b) => a.at - b.at)
 
-  const users = await prisma.user.findMany({ select: { id: true, firstName: true, lastName: true, role: true, extraRoles: true, customRateCents: true, customRepeatRateCents: true } })
+  const users = await prisma.user.findMany({ select: { id: true, firstName: true, lastName: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true, customRateCents: true, customRepeatRateCents: true } })
   const byId = new Map(users.map(u => [u.id, u]))
   const groups = new Map()
   for (const o of all) {
@@ -120,7 +120,7 @@ export async function setDesignRepeat(orderId, repeat) {
 
 /** Everyone paid per custom, with their rates, for the Rates editor. */
 export async function customRates() {
-  const users = await prisma.user.findMany({ where: { OR: [{ role: { in: Object.keys(DEFAULT_RATES) } }, { extraRoles: { hasSome: Object.keys(DEFAULT_RATES) } }], isActive: true }, select: { id: true, firstName: true, lastName: true, role: true, extraRoles: true, customRateCents: true, customRepeatRateCents: true }, orderBy: { firstName: 'asc' } })
+  const users = await prisma.user.findMany({ where: { OR: [{ role: { in: Object.keys(DEFAULT_RATES) } }, { extraRoles: { hasSome: Object.keys(DEFAULT_RATES) } }], isActive: true }, select: { id: true, firstName: true, lastName: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true, customRateCents: true, customRepeatRateCents: true }, orderBy: { firstName: 'asc' } })
   return users.map(u => ({ userId: u.id, name: `${u.firstName} ${u.lastName}`.trim(), level: designRole(u) === 'head_designer' ? 'Senior' : 'Junior', ...ratesFor(u), defaults: DEFAULT_RATES[designRole(u)] }))
 }
 

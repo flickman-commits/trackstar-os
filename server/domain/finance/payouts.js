@@ -23,7 +23,7 @@ export class PayoutError extends Error {
 }
 
 export const LINE_KINDS = ['customs', 'hours', 'designer_fee', 'bonus', 'reimbursement', 'other']
-const USER_SELECT = { id: true, firstName: true, lastName: true, role: true, extraRoles: true, hourlyRateCents: true, customRateCents: true, customRepeatRateCents: true }
+const USER_SELECT = { id: true, firstName: true, lastName: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true, hourlyRateCents: true, customRateCents: true, customRepeatRateCents: true }
 const name = u => [u?.firstName, u?.lastName].filter(Boolean).join(' ') || 'Someone'
 export const hoursAmount = (minutes, rateCents) => Math.round((minutes * rateCents) / 60)
 

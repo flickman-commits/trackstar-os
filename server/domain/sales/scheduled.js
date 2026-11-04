@@ -155,7 +155,7 @@ export async function sendDue({ limit = 20 } = {}) {
     const claimed = await prisma.salesScheduled.updateMany({ where: { id: row.id, status: 'scheduled' }, data: { status: 'sending' } })
     if (!claimed.count) continue
     try {
-      const user = await prisma.user.findUnique({ where: { id: row.createdById }, select: { id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true, isActive: true } })
+      const user = await prisma.user.findUnique({ where: { id: row.createdById }, select: { id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true, isActive: true } })
       if (!user?.isActive) throw new UserError('The person who scheduled this is no longer active')
       // Their role may have changed since they scheduled it; Sales has to still be theirs.
       if (!(await can(user, 'sales'))) throw new UserError('Sales is no longer part of the role of the person who scheduled this')

@@ -178,14 +178,14 @@ export async function listTimesheets({ status = null, userId = null, limit = 200
   const where = {}
   if (status && status !== 'all') where.status = status
   if (userId) where.userId = userId
-  const rows = await prisma.timesheet.findMany({ where, include: { user: { select: { id: true, firstName: true, lastName: true, role: true, extraRoles: true, hourlyRateCents: true } }, entries: { select: ENTRY_SELECT, orderBy: [{ day: 'asc' }, { createdAt: 'asc' }] } }, orderBy: [{ weekStart: 'desc' }, { createdAt: 'asc' }], take: Math.min(500, Math.max(1, limit)) })
+  const rows = await prisma.timesheet.findMany({ where, include: { user: { select: { id: true, firstName: true, lastName: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true, hourlyRateCents: true } }, entries: { select: ENTRY_SELECT, orderBy: [{ day: 'asc' }, { createdAt: 'asc' }] } }, orderBy: [{ weekStart: 'desc' }, { createdAt: 'asc' }], take: Math.min(500, Math.max(1, limit)) })
   return rows.filter(r => r.status !== 'draft' || r.entries.length).map(r => ({ ...shape(r, r.user), rateNow: r.user.hourlyRateCents }))
 }
 
 /** Everyone whose role includes hours (for the admin's filters and the reminders). */
 export async function hourlyPeople() {
   const caps = await loadRoleCaps()
-  const users = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, firstName: true, lastName: true, email: true, role: true, extraRoles: true, hourlyRateCents: true }, orderBy: { firstName: 'asc' } })
+  const users = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, firstName: true, lastName: true, email: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true, hourlyRateCents: true }, orderBy: { firstName: 'asc' } })
   return users.filter(u => u.role === 'admin' ? false : (caps[u.role] || []).includes('hours'))
 }
 
