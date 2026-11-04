@@ -1,4 +1,5 @@
 import { rolesOf } from '@/lib/roles'
+import DesignStatusPicker from '@/components/orders/DesignStatusPicker'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
@@ -30,7 +31,7 @@ import OrderTags, { HoverTip } from '@/components/OrderTags'
 import type { ToastMessage } from '@/components/orders/Toast'
 import {
   type ActiveView, type DesignStatus, type EditValues, type Order, type OrderComment, type PossibleMatch,
-  DESIGN_STATUS_CONFIG, designLabel, selectableDesignStatuses, mapOrder,
+  DESIGN_STATUS_CONFIG, mapOrder,
 } from '@/components/orders/orderModel'
 import {
   TZ, formatDueDate, isDueDateUrgent, dueIsLive, orderAge, formatOrderPlacedAt, getStatusDisplay,
@@ -1291,28 +1292,7 @@ Thank you!`
                   </button>
                 )}
                 {(selectedOrder.trackstarOrderType === 'custom' || selectedOrder.trackstarOrderType === 'race_partner')
-                  ? (() => {
-                      // Where a standard order's status sits, and it is the control: pick a status from it.
-                      const cur = DESIGN_STATUS_CONFIG[selectedOrder.designStatus as DesignStatus] ? selectedOrder.designStatus as DesignStatus : 'not_started'
-                      const cfg = DESIGN_STATUS_CONFIG[cur]
-                      return (
-                        <label className={`order-last md:order-none relative shrink-0 inline-flex items-center gap-1.5 pl-2 pr-1.5 py-0.5 rounded-full border border-border-gray text-[11px] md:text-xs font-medium whitespace-nowrap cursor-pointer ${cfg.bgColor} ${cfg.color}`} title="Change the design status">
-                          <span className={`w-2 h-2 rounded-full ${cfg.dot}`} aria-hidden />
-                          {designLabel(cur, selectedOrder.trackstarOrderType)}
-                          <ChevronDownIcon className="w-3 h-3 opacity-60" />
-                          <select
-                            value={cur}
-                            onChange={e => updateDesignStatus(selectedOrder.orderNumber, e.target.value as DesignStatus)}
-                            className="absolute inset-0 opacity-0 cursor-pointer"
-                            aria-label="Design status"
-                          >
-                            {selectableDesignStatuses(selectedOrder.trackstarOrderType, selectedOrder.designStatus).map(st => (
-                              <option key={st} value={st}>{designLabel(st, selectedOrder.trackstarOrderType)}</option>
-                            ))}
-                          </select>
-                        </label>
-                      )
-                    })()
+                  ? <span className="order-last md:order-none shrink-0"><DesignStatusPicker status={selectedOrder.designStatus} orderType={selectedOrder.trackstarOrderType} onChange={st => updateDesignStatus(selectedOrder.orderNumber, st)} /></span>
                   : (() => { const d = getStatusDisplay(selectedOrder); return (
                       <span className="order-last md:order-none shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-border-gray bg-white text-[11px] md:text-xs text-off-black/70 whitespace-nowrap" title={selectedOrder.pipeline?.fix || d.label}>
                         <span className={`w-2 h-2 rounded-full ${d.dot || 'bg-off-black/25'}`} />{d.label}

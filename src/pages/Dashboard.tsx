@@ -16,6 +16,7 @@ import OrderTags, { HoverTip } from '@/components/OrderTags'
 import OrderDetail from '@/components/orders/OrderDetail'
 import BulkAttention from '@/components/bulk/BulkAttention'
 import StatusPill from '@/components/orders/StatusPill'
+import DesignStatusPicker from '@/components/orders/DesignStatusPicker'
 import {
   type ActiveView, type DesignStatus, type EditValues, type Order, type PossibleMatch,
   DESIGN_STATUS_CONFIG, designLabel, mapOrder, orderRefOf,
@@ -215,6 +216,8 @@ export default function Dashboard() {
     setSearchParams(prev => { const next = new URLSearchParams(prev); if (value) next.set(key, value); else next.delete(key); return next }, { replace: true })
   }, [setSearchParams])
   const raceFilter = searchParams.get('race') || ''  // empty = show all races
+  // Custom Orders: show one design status only (Dan: find everything In Revision at a glance).
+  const [customStatus, setCustomStatus] = useState<string>('')
   const setRaceFilter = useCallback((v: string) => setUrlParam('race', v), [setUrlParam])
   // Standard orders: the queue to work. '' is everything open.
   const stageFilter: StageFilter = (['review', 'attach', 'action', 'waiting', 'not_run', 'late'] as const).find(k => k === searchParams.get('queue')) || ''
@@ -778,6 +781,21 @@ export default function Dashboard() {
     }
   }, [orders, team, loadTeam])
 
+  /** A design status picked on a list row: patch the list at once, save, and reload quietly. */
+  const setDesignStatusOf = async (order: Order, designStatus: DesignStatus) => {
+    const previous = order.designStatus
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, designStatus } : o))
+    try {
+      const res = await apiFetch('/api/orders/actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'design-status', orderNumber: order.orderNumber, designStatus }) })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || d.error || 'Could not change the status') }
+      setToast({ message: `${order.displayOrderNumber}: ${designLabel(designStatus, order.trackstarOrderType)}`, type: 'success' })
+      fetchOrders()
+    } catch (e) {
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, designStatus: previous } : o))
+      setToast({ message: e instanceof Error ? e.message : 'Could not change the status', type: 'error' })
+    }
+  }
+
   const ordersToFulfill = useMemo(() => {
     // Guard: ensure orders match the active view type to prevent cross-contamination
     const typeFiltered = orders.filter(o => (o.trackstarOrderType || 'standard') === activeView)
@@ -922,6 +940,9 @@ export default function Dashboard() {
     if (raceFilter && activeView === 'standard') {
       base = base.filter(o => (o.effectiveRaceName || o.raceName) === raceFilter)
     }
+    if (customStatus && activeView === 'custom') {
+      base = base.filter(o => (o.designStatus || 'not_started') === customStatus)
+    }
     if (stageFilter === 'late' && activeView === 'standard') {
       const late = new Set(onTime?.lateOrders || [])
       base = base.filter(o => late.has(o.orderNumber))
@@ -936,7 +957,7 @@ export default function Dashboard() {
     if (!searchQuery) return base
     const query = searchQuery.trim().toLowerCase()
     return base.filter(o => matchesSearch(o, query))
-  }, [ordersToFulfill, raceFilter, stageFilter, searchQuery, matchesSearch, activeView, onTime])
+  }, [ordersToFulfill, raceFilter, customStatus, stageFilter, searchQuery, matchesSearch, activeView, onTime])
 
   const filteredCompletedOrders = useMemo(() => {
     let base = completedOrders
@@ -1106,7 +1127,7 @@ export default function Dashboard() {
           >
             <SlidersHorizontal className="w-4 h-4" />
             Filters
-            {((scoped && person ? 1 : 0) + (activeView === 'standard' && raceFilter ? 1 : 0) + (sortChanged ? 1 : 0)) > 0 && <span className="px-1.5 py-0.5 rounded-full bg-dark-fill text-white text-[10px] font-semibold tabular-nums leading-none">{(scoped && person ? 1 : 0) + (activeView === 'standard' && raceFilter ? 1 : 0) + (sortChanged ? 1 : 0)}</span>}
+            {((scoped && person ? 1 : 0) + (activeView === 'standard' && raceFilter ? 1 : 0) + (activeView === 'custom' && customStatus ? 1 : 0) + (sortChanged ? 1 : 0)) > 0 && <span className="px-1.5 py-0.5 rounded-full bg-dark-fill text-white text-[10px] font-semibold tabular-nums leading-none">{(scoped && person ? 1 : 0) + (activeView === 'standard' && raceFilter ? 1 : 0) + (activeView === 'custom' && customStatus ? 1 : 0) + (sortChanged ? 1 : 0)}</span>}
             <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
           </button>
         )}
@@ -1173,6 +1194,27 @@ export default function Dashboard() {
             <div className="hidden md:block text-[10px] font-semibold uppercase tracking-wider text-off-black/40 mb-1">Team Member</div>
             <PersonFilter team={team} value={person} meId={myId} onChange={setPersonFilter} />
           </div>
+        )}
+        {activeView === 'custom' && (
+        <div className="md:w-56">
+          <div className="hidden md:block text-[10px] font-semibold uppercase tracking-wider text-off-black/40 mb-1">Status</div>
+          <div className="relative">
+          <select
+            value={customStatus}
+            onChange={(e) => setCustomStatus(e.target.value)}
+            className={`w-full appearance-none pl-3 md:pl-4 pr-9 py-2 md:py-3 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-off-black/10 focus:border-off-black/30 transition-colors cursor-pointer ${
+              customStatus ? 'bg-dark-fill text-white border-dark-fill' : 'bg-subtle-gray border-border-gray text-off-black'
+            }`}
+          >
+            <option value="" className="bg-white text-off-black">All statuses ({ordersToFulfill.length})</option>
+            {(Object.keys(DESIGN_STATUS_CONFIG) as DesignStatus[]).filter(st => st !== 'sent_to_production').map(st => {
+              const n = ordersToFulfill.filter(o => (o.designStatus || 'not_started') === st).length
+              return <option key={st} value={st} className="bg-white text-off-black">{DESIGN_STATUS_CONFIG[st].label} ({n})</option>
+            })}
+          </select>
+          <ChevronDownIcon className={`w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none ${customStatus ? 'text-white' : 'text-off-black/40'}`} />
+          </div>
+        </div>
         )}
         {activeView === 'standard' && (
         <div className={`md:w-64 ${scoped ? '' : 'col-span-2'}`}>
@@ -1463,7 +1505,6 @@ export default function Dashboard() {
                   /* Custom Designs / Partners - Mobile Cards */
                   <>
                     {filteredOrders.map((order) => {
-                      const designConfig = DESIGN_STATUS_CONFIG[order.designStatus as DesignStatus] || DESIGN_STATUS_CONFIG.not_started
                       const itemCount = getOrderItemCount(order.parentOrderNumber)
                       const isPartner = order.trackstarOrderType === 'race_partner'
                       return (
@@ -1475,10 +1516,7 @@ export default function Dashboard() {
                           {/* Row 1: Design status + Order# + badges */}
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${designConfig.bgColor} ${designConfig.color}`}>
-                                <span className={`w-2 h-2 rounded-full shrink-0 ${designConfig.dot}`} aria-hidden />
-                                {designLabel(order.designStatus, order.trackstarOrderType)}
-                              </span>
+                              <DesignStatusPicker size="xs" status={order.designStatus} orderType={order.trackstarOrderType} onChange={st => setDesignStatusOf(order, st)} />
                               {!isPartner && (
                                 <>
                                   <span className="text-sm font-medium text-off-black">{order.displayOrderNumber}</span>
@@ -1732,7 +1770,6 @@ export default function Dashboard() {
                     </thead>
                     <tbody className="divide-y divide-border-gray">
                       {filteredOrders.map((order, index) => {
-                        const designConfig = DESIGN_STATUS_CONFIG[order.designStatus as DesignStatus] || DESIGN_STATUS_CONFIG.not_started
                         return (
                           <tr
                             key={order.id}
@@ -1740,10 +1777,7 @@ export default function Dashboard() {
                             className={`hover:bg-subtle-gray cursor-pointer transition-colors ${index % 2 === 1 ? 'bg-subtle-gray/30' : ''}`}
                           >
                             <td className="pl-6 pr-3 py-4">
-                              <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${designConfig.bgColor} ${designConfig.color}`}>
-                                <span className={`w-2 h-2 rounded-full shrink-0 ${designConfig.dot}`} aria-hidden />
-                                {designLabel(order.designStatus, order.trackstarOrderType)}
-                              </span>
+                              <DesignStatusPicker status={order.designStatus} orderType={order.trackstarOrderType} onChange={st => setDesignStatusOf(order, st)} />
                             </td>
                             <td className="px-3 py-4">
                               <div className="flex items-center gap-2">
@@ -1800,7 +1834,6 @@ export default function Dashboard() {
                     </thead>
                     <tbody className="divide-y divide-border-gray">
                       {filteredOrders.map((order, index) => {
-                        const designConfig = DESIGN_STATUS_CONFIG[order.designStatus as DesignStatus] || DESIGN_STATUS_CONFIG.not_started
                         const itemCount = getOrderItemCount(order.parentOrderNumber)
                         return (
                           <tr
@@ -1837,10 +1870,7 @@ export default function Dashboard() {
                               </div>
                             </td>
                             <td className="px-3 py-4">
-                              <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${designConfig.bgColor} ${designConfig.color}`}>
-                                <span className={`w-2 h-2 rounded-full shrink-0 ${designConfig.dot}`} aria-hidden />
-                                {designLabel(order.designStatus, order.trackstarOrderType)}
-                              </span>
+                              <DesignStatusPicker status={order.designStatus} orderType={order.trackstarOrderType} onChange={st => setDesignStatusOf(order, st)} />
                             </td>
                             <td className="px-3 py-4">
                               {/* The rush chip sits with the due date, not with
