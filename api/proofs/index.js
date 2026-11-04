@@ -30,6 +30,7 @@ import { sendPublicError } from '../../server/lib/publicError.js'
 import { storage } from '../../server/lib/storage.js'
 import { sendEmail } from '../../server/lib/email.js'
 import { sendOrderEmail, customerMailReady } from '../../server/domain/support/customerMail.js'
+import { renderCustomerEmail } from '../../server/lib/customerEmail.js'
 // sharp loaded dynamically in processImage() — top-level import crashes Vercel cold start
 
 // Disable Vercel's default body parser for multipart support
@@ -527,7 +528,7 @@ export default async function handler(req, res) {
         ? String(shopifyData.name) : `#${order.parentOrderNumber}`
       const customerName = order.customerName || 'there'
 
-      // Build email — on-brand: dark bg, purple CTA, square buttons, Helvetica Neue, restrained voice
+      // The email: the shared customer template (server/lib/customerEmail.js), per the brand guide
       const subject = hasRevisions
         ? `Your updated design is ready`
         : `Your Trackstar Order ${displayNum} (Action Required)`
@@ -540,52 +541,19 @@ export default async function handler(req, res) {
         ? `We've revised your design. Take a look and let us know what you think.`
         : `We've put together ${proofCount > 1 ? `${proofCount} options` : 'a custom design'} for your order ${displayNum}. Review below and pick your favorite.`
 
-      const emailHtml = `
-<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#F7F5F0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F7F5F0;padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
-        <!-- Logo -->
-        <tr><td style="padding:0 0 32px;text-align:center;">
-          <img src="https://www.trackstar.art/cdn/shop/files/Trackstar_Logo_Cropped.png?height=28&v=1757377797" alt="Trackstar" height="28" style="height:28px;" />
-        </td></tr>
-        <!-- Body -->
-        <tr><td style="padding:32px;background-color:#FFFFFF;border:1px solid #E8E6E1;">
-          <h1 style="margin:0 0 16px;font-size:22px;color:#1A1A1A;font-weight:700;letter-spacing:0.02em;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">${headline}</h1>
-          <p style="margin:0 0 8px;font-size:15px;color:#666666;line-height:1.6;">Hi ${escapeHtml(customerName)},</p>
-          <p style="margin:0 0 ${note ? '16px' : '24px'};font-size:15px;color:#666666;line-height:1.6;">${bodyText}</p>${note ? `
-          <p style="margin:0 0 24px;font-size:14px;color:#1A1A1A;line-height:1.6;padding:12px 16px;background-color:#F7F5F0;border-left:3px solid #4600D6;font-style:italic;">${note.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</p>` : ''}
-
-          <!-- How this works - head off the "I'll just reply to this email" instinct -->
-          <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;"><tr><td style="background-color:#F7F5F0;padding:16px 20px;border-left:3px solid #4600D6;">
-            <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#4600D6;letter-spacing:0.1em;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">HOW THIS WORKS</p>
-            <p style="margin:0 0 6px;font-size:14px;color:#1A1A1A;line-height:1.5;"><strong style="color:#4600D6;">1.</strong> &nbsp;Click below to see your design${proofCount > 1 ? ' options' : ''}.</p>
-            <p style="margin:0 0 6px;font-size:14px;color:#1A1A1A;line-height:1.5;"><strong style="color:#4600D6;">2.</strong> &nbsp;Either approve your favorite, or request changes - <strong>both happen right in the portal</strong>.</p>
-            <p style="margin:0;font-size:14px;color:#1A1A1A;line-height:1.5;"><strong style="color:#4600D6;">3.</strong> &nbsp;We'll work on your revisions and send you updated mockups.</p>
-          </td></tr></table>
-
-          <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
-            <a href="${approvalUrl}" style="display:inline-block;background-color:#4600D6;color:#FFFFFF;font-size:14px;font-weight:700;padding:14px 40px;border-radius:0px;text-decoration:none;letter-spacing:0.5px;text-transform:uppercase;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-              REVIEW YOUR DESIGN${proofCount > 1 ? 'S' : ''}
-            </a>
-          </td></tr></table>
-
-          <!-- Anti-reply line. Customers were emailing edits back instead of using the portal. -->
-          <p style="margin:24px 0 0;font-size:13px;color:#666666;text-align:center;line-height:1.55;padding:0 12px;">
-            ✋ &nbsp;Please don't reply to this email with edits - we can only process changes through the <strong style="color:#1A1A1A;">Request Changes</strong> button on the portal.
-          </p>
-          <p style="margin:16px 0 0;font-size:11px;color:#999999;text-align:center;">This link expires in 30 days.</p>
-        </td></tr>
-        <!-- Footer -->
-        <tr><td style="padding:24px 0 0;text-align:center;">
-          <p style="margin:0;font-size:11px;color:#999999;letter-spacing:0.05em;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Trackstar - Celebrating athletic achievement.</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body></html>`
+      const emailHtml = renderCustomerEmail({
+        greeting: `Hi ${customerName},`,
+        paragraphs: [
+          escapeHtml(bodyText),
+          `Open the link below to see ${proofCount > 1 ? 'them' : 'it'}. Approve your favorite, or ask for changes, right there on the page. If you ask for changes, we work on them and send you the updated design.`,
+        ],
+        note: note || null,
+        cta: { label: `Review your design${proofCount > 1 ? 's' : ''}`, url: approvalUrl },
+        after: [
+          'Changes go through the <strong>Request changes</strong> button on that page rather than a reply here, so nothing gets lost.',
+          'The link works for 30 days.',
+        ],
+      })
 
       // From fast@ through the support mailbox, so a reply lands in Support on
       // a conversation linked to this order (server/domain/support/customerMail.js).

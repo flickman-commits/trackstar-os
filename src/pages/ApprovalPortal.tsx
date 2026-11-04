@@ -24,22 +24,27 @@ import SlideToApprove from '@/components/SlideToApprove'
 const T = {
   page: '#F6F5F2',
   card: '#FFFFFF',
-  line: '#E7E4DD',
+  line: '#E0E0E0',
   ink: '#1A1A1A',
-  muted: '#6B6B6B',
-  faint: '#9A9A9A',
+  muted: '#666666',
+  faint: '#999999',
   accent: '#4600D6',
-  bar: '#242424',
-  radius: 16,
+  bar: '#1A1A1A',
+  /** The site's panel system: 18px section panels, 8px cards inside them, 5px buttons. */
+  radius: 18,
+  cardRadius: 8,
   font: "Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif",
   /** One card. Used for every section so they cannot drift apart. */
   cardStyle: {
     backgroundColor: '#FFFFFF',
-    border: '1px solid #E7E4DD',
-    borderRadius: 16,
+    border: '1px solid #E0E0E0',
+    borderRadius: 8,
     boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
   } as const,
 }
+
+/** Buttons, per the brand guide: 5px corners, sentence case, 16px bold, 48px tall. */
+const BTN = 'w-full min-h-[48px] px-6 py-3 text-[16px] font-bold rounded-[5px] transition-colors duration-150 disabled:opacity-40 flex items-center justify-center gap-2'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -394,7 +399,7 @@ export default function ApprovalPortal() {
 
   if (state === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: T.page, fontFamily: T.font }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: T.page, fontFamily: T.font, letterSpacing: '-0.04em' }}>
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" style={{ color: '#666666' }} />
           <p style={{ color: '#666666', fontSize: '14px' }}>Loading your design...</p>
@@ -406,11 +411,11 @@ export default function ApprovalPortal() {
   // ═══ ERROR ═══
   if (state === 'error') {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: T.page, fontFamily: T.font }}>
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: T.page, fontFamily: T.font, letterSpacing: '-0.04em' }}>
         <div className="text-center max-w-sm">
           <img src="/trackstar-stars-transparent.png" alt="Trackstar" className="h-8 mx-auto mb-8" />
           <XCircle className="w-12 h-12 mx-auto mb-4" style={{ color: '#4600D6' }} />
-          <h1 style={{ color: '#1A1A1A', fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>Something went wrong</h1>
+          <h1 style={{ color: '#1A1A1A', fontSize: '26px', fontWeight: 700, marginBottom: '8px', lineHeight: 1.1 }}>Something went wrong</h1>
           <p style={{ color: '#666666', fontSize: '14px' }}>{errorMessage}</p>
         </div>
       </div>
@@ -420,11 +425,11 @@ export default function ApprovalPortal() {
   // ═══ EXPIRED ═══
   if (state === 'expired') {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: T.page, fontFamily: T.font }}>
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: T.page, fontFamily: T.font, letterSpacing: '-0.04em' }}>
         <div className="text-center max-w-sm">
           <img src="/trackstar-stars-transparent.png" alt="Trackstar" className="h-8 mx-auto mb-8" />
           <AlertTriangle className="w-12 h-12 mx-auto mb-4" style={{ color: '#4600D6' }} />
-          <h1 style={{ color: '#1A1A1A', fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>Link expired</h1>
+          <h1 style={{ color: '#1A1A1A', fontSize: '26px', fontWeight: 700, marginBottom: '8px', lineHeight: 1.1 }}>Link expired</h1>
           <p style={{ color: '#666666', fontSize: '14px' }}>This approval link has expired. Reach out to us and we'll send a fresh one.</p>
         </div>
       </div>
@@ -446,7 +451,7 @@ export default function ApprovalPortal() {
     const sortedBatches = [...batchMap.entries()].sort((a, b) => b[0] - a[0])
 
     return (
-      <div className="min-h-screen" style={{ backgroundColor: T.page, fontFamily: T.font }}>
+      <div className="min-h-screen" style={{ backgroundColor: T.page, fontFamily: T.font, letterSpacing: '-0.04em' }}>
         {/* Lightbox */}
         {lightboxUrl && (
           <div
@@ -505,7 +510,7 @@ export default function ApprovalPortal() {
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-2 mb-3">
               <CheckCircle2 className="w-5 h-5" style={{ color: '#4600D6' }} />
-              <h1 style={{ color: '#1A1A1A', fontSize: '20px', fontWeight: 700, letterSpacing: '0.01em' }}>
+              <h1 style={{ color: '#1A1A1A', fontSize: '26px', fontWeight: 700, lineHeight: 1.1 }}>
                 Design approved.
               </h1>
             </div>
@@ -532,8 +537,8 @@ export default function ApprovalPortal() {
               href="https://yotpo.com/go/nHef7FVS"
               target="_blank"
               rel="noopener noreferrer"
-              className="w-1/2 text-center px-3 py-2.5 text-sm font-medium transition-colors"
-              style={{ backgroundColor: 'transparent', border: '1px solid #4600D6', color: '#4600D6', borderRadius: 0 }}
+              className="w-1/2 text-center px-3 py-3 text-[16px] font-bold transition-colors min-h-[48px] flex items-center justify-center"
+              style={{ backgroundColor: 'transparent', border: '1.5px solid #4600D6', color: '#4600D6', borderRadius: 5 }}
             >
               Leave a Review
             </a>
@@ -541,8 +546,8 @@ export default function ApprovalPortal() {
               href="https://www.trackstar.art/collections/marathons"
               target="_blank"
               rel="noopener noreferrer"
-              className="w-1/2 text-center px-3 py-2.5 text-sm font-medium transition-colors"
-              style={{ backgroundColor: 'transparent', border: '1px solid #4600D6', color: '#4600D6', borderRadius: 0 }}
+              className="w-1/2 text-center px-3 py-3 text-[16px] font-bold transition-colors min-h-[48px] flex items-center justify-center"
+              style={{ backgroundColor: 'transparent', border: '1.5px solid #4600D6', color: '#4600D6', borderRadius: 5 }}
             >
               Build Your Collection
             </a>
@@ -600,7 +605,7 @@ export default function ApprovalPortal() {
 
           {/* Footer */}
           <div className="mt-12 pt-6 text-center" style={{ borderTop: '1px solid #E0E0E0' }}>
-            <p style={{ fontSize: '11px', color: '#999999', letterSpacing: '0.05em' }}>
+            <p style={{ fontSize: '14px', color: '#999999' }}>
               Trackstar - Celebrating athletic achievement.
             </p>
           </div>
@@ -612,13 +617,13 @@ export default function ApprovalPortal() {
   // ═══ REVISION SUBMITTED — success state ═══
   if (state === 'revision_submitted') {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: T.page, fontFamily: T.font }}>
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: T.page, fontFamily: T.font, letterSpacing: '-0.04em' }}>
         <div className="text-center max-w-sm">
           <img src="/trackstar-stars-transparent.png" alt="Trackstar" className="h-8 mx-auto mb-8" />
           <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(200, 85, 61, 0.1)' }}>
             <CheckCircle2 className="w-10 h-10" style={{ color: '#C8553D' }} />
           </div>
-          <h1 style={{ color: '#1A1A1A', fontSize: '24px', fontWeight: 700, marginBottom: '12px', letterSpacing: '0.01em' }}>
+          <h1 style={{ color: '#1A1A1A', fontSize: '26px', fontWeight: 700, marginBottom: '12px', lineHeight: 1.1 }}>
             Revision request received.
           </h1>
           <p style={{ color: '#666666', fontSize: '15px', lineHeight: 1.6, marginBottom: '8px' }}>
@@ -659,7 +664,7 @@ export default function ApprovalPortal() {
     : null
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: T.page, fontFamily: T.font }}>
+    <div className="min-h-screen" style={{ backgroundColor: T.page, fontFamily: T.font, letterSpacing: '-0.04em' }}>
       {/* Approve confirmation modal */}
       {proofBeingConfirmed && (
         <div
@@ -667,9 +672,9 @@ export default function ApprovalPortal() {
           style={{ backgroundColor: 'rgba(26, 26, 26, 0.6)' }}
           onClick={(e) => { if (e.target === e.currentTarget && !submitting) setConfirmApproveProofId(null) }}
         >
-          <div className="max-w-sm w-full" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E0E0' }}>
+          <div className="max-w-sm w-full" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E0E0', borderRadius: 18 }}>
             <div className="p-6">
-              <h3 style={{ color: '#1A1A1A', fontSize: '18px', fontWeight: 700, margin: '0 0 12px' }}>
+              <h3 style={{ color: '#1A1A1A', fontSize: '20px', fontWeight: 700, margin: '0 0 12px', lineHeight: 1.15 }}>
                 Approve {proofBeingConfirmedOptionNum && proofs.filter(p => p.status === 'pending').length > 1 ? `Option ${proofBeingConfirmedOptionNum}` : 'this design'}?
               </h3>
               <p style={{ color: '#666666', fontSize: '14px', margin: '0 0 20px', lineHeight: 1.55 }}>
@@ -681,18 +686,18 @@ export default function ApprovalPortal() {
                 <button
                   onClick={() => setConfirmApproveProofId(null)}
                   disabled={submitting}
-                  className="flex-1 px-4 py-3 text-sm font-medium transition-colors disabled:opacity-40"
-                  style={{ backgroundColor: '#FFFFFF', color: '#1A1A1A', border: '1px solid #E0E0E0' }}
+                  className="flex-1 min-h-[48px] px-4 py-3 text-[16px] font-bold rounded-[5px] transition-colors disabled:opacity-40"
+                  style={{ backgroundColor: 'transparent', color: '#4600D6', border: '1.5px solid #4600D6' }}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => handleApprove(confirmApproveProofId!)}
                   disabled={submitting}
-                  className="flex-1 px-4 py-3 text-sm font-bold transition-colors disabled:opacity-40 flex items-center justify-center gap-2 uppercase tracking-wide"
+                  className="flex-1 min-h-[48px] px-4 py-3 text-[16px] font-bold rounded-[5px] transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
                   style={{ backgroundColor: '#4600D6', color: '#FFFFFF' }}
                 >
-                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Yes, Approve'}
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Yes, approve'}
                 </button>
               </div>
             </div>
@@ -757,7 +762,7 @@ export default function ApprovalPortal() {
       <div className="max-w-3xl mx-auto px-4 pt-3 pb-1">
         <div
           className="flex items-center justify-between gap-3 pl-1.5 pr-1.5 py-1.5"
-          style={{ backgroundColor: T.bar, borderRadius: 24 }}
+          style={{ backgroundColor: T.bar, borderRadius: 18 }}
         >
           <span
             className="flex items-center justify-center shrink-0 overflow-hidden"
@@ -802,7 +807,7 @@ export default function ApprovalPortal() {
               is the subject of the page rather than a salutation. */}
           {/* Partners' title moved up into the bar. Customers keep the greeting. */}
           {!isPartner && (
-            <h1 style={{ color: '#1A1A1A', fontSize: '24px', fontWeight: 700, marginBottom: '4px', letterSpacing: '-0.01em' }}>
+            <h1 style={{ color: '#1A1A1A', fontSize: '26px', fontWeight: 700, marginBottom: '8px', lineHeight: 1.1 }}>
               {order?.customerName ? `Hey ${order.customerName}.` : 'Your design is ready.'}
             </h1>
           )}
@@ -815,12 +820,10 @@ export default function ApprovalPortal() {
                 backgroundColor: T.card,
                 color: T.accent,
                 border: `1px solid ${T.line}`,
-                borderRadius: 8,
-                padding: '5px 10px',
-                fontSize: '11px',
-                fontWeight: 700,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
+                borderRadius: 999,
+                padding: '5px 12px',
+                fontSize: '14px',
+                fontWeight: 500,
               }}
             >
               Presented by Trackstar
@@ -849,7 +852,7 @@ export default function ApprovalPortal() {
             <div>
               <span
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md mb-3"
-                style={{ backgroundColor: 'rgba(217, 119, 6, 0.12)', color: '#B45309', fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}
+                style={{ backgroundColor: 'rgba(242, 140, 40, 0.14)', color: '#9A4F0A', fontSize: '14px', fontWeight: 500, borderRadius: 999 }}
               >
                 In revision
               </span>
@@ -876,7 +879,7 @@ export default function ApprovalPortal() {
           )}
           {order?.designerNote && (
             <div style={{ ...T.cardStyle, marginTop: '16px', padding: '14px 16px', borderLeft: `3px solid ${T.accent}` }}>
-              <p style={{ color: '#666666', fontSize: '12px', fontWeight: 600, marginBottom: '4px', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Note from our designer</p>
+              <p style={{ color: '#666666', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>Note from our designer</p>
               <p style={{ color: '#1A1A1A', fontSize: '14px', lineHeight: 1.6, whiteSpace: 'pre-wrap' as const, margin: 0 }}>{order.designerNote}</p>
             </div>
           )}
@@ -889,7 +892,7 @@ export default function ApprovalPortal() {
             of getting us what we needed). */}
         {messages.length > 0 && !hasPendingProofs && (
           <div className="mb-4" style={{ ...T.cardStyle, padding: '18px' }}>
-            <p style={{ color: '#666666', fontSize: '12px', fontWeight: 600, marginBottom: '12px', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>
+            <p style={{ color: '#666666', fontSize: '14px', fontWeight: 500, marginBottom: '12px' }}>
               Questions from our designer
             </p>
             <div className="space-y-3" style={{ marginBottom: '16px' }}>
@@ -928,10 +931,10 @@ export default function ApprovalPortal() {
             <button
               onClick={handleSendReply}
               disabled={sendingReply || !reply.trim()}
-              className="w-full mt-2 px-4 py-3 text-sm font-bold transition-colors disabled:opacity-40 flex items-center justify-center gap-2 uppercase tracking-wide"
+              className={`${BTN} mt-2`}
               style={{ backgroundColor: '#4600D6', color: '#FFFFFF' }}
             >
-              {sendingReply ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Reply'}
+              {sendingReply ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send reply'}
             </button>
           </div>
         )}
@@ -1011,7 +1014,7 @@ export default function ApprovalPortal() {
                               style={{
                                 backgroundColor: T.card,
                                 border: isRevising ? `2px solid ${T.ink}` : `1px solid ${T.line}`,
-                                borderRadius: T.radius,
+                                borderRadius: T.cardRadius,
                                 boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                               }}
                             >
@@ -1098,11 +1101,11 @@ export default function ApprovalPortal() {
                                 <button
                                   onClick={() => setConfirmApproveProofId(proof.id)}
                                   disabled={submitting || isRevising}
-                                  className="hidden md:flex w-full px-4 py-3 text-sm font-bold transition-colors disabled:opacity-40 items-center justify-center gap-2 uppercase tracking-wide"
+                                  className={`${BTN} hidden md:flex`}
                                   style={{ backgroundColor: '#4600D6', color: '#FFFFFF' }}
                                 >
                                   <CheckCircle2 className="w-4 h-4" />
-                                  {visibleProofs.length === 1 ? 'Approve This Design' : `Approve Option ${optionNum}`}
+                                  {visibleProofs.length === 1 ? 'Approve this design' : `Approve option ${optionNum}`}
                                 </button>
                                 <button
                                   onClick={() => {
@@ -1110,14 +1113,14 @@ export default function ApprovalPortal() {
                                     setFeedback('')
                                   }}
                                   disabled={submitting}
-                                  className="w-full px-4 py-2.5 text-sm transition-colors disabled:opacity-40 flex items-center justify-center gap-2 rounded-[5px] md:rounded-none font-bold uppercase tracking-wide md:font-medium md:normal-case md:tracking-normal min-h-[58px] md:min-h-0"
+                                  className={BTN}
                                   style={{
-                                    backgroundColor: isRevising ? '#1A1A1A' : '#FFFFFF',
-                                    color: isRevising ? '#FFFFFF' : '#1A1A1A',
-                                    border: '1px solid #1A1A1A'
+                                    backgroundColor: isRevising ? '#4600D6' : 'transparent',
+                                    color: isRevising ? '#FFFFFF' : '#4600D6',
+                                    border: '1.5px solid #4600D6'
                                   }}
                                 >
-                                  {isRevising ? 'Close revisions form' : (visibleProofs.length === 1 ? 'Request Revision to this Design' : `Request Revision to Option ${optionNum}`)}
+                                  {isRevising ? 'Close the changes form' : (visibleProofs.length === 1 ? 'Request changes' : `Request changes to option ${optionNum}`)}
                                 </button>
 
                                 {/* Inline revisions form — expands below the
@@ -1142,10 +1145,10 @@ export default function ApprovalPortal() {
                                     <button
                                       onClick={() => handleRequestRevision(proof.id)}
                                       disabled={submitting || !feedback.trim()}
-                                      className="w-full px-4 py-3 text-sm font-bold transition-colors disabled:opacity-40 flex items-center justify-center gap-2 uppercase tracking-wide"
-                                      style={{ backgroundColor: '#1A1A1A', color: '#FFFFFF' }}
+                                      className={BTN}
+                                      style={{ backgroundColor: '#4600D6', color: '#FFFFFF' }}
                                     >
-                                      {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : `Send Revisions${visibleProofs.length > 1 ? ` for Option ${optionNum}` : ''}`}
+                                      {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : `Send changes${visibleProofs.length > 1 ? ` for option ${optionNum}` : ''}`}
                                     </button>
                                   </div>
                                 )}
@@ -1317,7 +1320,7 @@ export default function ApprovalPortal() {
 
         {/* Footer */}
         <div className="mt-12 pt-6 text-center" style={{ borderTop: '1px solid #E0E0E0' }}>
-          <p style={{ fontSize: '11px', color: '#999999', letterSpacing: '0.05em' }}>
+          <p style={{ fontSize: '14px', color: '#999999' }}>
             Trackstar - Celebrating athletic achievement.
           </p>
         </div>

@@ -46,6 +46,7 @@ import { slackTo, slackApi } from '../../server/lib/slack.js'
 import { sendPublicError } from '../../server/lib/publicError.js'
 import { sendEmail } from '../../server/lib/email.js'
 import { sendOrderEmail, customerMailReady } from '../../server/domain/support/customerMail.js'
+import { renderCustomerEmail, escapeHtml } from '../../server/lib/customerEmail.js'
 import { designDueDate } from '../../server/domain/orders/designDue.js'
 
 // Build the customer-facing approval/portal URL. Prod uses the Vercel
@@ -504,43 +505,15 @@ async function handleNotifyCustomDelay({ orderNumber, daysLate }, res, actor) {
 
   // On-brand email template — matches the proof email style (cream bg, dark
   // text, purple accent). Helvetica Neue for consistency.
-  const emailHtml = `
-<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#F7F5F0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F7F5F0;padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
-        <!-- Logo -->
-        <tr><td style="padding:0 0 32px;text-align:center;">
-          <img src="https://www.trackstar.art/cdn/shop/files/Trackstar_Logo_Cropped.png?height=28&v=1757377797" alt="Trackstar" height="28" style="height:28px;" />
-        </td></tr>
-        <!-- Body -->
-        <tr><td style="padding:32px;background-color:#FFFFFF;border:1px solid #E8E6E1;">
-          <h1 style="margin:0 0 20px;font-size:22px;color:#1A1A1A;font-weight:700;letter-spacing:0.02em;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">A quick heads-up on your order</h1>
-          <p style="margin:0 0 14px;font-size:15px;color:#555555;line-height:1.6;">Hey ${firstName},</p>
-          <p style="margin:0 0 14px;font-size:15px;color:#555555;line-height:1.6;">
-            Quick update - we've been swamped with custom orders the past couple of weeks, and things are running slightly behind where we'd hoped.
-          </p>
-          <p style="margin:0 0 14px;font-size:15px;color:#555555;line-height:1.6;">
-            We haven't forgotten you. We refuse to put out a design we're not proud of, so ${dueDateLine}
-          </p>
-          <p style="margin:0 0 14px;font-size:15px;color:#555555;line-height:1.6;">
-            We're sorry for the wait, and we promise it'll be worth it. We believe in keeping you in the loop, so we wanted to tell you personally. Excited to share your design soon.
-          </p>
-          <p style="margin:24px 0 0;font-size:15px;color:#555555;line-height:1.6;">
-            Thanks for your patience,<br/>
-            <strong>The Trackstar Design Team</strong>
-          </p>
-        </td></tr>
-        <!-- Footer -->
-        <tr><td style="padding:24px 0 0;text-align:center;">
-          <p style="margin:0;font-size:11px;color:#999999;letter-spacing:0.05em;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Trackstar - Celebrating athletic achievement.</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body></html>`
+  const emailHtml = renderCustomerEmail({
+    greeting: `Hey ${firstName},`,
+    paragraphs: [
+      "Quick update: we've been swamped with custom orders the past couple of weeks, and things are running slightly behind where we'd hoped.",
+      `We haven't forgotten you. We refuse to put out a design we're not proud of, so ${escapeHtml(dueDateLine.replace(/<[^>]+>/g, ''))}`,
+      "We're sorry for the wait, and we promise it'll be worth it. We wanted to tell you ourselves rather than leave you wondering. Excited to share your design soon.",
+    ],
+    signoff: 'The Trackstar design team',
+  })
 
   // From fast@ through the support mailbox; Resend only while it is not connected.
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'Trackstar <proofs@orders.trackstar.art>'
@@ -622,36 +595,15 @@ async function handleMessageCustomer({ orderId, body }, res, actor) {
   // On-brand email — mirrors the proof/delay templates (cream bg, purple CTA,
   // Helvetica Neue). Intentionally does NOT include the question text: we want
   // the customer to answer in the portal, not reply by email.
-  const emailHtml = `
-<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#F7F5F0;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F7F5F0;padding:40px 20px;">
-    <tr><td align="center">
-      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
-        <tr><td style="padding:0 0 32px;text-align:center;">
-          <img src="https://www.trackstar.art/cdn/shop/files/Trackstar_Logo_Cropped.png?height=28&v=1757377797" alt="Trackstar" height="28" style="height:28px;" />
-        </td></tr>
-        <tr><td style="padding:32px;background-color:#FFFFFF;border:1px solid #E8E6E1;">
-          <h1 style="margin:0 0 16px;font-size:22px;color:#1A1A1A;font-weight:700;letter-spacing:0.02em;">Your designer has a question</h1>
-          <p style="margin:0 0 14px;font-size:15px;color:#555555;line-height:1.6;">Hey ${firstName},</p>
-          <p style="margin:0 0 24px;font-size:15px;color:#555555;line-height:1.6;">
-            We're working on your custom design for order ${displayNum} and our designer has a quick question for you. Tap below to read it and reply - it only takes a moment, and it helps us get your design just right.
-          </p>
-          <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:0 0 8px;">
-            <a href="${portalUrl}" style="display:inline-block;background-color:#4600D6;color:#FFFFFF;font-size:15px;font-weight:700;text-decoration:none;padding:14px 32px;letter-spacing:0.03em;">VIEW &amp; REPLY</a>
-          </td></tr></table>
-          <p style="margin:20px 0 0;font-size:13px;color:#999999;line-height:1.6;text-align:center;">
-            Please reply in the portal rather than to this email so nothing gets lost.
-          </p>
-        </td></tr>
-        <tr><td style="padding:24px 0 0;text-align:center;">
-          <p style="margin:0;font-size:11px;color:#999999;letter-spacing:0.05em;">Trackstar - Celebrating athletic achievement.</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body></html>`
+  const emailHtml = renderCustomerEmail({
+    greeting: `Hey ${firstName},`,
+    paragraphs: [
+      `We're working on your custom design for order ${escapeHtml(displayNum)} and our designer has a quick question for you. It only takes a moment, and it helps us get your design just right.`,
+    ],
+    note: text,
+    cta: { label: 'Read and reply', url: portalUrl },
+    after: ['Reply on that page rather than to this email, so your designer sees it right away.'],
+  })
 
   // From fast@ through the support mailbox; Resend only while it is not connected.
   // No "(Action Required)": from a domain a filter has not seen, that reads as phishing.
