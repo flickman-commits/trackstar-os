@@ -27,6 +27,10 @@ const MAX_THREADS = 200
 const CONCURRENCY = 5
 // Stop starting new threads before the function's 300s runs out; the rest wait for the next pass.
 const BUDGET_MS = 230_000
+// This many failures in a row before anything is read means the model is down: stop and say so.
+const DOWN_AFTER = 5
+// Set while a pass left conversations unread because of errors; the hourly retry runs only then.
+const RETRY_KEY = 'support_triage_retry'
 
 /** What counts as urgent, in the order the Slack list groups them. */
 export const URGENT = {
@@ -121,9 +125,10 @@ export async function triagePending({ dryRun = false } = {}) {
 
   const started = Date.now()
   const results = []
-  let failed = 0, next = 0
+  let failed = 0, next = 0, firstError = null
+  const down = () => failed >= DOWN_AFTER && results.length === 0
   async function worker() {
-    while (next < due.length && Date.now() - started < BUDGET_MS) {
+    while (next < due.length && Date.now() - started < BUDGET_MS && !down()) {
       const t = due[next++]
       try {
         const d = await triageThread(t)
@@ -138,6 +143,7 @@ export async function triagePending({ dryRun = false } = {}) {
         }
       } catch (err) {
         failed++
+        firstError ||= String(err?.message || err).slice(0, 300)
         console.warn(`[support.triage] ${t.id}: ${err.message}`)
       }
     }
@@ -146,9 +152,11 @@ export async function triagePending({ dryRun = false } = {}) {
 
   const urgent = results.filter(r => r.urgent)
   return {
-    status: dryRun ? 'dry-run' : 'done',
+    status: dryRun ? 'dry-run' : down() ? 'down' : 'done',
     read: results.length,
     failed,
+    firstError,
+    due: due.length,
     left: due.length - next,
     starred: urgent.filter(r => !r.t.priority).length,
     urgent: urgent.map(r => ({ id: r.t.id, who: r.t.customerName || r.t.customerEmail || (r.t.igUsername ? `@${r.t.igUsername}` : 'Unknown'), subject: r.t.subject, category: r.category, reason: r.reason, alreadyStarred: r.t.priority })),
@@ -165,9 +173,22 @@ const whoOf = t => slackText(t.customerName || t.customerEmail || (t.igUsername 
  * three oldest urgent ones to start with. Why each is urgent is a note in
  * the conversation, not in Slack.
  */
-export async function scheduledTriage() {
+export async function scheduledTriage({ retryOnly = false } = {}) {
+  // The hourly retry only runs after a pass that could not read everything.
+  if (retryOnly && !(await prisma.systemConfig.findUnique({ where: { key: RETRY_KEY } }))) return { status: 'skipped', reason: 'Nothing to retry.' }
   const out = await triagePending()
-  if (out.status !== 'done') return out
+  if (out.status === 'skipped') return out
+  const unread = out.failed > 0 || out.status === 'down'
+  if (unread) await prisma.systemConfig.upsert({ where: { key: RETRY_KEY }, create: { key: RETRY_KEY, value: new Date().toISOString() }, update: { value: new Date().toISOString() } })
+  else await prisma.systemConfig.deleteMany({ where: { key: RETRY_KEY } })
+
+  // Could not reach the model: say so loudly, once, and do not tell the team "nothing urgent".
+  if (out.status === 'down') {
+    if (!retryOnly) await slackTo('alerts', `:warning: *Support triage could not reach Claude*, so none of the ${out.due} waiting conversations were read and nothing was marked urgent. It tries again every hour until it works.\nError: ${slackText(out.firstError || 'unknown', 300)}`, { or: 'matt' })
+    return out
+  }
+  // A retry that did nothing new stays quiet.
+  if (retryOnly && !out.read) return out
   const starred = await prisma.supportThread.findMany({
     where: { status: 'open', priority: true, filtered: false, mergedIntoId: null },
     orderBy: { lastInboundAt: 'asc' },
@@ -180,7 +201,7 @@ export async function scheduledTriage() {
   // Short: that it ran and the counts. Who and why are in Support and in each conversation's note.
   const report = [
     `_Support Triage_ · ${when} ET`,
-    `Read ${out.read} new conversation${out.read === 1 ? '' : 's'}, marked *${out.starred} urgent*. ${starred.length} urgent open in <${base}/support|Support>.${out.left ? ` ${out.left} wait for the next pass.` : ''}${out.failed ? ` ${out.failed} could not be read.` : ''}`,
+    `Read ${out.read} new conversation${out.read === 1 ? '' : 's'}, marked *${out.starred} urgent*. ${starred.length} urgent open in <${base}/support|Support>.${out.left ? ` ${out.left} wait for the next pass.` : ''}${out.failed ? ` *${out.failed} could not be read* (${slackText(out.firstError || 'unknown error', 160)}); it tries them again within the hour.` : ''}`,
   ].join('\n')
   await slackTo('reports', report, { or: 'matt' })
 
@@ -194,6 +215,7 @@ export async function scheduledTriage() {
     ...starred.slice(0, 3).map(t => `• ${link(t)}`),
     starred.length > 3 ? `The rest are in <${base}/support|Support>, sorted Priority first.` : null,
   ].filter(Boolean).join('\n')
-  await slackTo('support', summary)
+  // The team's summary goes with the two scheduled passes, not with retries.
+  if (!retryOnly) await slackTo('support', summary)
   return out
 }

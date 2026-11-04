@@ -70,6 +70,7 @@ export const supportTools = [
     async handler({ dryRun }) {
       const out = await triagePending({ dryRun })
       if (out.status === 'skipped') throw new ToolError(out.reason)
+      if (out.status === 'down') throw new ToolError(`Could not reach the model, so nothing was read (${out.failed} tries failed). Try again shortly.`)
       return {
         summary: dryRun ? `Triage dry run: ${out.urgent.length} of ${out.read} urgent` : `Triaged ${out.read} Support conversations, starred ${out.starred}`,
         dryRun, read: out.read, failed: out.failed, left: out.left, starred: dryRun ? 0 : out.starred,
