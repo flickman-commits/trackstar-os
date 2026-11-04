@@ -625,6 +625,13 @@ export default function Dashboard() {
   const lastUrlRef = useRef<string | null>(urlOrderRef)
   const replaceNextUrl = useRef(false)
   const lookedUpRef = useRef<string | null>(null)
+  // A link straight to an order (/orders/7566, a reload, back to an order):
+  // until that order is open, its place shows loading rather than the table,
+  // so the page never draws the list and then jumps. Not while an order is
+  // closing (the address still names it for a moment, and it was the one
+  // open), and it ends when the order opens or is not found (the address
+  // goes back to the list).
+  const openingFromLink = !!urlOrderRef && !selectedOrder && !showCompleted && lastSelectedRef.current !== urlOrderRef
   useEffect(() => {
     const open = (o: Order) => { lastSelectedRef.current = orderRefOf(o); setSelectedOrder(o) }
     // The order behind a ref: from the loaded list first, otherwise fetched on its own.
@@ -1274,7 +1281,7 @@ export default function Dashboard() {
       <div className="max-w-[1800px] mx-auto px-4 md:px-6 lg:px-8 w-full flex flex-col h-full">
         {/* Header - Compact bar on mobile, full greeting on desktop */}
         {/* The phone header: stars, count, tool name, the view picker. */}
-        {!inlineDetail && (
+        {!inlineDetail && !openingFromLink && (
           <PageHeader
             title={activeView === 'standard' ? 'Standard Orders' : activeView === 'custom' ? 'Custom Orders' : activeView === 'bulk' ? 'Bulk Orders' : 'Partners'}
             pill={`${activeView === 'bulk' ? (bulkCount ?? '') : fulfillable.length} orders`}
@@ -1318,7 +1325,13 @@ export default function Dashboard() {
 
         {/* Orders to Personalize Section. While an order is open, its header
             stays and the order takes the table's place (inlineDetail). */}
-        {!isLoading && (
+        {openingFromLink && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 py-16 text-sm text-off-black/50">
+            <Loader2 className="w-6 h-6 animate-spin text-off-black/40" />
+            Opening order {urlOrderRef}…
+          </div>
+        )}
+        {!isLoading && !openingFromLink && (
         <section className={inlineDetail ? 'flex-shrink-0 flex flex-col' : `flex-1 flex flex-col min-h-0 pb-4 ${activeView === 'race_partner' && completedOrders.length > 0 ? '' : 'md:pb-6'}`}>
           {/* Section Header */}
           <div className={`items-center justify-between mb-3 md:mb-4 flex-shrink-0 hidden md:flex`}>
@@ -1990,7 +2003,7 @@ export default function Dashboard() {
 
         {/* Bottom bar: Partners' completed orders. Standard and custom show
             theirs in the list, so they have no bar and the table runs to the bottom. */}
-        {!isLoading && !inlineDetail && activeView === 'race_partner' && completedOrders.length > 0 && (
+        {!isLoading && !inlineDetail && !openingFromLink && activeView === 'race_partner' && completedOrders.length > 0 && (
           <div className="flex-shrink-0 py-1.5 md:py-4 md:mt-2 mb-2 md:mb-8 md:border-t border-border-gray/50">
             <div className="flex items-center justify-center gap-3">
               {(
@@ -2150,7 +2163,7 @@ export default function Dashboard() {
         {/* Race Database Full-Screen Overlay */}
 
         {/* Loading State */}
-        {isLoading && (
+        {isLoading && !openingFromLink && (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-8 h-8 animate-spin text-off-black/40" />
           </div>
