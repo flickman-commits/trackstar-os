@@ -317,7 +317,7 @@ export async function attachLaterPhoto(token, path) {
     data: { photoPath: String(path), photoAddedManually: false, photoFree: false, photoPlacedAt: null, photoLaterClosedAt: new Date(), photoLaterOutcome: 'uploaded' },
   })
   if (!count) throw new PhotoLaterError('closed', 409)
-  await prisma.orderComment.create({ data: { orderId: o.id, authorId: null, authorName: 'TrackstarOS', text: 'The customer uploaded their photo after the race. The print renders with it on the next run.' } })
+  await prisma.orderComment.create({ data: { orderId: o.id, authorId: null, authorName: 'TrackstarOS', text: 'The customer uploaded their photo after the race. The print renders with it once everything else for it is in.' } })
   return pageView({ ...o, photoPath: String(path), photoLaterClosedAt: new Date(), photoLaterOutcome: 'uploaded' })
 }
 
