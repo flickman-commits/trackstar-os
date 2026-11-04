@@ -753,25 +753,18 @@ export default function ApprovalPortal() {
           Matt sent, and the same dark grey as the tool's own rail so the two
           Trackstar surfaces rhyme.
 
-          The logo sits in a white chip. The asset is purple artwork on a light
-          background with no alpha channel, so dropped straight onto the dark
-          bar it would show as a pale rectangle - and the purple is too close to
-          the bar in value to knock out cleanly. A white chip keeps the mark on
-          the ground it was drawn for. A proper light-on-dark lockup would let
-          it sit directly on the bar. */}
+          The white wordmark from the brand CDN sits straight on the ink bar,
+          per the brand guide (white on dark, never retyped). */}
       <div className="max-w-3xl mx-auto px-4 pt-3 pb-1">
         <div
-          className="flex items-center justify-between gap-3 pl-1.5 pr-1.5 py-1.5"
+          className="flex items-center justify-between gap-3 pl-1.5 pr-1.5 py-2.5"
           style={{ backgroundColor: T.bar, borderRadius: 18 }}
         >
-          <span
-            className="flex items-center justify-center shrink-0 overflow-hidden"
-            // #F3F3F3 is the logo file's own background, sampled from the
-            // asset, so the chip and the artwork meet with no visible seam.
-            style={{ backgroundColor: '#F3F3F3', borderRadius: 999, padding: '2px 10px' }}
-          >
-            <img src="/trackstar-logo.png" alt="Trackstar" className="h-8 w-auto" />
-          </span>
+          <img
+            src="https://www.trackstar.art/cdn/shop/files/Trackstar_White_Logo_Cropped.png"
+            alt="Trackstar"
+            className="shrink-0 h-5 w-auto ml-3"
+          />
           {/* The partner's name lives in the bar, beside the mark. It is still
               the page's h1 - it is the title, it just sits where a title sits
               in the reference. Wraps rather than truncates, per Matt: a
@@ -863,7 +856,7 @@ export default function ApprovalPortal() {
               </p>
             </div>
           )}
-          {/* "Don't email us" callout — light purple, sits right under the
+          {/* "Don't email us" callout, a white card (purple is never a background), sits right under the
               subheader so customers see it before they even scroll to the
               designs. Brand purple #4600D6 at low opacity.
 
@@ -871,9 +864,9 @@ export default function ApprovalPortal() {
               support policy, and that relationship runs on email in both
               directions. */}
           {hasPendingProofs && !isPartner && (
-            <div style={{ marginTop: '14px', padding: '12px 16px', backgroundColor: 'rgba(70, 0, 214, 0.05)', border: '1px solid rgba(70, 0, 214, 0.15)', borderRadius: 12 }}>
-              <p style={{ color: '#1A1A1A', fontSize: '13px', margin: 0, lineHeight: 1.5 }}>
-                <strong style={{ color: '#4600D6' }}>Please don't email us with revisions</strong> - tap <strong>Request Revision to this Design</strong> on the design you want changed.
+            <div style={{ marginTop: '14px', padding: '12px 16px', backgroundColor: '#FFFFFF', border: '1px solid #E0E0E0', borderRadius: 8 }}>
+              <p style={{ color: '#1A1A1A', fontSize: '14px', margin: 0, lineHeight: 1.4 }}>
+                Want something changed? Tap <strong style={{ color: '#4600D6' }}>Request changes</strong> under that design rather than emailing us, so it reaches your designer right away.
               </p>
             </div>
           )}
@@ -1092,7 +1085,7 @@ export default function ApprovalPortal() {
                                     the button plus dialog. */}
                                 <div className="md:hidden">
                                   <SlideToApprove
-                                    label={visibleProofs.length === 1 ? 'Slide to approve' : `Slide to approve Option ${optionNum}`}
+                                    label={visibleProofs.length === 1 ? 'Slide to approve' : `Slide to approve option ${optionNum}`}
                                     disabled={submitting || isRevising}
                                     busy={submitting}
                                     onComplete={() => handleApprove(proof.id)}

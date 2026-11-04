@@ -88,7 +88,7 @@ export default function SlideToApprove({ label, onComplete, disabled, busy, acce
         />
       )}
       <div
-        className="absolute inset-0 flex items-center justify-center text-sm font-bold uppercase tracking-wide pointer-events-none"
+        className="absolute inset-0 flex items-center justify-center text-[16px] font-bold pointer-events-none"
         style={{ paddingLeft: KNOB + PAD, color: done || busy ? '#FFFFFF' : '#1A1A1A', opacity: done || busy ? 1 : 1 - progress * 1.4 }}
       >
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : done ? 'Approved' : label}
