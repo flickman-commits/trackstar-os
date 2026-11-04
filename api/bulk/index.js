@@ -13,6 +13,7 @@
  *     update-runner { id, orderNumber, runnerName?, address? }
  *     research    { id, limit? }             research the next batch of unresearched runners
  *     submitted   { id }                     the sheet went to Artelo
+ *     send-batch  { id, orderNumbers? }      the ready runners (or these) went to Artelo as the next batch
  *     new-intake-link { id }                 rotate the partner's intake token
  *     delete      { id }                     admins only; refused if paid; removes the runners and the unpaid Shopify draft
  */
@@ -26,6 +27,7 @@ import {
   nextNumber, dueDateFor, verifiedRaceDate, parseRunnerList, addRunners, readiness, researchPending,
   addressComplete, FRAME_OPTIONS, SIZE_OPTIONS, sheetProblems, isAllowedFileUrl,
 } from '../../server/domain/bulk/bulkOrders.js'
+import { batchState, markBatchSent } from '../../server/domain/bulk/batches.js'
 import { getCanonicalRaceName } from '../../server/scrapers/index.js'
 import { defaultAssigneeFor } from '../../server/domain/orders/assignment.js'
 import { sendPublicError } from '../../server/lib/publicError.js'
@@ -64,7 +66,9 @@ async function loadOne(id) {
   if (!bulk) return null
   const runners = await prisma.order.findMany({ where: { bulkOrderId: id }, orderBy: { lineItemIndex: 'asc' }, select: RUNNER_SELECT })
   const ready = await readiness(bulk, runners)
+  const batch = await batchState(bulk, runners)
   return {
+    batch,
     ...bulk,
     paymentStatus: paymentStatus(bulk),
     shopifyOrderUrl: shopifyAdminUrl(bulk.shopifyOrderId),
@@ -261,6 +265,13 @@ export default async function handler(req, res) {
       // finish well inside the function's time limit.
       const out = await researchPending(bulk, { limit: Math.min(5, Math.max(1, parseInt(body.limit, 10) || 3)) })
       if (bulk.status === 'collecting') await prisma.bulkOrder.update({ where: { id: bulk.id }, data: { status: 'fulfillment' } })
+      return res.status(200).json({ ...out, bulkOrder: noMoney(await loadOne(bulk.id)) })
+    }
+
+    // A batch of the runners ready now went up to Artelo (server/domain/bulk/batches.js).
+    if (action === 'send-batch') {
+      const out = await markBatchSent(bulk, { orderNumbers: body.orderNumbers, actor })
+      await audit(`Marked batch ${out.n} of ${bulk.number} uploaded to Artelo (${out.count} runner${out.count === 1 ? '' : 's'})`)
       return res.status(200).json({ ...out, bulkOrder: noMoney(await loadOne(bulk.id)) })
     }
 

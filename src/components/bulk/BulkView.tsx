@@ -85,6 +85,18 @@ export interface BulkOrder {
     runners: { total: number; withAddress: number; ok: boolean }
   }
   sheetProblems?: { orderNumber: string; runnerName: string; problem: string }[]
+  /** Sending in batches (server/domain/bulk/batches.js): what went, who is ready, who is waiting, and names still to come. */
+  batch?: {
+    batches: { n: number; sentAt: string; by: string; count: number }[]
+    batchOf: Record<string, number>
+    sent: number
+    ready: string[]
+    readyCount: number
+    waiting: number
+    waitingReasons: Record<string, number>
+    toCome: number
+    nextBatch: number
+  }
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -365,8 +377,8 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
     } catch { toast.error('Check failed') } finally { setChecking(false) }
   }
 
-  const downloadSheet = async (force = false) => {
-    const res = await apiFetch(`${API_BASE}/api/bulk/sheet?id=${id}${force ? '&force=1' : ''}`)
+  const downloadSheet = async (force = false, batch?: string) => {
+    const res = await apiFetch(`${API_BASE}/api/bulk/sheet?id=${id}${force ? '&force=1' : ''}${batch ? `&batch=${batch}` : ''}`)
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
       toast.error(data.error || 'Could not build the sheet', { duration: 8000 })
@@ -391,7 +403,6 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   const st = STATUS_STYLE[b.status] || STATUS_STYLE.collecting
   const canResearch = r.paid && runners.length > 0 && r.scraper.ok
   const allResearched = runners.length > 0 && runners.every(x => x.researched)
-  const problems = b.sheetProblems || []
   const collecting = b.status === 'collecting'
   const fulfilling = b.status === 'fulfillment'
   const submitted = b.status === 'submitted'
@@ -498,7 +509,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
             </thead>
             <tbody>
               {runners.map(x => (
-                <RunnerRow key={x.id} r={x} compact={collecting} reach={reach[x.orderNumber]} editing={editing === x.orderNumber} removeArmed={isArmed(`remove:${x.orderNumber}`)}
+                <RunnerRow key={x.id} r={x} batch={b.batch?.batchOf?.[x.id]} compact={collecting} reach={reach[x.orderNumber]} editing={editing === x.orderNumber} removeArmed={isArmed(`remove:${x.orderNumber}`)}
                   onEdit={() => setEditing(editing === x.orderNumber ? null : x.orderNumber)}
                   onSave={async (fields) => { await act({ action: 'update-runner', orderNumber: x.orderNumber, ...fields }, 'Saved'); setEditing(null); refreshRunners() }}
                   onRemove={async () => { if (arm(`remove:${x.orderNumber}`)) { await act({ action: 'remove-runner', orderNumber: x.orderNumber }, 'Removed'); refreshRunners() } }}
@@ -542,28 +553,50 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
     </div>
   )
 
+  const bt = b.batch
   const arteloCard = (
     <div className="bg-white border border-border-gray rounded-md p-4 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-semibold uppercase tracking-tight">Artelo bulk upload</h3>
-          <p className="text-xs text-off-black/60 mt-0.5">One row per runner in the template's columns. Download, then upload it on Artelo's Orders page.</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => downloadSheet(false)} disabled={runners.length === 0} className={btnPrimary}><Download className="w-4 h-4" /> Download sheet</button>
-          {!submitted && <button onClick={() => { if (arm('submitted')) update({ status: 'submitted' }) }} className={btnSecondary}><FileText className="w-3.5 h-3.5" /> {isArmed('submitted') ? 'Click again to mark uploaded to Artelo' : 'Mark uploaded'}</button>}
-        </div>
+      <div>
+        <h3 className="text-sm font-semibold uppercase tracking-tight">Artelo bulk upload, in batches</h3>
+        <p className="text-xs text-off-black/60 mt-0.5">Send whoever is ready now and the rest when their names, results or prints come in. Download the batch's sheet, upload it on Artelo's Orders page, then mark it uploaded.</p>
       </div>
-      {problems.length > 0 ? (
-        <div className="bg-red-50 border border-red-200 rounded-md p-3">
-          <p className="text-xs font-semibold text-red-700 mb-1">{problems.length} row{problems.length === 1 ? '' : 's'} would fail at Artelo</p>
-          <ul className="text-xs text-red-800 space-y-0.5 max-h-40 overflow-y-auto">{problems.map((p, i) => <li key={i}><span className="font-mono">{p.orderNumber}</span> {p.runnerName}: {p.problem}</li>)}</ul>
-          <button onClick={() => downloadSheet(true)} className={`${btnGhost} mt-1`}>Download anyway</button>
+
+      {bt && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2"><p className="text-[11px] text-emerald-800">Sent</p><p className="text-lg font-bold tabular-nums text-emerald-900">{bt.sent}</p></div>
+          <div className="rounded-md bg-[#4600D6]/[0.05] border border-[#4600D6]/20 px-3 py-2"><p className="text-[11px] text-[#4600D6]">Ready for batch {bt.nextBatch}</p><p className="text-lg font-bold tabular-nums text-off-black">{bt.readyCount}</p></div>
+          <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2"><p className="text-[11px] text-amber-800">Not ready yet</p><p className="text-lg font-bold tabular-nums text-amber-900">{bt.waiting}</p></div>
+          <div className="rounded-md bg-subtle-gray border border-border-gray px-3 py-2" title={`Paid for ${b.quantity}, ${runners.length} names in`}><p className="text-[11px] text-off-black/60">Names still to come</p><p className="text-lg font-bold tabular-nums text-off-black">{bt.toCome}</p></div>
         </div>
-      ) : runners.length > 0 ? (
-        <p className="text-xs text-green-700 inline-flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Every row has an address and a file.</p>
-      ) : null}
-      {b.submittedAt && <p className="text-xs text-off-black/50">Uploaded to Artelo {fmtDate(b.submittedAt)}.</p>}
+      )}
+
+      {bt && bt.readyCount > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-[#4600D6]/20 bg-[#4600D6]/[0.03] px-3 py-2.5">
+          <span className="text-sm text-off-black flex-1 min-w-[12rem]">Batch {bt.nextBatch}: {bt.readyCount} runner{bt.readyCount === 1 ? '' : 's'} with an address and an approved print.</span>
+          <button onClick={() => downloadSheet(false, 'next')} className={btnPrimary}><Download className="w-4 h-4" /> Download batch {bt.nextBatch}</button>
+          <button onClick={() => { if (arm('send-batch')) act({ action: 'send-batch' }, `Batch ${bt.nextBatch} marked uploaded: ${bt.readyCount} runner${bt.readyCount === 1 ? '' : 's'} sent`) }} className={btnSecondary}><FileText className="w-3.5 h-3.5" /> {isArmed('send-batch') ? `Click again: ${bt.readyCount} sent to Artelo` : `Mark batch ${bt.nextBatch} uploaded`}</button>
+        </div>
+      )}
+
+      {bt && bt.waiting > 0 && (
+        <p className="text-xs text-amber-800">Not ready: {Object.entries(bt.waitingReasons).map(([why, n]) => `${n} ${why.charAt(0).toLowerCase()}${why.slice(1)}`).join(' · ')}.</p>
+      )}
+
+      {bt && bt.batches.length > 0 && (
+        <div className="divide-y divide-border-gray rounded-md border border-border-gray">
+          {bt.batches.map(x => (
+            <div key={x.n} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
+              <span className="font-semibold text-off-black">Batch {x.n}</span>
+              <span className="text-off-black/60">{x.count} runner{x.count === 1 ? '' : 's'} · {fmtDate(x.sentAt)} · {x.by}</span>
+              <button onClick={() => downloadSheet(true, String(x.n))} className={`${btnGhost} ml-auto`}><Download className="w-3.5 h-3.5" /> Sheet again</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {bt && bt.sent === 0 && bt.readyCount === 0 && runners.length > 0 && <p className="text-xs text-off-black/55">Nobody is ready yet. A runner joins the next batch once they are researched and their print is approved.</p>}
+      {b.submittedAt && <p className="text-xs text-green-700 inline-flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Every paid-for print went to Artelo ({fmtDate(b.submittedAt)}).</p>}
+      {!bt && <button onClick={() => downloadSheet(false)} disabled={runners.length === 0} className={btnPrimary}><Download className="w-4 h-4" /> Download sheet</button>}
     </div>
   )
 
@@ -659,7 +692,8 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
             <ProductionFile order={billing} onChanged={load} />
           </div>
         )}
-        {collecting && <>{intakeCard}{runnersCard}</>}
+        {/* Paid and still collecting names: send whoever is ready in batches meanwhile. */}
+        {collecting && <>{intakeCard}{r.paid && runners.length > 0 && arteloCard}{runnersCard}</>}
         {fulfilling && <>{productionCard}{runnersCard}{filesCard}{arteloCard}{intakeCard}</>}
         {submitted && <>{arteloCard}{productionCard}{runnersCard}</>}
       </div>
@@ -670,7 +704,9 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   )
 }
 
-function RunnerRow({ r, compact, reach, editing, removeArmed, onEdit, onSave, onRemove, onOpen, onUpload, onDetach }: {
+function RunnerRow({ r, batch, compact, reach, editing, removeArmed, onEdit, onSave, onRemove, onOpen, onUpload, onDetach }: {
+  /** The batch it went to Artelo in, once sent. */
+  batch?: number
   r: BulkRunner; compact?: boolean; reach?: boolean; editing: boolean; removeArmed?: boolean
   onEdit: () => void; onSave: (fields: { runnerName?: string; address?: BulkRunner['address'] }) => Promise<void>; onRemove: () => void; onOpen: () => void
   onUpload: (f: File) => void; onDetach: () => void
@@ -704,7 +740,7 @@ function RunnerRow({ r, compact, reach, editing, removeArmed, onEdit, onSave, on
             <label className="text-[11px] text-off-black/50 hover:text-off-black cursor-pointer inline-flex items-center gap-1"><Upload className="w-3 h-3" /> Add<input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" onChange={e => { if (e.target.files?.[0]) onUpload(e.target.files[0]); e.target.value = '' }} /></label>
           )}
         </td>
-        <td className="px-3 py-2">{r.completed ? <Check className="w-4 h-4 text-green-600" /> : <span className="text-off-black/30">·</span>}</td>
+        <td className="px-3 py-2 whitespace-nowrap">{r.completed ? <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-700"><Check className="w-3.5 h-3.5" />{batch ? `Batch ${batch}` : 'Sent'}</span> : <span className="text-off-black/30">·</span>}</td>
         </>}
         <td className="px-2 py-2 text-right whitespace-nowrap">
           <button onClick={onEdit} className={btnGhost}>{editing ? 'Close' : 'Edit'}</button>
