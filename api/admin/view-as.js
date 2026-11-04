@@ -32,7 +32,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const users = await prisma.user.findMany({
         where: { isActive: true, id: { not: real.id } },
-        select: { id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true },
+        select: { id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true },
         orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
       })
       return res.status(200).json({ users: users.map(u => ({ id: u.id, email: u.email, name: fullName(u) || u.email, role: u.role, roleLabel: roleLabel(u.role) })) })
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     const userId = String(req.body?.userId || '')
     if (!userId) return res.status(400).json({ error: 'Pick someone to view as.' })
     if (userId === real.id) return res.status(400).json({ error: 'That is you.' })
-    const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true, isActive: true } })
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true, isActive: true } })
     if (!target || !target.isActive) return res.status(404).json({ error: 'No active person by that id.' })
 
     res.setHeader('Set-Cookie', buildViewAsCookie(req, { token: createViewAsToken(real.id, target.id) }))

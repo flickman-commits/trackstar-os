@@ -36,25 +36,30 @@ export const ROLE_LABEL = {
   designer: 'Junior Designer',
 }
 
-/** What an admin can hand out, in the order the Roles panel shows them. */
+/**
+ * What an admin can hand out, grouped by the job it belongs to, in the order
+ * the People page shows them. Ids are stable; only the words change.
+ */
 export const CAPABILITIES = [
-  { id: 'sales', group: 'Pages', label: 'Sales' },
-  { id: 'support', group: 'Pages', label: 'Support' },
-  { id: 'creators', group: 'Pages', label: 'Creators' },
-  { id: 'hours', group: 'Pages', label: 'Hours (log and submit your own time)' },
-  { id: 'orders.assign_custom', group: 'Orders', label: 'Assign custom orders' },
-  { id: 'orders.render', group: 'Orders', label: 'Create and approve automated designs' },
-  { id: 'orders.message_customer', group: 'Orders', label: 'Email customers on custom orders' },
+  { id: 'support', group: 'Work areas', label: 'Support inbox', blurb: 'Read and answer customer conversations' },
+  { id: 'sales', group: 'Work areas', label: 'Sales', blurb: 'The race and charity pipeline (needs an Attio seat)' },
+  { id: 'creators', group: 'Work areas', label: 'Creators', blurb: 'The creator program and briefs' },
+  { id: 'hours', group: 'Work areas', label: 'Hours', blurb: 'Log and submit their own time' },
+  { id: 'orders.assign_custom', group: 'Can also do', label: 'Assign custom orders', blurb: 'Hand custom designs to a designer' },
+  { id: 'orders.render', group: 'Can also do', label: 'Approve automated designs', blurb: 'Create and approve standard prints' },
+  { id: 'orders.message_customer', group: 'Can also do', label: 'Email customers on custom orders', blurb: 'Send proofs and questions from an order' },
+  { id: 'tools.samples', group: 'Can also do', label: 'Send samples', blurb: 'Places real orders with the print partner' },
   { id: 'tools.discounts', group: 'Tools', label: 'Discount codes' },
   { id: 'tools.pace', group: 'Tools', label: 'Pace calculator' },
   { id: 'tools.weather', group: 'Tools', label: 'Race weather' },
   { id: 'tools.surveys', group: 'Tools', label: 'Design Survey' },
-  { id: 'tools.samples', group: 'Tools', label: 'Samples (sends real orders)' },
-  { id: 'settings.reviews', group: 'Settings', label: 'Request Reviews' },
-  { id: 'settings.stats', group: 'Settings', label: 'Stats' },
-  { id: 'settings.design_needs', group: 'Settings', label: 'Design Needs' },
+  { id: 'settings.reviews', group: 'Reports', label: 'Request Reviews' },
+  { id: 'settings.stats', group: 'Reports', label: 'Stats' },
+  { id: 'settings.design_needs', group: 'Reports', label: 'Design Needs' },
 ]
 const GRANTABLE = new Set(CAPABILITIES.map(c => c.id))
+/** Only these may be granted or denied to a person; anything else is dropped. */
+export const grantable = list => [...new Set((Array.isArray(list) ? list : []).filter(c => GRANTABLE.has(c)))]
 const EDITABLE_ROLES = ROLES.filter(r => r !== 'admin')
 
 export const DEFAULT_CAPS = {
@@ -135,13 +140,18 @@ export function splitRoles(list) {
 
 /**
  * Everything this person includes: '*' for admin, else the capability ids of
- * all their roles together. Takes a role string or a user with extraRoles.
+ * all their roles together, plus their own extras, less what was taken away.
+ * Takes a role string or a user with extraRoles / extraCaps / deniedCaps.
  */
 export async function capsFor(who) {
   const roles = rolesOf(who)
   if (roles.includes('admin')) return '*'
   const table = await loadRoleCaps()
-  return [...new Set(roles.flatMap(r => table[r] || []))]
+  const fromRoles = roles.flatMap(r => table[r] || [])
+  // Per-person exceptions on top of the roles (User.extraCaps / deniedCaps).
+  const extra = typeof who === 'object' ? grantable(who.extraCaps) : []
+  const denied = new Set(typeof who === 'object' ? grantable(who.deniedCaps) : [])
+  return [...new Set([...fromRoles, ...extra])].filter(c => !denied.has(c))
 }
 
 /** Whether this person (or role) may use this part of the app. */

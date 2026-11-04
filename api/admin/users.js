@@ -22,7 +22,7 @@
  */
 import crypto from 'crypto'
 import prisma from '../_lib/prisma.js'
-import { splitRoles } from '../_lib/roles.js'
+import { splitRoles, rolesOf, capsFor, grantable } from '../_lib/roles.js'
 import { setCors, requireAdmin, bumpSessionVersion, buildSessionCookie, createSessionToken } from '../_lib/auth.js'
 import {
   hashPassword, verifyPassword, normalizeEmail, isValidEmail, fullName, roleLabel,
@@ -33,14 +33,20 @@ const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const MIN_PASSWORD = 10
 
 const PUBLIC_FIELDS = {
-  id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true, isActive: true,
+  id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true, isActive: true,
   lastLoginAt: true, lastSeenAt: true, createdAt: true, inviteExpiresAt: true, passwordHash: true,
+  hourlyRateCents: true, customRateCents: true, customRepeatRateCents: true,
 }
 
-/** Never let a password hash out of the API, even to an admin. */
-function shape(u) {
+/**
+ * Never let a password hash out of the API, even to an admin. Adds the
+ * person's status and what they can do in all, so the People page needs no
+ * second call to say it.
+ */
+async function shape(u) {
   const { passwordHash, ...rest } = u
-  return { ...rest, name: fullName(u), hasPassword: Boolean(passwordHash) }
+  const status = !u.isActive ? 'deactivated' : !passwordHash ? 'invited' : 'active'
+  return { ...rest, name: fullName(u), hasPassword: Boolean(passwordHash), status, roles: rolesOf(u), caps: await capsFor(u) }
 }
 
 function newInvite() {
@@ -72,7 +78,7 @@ export default async function handler(req, res) {
         orderBy: [{ isActive: 'desc' }, { firstName: 'asc' }, { lastName: 'asc' }],
         select: PUBLIC_FIELDS,
       })
-      return res.status(200).json({ users: users.map(shape) })
+      return res.status(200).json({ users: await Promise.all(users.map(shape)) })
     }
 
     if (req.method === 'POST') {
@@ -97,7 +103,7 @@ export default async function handler(req, res) {
         // Not audited. Someone correcting the spelling of their own name is
         // not a consequential action, and logging it would bury the ones that
         // are.
-        return res.status(200).json({ user: shape(user) })
+        return res.status(200).json({ user: await shape(user) })
       }
 
       // Changing your own password needs no role, only a live account.
@@ -151,7 +157,7 @@ export default async function handler(req, res) {
           detail: { email, role },
           actor: admin,
         })
-        return res.status(201).json({ user: shape(user), inviteUrl: inviteUrl(req, invite.inviteToken) })
+        return res.status(201).json({ user: await shape(user), inviteUrl: inviteUrl(req, invite.inviteToken) })
       }
 
       const target = body.id
@@ -159,10 +165,15 @@ export default async function handler(req, res) {
         : null
       if (!target) return res.status(404).json({ error: 'No such user' })
 
-      if (action === 'role') {
-        // A list of roles (checkboxes), or the old single role.
+      if (action === 'role' || action === 'access') {
+        // The roles (a list, or the old single role) and, for 'access', the
+        // person's own exceptions: capabilities added on top and taken away.
         const split = splitRoles(Array.isArray(body.roles) ? body.roles : [body.role])
         if (!split) return res.status(400).json({ error: 'Pick at least one role.' })
+        if (action === 'access') {
+          split.extraCaps = grantable(body.extraCaps)
+          split.deniedCaps = grantable(body.deniedCaps).filter(c => !split.extraCaps.includes(c))
+        }
         // Demoting the last admin locks everyone out of user management, and
         // the only way back is database access. Refuse rather than explain.
         if (target.role === 'admin' && split.role !== 'admin' && await lastAdmin(target.id)) {
@@ -177,7 +188,7 @@ export default async function handler(req, res) {
           detail: { userId: target.id, from, to },
           actor: admin,
         })
-        return res.status(200).json({ user: shape(user) })
+        return res.status(200).json({ user: await shape(user) })
       }
 
       if (action === 'active') {
@@ -193,7 +204,7 @@ export default async function handler(req, res) {
           detail: { userId: target.id },
           actor: admin,
         })
-        return res.status(200).json({ user: shape(user) })
+        return res.status(200).json({ user: await shape(user) })
       }
 
       if (action === 'reset') {

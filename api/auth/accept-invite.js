@@ -62,7 +62,7 @@ export default async function handler(req, res) {
     })
 
     const actor = {
-      id: user.id, email: user.email, role: user.role, extraRoles: user.extraRoles || [],
+      id: user.id, email: user.email, role: user.role, extraRoles: user.extraRoles || [], extraCaps: user.extraCaps || [], deniedCaps: user.deniedCaps || [],
       firstName: user.firstName, lastName: user.lastName,
     }
     res.setHeader('Set-Cookie', buildSessionCookie(req, { token: createSessionToken({ ...actor, sessionVersion: user.sessionVersion }) }))

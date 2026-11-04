@@ -39,7 +39,7 @@ export function hashSecret(secret) {
   return crypto.createHash('sha256').update(String(secret)).digest('hex')
 }
 
-const USER_SELECT = { id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true, isActive: true }
+const USER_SELECT = { id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true, isActive: true }
 
 /** The shape the Settings page shows. Never the hash. */
 export function publicKey(row) {
@@ -152,6 +152,6 @@ export async function resolveApiKey(presented, { db = prisma, env = process.env,
     db.apiKey.update({ where: { id: row.id }, data: { lastUsedAt: now } }).catch(() => {})
   }
 
-  const user = row.user ? { id: row.user.id, email: row.user.email, firstName: row.user.firstName, lastName: row.user.lastName, role: normalizeRole(row.user.role), extraRoles: row.user.extraRoles || [] } : null
-  return { kind: user ? 'user' : 'service', keyId: row.id, name: row.name, scopes: new Set(row.scopes), user, role: user?.role || null, extraRoles: user?.extraRoles || [], legacy: false }
+  const user = row.user ? { id: row.user.id, email: row.user.email, firstName: row.user.firstName, lastName: row.user.lastName, role: normalizeRole(row.user.role), extraRoles: row.user.extraRoles || [], extraCaps: row.user.extraCaps || [], deniedCaps: row.user.deniedCaps || [] } : null
+  return { kind: user ? 'user' : 'service', keyId: row.id, name: row.name, scopes: new Set(row.scopes), user, role: user?.role || null, extraRoles: user?.extraRoles || [], extraCaps: user?.extraCaps || [], deniedCaps: user?.deniedCaps || [], legacy: false }
 }

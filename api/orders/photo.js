@@ -69,7 +69,7 @@ async function startRender(orderId, note) {
 async function customPhotoByDesigner(body, actor) {
   if (!['upload-url', 'attach', 'replace'].includes(body.action) || !actor?.id) return null
   // Any of their roles, not just the main one (Settings > People ticks several).
-  const me = await prisma.user.findUnique({ where: { id: actor.id }, select: { role: true, extraRoles: true } })
+  const me = await prisma.user.findUnique({ where: { id: actor.id }, select: { role: true, extraRoles: true, extraCaps: true, deniedCaps: true } })
   if (!rolesOf(me).some(r => DESIGN_ROLES.includes(r))) return null
   const ids = (body.action === 'attach' ? (Array.isArray(body.orderIds) ? body.orderIds : []) : [body.orderId]).map(String).filter(Boolean).slice(0, 20)
   if (!ids.length) return null

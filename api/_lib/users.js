@@ -108,7 +108,7 @@ export async function loadActiveUser(actor) {
   if (!actor.id) return null
   const user = await prisma.user.findUnique({
     where: { id: actor.id },
-    select: { id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true, isActive: true },
+    select: { id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true, isActive: true },
   })
   if (!user || !user.isActive) return null
   // An admin viewing as someone is not that person being seen.

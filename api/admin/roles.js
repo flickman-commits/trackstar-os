@@ -9,7 +9,8 @@
  */
 import { setCors, requireAdmin } from '../_lib/auth.js'
 import { requireAdminRole, recordAudit } from '../_lib/users.js'
-import { ROLES, ROLE_LABEL, CAPABILITIES, DEFAULT_CAPS, loadRoleCaps, saveRoleCaps } from '../_lib/roles.js'
+import { ROLES, ROLE_LABEL, CAPABILITIES, DEFAULT_CAPS, loadRoleCaps, saveRoleCaps, rolesOf } from '../_lib/roles.js'
+import prisma from '../_lib/prisma.js'
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, PUT, OPTIONS' })) return
@@ -20,8 +21,11 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
+      // Who has each role, for the cards.
+      const people = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, firstName: true, lastName: true, role: true, extraRoles: true }, orderBy: { firstName: 'asc' } })
+      const members = Object.fromEntries(ROLES.map(r => [r, people.filter(p => rolesOf(p).includes(r)).map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}`.trim() }))]))
       return res.status(200).json({
-        roles: ROLES.map(id => ({ id, label: ROLE_LABEL[id] })),
+        roles: ROLES.map(id => ({ id, label: ROLE_LABEL[id], members: members[id] })),
         capabilities: CAPABILITIES,
         caps: await loadRoleCaps({ force: true }),
         defaults: DEFAULT_CAPS,

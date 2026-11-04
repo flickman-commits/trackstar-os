@@ -88,8 +88,8 @@ const SETTINGS_NAV: {
     group: 'Team',
     adminOnly: true,
     items: [
-      { id: 'people', label: 'People', blurb: 'Who can sign in and what they are allowed to do', icon: Users },
-      { id: 'roles', label: 'Roles', blurb: 'What each role can see and use', icon: ShieldCheck },
+      { id: 'people', label: 'People', blurb: 'Everyone on the team: their access, work, pay and keys', icon: Users },
+      { id: 'roles', label: 'Permission Sets', blurb: 'The bundles of permissions people are given', icon: ShieldCheck },
       { id: 'assignments', label: 'Order Assignment', blurb: 'Who new orders go to, and extra help for busy stretches', icon: UserCog },
     ],
   },
