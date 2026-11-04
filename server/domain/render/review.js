@@ -10,6 +10,7 @@ import { deliverApproved } from './deliver.js'
 import { markRacePrinted } from '../races/verification.js'
 import { needFromRejection } from './designNeeds.js'
 import { publishBulkPrint } from '../bulk/bulkRender.js'
+import { describeOrder } from '../orders/complete.js'
 import { queueSend } from './arteloSend.js'
 
 /** Copy an approved print to the Drive Orders folder, then upload it to the Artelo library. Never throws. */
@@ -52,6 +53,10 @@ export async function reviewRender({ jobId, decision, note, user, designNeed = f
     delivery = Promise.all([delivery, published]).then(([d]) => d)
     await prisma.renderJob.updateMany({ where: { orderId: job.orderId, review: 'pending', id: { not: job.id } }, data: { review: 'closed', reviewNote: 'Another version was approved', reviewedAt: new Date() } })
   }
-  await recordAudit({ action: `render.${job.review}`, summary: `${job.review === 'approved' ? (job.sendAfter ? 'Approved and queued for production' : 'Approved') : 'Rejected'} the render of ${job.spec?.file || job.orderId} (v${job.version})${job.reviewNote ? `: ${job.reviewNote}` : ''}`, detail: { jobId: job.id, orderId: job.orderId }, actor: user })
+  // Named by the order, not the template file, so the Activity Log finds it by order number.
+  const order = await prisma.order.findUnique({ where: { id: job.orderId }, select: { orderNumber: true, parentOrderNumber: true, runnerName: true, raceName: true, raceYear: true } }).catch(() => null)
+  const what = order ? `the design of ${describeOrder(order)}` : `the render of ${job.spec?.file || job.orderId}`
+  const verb = job.review === 'approved' ? (job.sendAfter ? 'Approved and queued for production' : job.sendHeldAt ? 'Approved (held, not sent)' : 'Approved') : 'Rejected'
+  await recordAudit({ action: `render.${job.review}`, summary: `${verb} ${what} (v${job.version})${job.reviewNote ? `: ${job.reviewNote}` : ''}`, detail: { jobId: job.id, orderId: job.orderId, orderNumber: order?.orderNumber || null, parentOrderNumber: order?.parentOrderNumber || null, version: job.version, template: job.spec?.file || null, queuedForProduction: Boolean(job.sendAfter) }, actor: user })
   return { job, delivery }
 }

@@ -389,6 +389,14 @@ export default async function handler(req, res) {
         })
 
         console.log(`[approve] Customer ${approval} proof v${proof.version} for order ${approvalToken.order.orderNumber}`)
+        // In the Activity Log too, credited to the customer: an approval here
+        // is what lets a designer send a custom to production.
+        await recordAudit({
+          action: approval === 'approve' ? 'proof.customer_approved' : 'proof.customer_revision',
+          summary: `${approval === 'approve' ? 'Customer approved' : 'Customer asked for changes to'} proof v${proof.version} for order ${approvalToken.order.orderNumber}${newDesignStatus === 'approved_by_customer' ? ' (design approved)' : ''}`,
+          detail: { orderId: approvalToken.orderId, orderNumber: approvalToken.order.orderNumber, proofId: proof.id, version: proof.version, designStatus: newDesignStatus },
+          actor: { isSystem: true, email: `customer:${approvalToken.order.customerEmail || 'approval link'}` },
+        })
 
         // Custom designs the customer approved go to the shared gallery folder.
         // Awaited so the serverless function does not end mid-upload; it never

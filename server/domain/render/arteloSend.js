@@ -113,7 +113,7 @@ export async function holdSend({ orderId, actor }) {
   if (job.arteloSentAt) throw new SendError('This order was already sent to production')
   const out = await prisma.renderJob.update({ where: { id: job.id }, data: { sendHeldAt: new Date(), sendHeldBy: personName(actor), sendAfter: null } })
   const order = await prisma.order.findUnique({ where: { id: job.orderId } })
-  await recordAudit({ action: 'artelo.hold', summary: `Held ${order ? describeOrder(order) : job.orderId} from going to production`, detail: { jobId: job.id, orderId: job.orderId }, actor })
+  await recordAudit({ action: 'artelo.hold', summary: `Held ${order ? describeOrder(order) : job.orderId} from going to production`, detail: { jobId: job.id, orderId: job.orderId, orderNumber: order?.orderNumber || null }, actor })
   return out
 }
 
@@ -148,7 +148,7 @@ export async function sendNow({ orderId, actor }) {
   if (job.arteloSentAt) throw new SendError('This order was already sent to production')
   const now = new Date()
   const out = await prisma.renderJob.update({ where: { id: job.id }, data: { sendAfter: now, sendHeldAt: null, sendHeldBy: null, sendError: null, arteloAttachedAt: null } })
-  await recordAudit({ action: 'artelo.send_now', summary: `Sent ${describeOrder(order)} to production`, detail: { jobId: job.id, orderId: order.id }, actor })
+  await recordAudit({ action: 'artelo.send_now', summary: `Sent ${describeOrder(order)} to production (Send now)`, detail: { jobId: job.id, orderId: order.id, orderNumber: order.orderNumber }, actor })
   const claimed = await prisma.renderJob.updateMany({ where: { id: job.id, sendAfter: now, sendHeldAt: null, arteloSentAt: null }, data: { sendAfter: new Date(Date.now() + 3 * MIN) } })
   if (claimed.count) await sendOne(out)
   return out
@@ -219,8 +219,9 @@ async function markSent(job, order, actorId) {
   }
   await recordAudit({
     action: 'artelo.sent',
-    summary: `Sent ${displayNumber(order)}${order.runnerName ? ` (${order.runnerName})` : ''} to production in Artelo`,
-    detail: { jobId: job.id, orderId: order.id, arteloOrderId: order.arteloOrderData?.id, prints: rows.length, problems },
+    // Credited to the person who approved the design; the send itself is automatic after that.
+    summary: `Sent ${displayNumber(order)}${order.runnerName ? ` (${order.runnerName})` : ''} to production in Artelo${actor ? `, approved by ${personName(actor)}` : ''}`,
+    detail: { jobId: job.id, orderId: order.id, orderNumber: order.orderNumber, parentOrderNumber: order.parentOrderNumber, arteloOrderId: order.arteloOrderData?.id, prints: rows.length, problems },
     actor,
   })
 }

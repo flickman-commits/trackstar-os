@@ -16,15 +16,16 @@
  * team member's ability to change their own password. It is the one piece of
  * the old People panel everyone still needs.
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import { Loader2, RefreshCw, LogOut } from 'lucide-react'
+import { Loader2, LogOut } from 'lucide-react'
 import { useAuth, fullName, PasswordInput } from '@/lib/auth'
-import { btnPrimary, btnSecondary, btnGhost, inputBase, fieldLabel } from '@/lib/ui'
+import { btnPrimary, btnSecondary, inputBase, fieldLabel } from '@/lib/ui'
 import { ROLE_LABEL, normalizeRole, describeCaps, rolesOf } from '@/lib/roles'
 
 export { default as PeoplePanel } from '@/components/people/PeopleDirectory'
 export { default as RolesPanel } from '@/components/people/PermissionSets'
+export { default as ActivityPanel } from '@/components/ActivityLog'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -208,70 +209,3 @@ export function AccountPanel() {
   )
 }
 
-interface AuditEntry {
-  id: string
-  action: string
-  summary: string
-  createdAt: string
-  actor: string
-}
-
-export function ActivityPanel() {
-  const [events, setEvents] = useState<AuditEntry[]>([])
-  const [loading, setLoading] = useState(true)
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await api('/api/admin/audit?limit=200')
-      const data = await res.json()
-      if (res.ok) setEvents(data.events || [])
-      else toast.error(data.error || 'Could not load the log')
-    } catch {
-      toast.error('Could not reach the server')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { load() }, [load])
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-off-black/50">
-          Every destructive action, newest first. Append only, so nothing here can be edited or removed.
-        </p>
-        <button onClick={load} className={btnGhost} disabled={loading}>
-          <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </button>
-      </div>
-
-      {loading && !events.length ? (
-        <div className="flex items-center justify-center py-10">
-          <Loader2 className="w-5 h-5 animate-spin text-off-black/40" />
-        </div>
-      ) : !events.length ? (
-        <div className="rounded-lg border border-border-gray bg-subtle-gray/40 p-6 text-center">
-          <p className="text-xs text-off-black/50">Nothing logged yet.</p>
-        </div>
-      ) : (
-        <div className="rounded-lg border border-border-gray divide-y divide-border-gray">
-          {events.map(e => (
-            <div key={e.id} className="flex items-start justify-between gap-4 px-3 py-2.5">
-              <div className="min-w-0">
-                <p className="text-xs text-off-black">{e.summary}</p>
-                <p className="text-[11px] text-off-black/45 mt-0.5">
-                  {e.actor} · <span className="font-mono">{e.action}</span>
-                </p>
-              </div>
-              <span className="text-[11px] text-off-black/40 whitespace-nowrap tabular-nums">
-                {new Date(e.createdAt).toLocaleString()}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
