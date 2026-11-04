@@ -6,7 +6,7 @@ import { Bar, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, C
 import { btnGhost, segment, segmentGroup } from '@/lib/ui'
 import { financeApi, usd, usdShort, pctText, xText, intText, dayLabel, SERIES } from '@/lib/financeApi'
 import type { OverviewPayload, TrendDay, WaterfallLine } from '@/types/finance'
-import { card, Delta, ErrorCard, Spark, Spinner, Tile, tableHead, num } from './bits'
+import { card, DeltaPill, ErrorCard, Spark, Spinner, Tile, num } from './bits'
 
 const SHORT: Record<string, string> = { today: 'Today', yesterday: 'Yesterday', '7d': '7d', '30d': '30d', mtd: 'MTD', last_month: 'Last month', qtd: 'QTD', ytd: 'YTD' }
 const PERIOD_KEY = 'finance.period'
@@ -45,22 +45,25 @@ export default function Overview() {
   const t = data?.totals, c = data?.compare
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className={`${segmentGroup} flex-wrap`}>
+      <div className="flex flex-col md:flex-row md:flex-wrap md:items-center justify-between gap-2">
+        <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-2 min-w-0">
+          <div className="-mx-3 px-3 md:mx-0 md:px-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className={`${segmentGroup} flex-nowrap whitespace-nowrap md:flex-wrap`}>
             {(data?.periods || Object.keys(SHORT).map(key => ({ key, label: SHORT[key] }))).map(p => (
-              <button key={p.key} onClick={() => setPeriod(p.key)} className={segment(period === p.key, 'sm')}>{SHORT[p.key] ?? p.label}</button>
+              <button key={p.key} onClick={() => setPeriod(p.key)} className={`${segment(period === p.key, 'sm')} shrink-0`}>{SHORT[p.key] ?? p.label}</button>
             ))}
+          </div>
           </div>
           {data && (
             <span className="text-xs text-off-black/50">
               {data.period.first === data.period.last ? dayLabel(data.period.first, 'weekday') : `${dayLabel(data.period.first)} to ${dayLabel(data.period.last)}`}
               {data.partial && data.through && <> · through {dayLabel(data.through)}</>}
               {data.partial && !data.through && <> · nothing landed yet</>}
+              <button onClick={sync} disabled={syncing} className="md:hidden ml-2 inline-flex items-center gap-1 text-off-black/50 align-middle" title="Read the Daily Tracker now"><RefreshCw className={`w-3 h-3 ${syncing || loading ? 'animate-spin' : ''}`} /> Refresh</button>
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-2">
           {data?.sync?.at && <span className="text-[11px] text-off-black/40">Sheet read {new Date(data.sync.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>}
           <button onClick={sync} disabled={syncing} className={btnGhost} title="Read the Daily Tracker now"><RefreshCw className={`w-3.5 h-3.5 ${syncing || loading ? 'animate-spin' : ''}`} /> Refresh</button>
         </div>
@@ -73,13 +76,25 @@ export default function Overview() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <Tile label="Revenue" value={usd(t.revenue)} sub={`Shopify ${usd(t.shopifyRevenue)} · Etsy ${usd(t.etsyRevenue)}`} delta={<Delta now={t.revenue} before={c.revenue} fmt={usd} />} spark={spark && <Spark values={spark.revenue} color={SERIES.revenue} />} title="Shopify net sales plus Etsy net sales, as the raw tabs report them." />
-            <Tile label="Contribution margin" value={usd(t.cm)} sub={`${pctText(t.cmPct)} of revenue · gross ${pctText(t.grossMarginPct)}`} delta={<Delta now={t.cm} before={c.cm} fmt={usd} />} spark={spark && <Spark values={spark.cm} color={SERIES.cm} />} title={data.feeBase === 'cm' ? 'Revenue less fees, production, shipping and ad spend, less the designer fee (7.5% of that).' : 'Revenue less fees, production, shipping and the designer fee (7.5% of gross profit), less ad spend.'} />
-            <Tile label="Ad spend" value={usd(t.adSpend)} sub={`${xText(t.roas)} blended ROAS · break-even ${data.breakevenRoas}x · CPA ${usd(t.cpa)}`} delta={<Delta now={t.adSpend} before={c.adSpend} costly fmt={usd} />} spark={spark && <Spark values={spark.adSpend} color={SERIES.adSpend} />} title="Meta plus Google. ROAS is revenue over ad spend; CPA is ad spend per order." />
-            <Tile label="Orders" value={intText(t.orders)} sub={`AOV ${usd(t.aov)} · ${intText(t.organicOrders)} organic (${pctText(t.organicPct)})`} delta={<Delta now={t.orders} before={c.orders} fmt={v => intText(v)} />} spark={spark && <Spark values={spark.orders} color={SERIES.cogs} />} title="Shopify plus Etsy orders. Organic is whatever Meta and Google do not claim." />
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            <Tile label="Revenue" value={usd(t.revenue)} pill={<DeltaPill now={t.revenue} before={c.revenue} />} compare={`vs ${usd(c.revenue)} ${data.period.compareLabel}`}
+              spark={spark && <Spark values={spark.revenue} color={SERIES.revenue} />}
+              details={[['Shopify', usd(t.shopifyRevenue)], ['Etsy', usd(t.etsyRevenue)]]}
+              title="Shopify net sales plus Etsy net sales, as the raw tabs report them." />
+            <Tile label="Contribution margin" value={usd(t.cm)} pill={<DeltaPill now={t.cm} before={c.cm} />} compare={`vs ${usd(c.cm)} ${data.period.compareLabel}`}
+              spark={spark && <Spark values={spark.cm} color={SERIES.cm} />}
+              details={[['Of revenue', pctText(t.cmPct)], ['Gross margin', pctText(t.grossMarginPct)]]}
+              title={data.feeBase === 'cm' ? 'Revenue less fees, production, shipping and ad spend, less the designer fee (7.5% of that).' : 'Revenue less fees, production, shipping and the designer fee (7.5% of gross profit), less ad spend.'} />
+            <Tile label="Ad spend" value={usd(t.adSpend)} pill={<DeltaPill now={t.adSpend} before={c.adSpend} costly />} compare={`vs ${usd(c.adSpend)} ${data.period.compareLabel}`}
+              spark={spark && <Spark values={spark.adSpend} color={SERIES.adSpend} />}
+              details={[['Blended ROAS', <>{xText(t.roas)} <span className="text-[11px] font-normal text-off-black/45">/ {data.breakevenRoas}x even</span></>], ['CPA', usd(t.cpa)]]}
+              title="Meta plus Google. ROAS is revenue over ad spend; CPA is ad spend per order." />
+            <Tile label="Orders" value={intText(t.orders)} pill={<DeltaPill now={t.orders} before={c.orders} />} compare={`vs ${intText(c.orders)} ${data.period.compareLabel}`}
+              spark={spark && <Spark values={spark.orders} color={SERIES.cogs} />}
+              details={[['AOV', usd(t.aov)], ['Organic', <>{intText(t.organicOrders)} <span className="text-[11px] font-normal text-off-black/45">{pctText(t.organicPct)}</span></>]]}
+              title="Shopify plus Etsy orders. Organic is whatever Meta and Google do not claim." />
           </div>
-          <p className="text-[11px] text-off-black/45 -mt-2">Deltas are against {data.period.compareLabel} ({dayLabel(data.period.compareFirst)}{data.period.compareFirst !== data.period.compareLast ? ` to ${dayLabel(data.period.compareLast)}` : ''}).</p>
+          <p className="hidden md:block text-[11px] text-off-black/45 -mt-2">Deltas are against {data.period.compareLabel} ({dayLabel(data.period.compareFirst)}{data.period.compareFirst !== data.period.compareLast ? ` to ${dayLabel(data.period.compareLast)}` : ''}).</p>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
             <div className={`${card} p-4 xl:col-span-2`}>
@@ -110,7 +125,7 @@ export default function Overview() {
           <div className={`${card} p-4`}>
             <div className="flex items-baseline justify-between mb-2">
               <h3 className="text-sm font-semibold text-off-black">The last 90 days</h3>
-              <span className="text-[11px] text-off-black/45">Revenue as the line; costs, ad spend, the designer fee and what is left as the bars. Race days marked.</span>
+              <span className="hidden md:inline text-[11px] text-off-black/45">Revenue as the line; costs, ad spend, the designer fee and what is left as the bars. Race days marked.</span>
             </div>
             <Trend days={data.trend} />
           </div>
@@ -230,12 +245,12 @@ function Levers({ data }: { data: OverviewPayload }) {
     ['Paid orders', intText((l.metaPurchases ?? 0) + (l.googleConversions ?? 0)), `Meta ${intText(l.metaPurchases)} · Google ${intText(l.googleConversions)} · organic ${intText(t.organicOrders)}`],
   ]
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3">
       {items.map(([label, value, sub]) => (
-        <div key={label} className="rounded-md bg-subtle-gray border border-border-gray p-3">
-          <p className={tableHead}>{label}</p>
-          <p className="text-lg font-semibold text-off-black tabular-nums mt-0.5">{value}</p>
-          <p className="text-[11px] text-off-black/50 mt-0.5">{sub}</p>
+        <div key={label} className="rounded-xl bg-subtle-gray/60 p-3.5">
+          <p className="text-xs font-medium text-off-black/60">{label}</p>
+          <p className="text-2xl font-bold tracking-tight text-off-black tabular-nums mt-2 leading-none">{value}</p>
+          <p className="text-[11px] text-off-black/50 mt-2 leading-snug">{sub}</p>
         </div>
       ))}
     </div>

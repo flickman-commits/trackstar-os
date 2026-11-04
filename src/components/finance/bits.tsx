@@ -13,27 +13,45 @@ export function ErrorCard({ text }: { text: string }) {
   return <div className={`${card} p-4 text-sm text-red-700`}>{text}</div>
 }
 
-/** A value against the compare period: green up, red down, with the tone flipped for costs. */
-export function Delta({ now, before, costly = false, fmt }: { now: number | null; before: number | null; costly?: boolean; fmt?: (v: number) => string }) {
-  if (now == null || before == null || !before) return <span className="text-[11px] text-off-black/40">no compare</span>
+/** The change against the compare period as a small pill: green when it went the good way, red when not. */
+export function DeltaPill({ now, before, costly = false }: { now: number | null; before: number | null; costly?: boolean }) {
+  if (now == null || before == null || !before) return <span className="shrink-0 rounded-full bg-off-black/5 px-2.5 py-1 text-[11px] font-medium text-off-black/45">No compare</span>
   const pct = ((now - before) / Math.abs(before)) * 100
   const up = pct >= 0
   const good = costly ? !up : up
-  const tone = Math.abs(pct) < 0.05 ? 'text-off-black/45' : good ? 'text-green-700' : 'text-red-600'
-  return <span className={`text-[11px] font-medium tabular-nums ${tone}`}>{up ? '▲' : '▼'} {Math.abs(pct).toFixed(Math.abs(pct) >= 100 ? 0 : 1)}%{fmt ? <span className="text-off-black/40 font-normal"> vs {fmt(before)}</span> : null}</span>
+  const flat = Math.abs(pct) < 0.05
+  const tone = flat ? 'bg-off-black/5 text-off-black/55' : good ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+  return <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold tabular-nums ${tone}`}>{up ? '▲' : '▼'} {Math.abs(pct).toFixed(Math.abs(pct) >= 100 ? 0 : 1)}%</span>
 }
 
-/** Big number, its label, a line under it, an optional sparkline on the right. */
-export function Tile({ label, value, sub, delta, spark, title }: { label: string; value: ReactNode; sub?: ReactNode; delta?: ReactNode; spark?: ReactNode; title?: string }) {
+/**
+ * One number per card, like the charity bib finder: the label and the change
+ * on top, the big number, the shape of the last 30 days, and two plain
+ * details at the bottom.
+ */
+export function Tile({ label, value, pill, compare, spark, details = [], title }: {
+  label: string; value: ReactNode; pill?: ReactNode; compare?: ReactNode; spark?: ReactNode
+  details?: [string, ReactNode][]; title?: string
+}) {
   return (
-    <div className={`${card} p-4 flex items-start justify-between gap-3 min-w-0`} title={title}>
-      <div className="min-w-0">
-        <p className="text-xs text-off-black/50">{label}</p>
-        <p className="text-2xl md:text-[28px] font-semibold text-off-black mt-0.5 tabular-nums leading-tight truncate">{value}</p>
-        {sub && <p className="text-[11px] text-off-black/50 mt-0.5">{sub}</p>}
-        {delta && <p className="mt-1">{delta}</p>}
+    <div className="rounded-xl bg-white border border-border-gray/70 p-5 flex flex-col min-w-0" title={title}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-medium text-off-black/80">{label}</p>
+        {pill}
       </div>
-      {spark && <div className="w-20 h-10 shrink-0 self-center">{spark}</div>}
+      <p className="mt-4 text-[34px] leading-none font-bold tracking-tight text-off-black tabular-nums">{value}</p>
+      {compare && <p className="mt-1.5 text-[11px] text-off-black/45">{compare}</p>}
+      {spark && <div className="mt-4 h-12 -mx-1">{spark}</div>}
+      {details.length > 0 && (
+        <div className="mt-auto pt-4 flex items-end justify-between gap-4">
+          {details.slice(0, 2).map(([k, v], i) => (
+            <div key={k} className={`min-w-0 ${i ? 'text-right' : ''}`}>
+              <p className="text-[11px] text-off-black/50">{k}</p>
+              <p className="text-base font-bold text-off-black tabular-nums leading-tight">{v}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -42,7 +60,7 @@ export function Tile({ label, value, sub, delta, spark, title }: { label: string
 export function Spark({ values, color = '#121212' }: { values: (number | null)[]; color?: string }) {
   const pts = values.map((v, i) => [i, v] as const).filter(p => p[1] != null) as [number, number][]
   if (pts.length < 2) return null
-  const w = 80, h = 40, pad = 3
+  const w = 240, h = 48, pad = 4
   const xs = pts.map(p => p[0]), ys = pts.map(p => p[1])
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(0, ...ys), maxY = Math.max(...ys)
   const sx = (x: number) => pad + ((x - minX) / Math.max(1, maxX - minX)) * (w - pad * 2)
@@ -50,9 +68,9 @@ export function Spark({ values, color = '#121212' }: { values: (number | null)[]
   const d = pts.map((p, i) => `${i ? 'L' : 'M'}${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join(' ')
   const last = pts[pts.length - 1]
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-full" aria-hidden="true">
-      <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={sx(last[0])} cy={sy(last[1])} r="3" fill={color} stroke="#fff" strokeWidth="2" />
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="w-full h-full overflow-visible" aria-hidden="true">
+      <path d={`${d} L${sx(last[0]).toFixed(1)},${h} L${sx(pts[0][0]).toFixed(1)},${h} Z`} fill={color} opacity="0.08" />
+      <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
     </svg>
   )
 }
