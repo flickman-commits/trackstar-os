@@ -1820,8 +1820,9 @@ export default function Dashboard() {
                     <thead className="bg-subtle-gray border-b border-border-gray sticky top-0 z-10">
                       <tr>
                         <th className="text-center pl-6 pr-2 py-4 text-xs font-semibold text-off-black/60 uppercase tracking-wider w-12">Src</th>
-                        <th className="text-left px-3 py-4 text-xs font-semibold text-off-black/60 uppercase tracking-wider w-48">Order #</th>
+                        <th className="text-left px-3 py-4 text-xs font-semibold text-off-black/60 uppercase tracking-wider w-36">Order #</th>
                         <th className="text-left px-3 py-4 text-xs font-semibold text-off-black/60 uppercase tracking-wider w-44">Design Status</th>
+                        <th className="text-left px-3 py-4 text-xs font-semibold text-off-black/60 uppercase tracking-wider w-40">Tags</th>
                         <th className="text-left px-3 py-4 text-xs font-semibold text-off-black/60 uppercase tracking-wider w-40" title="Two days before the date the customer was promised">Design Due</th>
                         <th className="text-left px-3 py-4 text-xs font-semibold text-off-black/60 uppercase tracking-wider w-52">
                           <div className="flex items-center gap-2 leading-none">
@@ -1860,6 +1861,14 @@ export default function Dashboard() {
                                 {(order.notes || (order.commentCount ?? 0) > 0) && (
                                   <HoverTip text="Has notes or comments"><MessageSquareText className="w-3.5 h-3.5 text-amber-500 cursor-help" /></HoverTip>
                                 )}
+                              </div>
+                            </td>
+                            <td className="px-3 py-4">
+                              <DesignStatusPicker status={order.designStatus} orderType={order.trackstarOrderType} onChange={st => setDesignStatusOf(order, st)} />
+                            </td>
+                            <td className="px-3 py-4">
+                              {/* Tags: what Sort's "on top" boxes go by, out of the order number's way. */}
+                              <div className="flex flex-wrap items-center gap-1">
                                 {/* What Sort's "on top" boxes go by, so a reorder can be seen. */}
                                 {(order.isRushOrder || order.isExpedited) && (
                                   <span className="px-1.5 py-0.5 bg-red-50 text-red-700 text-[10px] font-semibold rounded whitespace-nowrap" title={order.isExpedited ? `Customer paid for ${order.shippingMethod || 'expedited'} shipping` : 'Rush order'}>🚀 {order.isExpedited ? 'Expedited' : 'Rush'}</span>
@@ -1868,9 +1877,6 @@ export default function Dashboard() {
                                   <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 text-[10px] font-semibold rounded whitespace-nowrap" title="High value order">💰 Big spender{order.orderTotalUsd ? ` $${Math.round(order.orderTotalUsd).toLocaleString()}` : ''}</span>
                                 )}
                               </div>
-                            </td>
-                            <td className="px-3 py-4">
-                              <DesignStatusPicker status={order.designStatus} orderType={order.trackstarOrderType} onChange={st => setDesignStatusOf(order, st)} />
                             </td>
                             <td className="px-3 py-4">
                               {/* The rush chip sits with the due date, not with

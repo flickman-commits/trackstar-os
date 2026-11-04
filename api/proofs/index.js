@@ -241,7 +241,7 @@ export default async function handler(req, res) {
               id: true, orderNumber: true, parentOrderNumber: true,
               customerName: true, customerEmail: true, raceName: true,
               designStatus: true, trackstarOrderType: true, shopifyOrderData: true,
-              designerNote: true, runnerName: true, raceYear: true
+              designerNote: true, runnerName: true, raceYear: true, featureConsent: true
             }
           }
         }
@@ -287,6 +287,15 @@ export default async function handler(req, res) {
         const { proofId, approval } = body
         const feedback = body.feedback == null ? null : String(body.feedback).trim().slice(0, 2000) || null
 
+        // Customs: "Can we feature this design on our site?" is asked once,
+        // after the design is approved, not on every option. Answered as
+        // { answer: 'feature', featureOk } (Settings > Site Gallery reads it).
+        if (body.answer === 'feature') {
+          if (approvalToken.order.trackstarOrderType !== 'custom' || typeof body.featureOk !== 'boolean') return res.status(400).json({ error: 'Yes or no?' })
+          await prisma.order.update({ where: { id: approvalToken.orderId }, data: { featureConsent: body.featureOk } })
+          return res.status(200).json({ ok: true, featureConsent: body.featureOk })
+        }
+
         if (!proofId) return res.status(400).json({ error: 'proofId is required' })
         // Once a design is in production an answer from the portal cannot
         // move it back to revision; that conversation goes through support.
@@ -296,12 +305,8 @@ export default async function handler(req, res) {
         if (!approval || !['approve', 'request_revision'].includes(approval)) {
           return res.status(400).json({ error: 'approval must be "approve" or "request_revision"' })
         }
-        // Customs ask "Can we feature this design on our site?" with no
-        // default (Settings > Site Gallery reads the answer).
-        const askFeature = approval === 'approve' && approvalToken.order.trackstarOrderType === 'custom'
-        if (askFeature && typeof body.featureOk !== 'boolean') {
-          return res.status(400).json({ error: 'Please answer whether we can feature your design on our site.' })
-        }
+        // An answer sent along with the approval still counts (older portal tabs).
+        const askFeature = approval === 'approve' && approvalToken.order.trackstarOrderType === 'custom' && typeof body.featureOk === 'boolean'
 
         const proof = await prisma.proof.findUnique({ where: { id: String(proofId) } })
         if (!proof || proof.orderId !== approvalToken.orderId) {

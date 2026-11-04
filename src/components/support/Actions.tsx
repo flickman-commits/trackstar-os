@@ -281,13 +281,8 @@ function CancelForm({ o, thread, onDone, onCancel }: FormProps) {
 }
 
 type Choice = { value: string; label: string }
-type ClaimPrep = { number: string; arteloOrderId: string | null; to: string; photos: { messageId: string; index: number; filename: string; at: string }[] }
-
-type ClaimKind = 'damaged' | 'lost'
-const CLAIM_KINDS: { value: ClaimKind; label: string; sub: string }[] = [
-  { value: 'damaged', label: 'Arrived damaged', sub: 'Photos of the damage' },
-  { value: 'lost', label: 'Lost in transit', sub: 'Never arrived, waited long enough' },
-]
+type TicketKind = { value: string; label: string; sub: string; photos: boolean; subject: string; body: string }
+type TicketPrep = { number: string; arteloOrderId: string | null; to: string; kinds: TicketKind[]; photos: { messageId: string; index: number; filename: string; at: string }[] }
 
 /** The order's newest tracking, Artelo's first: a link if there is one, else carrier and number. */
 function trackingText(o: FormProps['o']) {
@@ -297,105 +292,124 @@ function trackingText(o: FormProps['o']) {
 }
 
 /**
- * Claim with Artelo: a print that arrived damaged (the customer's photos and
- * what broke) or never arrived (the tracking link). Artelo support files a
- * report or a carrier trace and makes a free "-R" replacement (a New Artelo
- * order is billed). Their replacement then shows under Orders on its own.
+ * An Artelo ticket: an email to support@artelo.com about this order. Pick
+ * what it is about (the pill fills the subject and the body), edit either,
+ * attach the customer's photos from this conversation or files from your
+ * computer, send. The subject always carries the order number.
  */
-function DamageClaimForm({ o, thread, onDone, onCancel }: FormProps) {
-  const [kind, setKind] = useState<ClaimKind>('damaged')
-  const [prep, setPrep] = useState<ClaimPrep | null>(null)
+function ArteloTicketForm({ o, thread, onDone, onCancel }: FormProps) {
+  const [prep, setPrep] = useState<TicketPrep | null>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [kind, setKind] = useState<string>('damaged')
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
   const [picked, setPicked] = useState<string[]>([])
-  const [text, setText] = useState('')
-  const [tracking, setTracking] = useState(() => trackingText(o))
+  const [uploads, setUploads] = useState<{ ref: string; name: string; preview: string }[]>([])
+  const [uploading, setUploading] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [pressKey, setPressKey] = useState('')
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState<{ kind: ClaimKind; photos: number } | null>(null)
-  const lost = kind === 'lost'
+  const [sent, setSent] = useState<{ files: number } | null>(null)
   const key = (p: { messageId: string; index: number }) => `${p.messageId}:${p.index}`
   useEffect(() => {
-    supportApi.arteloOrder<ClaimPrep>({ action: 'claimPrep', id: thread.id, shopifyOrderId: o.shopifyOrderId })
-      .then(r => { setPrep(r); setPicked(r.photos.slice(0, 8).map(key)) })
+    supportApi.arteloOrder<TicketPrep>({ action: 'claimPrep', id: thread.id, shopifyOrderId: o.shopifyOrderId, tracking: trackingText(o) })
+      .then(r => { setPrep(r); const k = r.kinds[0]; setSubject(k.subject); setBody(k.body); setPicked(r.photos.slice(0, 8).map(key)) })
       .catch(e => setErr((e as Error).message))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  const photosToSend = lost ? [] : (prep?.photos || []).filter(p => picked.includes(key(p)))
-  const ready = lost ? Boolean(tracking.trim()) : Boolean(text.trim())
+  const current = prep?.kinds.find(k => k.value === kind)
+  const pick = (k: TicketKind) => { setKind(k.value); setSubject(k.subject); setBody(k.body); setConfirming(false) }
+  const photosToSend = current?.photos ? (prep?.photos || []).filter(p => picked.includes(key(p))) : []
+  const n = photosToSend.length + uploads.length
+  const ready = Boolean(subject.trim()) && subject.includes(prep?.number || '\u0000') && Boolean(body.trim())
+  const addFiles = async (list: FileList | null) => {
+    if (!list?.length) return
+    setUploading(true)
+    try {
+      for (const f of Array.from(list).slice(0, 8)) {
+        const slot = await supportApi.uploadSlot(f.name, f.type, f.size)
+        const put = await putUpload(slot.uploadUrl, { headers: { 'Content-Type': f.type, 'x-upsert': 'false' }, body: f })
+        if (!put.ok) throw new Error(`Could not upload ${f.name}`)
+        setUploads(u => [...u, { ref: slot.ref, name: f.name, preview: URL.createObjectURL(f) }])
+      }
+    } catch (e) { toast.error((e as Error).message) } finally { setUploading(false) }
+  }
   const send = async () => {
     if (!confirming) { setConfirming(true); setPressKey(newIdempotencyKey()); setErr(null); return }
     setBusy(true)
     try {
       const out = await supportApi.arteloOrder<{ photos: number }>({
-        action: 'claim', id: thread.id, shopifyOrderId: o.shopifyOrderId, kind,
-        photos: photosToSend.map(p => ({ messageId: p.messageId, index: p.index })), note: text, tracking: lost ? tracking : undefined, idempotencyKey: pressKey,
+        action: 'claim', id: thread.id, shopifyOrderId: o.shopifyOrderId, kind, subject, body,
+        photos: photosToSend.map(p => ({ messageId: p.messageId, index: p.index })), uploads: uploads.map(u => u.ref), idempotencyKey: pressKey,
       })
-      setSent({ kind, photos: out.photos })
-      toast.success(`${lost ? 'Lost in transit' : 'Damage'} claim sent to Artelo support`)
+      setSent({ files: out.photos })
+      toast.success('Ticket sent to Artelo support')
       onDone()
     } catch (e) { setErr((e as Error).message); toast.error((e as Error).message) }
     finally { setBusy(false); setConfirming(false) }
   }
   if (sent) {
     return (
-      <ActionModal icon={MessageSquareWarning} title={sent.kind === 'lost' ? 'Lost in transit claim sent' : 'Damage claim sent'} sub={`#${o.number}`} onClose={onCancel}
+      <ActionModal icon={MessageSquareWarning} title="Artelo ticket sent" sub={`#${o.number}`} onClose={onCancel}
         footer={<button onClick={onCancel} className={modalPrimary}>Done</button>}>
-        <Done title={`Sent to ${prep?.to || 'Artelo support'}${sent.photos ? ` with ${sent.photos} photo${sent.photos === 1 ? '' : 's'}` : ''}`}>
-          Their answer comes into Support as its own conversation. The free replacement shows under Orders once Artelo makes it.
+        <Done title={`Sent to ${prep?.to || 'Artelo support'}${sent.files ? ` with ${sent.files} attachment${sent.files === 1 ? '' : 's'}` : ''}`}>
+          Their answer comes into Support as its own conversation. A free replacement, when it is one, shows under Orders once Artelo makes it.
         </Done>
       </ActionModal>
     )
   }
-  const n = photosToSend.length
   return (
-    <ActionModal icon={MessageSquareWarning} title="Claim with Artelo" sub={`#${o.number}`} onClose={onCancel} busy={busy}
-      hint={confirming ? <span className={`${bad} font-medium`}>Send this {lost ? 'lost in transit' : 'damage'} claim to Artelo support{n ? ` with ${n} photo${n === 1 ? '' : 's'}` : ''}?</span> : undefined}
+    <ActionModal icon={MessageSquareWarning} title="Create Artelo ticket" sub={`#${o.number}`} onClose={onCancel} busy={busy}
+      hint={confirming ? <span className={`${bad} font-medium`}>Send this to {prep?.to}{n ? ` with ${n} attachment${n === 1 ? '' : 's'}` : ''}?</span> : undefined}
       footer={<>
         <button onClick={() => (confirming ? setConfirming(false) : onCancel())} disabled={busy} className={modalCancel}>{confirming ? 'Back' : 'Cancel'}</button>
-        {prep && <button onClick={send} disabled={busy || !ready} className={modalPrimary}>{busy && <Spin />}{confirming ? 'Yes, send it' : 'Send claim to Artelo'}</button>}
+        {prep && <button onClick={send} disabled={busy || uploading || !ready} className={modalPrimary}>{busy && <Spin />}{confirming ? 'Yes, send it' : 'Send to Artelo'}</button>}
       </>}>
-      <div className="grid grid-cols-2 gap-2">
-        {CLAIM_KINDS.map(k => (
-          <button key={k.value} type="button" onClick={() => { setKind(k.value); setConfirming(false) }}
-            className={`text-left rounded-xl border px-3 py-2 ${kind === k.value ? 'border-[#4600D6] bg-[#4600D6]/[0.05]' : 'border-border-gray hover:bg-subtle-gray'}`}>
-            <div className={`text-sm font-semibold ${kind === k.value ? 'text-[#4600D6]' : 'text-off-black'}`}>{k.label}</div>
-            <div className="text-xs text-off-black/55">{k.sub}</div>
-          </button>
-        ))}
-      </div>
-      {!prep && !err && <Loading>Finding the customer's photos</Loading>}
-      {prep && lost && (
+      {!prep && !err && <Loading>Drafting the ticket</Loading>}
+      {prep && (
         <>
-          <div className={note}>Emails <b>{prep.to}</b> from the support inbox with the tracking. Artelo opens a trace with the carrier and makes a free replacement of #{prep.number}.</div>
-          <Field label="Tracking link">
-            <input value={tracking} onChange={e => setTracking(e.target.value)} placeholder="Paste the tracking link or number" className={modalInput} />
+          <div className="flex flex-wrap gap-1.5">
+            {prep.kinds.map(k => (
+              <button key={k.value} type="button" onClick={() => pick(k)} title={k.sub}
+                className={`rounded-full border px-3 py-1 text-xs font-medium ${kind === k.value ? 'border-[#4600D6] bg-[#4600D6]/[0.06] text-[#4600D6]' : 'border-border-gray text-off-black/70 hover:bg-subtle-gray'}`}>
+                {k.label}
+              </button>
+            ))}
+          </div>
+          <Field label="Subject">
+            <input value={subject} onChange={e => setSubject(e.target.value)} className={modalInput} />
+            {prep.number && !subject.includes(prep.number) && <span className={`${bad} text-xs`}>Keep the order number {prep.number} in the subject so Artelo can find it.</span>}
           </Field>
-          {!trackingText(o) && <div className={warn}>No tracking on this order yet. Paste it from Artelo or Shopify.</div>}
-          <Field label="Anything else (optional)"><textarea value={text} onChange={e => setText(e.target.value)} rows={2} placeholder="e.g. Tracking has not moved since Oct 12" className={modalInput} /></Field>
-        </>
-      )}
-      {prep && !lost && (
-        <>
-          <div className={note}>Emails <b>{prep.to}</b> from the support inbox. Artelo files a report and makes a free replacement of #{prep.number}.</div>
-          {prep.photos.length === 0
-            ? <div className={warn}>No photos from the customer in this conversation. You can send the claim without them, but Artelo usually asks for photos of the damage and the box.</div>
-            : (
-              <Field label="Photos to send (optional)">
-                <div className="grid grid-cols-4 gap-2">
-                  {prep.photos.map(p => {
-                    const on = picked.includes(key(p))
-                    return (
-                      <button key={key(p)} type="button" onClick={() => setPicked(prev => on ? prev.filter(x => x !== key(p)) : [...prev, key(p)])} title={p.filename}
-                        className={`relative aspect-square rounded-xl border-2 overflow-hidden bg-white ${on ? 'border-[#4600D6]' : 'border-transparent opacity-50 hover:opacity-80'}`}>
-                        <img src={`/api/support/attachment?message=${encodeURIComponent(p.messageId)}&i=${p.index}`} alt={p.filename} className="w-full h-full object-cover" />
-                        {on && <span className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[#4600D6] text-white flex items-center justify-center"><Check className="w-3.5 h-3.5" /></span>}
-                      </button>
-                    )
-                  })}
-                </div>
-              </Field>
-            )}
-          <Field label="What is damaged"><textarea value={text} onChange={e => setText(e.target.value)} rows={3} placeholder="e.g. Frame cracked at the corner, glass shattered" className={modalInput} /></Field>
+          <Field label="Message">
+            <textarea value={body} onChange={e => setBody(e.target.value)} rows={10} className={`${modalInput} font-mono text-xs leading-relaxed`} />
+          </Field>
+          {current?.photos && (
+            <Field label={prep.photos.length ? 'Attachments' : 'Attachments (none from the customer in this conversation)'}>
+              <div className="grid grid-cols-4 gap-2">
+                {prep.photos.map(p => {
+                  const on = picked.includes(key(p))
+                  return (
+                    <button key={key(p)} type="button" onClick={() => setPicked(prev => on ? prev.filter(x => x !== key(p)) : [...prev, key(p)])} title={p.filename}
+                      className={`relative aspect-square rounded-xl border-2 overflow-hidden bg-white ${on ? 'border-[#4600D6]' : 'border-transparent opacity-50 hover:opacity-80'}`}>
+                      <img src={`/api/support/attachment?message=${encodeURIComponent(p.messageId)}&i=${p.index}`} alt={p.filename} className="w-full h-full object-cover" />
+                      {on && <span className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[#4600D6] text-white flex items-center justify-center"><Check className="w-3.5 h-3.5" /></span>}
+                    </button>
+                  )
+                })}
+                {uploads.map(u => (
+                  <button key={u.ref} type="button" onClick={() => setUploads(prev => prev.filter(x => x.ref !== u.ref))} title={`${u.name} (click to remove)`}
+                    className="relative aspect-square rounded-xl border-2 border-[#4600D6] overflow-hidden bg-white">
+                    <img src={u.preview} alt={u.name} className="w-full h-full object-cover" />
+                    <span className="absolute top-1 right-1 w-5 h-5 rounded-full bg-white/90 text-off-black flex items-center justify-center"><X className="w-3.5 h-3.5" /></span>
+                  </button>
+                ))}
+                <label className={`aspect-square rounded-xl border-2 border-dashed border-border-gray flex flex-col items-center justify-center gap-1 text-[11px] text-off-black/55 cursor-pointer hover:bg-subtle-gray ${uploading ? 'opacity-50' : ''}`}>
+                  {uploading ? <Spin /> : <ImageIcon className="w-4 h-4" />}{uploading ? 'Uploading' : 'Add image'}
+                  <input type="file" accept="image/*" multiple className="sr-only" disabled={uploading} onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
+                </label>
+              </div>
+            </Field>
+          )}
+          <div className={note}>Emails <b>{prep.to}</b> from the support inbox. Artelo's reply opens its own conversation here.</div>
         </>
       )}
       {err && <div className={bad}>{err}</div>}
@@ -824,8 +838,8 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
             </>
           )
         })()}
-        {/* Damaged or lost in transit: Artelo replaces it free once its support has the claim. */}
-        {o.shopifyOrderId && o.items.length > 0 && shipped && <ActionLink icon={MessageSquareWarning} onClick={() => setOpen('claim')} title="Arrived damaged or lost in transit: emails Artelo support, who file a report and make a free replacement.">Damaged or lost: claim with Artelo</ActionLink>}
+        {/* A ticket to Artelo support about this order: damaged, lost, wrong, missing, an address change, anything. */}
+        {o.shopifyOrderId && o.items.length > 0 && <ActionLink icon={MessageSquareWarning} onClick={() => setOpen('claim')} title="Emails support@artelo.com about this order, with the order number in the subject. Damage and loss get a free replacement.">Create Artelo ticket</ActionLink>}
         {/* A reprint or replacement: the same print to this customer, built in Artelo from here. */}
         {o.shopifyOrderId && o.items.length > 0 && <ActionLink icon={Repeat} onClick={() => setOpen('reorder')} title="The same print to this customer: a reprint or a replacement. Artelo bills us for it, so damage goes through the claim instead.">New Artelo order</ActionLink>}
         {o.shopifyOrderId && o.financialStatus !== 'REFUNDED' && <ActionLink icon={Receipt} onClick={() => setOpen('refund')} title="All or part, to the card they paid with. Over $150 is Matt's call.">Refund</ActionLink>}
@@ -840,7 +854,7 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
           hint="Shows on the order for whoever fulfills it." onCancel={close}
           onSend={async text => { await supportApi.action('orderNote', { id: thread.id, orderId: o.items[0].orderId, text }); toast.success('Note left on the order'); onChanged() }} />
       )}
-      {open === 'claim' && <DamageClaimForm {...form} />}
+      {open === 'claim' && <ArteloTicketForm {...form} />}
       {open === 'reorder' && <ArteloOrderForm {...form} isAdmin={isAdmin} />}
       {open === 'refund' && <RefundForm {...form} />}
       {open === 'cancel' && <CancelForm {...form} />}

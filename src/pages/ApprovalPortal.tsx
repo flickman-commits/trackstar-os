@@ -81,14 +81,17 @@ interface OrderInfo {
   trackstarOrderType?: 'standard' | 'custom' | 'race_partner'
   designStatus: string
   designerNote: string | null
+  /** A custom's answer to "Can we feature this?"; null until they say. */
+  featureConsent?: boolean | null
 }
 
 type PortalState = 'loading' | 'ready' | 'expired' | 'error' | 'all_approved' | 'revision_submitted'
 
 /**
  * "Can we feature this design on our site?" Two tiles, neither chosen, the
- * same shape as the storefront's "Is this a gift?" question. The answer is
- * the customer's consent for Settings > Site Gallery.
+ * same shape as the storefront's "Is this a gift?" question. Asked once on
+ * the approved screen, after they have approved a design, never beside each
+ * option. The answer is the customer's consent for Settings > Site Gallery.
  */
 function FeatureQuestion({ value, onChange, name }: { value: boolean | null; onChange: (v: boolean) => void; name: string }) {
   return (
@@ -111,9 +114,6 @@ function FeatureQuestion({ value, onChange, name }: { value: boolean | null; onC
           )
         })}
       </div>
-      {value === null && (
-        <p style={{ color: T.muted, fontSize: '12px', margin: '6px 0 0' }}>Choose one to approve.</p>
-      )}
     </div>
   )
 }
@@ -143,8 +143,8 @@ export default function ApprovalPortal() {
   // Lightweight confirmation modal for Approve clicks — prevents fat-finger
   // approvals (especially on mobile). Stores the proof being confirmed.
   const [confirmApproveProofId, setConfirmApproveProofId] = useState<string | null>(null)
-  // "Can we feature this design on our site?" on a custom. No default, like
-  // the storefront's "Is this a gift?": approving waits for an answer.
+  // "Can we feature this design on our site?" on a custom, asked on the
+  // approved screen. Null until they tap one.
   const [featureOk, setFeatureOk] = useState<boolean | null>(null)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   // Which option full screen is showing, or null when it is closed.
@@ -201,7 +201,7 @@ export default function ApprovalPortal() {
       const res = await fetch(`${API_BASE}/api/proofs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'approve', token, proofId, approval: 'approve', ...(order?.trackstarOrderType === 'custom' ? { featureOk } : {}) })
+        body: JSON.stringify({ action: 'approve', token, proofId, approval: 'approve' })
       })
       if (!res.ok) {
         const data = await res.json()
@@ -215,6 +215,17 @@ export default function ApprovalPortal() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  /** The feature answer, on the approved screen: saved as soon as they tap one. */
+  const answerFeature = async (v: boolean) => {
+    if (!token) return
+    setFeatureOk(v)
+    try {
+      const res = await fetch(`${API_BASE}/api/proofs`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'approve', token, answer: 'feature', featureOk: v }) })
+      if (!res.ok) { const data = await res.json().catch(() => ({})); toast.error(data.error || 'Something went wrong'); setFeatureOk(null); return }
+      setOrder(o => o ? { ...o, featureConsent: v } : o)
+    } catch { toast.error('Unable to save that. Please try again.'); setFeatureOk(null) }
   }
 
   const handleSendReply = async () => {
@@ -506,6 +517,15 @@ export default function ApprovalPortal() {
             <p style={{ color: '#999999', fontSize: '13px' }}>Order #{order?.displayOrderNumber || order?.parentOrderNumber}</p>
           </div>
 
+          {/* One question, now that a design is approved: may we show it? */}
+          {order?.trackstarOrderType === 'custom' && (
+            <div className="mx-auto mb-8" style={{ maxWidth: '320px' }}>
+              {order.featureConsent == null
+                ? <FeatureQuestion value={featureOk} onChange={answerFeature} name="feature" />
+                : <p className="text-center" style={{ color: '#666666', fontSize: '13px' }}>{order.featureConsent ? 'Thanks for letting us feature it.' : 'Noted, we will keep it to you.'}</p>}
+            </div>
+          )}
+
           {/* CTAs */}
           <div className="flex gap-3 mb-8 mx-auto" style={{ maxWidth: '320px' }}>
             <a
@@ -624,8 +644,6 @@ export default function ApprovalPortal() {
   // The stored type is still 'race_partner' - it predates the charities - but
   // the portal only cares that this is a partner rather than a customer.
   const isPartner = order?.trackstarOrderType === 'race_partner'
-  const asksFeature = order?.trackstarOrderType === 'custom'
-  const needsFeatureAnswer = asksFeature && featureOk === null
   // Partner rows carry the organization in raceName; customerName is the
   // contact there, so it cannot stand in as the name on the header.
   const partnerName = order?.raceName || 'Our partner'
@@ -1069,20 +1087,17 @@ export default function ApprovalPortal() {
                                     confirm dialog: the drag itself is the
                                     guard against a stray tap. Desktop keeps
                                     the button plus dialog. */}
-                                {asksFeature && (
-                                  <FeatureQuestion value={featureOk} onChange={setFeatureOk} name={`feature-${proof.id}`} />
-                                )}
                                 <div className="md:hidden">
                                   <SlideToApprove
                                     label={visibleProofs.length === 1 ? 'Slide to approve' : `Slide to approve Option ${optionNum}`}
-                                    disabled={submitting || isRevising || needsFeatureAnswer}
+                                    disabled={submitting || isRevising}
                                     busy={submitting}
                                     onComplete={() => handleApprove(proof.id)}
                                   />
                                 </div>
                                 <button
                                   onClick={() => setConfirmApproveProofId(proof.id)}
-                                  disabled={submitting || isRevising || needsFeatureAnswer}
+                                  disabled={submitting || isRevising}
                                   className="hidden md:flex w-full px-4 py-3 text-sm font-bold transition-colors disabled:opacity-40 items-center justify-center gap-2 uppercase tracking-wide"
                                   style={{ backgroundColor: '#4600D6', color: '#FFFFFF' }}
                                 >

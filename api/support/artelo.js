@@ -3,9 +3,9 @@
  *
  *   POST { action: 'prep', id, shopifyOrderId }      the items, whether each can be copied, the next order id
  *   POST { action: 'create', id, shopifyOrderId, orderIds, changes?, files?: { [orderId]: 'upload:<path>' }, address, email, instructions, test }
- *   POST { action: 'claimPrep', id, shopifyOrderId }  the customer's photos in this conversation, for a claim
- *   POST { action: 'claim', id, shopifyOrderId, kind: 'damaged' | 'lost', photos?: [{ messageId, index }], note?, tracking? }
- *                                                    emails Artelo support for a free replacement (damageClaim.js)
+ *   POST { action: 'claimPrep', id, shopifyOrderId, tracking? }  the ticket kinds with a draft each, and the customer's photos here
+ *   POST { action: 'claim', id, shopifyOrderId, kind, subject, body, photos?: [{ messageId, index }], uploads?: ['upload:<path>'] }
+ *                                                    emails Artelo support (damageClaim.js); the subject must carry the order number
  *
  * id is the Support conversation, and the order has to be its customer's
  * (under their email, or linked to them). `create` carries an idempotencyKey
@@ -42,10 +42,10 @@ export default async function handler(req, res) {
       await recordAudit({ action: 'support.artelo_order', summary: out.summary, detail: { threadId: thread.id, shopifyOrderId: body.shopifyOrderId, arteloOrderId: out.orderId, test: out.test }, actor: user })
       return res.status(200).json(out)
     }
-    if (body.action === 'claimPrep') return res.status(200).json(await claimPrep({ thread, shopifyOrderId: body.shopifyOrderId }))
+    if (body.action === 'claimPrep') return res.status(200).json(await claimPrep({ thread, shopifyOrderId: body.shopifyOrderId, tracking: body.tracking, actor: user }))
     if (body.action === 'claim') {
       await claimOnce('support.artelo_claim', body.idempotencyKey)
-      const out = await sendArteloClaim({ thread, shopifyOrderId: body.shopifyOrderId, kind: body.kind === 'lost' ? 'lost' : 'damaged', photos: body.photos, note: body.note, tracking: body.tracking, actor: user })
+      const out = await sendArteloClaim({ thread, shopifyOrderId: body.shopifyOrderId, kind: body.kind, subject: body.subject, body: body.body, photos: body.photos, uploads: body.uploads, actor: user })
       await recordAudit({ action: 'support.artelo_claim', summary: out.summary, detail: { threadId: thread.id, shopifyOrderId: body.shopifyOrderId, kind: out.kind, photos: out.photos, claimThreadId: out.claimThreadId }, actor: user })
       return res.status(200).json(out)
     }

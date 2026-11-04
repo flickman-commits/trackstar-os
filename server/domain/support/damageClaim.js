@@ -1,24 +1,23 @@
 /**
- * A claim to Artelo support, from Support, for a print that arrived damaged
- * or never arrived. Artelo replaces it for free once its support has the
- * claim: they file a report with the carrier and make a "-R" replacement
- * (4341-R, 3013-R) at no charge. A New Artelo order (arteloOrder.js) is
- * billed like any order, so these go this way instead.
+ * An Artelo ticket, from Support: an email from fast@ to Artelo support
+ * about one order. A kind (damaged, lost, wrong print, missing, address
+ * change, other) gives a draft subject and body with the order numbers on
+ * both sides, the prints and the ship-to; the person edits either before
+ * sending, and can attach the customer's photos from the conversation or
+ * files from their computer. The subject always carries the order number so
+ * Artelo can find it.
  *
- *   damaged  the customer's photos from this conversation (optional, but
- *            Artelo usually asks for them) and what is damaged
- *   lost     the tracking link, and how long the customer has waited
- *
- * The claim is an email from fast@ to Artelo support with the order numbers
- * on both sides, the prints, and where the replacement goes. It starts its
- * own Support conversation, so Artelo's answer lands there. The replacement
- * Artelo makes shows in the Orders panel on its own (replacements.js).
+ * Damage and loss are the common ones: Artelo replaces those free once it
+ * has the ticket (a "-R" order, 4341-R), where a New Artelo order
+ * (arteloOrder.js) is billed. The ticket starts its own Support conversation,
+ * so Artelo's answer lands there.
  */
 import prisma from '../../db.js'
 import { UserError } from './errors.js'
 import { sendNew, messageAttachment } from './mailbox.js'
 import { replyToHtml, replyToPlain } from './format.js'
 import { arteloOrderUrl } from '../../lib/links.js'
+import { readUpload } from './uploads.js'
 
 export const ARTELO_SUPPORT_EMAIL = 'support@artelo.com'
 const IMAGE = /^image\/(jpe?g|png|gif|webp|heic|heif|avif)$/i
@@ -56,72 +55,112 @@ async function orderFor(shopifyOrderId) {
   return { rows, number, artelo: rows[0].arteloOrderData || null }
 }
 
-export async function claimPrep({ thread, shopifyOrderId }) {
-  const { number, artelo } = await orderFor(shopifyOrderId)
-  return { number, arteloOrderId: artelo?.orderId || null, to: ARTELO_SUPPORT_EMAIL, photos: (await claimPhotos(thread.id)).slice(0, 30) }
+/** Everything the drafts and the email need about the order. */
+async function orderFacts(shopifyOrderId) {
+  const { rows, number, artelo } = await orderFor(shopifyOrderId)
+  const addr = artelo?.customerAddress || {}
+  const shipTo = [addr.name, addr.street1, addr.street2, [addr.city, addr.state, addr.zipcode].filter(Boolean).join(' '), addr.countryCode || addr.country].filter(Boolean).join(', ')
+  const prints = rows.map(r => `- ${[r.raceName, r.raceYear].filter(Boolean).join(' ')}${r.runnerName ? `, ${r.runnerName}` : ''}${r.productSize ? `, ${r.productSize}` : ''}${r.frameType ? `, ${r.frameType}` : ''}`).join('\n')
+  const ids = `${number}${artelo?.orderId ? ` (${artelo.orderId})` : ''}`
+  const ref = `Order ${number}${artelo?.orderId ? ` (Artelo order ${artelo.orderId})` : ''}`
+  return { rows, number, artelo, shipTo, prints, ids, ref, link: arteloOrderUrl(artelo?.id) }
 }
 
-export const CLAIM_KINDS = ['damaged', 'lost']
+/** The kinds of ticket, each with its draft. `tracking` is the order's newest tracking, if the form has it. */
+export const TICKET_KINDS = [
+  { value: 'damaged', label: 'Arrived damaged', sub: 'Photos of the damage and the box', photos: true,
+    subject: f => `Damaged in shipping: order ${f.ids}`,
+    body: f => [`${f.ref} arrived damaged.`, '', 'What is damaged: ', '', `Please file a report and send a replacement${f.shipTo ? ` to the same address: ${f.shipTo}` : ' to the same address'}.`] },
+  { value: 'lost', label: 'Lost in transit', sub: 'Never arrived, waited long enough', photos: false,
+    subject: f => `Lost in transit: order ${f.ids}`,
+    body: f => [`${f.ref} has not arrived. The customer has waited long enough that it looks lost in transit.`, '', `Tracking: ${f.tracking || ''}`, '', `Please open a trace with the carrier and send a replacement${f.shipTo ? ` to the same address: ${f.shipTo}` : ' to the same address'}.`] },
+  { value: 'wrong', label: 'Wrong print', sub: 'Not the design, size or frame ordered', photos: true,
+    subject: f => `Wrong print received: order ${f.ids}`,
+    body: f => [`${f.ref} arrived with the wrong print.`, '', 'What was received instead: ', '', `Please send the correct print${f.shipTo ? ` to the same address: ${f.shipTo}` : ''}.`] },
+  { value: 'missing', label: 'Missing from the box', sub: 'An item or part did not come', photos: true,
+    subject: f => `Missing item: order ${f.ids}`,
+    body: f => [`${f.ref} arrived with something missing.`, '', 'What is missing: ', '', `Please send it${f.shipTo ? ` to the same address: ${f.shipTo}` : ''}.`] },
+  { value: 'address', label: 'Address change', sub: 'Before it ships', photos: false,
+    subject: f => `Address change: order ${f.ids}`,
+    body: f => [`Please ship ${f.ref} to this address instead:`, '', '', f.shipTo ? `It was going to: ${f.shipTo}.` : ''] },
+  { value: 'other', label: 'Something else', sub: 'Write it yourself', photos: true,
+    subject: f => `Order ${f.ids}`,
+    body: f => [`About ${f.ref}:`, '', ''] },
+]
+export const CLAIM_KINDS = TICKET_KINDS.map(k => k.value)
 
-export async function sendArteloClaim({ thread, shopifyOrderId, kind = 'damaged', photos, note, tracking, actor }) {
-  if (!CLAIM_KINDS.includes(kind)) throw new UserError('Damaged or lost in transit?')
-  const lost = kind === 'lost'
-  const what = String(note || '').trim().slice(0, 2000)
-  const track = String(tracking || '').trim().slice(0, 500)
-  if (!lost && !what) throw new UserError('Say what is damaged, for example "Frame cracked at the corner, glass shattered"')
-  if (lost && !track) throw new UserError('Add the tracking link or number so Artelo can open a trace with the carrier')
-  const picked = Array.isArray(photos) ? photos.slice(0, MAX_PHOTOS) : []
+function draftFor(kind, f, actor) {
+  const text = [
+    'Hi Artelo team,',
+    '',
+    ...kind.body(f),
+    '',
+    `The print${f.rows.length > 1 ? 's' : ''}:`,
+    f.prints,
+    ...(f.link ? ['', f.link] : []),
+    '',
+    'Thanks,',
+    `${actorFirst(actor)} from Trackstar`,
+  ]
+  return { subject: kind.subject(f), body: text.join('\n').replace(/\n{3,}/g, '\n\n') }
+}
 
-  // Only photos from this conversation, by the same list the form showed.
-  const own = picked.length ? await claimPhotos(thread.id) : []
+/** What the form starts from: the kinds with a draft each, and the customer's photos in this conversation. */
+export async function claimPrep({ thread, shopifyOrderId, tracking, actor }) {
+  const f = { ...(await orderFacts(shopifyOrderId)), tracking: String(tracking || '').trim() }
+  return {
+    number: f.number,
+    arteloOrderId: f.artelo?.orderId || null,
+    to: ARTELO_SUPPORT_EMAIL,
+    kinds: TICKET_KINDS.map(k => ({ value: k.value, label: k.label, sub: k.sub, photos: k.photos, ...draftFor(k, f, actor) })),
+    photos: (await claimPhotos(thread.id)).slice(0, 30),
+  }
+}
+
+/**
+ * Send it. `photos` are the customer's, from this conversation; `uploads`
+ * are "upload:<path>" refs the person added from their computer.
+ */
+export async function sendArteloClaim({ thread, shopifyOrderId, kind = 'damaged', subject, body, photos, uploads, actor }) {
+  const k = TICKET_KINDS.find(x => x.value === kind)
+  if (!k) throw new UserError('What kind of ticket is this?')
+  const f = await orderFacts(shopifyOrderId)
+  const subj = String(subject || '').trim().slice(0, 200)
+  const text = String(body || '').trim().slice(0, 6000)
+  if (!subj) throw new UserError('Give the ticket a subject')
+  if (!subj.includes(f.number)) throw new UserError(`The subject has to include the order number, ${f.number}, so Artelo can find it`)
+  if (!text) throw new UserError('Say what the ticket is about')
+
   const files = []
   let total = 0
+  const add = (bytes, contentType, filename) => {
+    total += bytes.length
+    if (total > MAX_BYTES) throw new UserError('Those attachments are too big for one email. Pick fewer.')
+    files.push({ bytes, contentType, filename })
+  }
+  // Only photos from this conversation, by the same list the form showed.
+  const picked = Array.isArray(photos) ? photos.slice(0, MAX_PHOTOS) : []
+  const own = picked.length ? await claimPhotos(thread.id) : []
   for (const p of picked) {
     const hit = own.find(o => o.messageId === String(p?.messageId) && o.index === Number(p?.index))
     if (!hit) throw new UserError('One of those photos is not in this conversation')
     const a = await messageAttachment(hit.messageId, hit.index)
     if (!a?.bytes) throw new UserError(`Could not load ${hit.filename} from Gmail`)
-    total += a.bytes.length
-    if (total > MAX_BYTES) throw new UserError('Those photos are too big for one email. Pick fewer.')
-    files.push({ bytes: a.bytes, contentType: a.mimeType || 'image/jpeg', filename: a.filename || hit.filename })
+    add(a.bytes, a.mimeType || 'image/jpeg', a.filename || hit.filename)
+  }
+  for (const ref of (Array.isArray(uploads) ? uploads : []).slice(0, MAX_PHOTOS)) {
+    if (!String(ref).startsWith('upload:')) throw new UserError('That file was not uploaded here')
+    const up = await readUpload(String(ref).slice('upload:'.length))
+    add(up.bytes, up.contentType, up.filename)
   }
 
-  const { rows, number, artelo } = await orderFor(shopifyOrderId)
-  const addr = artelo?.customerAddress || {}
-  const shipTo = [addr.name, addr.street1, addr.street2, [addr.city, addr.state, addr.zipcode].filter(Boolean).join(' '), addr.countryCode || addr.country].filter(Boolean).join(', ')
-  const prints = rows.map(r => `- ${[r.raceName, r.raceYear].filter(Boolean).join(' ')}${r.runnerName ? `, ${r.runnerName}` : ''}${r.productSize ? `, ${r.productSize}` : ''}${r.frameType ? `, ${r.frameType}` : ''}`).join('\n')
-  const link = arteloOrderUrl(artelo?.id)
-  const ids = `${number}${artelo?.orderId ? ` (${artelo.orderId})` : ''}`
-  const photoLine = files.length ? ` The customer's photo${files.length === 1 ? ' is' : 's are'} attached.` : ''
-  const subject = lost ? `Lost in transit: order ${ids}` : `Damaged in shipping: order ${ids}`
-  const text = [
-    'Hi Artelo team,',
-    '',
-    lost
-      ? `Order ${number}${artelo?.orderId ? ` (Artelo order ${artelo.orderId})` : ''} has not arrived. The customer has waited long enough that it looks lost in transit.${photoLine}`
-      : `Order ${number}${artelo?.orderId ? ` (Artelo order ${artelo.orderId})` : ''} arrived damaged.${photoLine}`,
-    '',
-    ...(lost ? [`Tracking: ${track}`, ...(what ? ['', what] : [])] : [`What is damaged: ${what}`]),
-    '',
-    `The print${rows.length > 1 ? 's' : ''}:`,
-    prints,
-    '',
-    lost
-      ? (shipTo ? `Please open a trace with the carrier and send a replacement to the same address: ${shipTo}.` : 'Please open a trace with the carrier and send a replacement to the same address.')
-      : (shipTo ? `Please file a report and send a replacement to the same address: ${shipTo}.` : 'Please file a report and send a replacement to the same address.'),
-    ...(link ? ['', link] : []),
-    '',
-    'Thanks,',
-    `${actorFirst(actor)} from Trackstar`,
-  ].join('\n')
-
-  const sent = await sendNew({ userId: actor?.id || null, to: ARTELO_SUPPORT_EMAIL, subject, html: replyToHtml(text), text: replyToPlain(text), attachments: files })
+  const sent = await sendNew({ userId: actor?.id || null, to: ARTELO_SUPPORT_EMAIL, subject: subj, html: replyToHtml(text), text: replyToPlain(text), attachments: files })
   const by = [actor?.firstName, actor?.lastName].filter(Boolean).join(' ') || 'Someone'
-  const label = lost ? 'lost in transit claim' : 'damage claim'
-  const withPhotos = files.length ? ` with ${files.length} photo${files.length === 1 ? '' : 's'}` : ''
+  const withFiles = files.length ? ` with ${files.length} attachment${files.length === 1 ? '' : 's'}` : ''
+  const label = k.label.toLowerCase()
   await prisma.$transaction([
-    prisma.supportNote.create({ data: { threadId: thread.id, kind: 'event', body: `${by} sent a ${label} for #${number} to Artelo support${withPhotos}. Artelo's free replacement shows under Orders once they make it.`, authorId: actor?.id || null, authorName: by } }),
-    ...rows.map(r => prisma.orderComment.create({ data: { orderId: r.id, text: `${lost ? 'Lost in transit' : 'Damage'} claim sent to Artelo support${withPhotos}: ${(lost ? track : what).slice(0, 300)}`, authorId: actor?.id || null, authorName: by } })),
+    prisma.supportNote.create({ data: { threadId: thread.id, kind: 'event', body: `${by} opened an Artelo ticket for #${f.number} (${label})${withFiles}: "${subj}". Artelo's answer comes into Support as its own conversation.`, authorId: actor?.id || null, authorName: by } }),
+    ...f.rows.map(r => prisma.orderComment.create({ data: { orderId: r.id, text: `Artelo ticket (${label})${withFiles}: ${subj}`, authorId: actor?.id || null, authorName: by } })),
   ])
-  return { number, kind, photos: files.length, claimThreadId: sent?.threadId || null, summary: `Sent a ${label} for #${number} to Artelo support${withPhotos}` }
+  return { number: f.number, kind, photos: files.length, claimThreadId: sent?.threadId || null, summary: `Opened an Artelo ticket for #${f.number} (${label})${withFiles}` }
 }
