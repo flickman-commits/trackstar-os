@@ -6,6 +6,17 @@ import { btnPrimary, btnSecondary, btnGhost, inputBase, modalPrimary, modalCance
 import { financeApi, hoursText, dayLabel, mondayOf, addDays, todayET } from '@/lib/financeApi'
 import type { HoursPayload, TimeEntry } from '@/types/finance'
 import { StatusChip } from '@/components/finance/bits'
+import { useLocation } from 'react-router-dom'
+import { HOURS_CHANGED } from './RunningTimer'
+
+/** What a timer started from this page is for, by default. */
+function panelName(path: string) {
+  if (path.startsWith('/support')) return 'Customer Support'
+  if (path.startsWith('/creators') || path.startsWith('/briefs')) return 'Creators'
+  if (path.startsWith('/sales') || path.startsWith('/send')) return 'Sales'
+  if (path.startsWith('/finance')) return 'Finance'
+  return 'Fulfillment'
+}
 
 /**
  * Your hours, one week at a time: seven days, the entries on each, a timer
@@ -37,7 +48,8 @@ function HoursBody({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState(false)
-  const [timerNote, setTimerNote] = useState('')
+  const { pathname } = useLocation()
+  const [timerNote, setTimerNote] = useState(() => panelName(pathname))
   const [tick, setTick] = useState(0)
 
   const load = useCallback(async (w: string) => {
@@ -48,7 +60,7 @@ function HoursBody({ onClose }: { onClose: () => void }) {
 
   const act = async (body: Record<string, unknown>, ok?: string) => {
     setBusy(true)
-    try { const out = await financeApi.hoursAction({ weekStart: week, ...body }); setData(out); if (out.week.weekStart !== week) setWeek(out.week.weekStart); if (ok) toast.success(ok) }
+    try { const out = await financeApi.hoursAction({ weekStart: week, ...body }); setData(out); if (out.week.weekStart !== week) setWeek(out.week.weekStart); window.dispatchEvent(new Event(HOURS_CHANGED)); if (ok) toast.success(ok) }
     catch (e) { toast.error((e as Error).message) } finally { setBusy(false) }
   }
   const ts = data?.week
@@ -90,8 +102,8 @@ function HoursBody({ onClose }: { onClose: () => void }) {
                   </>
                 ) : (
                   <>
-                    <input value={timerNote} onChange={e => setTimerNote(e.target.value)} placeholder="What are you on? (optional)" className={`${inputBase} flex-1 min-w-[160px] py-1.5`} disabled={locked} />
-                    <button onClick={() => { act({ action: 'start', note: timerNote }, 'Timer started'); setTimerNote('') }} disabled={busy || locked} className={btnSecondary}><Play className="w-3.5 h-3.5" /> Start timer</button>
+                    <input value={timerNote} onChange={e => setTimerNote(e.target.value)} placeholder="What are you working on?" className={`${inputBase} flex-1 min-w-[160px] py-1.5`} disabled={locked} />
+                    <button onClick={() => { act({ action: 'start', note: timerNote }, 'Timer started'); setTimerNote(panelName(pathname)) }} disabled={busy || locked} className={btnSecondary}><Play className="w-3.5 h-3.5" /> Start timer</button>
                   </>
                 )}
               </div>

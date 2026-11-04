@@ -5,7 +5,7 @@
  * DEFAULT_CAPS here is only the fallback for a session that has not loaded
  * it yet.
  */
-export type Role = 'admin' | 'sales' | 'fulfillment' | 'support' | 'head_designer' | 'designer'
+export type Role = 'admin' | 'sales' | 'fulfillment' | 'support' | 'creators' | 'head_designer' | 'designer'
 
 export type Capability =
   | 'sales' | 'support' | 'creators' | 'hours' | 'orders.assign_custom' | 'orders.render' | 'orders.message_customer'
@@ -14,13 +14,14 @@ export type Capability =
 
 export type Caps = '*' | Capability[]
 
-export const ROLES: Role[] = ['admin', 'sales', 'fulfillment', 'support', 'head_designer', 'designer']
+export const ROLES: Role[] = ['admin', 'sales', 'fulfillment', 'support', 'creators', 'head_designer', 'designer']
 
 export const ROLE_LABEL: Record<Role, string> = {
   admin: 'Admin',
   sales: 'Sales & Marketing',
   fulfillment: 'Fulfillment',
   support: 'Customer Support',
+  creators: 'Creators',
   head_designer: 'Head of Design',
   designer: 'Junior Designer',
 }
@@ -48,6 +49,7 @@ const DEFAULT_CAPS: Record<Role, Caps> = {
   sales: ['sales', 'creators', 'tools.discounts', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.reviews', 'settings.stats'],
   fulfillment: ['support', 'creators', 'orders.render', 'tools.discounts', 'tools.pace', 'tools.weather', 'settings.stats', 'settings.design_needs'],
   support: ['support', 'hours', 'tools.discounts', 'tools.pace', 'tools.weather'],
+  creators: ['creators', 'hours', 'tools.discounts'],
   head_designer: ['orders.assign_custom', 'orders.message_customer', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.stats', 'settings.design_needs'],
   designer: ['orders.message_customer', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.stats', 'settings.design_needs'],
 }

@@ -6,6 +6,7 @@ import CustomTools from '@/components/CustomTools'
 import StandardTools from '@/components/StandardTools'
 import CommandSearch from '@/components/CommandSearch'
 import HoursModal from '@/components/hours/HoursModal'
+import RunningTimer from '@/components/hours/RunningTimer'
 
 /**
  * Everything that has to outlive a page change.
@@ -88,6 +89,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <CustomTools open={railPanel === 'pace'} onClose={() => setRailPanel(null)} />
       <StandardTools open={railPanel === 'discounts'} onClose={() => setRailPanel(null)} />
       <HoursModal open={railPanel === 'hours'} onClose={() => setRailPanel(null)} />
+      {can('hours') && <RunningTimer onOpen={() => setRailPanel('hours')} />}
       <CommandSearch can={can} onOpenSettings={openSettings} />
       {children}
     </div>

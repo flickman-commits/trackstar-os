@@ -26,6 +26,7 @@
  * (renderWithPhoto). A paid-for photo that is not paid yet renders once
  * Shopify reads paid (jobs.js rerenderChanged).
  */
+import { rolesOf } from '../_lib/roles.js'
 import crypto from 'node:crypto'
 import { setCors, requireAdmin } from '../_lib/auth.js'
 import { requireAdminRole, requireCapability, recordAudit } from '../_lib/users.js'
@@ -66,7 +67,10 @@ async function startRender(orderId, note) {
 
 /** A designer adding or replacing the photo on custom orders only: the actor, else null. */
 async function customPhotoByDesigner(body, actor) {
-  if (!DESIGN_ROLES.includes(actor?.role) || !['upload-url', 'attach', 'replace'].includes(body.action)) return null
+  if (!['upload-url', 'attach', 'replace'].includes(body.action) || !actor?.id) return null
+  // Any of their roles, not just the main one (Settings > People ticks several).
+  const me = await prisma.user.findUnique({ where: { id: actor.id }, select: { role: true, extraRoles: true } })
+  if (!rolesOf(me).some(r => DESIGN_ROLES.includes(r))) return null
   const ids = (body.action === 'attach' ? (Array.isArray(body.orderIds) ? body.orderIds : []) : [body.orderId]).map(String).filter(Boolean).slice(0, 20)
   if (!ids.length) return null
   const rows = await prisma.order.findMany({ where: { id: { in: ids } }, select: { trackstarOrderType: true } })
