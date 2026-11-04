@@ -192,6 +192,7 @@ function Trend({ days }: { days: TrendDay[] }) {
   const rows = days.map(d => ({ ...d, cmPos: Math.max(0, d.cm), label: dayLabel(d.day) }))
   const raceDots = rows.filter(d => d.races.length && d.landed)
   return (
+    <div>
     <div className="h-64">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={rows} margin={{ top: 10, right: 8, left: 0, bottom: 0 }} barCategoryGap={2}>
@@ -224,9 +225,12 @@ function Trend({ days }: { days: TrendDay[] }) {
           {raceDots.map(d => <ReferenceDot key={d.day} x={d.label} y={d.revenue} r={4} fill="#fff" stroke={SERIES.revenue} strokeWidth={2} />)}
         </ComposedChart>
       </ResponsiveContainer>
-      <div className="flex flex-wrap gap-3 mt-1 text-[11px] text-off-black/60">
-        {[['Revenue', SERIES.revenue], ['COGS', SERIES.cogs], ['Ad spend', SERIES.adSpend], ['Designer fee', SERIES.designerFee], ['Contribution margin', SERIES.cm]].map(([l, c]) => <span key={l} className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: c }} />{l}</span>)}
-        <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-full inline-block border-2 border-off-black bg-white" />Race day</span>
+    </div>
+      {/* Below the chart, not inside its fixed-height box, so it never spills into the next card. */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3 text-xs text-off-black/65">
+        <span className="inline-flex items-center gap-1.5"><span className="shrink-0 w-4 h-[3px] rounded-full" style={{ background: SERIES.revenue }} />Revenue</span>
+        {[['COGS', SERIES.cogs], ['Ad spend', SERIES.adSpend], ['Designer fee', SERIES.designerFee], ['Contribution margin', SERIES.cm]].map(([l, c]) => <span key={l} className="inline-flex items-center gap-1.5"><span className="shrink-0 w-2.5 h-2.5 rounded-[3px]" style={{ background: c }} />{l}</span>)}
+        <span className="inline-flex items-center gap-1.5"><span className="shrink-0 w-2.5 h-2.5 rounded-full bg-white" style={{ border: `2px solid ${SERIES.revenue}` }} />Race day</span>
       </div>
     </div>
   )
