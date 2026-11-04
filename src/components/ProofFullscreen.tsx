@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2 } from 'lucide-react'
 import { Suspense, lazy, type ReactNode } from 'react'
 
@@ -27,11 +27,15 @@ function isPdf(url: string) {
  * designs at full size: still navigable, still zoomable, and it closes back to
  * the option you were looking at.
  *
- * Panning and pinch are the browser's, not ours. The image sits in a scroll
- * container and zooming just makes it wider than the container, so native
- * scrolling does the work on both platforms and pinch keeps working on a phone
- * because nothing here blocks it. A hand-rolled gesture layer would be a lot of
- * code to arrive back at what the browser already does properly.
+ * Zoom is a transform on the fitted image, about the point under the cursor
+ * or between the fingers: translate(x, y) scale(s), with the image's centre
+ * as the origin. It used to make the image physically wider inside a scroll
+ * box centred with flexbox, and once it outgrew the box the centring pushed
+ * its left edge out of reach, so every zoom slid sideways; each wheel tick
+ * also jumped a fixed 12%. Now the point you aim at stays put, the buttons and
+ * a click glide (a short transition), a trackpad pinch follows the fingers
+ * continuously, and the pan is clamped so the print never drifts off screen.
+ * Drag (or a plain wheel / two-finger scroll) pans once zoomed.
  */
 export default function ProofFullscreen({
   proofs,
@@ -50,34 +54,26 @@ export default function ProofFullscreen({
   /** An action for the design on screen, pinned under it (Design Survey's vote). */
   footer?: ReactNode
 }) {
-  // A number, not a boolean. Zoom used to be fit-or-2.5x with nothing in
-  // between, which is fine for a peek and useless for reading small type on a
-  // poster. Every control now moves the same value.
-  const [scale, setScale] = useState(1)
+  // One view: scale and the pan, in screen pixels from the centred position.
+  const [view, setView] = useState<{ s: number; x: number; y: number }>({ s: 1, x: 0, y: 0 })
+  // Glide for discrete steps (buttons, a click, keys); follow exactly while a gesture is live.
+  const [animate, setAnimate] = useState(false)
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null)
   const [box, setBox] = useState<{ w: number; h: number } | null>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const viewRef = useRef(view)
+  viewRef.current = view
   const touchStart = useRef<{ x: number; y: number } | null>(null)
-  const pinch = useRef<{ dist: number; scale: number } | null>(null)
-  /**
-   * Where to re-centre once the new size is on screen.
-   *
-   * Scrolling straight after setScale does nothing useful: React has not
-   * re-rendered the image at its new size yet, so the scroll position is
-   * clamped against the OLD dimensions and collapses to zero. Stash the intent
-   * and apply it in a layout effect, which runs after the DOM is updated and
-   * before paint, so there is no visible jump.
-   */
-  const anchor = useRef<{ px: number; py: number; ratio: number } | null>(null)
-  const zoomed = scale > 1
+  const gesture = useRef<{ kind: 'pinch'; dist: number; s: number; mid: { x: number; y: number }; x: number; y: number } | { kind: 'pan'; x0: number; y0: number; x: number; y: number; moved: boolean } | null>(null)
+  const scale = view.s
+  const zoomed = scale > 1.001
 
   const proof = proofs[index]
   const many = proofs.length > 1
 
-  // The fitted size has to be a concrete number of pixels: every zoom level is
-  // a multiple of it, and the scroll extents depend on it.
+  // The stage's size: the fitted image and the pan limits both come from it.
   useEffect(() => {
-    const el = scrollRef.current
+    const el = stageRef.current
     if (!el) return
     const measure = () => setBox({ w: el.clientWidth, h: el.clientHeight })
     measure()
@@ -85,15 +81,6 @@ export default function ProofFullscreen({
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
-
-  useLayoutEffect(() => {
-    const a = anchor.current
-    const el = scrollRef.current
-    anchor.current = null
-    if (!a || !el) return
-    el.scrollLeft = (el.scrollLeft + a.px) * a.ratio - a.px
-    el.scrollTop = (el.scrollTop + a.py) * a.ratio - a.py
-  }, [scale])
 
   const PAD = 16
   const fitted = natural && box
@@ -103,31 +90,42 @@ export default function ProofFullscreen({
       })()
     : null
 
+  /** Keep the image covering what it can: no pan past its own edges, and centred on an axis where it fits. */
+  const clamp = useCallback((v: { s: number; x: number; y: number }) => {
+    if (!fitted || !box) return { s: v.s, x: 0, y: 0 }
+    const mx = Math.max(0, (fitted.w * v.s - box.w) / 2 + PAD)
+    const my = Math.max(0, (fitted.h * v.s - box.h) / 2 + PAD)
+    return { s: v.s, x: Math.min(mx, Math.max(-mx, v.x)), y: Math.min(my, Math.max(-my, v.y)) }
+  }, [fitted, box])
+
   /**
-   * Change zoom while keeping the point under the cursor or fingers still.
-   *
-   * Without this the image jumps to a different part of itself on every step,
-   * which is what makes a zoom feel broken: you aim at the finish time, zoom,
-   * and end up looking at the sky.
+   * Zoom to `next`, keeping the screen point (clientX, clientY) fixed; the
+   * centre of the stage when none is given, which zooms perfectly straight.
    */
-  const zoomAt = useCallback((next: number, clientX?: number, clientY?: number) => {
-    const el = scrollRef.current
+  const zoomTo = useCallback((next: number, clientX?: number, clientY?: number, glide = true) => {
+    const el = stageRef.current
+    const cur = viewRef.current
     const target = Math.min(MAX_SCALE, Math.max(MIN_SCALE, next))
-    setScale(prev => {
-      if (!el || target === prev) return target
-      const rect = el.getBoundingClientRect()
-      const px = (clientX ?? rect.left + rect.width / 2) - rect.left
-      const py = (clientY ?? rect.top + rect.height / 2) - rect.top
-      anchor.current = { px, py, ratio: target / prev }
-      return target
-    })
-  }, [])
+    if (!el || Math.abs(target - cur.s) < 1e-4) return
+    const r = el.getBoundingClientRect()
+    // The point, relative to the stage centre (the transform origin's home).
+    const px = clientX == null ? 0 : clientX - (r.left + r.width / 2)
+    const py = clientY == null ? 0 : clientY - (r.top + r.height / 2)
+    const k = target / cur.s
+    const nextView = target <= MIN_SCALE ? { s: 1, x: 0, y: 0 } : clamp({ s: target, x: px - (px - cur.x) * k, y: py - (py - cur.y) * k })
+    setAnimate(glide)
+    setView(nextView)
+  }, [clamp])
+
+  // The old name, used by the controls below.
+  const zoomAt = zoomTo
 
   const go = useCallback(
     (delta: number) => {
       if (!many) return
       const next = (index + delta + proofs.length) % proofs.length
-      setScale(1)
+      setAnimate(false)
+      setView({ s: 1, x: 0, y: 0 })
       onIndexChange(next)
     },
     [index, many, onIndexChange, proofs.length]
@@ -140,13 +138,14 @@ export default function ProofFullscreen({
       if (e.key === 'Escape') { onClose(); return }
       if (e.key === 'ArrowRight') { e.preventDefault(); go(1) }
       if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1) }
-      if (e.key === '+' || e.key === '=') { e.preventDefault(); zoomAt(scale === 1 ? STEP_SCALE : scale * 1.4) }
-      if (e.key === '-' || e.key === '_') { e.preventDefault(); zoomAt(scale / 1.4) }
-      if (e.key === '0') { e.preventDefault(); zoomAt(1) }
+      const s0 = viewRef.current.s
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); zoomTo(s0 < 1.01 ? STEP_SCALE : s0 * 1.4) }
+      if (e.key === '-' || e.key === '_') { e.preventDefault(); zoomTo(s0 / 1.4) }
+      if (e.key === '0') { e.preventDefault(); zoomTo(1) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [go, onClose, zoomAt, scale])
+  }, [go, onClose, zoomTo])
 
   // Hold the page still underneath, and put it back exactly as it was.
   useEffect(() => {
@@ -155,58 +154,72 @@ export default function ProofFullscreen({
     return () => { document.body.style.overflow = prev }
   }, [])
 
-  // Reset the scroll position when the option changes, or the next design opens
-  // halfway down.
+  // A new option opens fitted and centred.
   useEffect(() => {
-    setScale(1)
+    setAnimate(false)
+    setView({ s: 1, x: 0, y: 0 })
     setNatural(null)
-    scrollRef.current?.scrollTo({ left: 0, top: 0 })
   }, [index])
 
-  // Native listeners, deliberately. React attaches wheel and touchmove as
-  // passive, so preventDefault there is ignored and the browser zooms the whole
-  // page instead - header, buttons and all. These have to be non-passive to
-  // keep the zoom on the artwork.
+  // A resize (a phone turned, the window dragged) keeps the pan inside the new limits.
+  useEffect(() => { setView(v => clamp(v)) }, [clamp])
+
+  // Native listeners, deliberately: React attaches wheel and touchmove as
+  // passive, so preventDefault there is ignored and the browser zooms the
+  // whole page instead.
   useEffect(() => {
-    const el = scrollRef.current
+    const el = stageRef.current
     if (!el) return
 
     const onWheel = (e: WheelEvent) => {
-      // ctrlKey is how a macOS trackpad pinch arrives, and how ctrl/cmd+wheel
-      // arrives on a mouse. A plain wheel keeps scrolling the zoomed image.
-      if (!e.ctrlKey && !e.metaKey) return
       e.preventDefault()
-      setScale(prev => {
-        const target = Math.min(MAX_SCALE, Math.max(MIN_SCALE, prev * (e.deltaY < 0 ? 1.12 : 1 / 1.12)))
-        if (target === prev) return prev
-        const rect = el.getBoundingClientRect()
-        anchor.current = { px: e.clientX - rect.left, py: e.clientY - rect.top, ratio: target / prev }
-        return target
-      })
+      const cur = viewRef.current
+      if (e.ctrlKey || e.metaKey) {
+        // A trackpad pinch arrives as ctrl+wheel with small deltas; a mouse
+        // wheel with ctrl as big ones. An exponential of the delta makes both
+        // smooth and proportional, instead of a fixed jump per event.
+        const delta = Math.max(-60, Math.min(60, e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY))
+        zoomTo(cur.s * Math.exp(-delta * 0.01), e.clientX, e.clientY, false)
+        return
+      }
+      // A plain wheel or two-finger scroll pans once zoomed.
+      if (cur.s > 1.001) { setAnimate(false); setView(v => clamp({ s: v.s, x: v.x - e.deltaX, y: v.y - e.deltaY })) }
     }
 
     const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+    const mid = (t: TouchList) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 })
 
     const onTouchStartNative = (e: TouchEvent) => {
-      if (e.touches.length !== 2) return
-      pinch.current = { dist: dist(e.touches), scale }
+      const cur = viewRef.current
+      if (e.touches.length === 2) {
+        gesture.current = { kind: 'pinch', dist: dist(e.touches), s: cur.s, mid: mid(e.touches), x: cur.x, y: cur.y }
+      } else if (e.touches.length === 1 && cur.s > 1.001) {
+        gesture.current = { kind: 'pan', x0: e.touches[0].clientX, y0: e.touches[0].clientY, x: cur.x, y: cur.y, moved: false }
+      }
     }
     const onTouchMoveNative = (e: TouchEvent) => {
-      if (e.touches.length !== 2 || !pinch.current) return
+      const g = gesture.current
+      if (!g) return
       e.preventDefault()
-      const rect = el.getBoundingClientRect()
-      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2
-      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2
-      const nextRaw = pinch.current.scale * (dist(e.touches) / pinch.current.dist)
-      const target = Math.min(MAX_SCALE, Math.max(MIN_SCALE, nextRaw))
-      setScale(prev => {
-        if (target === prev) return prev
-        anchor.current = { px: midX - rect.left, py: midY - rect.top, ratio: target / prev }
-        return target
-      })
+      setAnimate(false)
+      if (g.kind === 'pinch' && e.touches.length === 2) {
+        const r = el.getBoundingClientRect()
+        const m = mid(e.touches)
+        const target = Math.min(MAX_SCALE, Math.max(MIN_SCALE, g.s * (dist(e.touches) / g.dist)))
+        // Zoom about where the fingers started, then follow the midpoint as they move together.
+        const px = g.mid.x - (r.left + r.width / 2), py = g.mid.y - (r.top + r.height / 2)
+        const k = target / g.s
+        setView(clamp({ s: target, x: px - (px - g.x) * k + (m.x - g.mid.x), y: py - (py - g.y) * k + (m.y - g.mid.y) }))
+      } else if (g.kind === 'pan' && e.touches.length === 1) {
+        const dx = e.touches[0].clientX - g.x0, dy = e.touches[0].clientY - g.y0
+        if (Math.abs(dx) + Math.abs(dy) > 3) g.moved = true
+        setView(v => clamp({ s: v.s, x: g.x + dx, y: g.y + dy }))
+      }
     }
     const onTouchEndNative = (e: TouchEvent) => {
-      if (e.touches.length < 2) pinch.current = null
+      if (e.touches.length === 0) gesture.current = null
+      // Let go of a pinch below fit and it settles back to fit.
+      if (viewRef.current.s < 1.02) { setAnimate(true); setView({ s: 1, x: 0, y: 0 }) }
     }
 
     el.addEventListener('wheel', onWheel, { passive: false })
@@ -219,14 +232,34 @@ export default function ProofFullscreen({
       el.removeEventListener('touchmove', onTouchMoveNative)
       el.removeEventListener('touchend', onTouchEndNative)
     }
-  }, [scale])
+  }, [clamp, zoomTo])
 
-  /** Zoom toward the point that was clicked, rather than to the middle. */
-  const toggleZoomAt = (clientX: number, clientY: number) =>
-    zoomAt(zoomed ? 1 : STEP_SCALE, clientX, clientY)
+  // Mouse: drag to pan once zoomed; a click without a drag zooms in at that
+  // point, or back to fit.
+  const mouse = useRef<{ x0: number; y0: number; x: number; y: number; moved: boolean } | null>(null)
+  const onMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return
+    const cur = viewRef.current
+    mouse.current = { x0: e.clientX, y0: e.clientY, x: cur.x, y: cur.y, moved: false }
+  }
+  const onMouseMove = (e: React.MouseEvent) => {
+    const m = mouse.current
+    if (!m || viewRef.current.s <= 1.001) return
+    const dx = e.clientX - m.x0, dy = e.clientY - m.y0
+    if (!m.moved && Math.abs(dx) + Math.abs(dy) < 4) return
+    m.moved = true
+    setAnimate(false)
+    setView(v => clamp({ s: v.s, x: m.x + dx, y: m.y + dy }))
+  }
+  const onMouseUp = (e: React.MouseEvent) => {
+    const m = mouse.current
+    mouse.current = null
+    if (!m || m.moved) return
+    if ((e.target as HTMLElement).tagName !== 'IMG') return
+    zoomTo(zoomed ? 1 : STEP_SCALE, zoomed ? undefined : e.clientX, zoomed ? undefined : e.clientY)
+  }
 
-  // Swipe changes option, but only while fitted: once zoomed, a horizontal drag
-  // is the user panning around the print and must not also flip the page.
+  // Swipe changes option, but only while fitted: once zoomed, a drag pans.
   const onTouchStart = (e: React.TouchEvent) => {
     if (zoomed || !many || e.touches.length > 1) { touchStart.current = null; return }
     const t = e.touches[0]
@@ -235,11 +268,24 @@ export default function ProofFullscreen({
   const onTouchEnd = (e: React.TouchEvent) => {
     const start = touchStart.current
     touchStart.current = null
-    if (!start || pinch.current) return
+    if (!start || gesture.current?.kind === 'pinch') return
     const t = e.changedTouches[0]
     const dx = t.clientX - start.x
     const dy = t.clientY - start.y
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1)
+  }
+
+  // A double-tap on a phone zooms in at that point, or back to fit.
+  const lastTap = useRef(0)
+  const onTapEnd = (e: React.TouchEvent) => {
+    onTouchEnd(e)
+    if (e.changedTouches.length !== 1 || gesture.current) return
+    const now = Date.now()
+    if (now - lastTap.current < 300) {
+      const t = e.changedTouches[0]
+      zoomTo(zoomed ? 1 : STEP_SCALE, zoomed ? undefined : t.clientX, zoomed ? undefined : t.clientY)
+      lastTap.current = 0
+    } else lastTap.current = now
   }
 
   if (!proof) return null
@@ -302,19 +348,17 @@ export default function ProofFullscreen({
 
       <div className="relative flex-1 min-h-0">
         <div
-          ref={scrollRef}
-          className={`absolute inset-0 ${zoomed ? 'overflow-auto' : 'overflow-hidden'}`}
+          ref={stageRef}
+          className={`absolute inset-0 overflow-hidden select-none ${pdf ? 'overflow-auto' : ''} ${zoomed ? 'cursor-grab active:cursor-grabbing' : ''}`}
+          style={{ touchAction: pdf ? 'auto' : 'none' }}
           onTouchStart={onTouchStart}
-          onTouchEnd={onTouchEnd}
+          onTouchEnd={onTapEnd}
+          onMouseDown={pdf ? undefined : onMouseDown}
+          onMouseMove={pdf ? undefined : onMouseMove}
+          onMouseUp={pdf ? undefined : onMouseUp}
+          onMouseLeave={() => { mouse.current = null }}
         >
-          {/* Two different jobs, so two different boxes.
-              Fitted: a definite h-full, because the image's max-h-full is a
-              percentage and a percentage needs a parent with a real height to
-              resolve against. min-h-full is not that, which is why a tall print
-              rendered at natural size and ran off the bottom of the screen.
-              Zoomed: min-w/min-h so the oversized image can push the container
-              out and be scrolled around instead of clipped. */}
-          <div className={`flex items-center justify-center p-2 sm:p-4 ${zoomed ? 'min-w-full min-h-full' : 'w-full h-full'}`}>
+          <div className="w-full h-full flex items-center justify-center p-2 sm:p-4">
             {pdf ? (
               <Suspense fallback={<Loader2 className="w-7 h-7 animate-spin" style={{ color: '#888' }} />}>
                 <PdfViewer url={proof.imageUrl} maxHeight={Math.round(window.innerHeight * 0.85)} />
@@ -324,13 +368,18 @@ export default function ProofFullscreen({
                 src={proof.imageUrl}
                 alt={label}
                 onLoad={e => setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
-                onClick={e => toggleZoomAt(e.clientX, e.clientY)}
-                className={`select-none ${zoomed ? 'cursor-zoom-out' : 'cursor-zoom-in'} ${fitted ? '' : 'max-w-full max-h-full object-contain'}`}
-                // Sized from the fitted dimensions so every zoom level is an
-                // exact multiple of "fits the screen", and so the scroll extents
-                // match what is actually drawn. Falls back to object-contain
-                // until the image reports its natural size.
-                style={fitted ? { width: fitted.w * scale, height: fitted.h * scale, maxWidth: 'none' } : undefined}
+                className={`select-none ${zoomed ? '' : 'cursor-zoom-in'} ${fitted ? '' : 'max-w-full max-h-full object-contain'}`}
+                // Always the fitted size; zoom and pan are a transform about
+                // its centre, so the layout never moves under it.
+                style={fitted ? {
+                  width: fitted.w,
+                  height: fitted.h,
+                  maxWidth: 'none',
+                  transform: `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.s})`,
+                  transformOrigin: '50% 50%',
+                  transition: animate ? 'transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1)' : 'none',
+                  willChange: 'transform',
+                } : undefined}
                 draggable={false}
                 onContextMenu={e => e.preventDefault()}
               />
@@ -367,7 +416,7 @@ export default function ProofFullscreen({
         <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
           {pdf
             ? 'Arrow keys to change option · Esc to close'
-            : 'Scroll to zoom · click the design to zoom in · + and − to step · 0 to fit · arrow keys to change option · Esc to close'}
+            : 'Pinch or click to zoom · drag to move around · + and − to step · 0 to fit · arrow keys to change option · Esc to close'}
         </span>
       </div>
 
@@ -376,7 +425,7 @@ export default function ProofFullscreen({
           {proofs.map((p, i) => (
             <button
               key={p.id}
-              onClick={() => { setScale(1); onIndexChange(i) }}
+              onClick={() => { setAnimate(false); setView({ s: 1, x: 0, y: 0 }); onIndexChange(i) }}
               className="rounded-full transition-all"
               style={{
                 width: i === index ? '24px' : '8px',
