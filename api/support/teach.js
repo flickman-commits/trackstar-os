@@ -7,6 +7,7 @@ import { setCors } from '../_lib/auth.js'
 import { requireCapability, requireAdminOnly, recordAudit } from '../_lib/users.js'
 import { proposeLessons, addLessons } from '../../server/domain/support/teach.js'
 import { isUserError } from '../../server/domain/support/errors.js'
+import { systemProblem } from '../../server/lib/systemProblem.js'
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'POST, OPTIONS' })) return
@@ -29,6 +30,8 @@ export default async function handler(req, res) {
   } catch (error) {
     const known = isUserError(error)
     if (!known) console.error('[API /support/teach]', error)
-    return res.status(known ? 400 : 500).json({ error: known ? error.message : 'Could not update the playbook' })
+    // A database problem names itself (server/lib/systemProblem.js); anything else still says which step failed.
+    const sys = known ? null : systemProblem(error)
+    return res.status(known ? 400 : sys ? sys.status : 500).json({ error: known ? error.message : sys ? sys.message : `Could not ${b.action === 'save' ? 'save the rule to' : 'write a rule for'} the playbook. Try again, and tell Matt if it keeps happening.` })
   }
 }

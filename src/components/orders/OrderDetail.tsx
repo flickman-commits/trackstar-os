@@ -1689,6 +1689,10 @@ Thank you!`
                     </div>
                   )}
 
+                  {/* The customer's open Support conversations, at the top like on a
+                      standard order: on a custom they are usually a change to the design. */}
+                  <OrderConversations variant="alert" orderId={selectedOrder.id} enabled={!!selectedOrder.customerEmail && can('support')} />
+
                   {/* ═══ STAGE-SPECIFIC PRIMARY ACTION — always at the top ═══ */}
 
                   {/* Customer approved: the designer uploads the custom order's final PDF here
@@ -1903,7 +1907,6 @@ Thank you!`
                     </CollapsibleSection>
                   )}
 
-                  <OrderConversations orderId={selectedOrder.id} enabled={!!selectedOrder.customerEmail && can('support')} />
                   </div>
                   </div>
                   </div>
