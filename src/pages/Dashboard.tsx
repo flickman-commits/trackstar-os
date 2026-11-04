@@ -162,7 +162,8 @@ function loadView(view: ActiveView) {
   if (running) return running
   const p = (async () => {
     const response = await apiFetch(`/api/orders?type=${view}${view === 'standard' ? '&scope=open' : ''}`)
-    if (!response.ok) throw new Error('Failed to fetch orders')
+    // Say what the server said (a database out of date, unreachable or busy names itself), not a shrug.
+    if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || "Couldn't load orders. Try again in a moment.")
     const data = await response.json()
     const rows: Record<string, unknown>[] = data.orders || []
     // The research's possible matches, so the accept picker shows after a reload too.
@@ -357,7 +358,7 @@ export default function Dashboard() {
       })
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error fetching orders:', error)
-      if (activeViewRef.current === view) setToast({ message: 'Failed to fetch orders', type: 'error' })
+      if (activeViewRef.current === view) setToast({ message: error instanceof Error ? error.message : "Couldn't load orders. Try again in a moment.", type: 'error' })
     } finally {
       if (activeViewRef.current === view) setIsLoading(false)
     }

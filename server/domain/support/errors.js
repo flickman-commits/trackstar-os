@@ -7,6 +7,7 @@
  * tokens or a customer's details, so the endpoint logs it and returns a
  * fixed message instead. Support and Sales share this file.
  */
+import { systemProblem } from '../../lib/systemProblem.js'
 export class UserError extends Error {
   constructor(message, { status = 400, ...extra } = {}) {
     super(message)
@@ -24,10 +25,12 @@ export function isUserError(err) {
 
 /** The message to put in a response: ours as is, anything else replaced. */
 export function publicMessage(err, fallback = 'Something went wrong. Try again, and tell Matt if it keeps happening.') {
-  return isUserError(err) ? err.message : fallback
+  if (isUserError(err)) return err.message
+  // A database that is out of date, unreachable or full gets named (server/lib/systemProblem.js).
+  return systemProblem(err)?.message || fallback
 }
 
 /** The status to answer with: a UserError's own, else 500. */
 export function publicStatus(err) {
-  return isUserError(err) ? (err.status || 400) : 500
+  return isUserError(err) ? (err.status || 400) : (systemProblem(err)?.status || 500)
 }
