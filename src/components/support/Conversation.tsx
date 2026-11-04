@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Archive, Bold, ChevronDown, Clock, Italic, Link as LinkIcon, Loader2, Mail, Paperclip, RotateCcw, Send, Star, StickyNote, Trash2, Zap, X, Search } from 'lucide-react'
+import { AlertTriangle, Archive, Bold, ChevronDown, Clock, Italic, Link as LinkIcon, Loader2, Mail, Paperclip, RotateCcw, Send, StickyNote, Trash2, Zap, X, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnGhost, btnPrimary, btnSecondary } from '@/lib/ui'
 import { supportApi } from '@/lib/supportApi'
@@ -204,7 +204,7 @@ function MacroMenu({ macros, onPick, onClose }: { macros: Macro[]; onPick: (m: M
   )
 }
 
-export default function Conversation({ thread, team, me, isAdmin, busy, macros, expectedHandle = 'trackstar_art', onAssign, onStatus, onSnooze, onPriority, onMarkUnread, onReply, onNote, onDeleteNote, onRedraft, onMerge, merging = [], onUseMacro, onRefresh, replyRef, noteRef, insertRef, attachRef }: {
+export default function Conversation({ thread, team, me, isAdmin, busy, macros, expectedHandle = 'trackstar_art', onAssign, onStatus, onSnooze, onMarkUnread, onReply, onNote, onDeleteNote, onRedraft, onMerge, merging = [], onUseMacro, onRefresh, replyRef, noteRef, insertRef, attachRef }: {
   thread: ThreadDetail
   /** The Instagram account replies go out as, without the @. */
   expectedHandle?: string
@@ -216,7 +216,6 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
   onAssign: (id: string | null) => void
   onStatus: (s: ThreadStatus) => void
   onSnooze: (until: string | null) => void
-  onPriority: (p: boolean) => void
   onMarkUnread: () => void
   onReply: (text: string, close: boolean, attachments: string[]) => Promise<boolean>
   onNote: (body: string, mentions: string[]) => Promise<boolean>
@@ -490,9 +489,8 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
           </div>
           <div className="shrink-0 flex items-center gap-0.5 -mt-0.5">
             {snoozed && <span className="mr-1 text-[11px] text-off-black/50 inline-flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(thread.snoozedUntil as string).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}</span>}
-            <button onClick={() => onPriority(!thread.priority)} disabled={busy} className={`${btnGhost} px-1.5`} title={thread.priority ? 'Remove priority (p)' : 'Mark priority (p)'}>
-              <Star className={`w-4 h-4 ${thread.priority ? 'text-amber-500 fill-amber-500' : 'text-off-black/40'}`} />
-            </button>
+            {/* Marked and unmarked from the details panel (or p); here it only shows. */}
+            {thread.priority && <span className="mr-1 px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-[11px] font-semibold text-amber-800">Priority</span>}
             <button onClick={onMarkUnread} disabled={busy} className={`${btnGhost} px-1.5`} title="Mark unread (u)">
               <Mail className="w-4 h-4 text-off-black/40" />
             </button>

@@ -477,7 +477,14 @@ export default function Details({ thread, tagSuggestions, onOpenThread, onMerge,
               </span>
             </Attr>
             <Attr label="Priority">
-              <label className="inline-flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={thread.priority} onChange={e => onPriority(e.target.checked)} className="accent-amber-500" />{thread.priority ? 'Priority' : 'Normal'}</label>
+              {thread.priority ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-[11px] font-semibold text-amber-800">Priority</span>
+                  <button onClick={() => onPriority(false)} className="text-xs text-off-black/50 hover:text-off-black hover:underline" title="Remove priority (p)">Remove</button>
+                </span>
+              ) : (
+                <button onClick={() => onPriority(true)} className={btnSecondary} title="Mark as priority (p)">Mark as Priority</button>
+              )}
             </Attr>
             {(thread.lastInboundAt || thread.lastOutboundAt) && (
               <div className="grid grid-cols-2 gap-3 text-xs pt-0.5">
