@@ -12,8 +12,9 @@
  */
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import type { ReactNode } from 'react'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { roleCan, type Capability, type Caps } from '@/lib/roles'
+import { listViewAsPeople, setViewAs, type ViewAsPerson } from '@/lib/viewAs'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -26,6 +27,8 @@ export interface CurrentUser {
   role: string
   /** What the role includes, as set in Settings > Admin > Roles. */
   caps?: Caps
+  /** Set while an admin is viewing TrackstarOS as this person (read-only): the admin. */
+  viewedBy?: { id: string; firstName?: string; lastName?: string }
 }
 
 /** "Matt Hickman", or just "Matt" when no last name is set. */
@@ -144,6 +147,49 @@ function NotYours({ what }: { what: string }) {
   )
 }
 
+/**
+ * Shown on every page while an admin views TrackstarOS as someone else
+ * (Settings > People). Says who, that it is read-only, and switches or stops.
+ */
+function ViewAsBanner({ user }: { user: CurrentUser }) {
+  const [people, setPeople] = useState<ViewAsPerson[]>([])
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { listViewAsPeople().then(setPeople).catch(() => {}) }, [])
+  const go = async (id: string | null) => {
+    setBusy(true)
+    try { await setViewAs(id) } catch { setBusy(false) }
+  }
+  return (
+    <div className="fixed z-[200] right-3 left-3 md:left-auto bottom-[calc(100px+env(safe-area-inset-bottom))] md:bottom-4 md:right-4 md:max-w-md rounded-lg border border-amber-300 bg-amber-50 shadow-lg px-3 py-2.5 text-xs text-amber-950">
+      <div className="flex items-center gap-2">
+        <Eye className="w-3.5 h-3.5 shrink-0" />
+        <span className="flex-1 min-w-0">
+          Viewing as <strong>{fullName(user) || user.email}</strong>. Read-only: nothing you do here is saved.
+        </span>
+        {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+      </div>
+      <div className="flex items-center gap-2 mt-2">
+        <select
+          className="flex-1 min-w-0 rounded-md border border-amber-300 bg-white px-2 py-1 text-xs"
+          value={user.id}
+          disabled={busy}
+          onChange={e => go(e.target.value)}
+        >
+          {!people.some(p => p.id === user.id) && <option value={user.id}>{fullName(user) || user.email}</option>}
+          {people.map(p => <option key={p.id} value={p.id}>{p.name} ({p.roleLabel})</option>)}
+        </select>
+        <button
+          onClick={() => go(null)}
+          disabled={busy}
+          className="shrink-0 rounded-md bg-dark-fill px-2.5 py-1 font-medium text-white hover:opacity-90 disabled:opacity-50"
+        >
+          Stop viewing
+        </button>
+      </div>
+    </div>
+  )
+}
+
 const shell = 'min-h-screen bg-off-white flex items-center justify-center px-4'
 const card = 'bg-white border border-border-gray rounded-md p-6 shadow-sm'
 const field =
@@ -247,6 +293,7 @@ export function SignInGate({ children }: { children: ReactNode }) {
     return (
       <AuthProvider user={user} setUser={setUser}>
         {children}
+        {user.viewedBy && <ViewAsBanner user={user} />}
       </AuthProvider>
     )
   }

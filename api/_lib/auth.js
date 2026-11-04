@@ -101,7 +101,7 @@ async function sessionState(userId) {
   if (hit && Date.now() - hit.at < SESSION_CACHE_MS) return hit.value
   const value = await prisma.user.findUnique({
     where: { id: userId },
-    select: { isActive: true, role: true, sessionVersion: true },
+    select: { isActive: true, role: true, sessionVersion: true, email: true },
   })
   sessionCache.set(userId, { at: Date.now(), value })
   if (sessionCache.size > 500) sessionCache.delete(sessionCache.keys().next().value)
@@ -130,6 +130,61 @@ export async function bumpSessionVersion(userId) {
   sessionCache.delete(userId)
   return user.sessionVersion
 }
+
+// ---------------------------------------------------------------------------
+// View as: an admin sees the app as someone else
+// ---------------------------------------------------------------------------
+
+/**
+ * Settings > People > View as. A second signed cookie names the admin and
+ * the person; while it is set, every request from that admin's session is
+ * answered as that person (their role, their queues, their own pages), so
+ * what the admin sees is what the person sees. It is read-only: anything but
+ * a read is refused, so nothing is ever done in someone else's name. It
+ * lapses after VIEW_AS_MAX_AGE_MS, and only counts for the admin who set it
+ * while they are still an admin. api/admin/view-as.js starts and stops it.
+ */
+export const VIEW_AS_COOKIE = 'ts_view_as'
+const VIEW_AS_MAX_AGE_MS = 4 * 60 * 60 * 1000
+
+export function createViewAsToken(adminId, targetId) {
+  const payload = ['viewas', adminId, targetId, String(Date.now() + VIEW_AS_MAX_AGE_MS)].join('|')
+  return `${payload}.${sign(payload)}`
+}
+
+function readViewAsToken(token) {
+  if (!token || typeof token !== 'string' || !sessionSecret()) return null
+  const dot = token.lastIndexOf('.')
+  if (dot < 1) return null
+  const payload = token.slice(0, dot)
+  if (!safeEqual(token.slice(dot + 1), sign(payload))) return null
+  const [kind, adminId, targetId, exp] = payload.split('|')
+  if (kind !== 'viewas' || !adminId || !targetId || !(Number(exp) > Date.now())) return null
+  return { adminId, targetId }
+}
+
+export function buildViewAsCookie(req, { clear = false, token = '' } = {}) {
+  const base = buildSessionCookie(req, { clear, token })
+  return base
+    .replace(`${SESSION_COOKIE}=`, `${VIEW_AS_COOKIE}=`)
+    .replace(/Max-Age=\d+/, `Max-Age=${clear ? 0 : Math.floor(VIEW_AS_MAX_AGE_MS / 1000)}`)
+}
+
+/**
+ * The person an admin's session is viewing as, or null. `real` is the live
+ * actor from the session cookie; the view only holds while they are an
+ * admin and the person is active.
+ */
+export async function viewAsTarget(req, real) {
+  if (!real || real.role !== 'admin') return null
+  const v = readViewAsToken(parseCookies(req)[VIEW_AS_COOKIE])
+  if (!v || v.adminId !== real.id || v.targetId === real.id) return null
+  const state = await sessionState(v.targetId)
+  if (!state || !state.isActive) return null
+  return { id: v.targetId, email: state.email, role: state.role, version: state.sessionVersion, viewedBy: { id: real.id, email: real.email } }
+}
+
+const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
 /** Back-compat boolean form, for callers that only need yes/no. */
 export function verifySessionToken(token) {
@@ -243,7 +298,15 @@ export async function requireAdmin(req, res) {
   const cookies = parseCookies(req)
   if (cookies[SESSION_COOKIE]) {
     const actor = await liveSession(cookies[SESSION_COOKIE])
-    if (actor) return actor
+    if (actor) {
+      const viewing = cookies[VIEW_AS_COOKIE] ? await viewAsTarget(req, actor) : null
+      if (!viewing) return actor
+      if (!READ_METHODS.has(String(req.method || 'GET').toUpperCase())) {
+        res.status(403).json({ error: `You are viewing TrackstarOS as ${viewing.email}, which is read-only. Stop viewing to make changes.`, code: 'view_as_read_only' })
+        return false
+      }
+      return viewing
+    }
   }
 
   // Server-to-server path: shared admin secret header (constant-time compare).

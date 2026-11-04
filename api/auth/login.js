@@ -22,6 +22,7 @@ import {
   createSessionToken,
   readSessionToken,
   SESSION_COOKIE,
+  viewAsTarget,
 } from '../_lib/auth.js'
 import { verifyPassword, hashPassword, normalizeEmail, isValidEmail, touchLastSeen } from '../_lib/users.js'
 import { capsFor } from '../_lib/roles.js'
@@ -54,6 +55,20 @@ export default async function handler(req, res) {
     }
     touchLastSeen(user.id)
     const { sessionVersion: _v, ...shown } = user
+    // Viewing as someone (api/admin/view-as.js): the app gets that person, plus who is looking.
+    const viewing = await viewAsTarget(req, user)
+    if (viewing) {
+      const target = await prisma.user.findUnique({
+        where: { id: viewing.id },
+        select: { id: true, email: true, firstName: true, lastName: true, role: true },
+      })
+      if (target) {
+        return res.status(200).json({
+          authenticated: true,
+          user: { ...target, caps: await capsFor(target.role), viewedBy: { id: user.id, firstName: user.firstName, lastName: user.lastName } },
+        })
+      }
+    }
     return res.status(200).json({ authenticated: true, user: { ...shown, caps: await capsFor(user.role) } })
   }
 

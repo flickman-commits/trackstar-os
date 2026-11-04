@@ -111,6 +111,8 @@ export async function loadActiveUser(actor) {
     select: { id: true, email: true, firstName: true, lastName: true, role: true, isActive: true },
   })
   if (!user || !user.isActive) return null
+  // An admin viewing as someone is not that person being seen.
+  if (actor.viewedBy) return { ...user, viewedBy: actor.viewedBy }
   touchLastSeen(user.id)
   return user
 }

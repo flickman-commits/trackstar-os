@@ -16,8 +16,9 @@
  */
 import { useState, useEffect, useCallback, Fragment } from 'react'
 import { toast } from 'sonner'
-import { Loader2, RefreshCw, UserPlus, Copy, Check, LogOut, ChevronDown } from 'lucide-react'
+import { Loader2, RefreshCw, UserPlus, Copy, Check, LogOut, ChevronDown, Eye } from 'lucide-react'
 import { useAuth, fullName, PasswordInput } from '@/lib/auth'
+import { setViewAs } from '@/lib/viewAs'
 import { btnPrimary, btnSecondary, btnDanger, btnGhost, inputBase, fieldLabel } from '@/lib/ui'
 import { useArmed } from '@/lib/useArmed'
 import { ROLES, ROLE_LABEL, normalizeRole, describeCaps, type Role, type Caps, type Capability } from '@/lib/roles'
@@ -186,6 +187,15 @@ export function PeoplePanel() {
     }
   }
 
+  const viewAs = async (id: string) => {
+    setBusyId(id)
+    try { await setViewAs(id) } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'That did not work')
+      setBusyId(null)
+    }
+  }
+  const viewable = members.filter(m => m.isActive && m.id !== user?.id)
+
   const remove = async (m: TeamMember) => {
     if (!arm(`delete:${m.id}`)) return
     setBusyId(m.id)
@@ -218,6 +228,23 @@ export function PeoplePanel() {
           )}
         </div>
       </div>
+
+      {viewable.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border-gray bg-white px-3 py-2">
+          <Eye className="w-3.5 h-3.5 text-off-black/50" />
+          <span className="text-xs font-medium text-off-black">View TrackstarOS as</span>
+          <select
+            className={`${inputBase} w-56`}
+            value=""
+            disabled={Boolean(busyId)}
+            onChange={e => e.target.value && viewAs(e.target.value)}
+          >
+            <option value="">Choose a person…</option>
+            {viewable.map(m => <option key={m.id} value={m.id}>{m.name} ({roleLabel(m.role)})</option>)}
+          </select>
+          <span className="text-[11px] text-off-black/45">See exactly what they see. Read-only, ends after 4 hours or when you stop.</span>
+        </div>
+      )}
 
       {inviteUrl && <InviteLink url={inviteUrl} onDismiss={() => setInviteUrl('')} />}
 
@@ -326,6 +353,11 @@ export function PeoplePanel() {
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-1.5">
                         {busyId === m.id && <Loader2 className="w-3 h-3 animate-spin text-off-black/40" />}
+                        {m.isActive && m.id !== user?.id && (
+                          <button className={btnGhost} disabled={busyId === m.id} onClick={() => viewAs(m.id)} title="See TrackstarOS as they see it (read-only)">
+                            View as
+                          </button>
+                        )}
                         {m.isActive && (
                           <button
                             className={btnGhost}
