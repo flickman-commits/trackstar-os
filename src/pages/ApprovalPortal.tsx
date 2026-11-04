@@ -22,8 +22,8 @@ import SlideToApprove from '@/components/SlideToApprove'
  * than approximated.
  */
 const T = {
-  page: '#FFFFFF',
-  card: '#F6F5F2',
+  page: '#F6F5F2',
+  card: '#FFFFFF',
   line: '#E0E0E0',
   ink: '#1A1A1A',
   muted: '#666666',
@@ -32,12 +32,12 @@ const T = {
   bar: '#1A1A1A',
   /** The site's panel system: 18px section panels, 8px cards inside them, 5px buttons. */
   radius: 18,
-  cardRadius: 8,
+  cardRadius: 14,
   font: "Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif",
   /** One card. Used for every section so they cannot drift apart. */
   cardStyle: {
-    backgroundColor: '#F6F5F2',
-    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
   } as const,
 }
 
@@ -766,15 +766,19 @@ export default function ApprovalPortal() {
 
           The white wordmark from the brand CDN sits straight on the ink bar,
           per the brand guide (white on dark, never retyped). */}
-      <header className="w-full" style={{ backgroundColor: '#1A1A1A' }}>
+      <header className="sticky top-0 z-40 w-full bg-white" style={{ borderBottom: '1px solid #E0E0E0' }}>
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
-          <img src="https://www.trackstar.art/cdn/shop/files/Trackstar_White_Logo_Cropped.png" alt="Trackstar" className="shrink-0 h-5 w-auto" />
+          <div className="flex items-center gap-3 min-w-0">
+            <img src="https://www.trackstar.art/cdn/shop/files/Trackstar_Logo_Cropped.png" alt="Trackstar" className="shrink-0 h-[18px] md:h-[22px] w-auto" />
+            <span className="shrink-0 w-px h-5 md:h-6" style={{ backgroundColor: '#D6D6D6' }} aria-hidden />
+            <span className="whitespace-nowrap text-[16px] md:text-[18px]" style={{ color: '#1A1A1A', fontWeight: 600 }}>{isPartner ? 'Design approval' : 'Custom Order'}</span>
+          </div>
           {/* A partner's name is the page's title; a customer sees their order number. */}
           {isPartner ? (
-            <h1 className="min-w-0 text-right" style={{ color: '#FFFFFF', fontSize: '16px', fontWeight: 500, lineHeight: 1.3, margin: 0 }}>{partnerName}</h1>
+            <h1 className="min-w-0 text-right truncate" style={{ color: '#1A1A1A', fontSize: '16px', fontWeight: 500, lineHeight: 1.3, margin: 0 }}>{partnerName}</h1>
           ) : (
-            <span className="shrink-0" style={{ color: 'rgba(255,255,255,0.75)', fontSize: '16px', fontWeight: 500 }}>
-              Order #{order?.displayOrderNumber || order?.parentOrderNumber}
+            <span className="shrink-0 text-[15px] md:text-[16px]" style={{ color: '#666666', fontWeight: 500 }}>
+              <span className="hidden sm:inline">Order </span>#{order?.displayOrderNumber || order?.parentOrderNumber}
             </span>
           )}
         </div>
@@ -985,6 +989,7 @@ export default function ApprovalPortal() {
                               style={{
                                 backgroundColor: T.card,
                                 border: isRevising ? `2px solid ${T.accent}` : '2px solid transparent',
+                                boxShadow: 'none',
                                 borderRadius: T.cardRadius,
                               }}
                             >
