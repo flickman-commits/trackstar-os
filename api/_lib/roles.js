@@ -47,6 +47,7 @@ export const CAPABILITIES = [
   { id: 'hours', group: 'Work areas', label: 'Hours', blurb: 'Log and submit their own time' },
   { id: 'orders.assign_custom', group: 'Can also do', label: 'Assign custom orders', blurb: 'Hand custom designs to a designer' },
   { id: 'orders.render', group: 'Can also do', label: 'Approve automated designs', blurb: 'Create and approve standard prints' },
+  { id: 'orders.add_photo', group: 'Can also do', label: 'Add customer photos', blurb: 'Put an emailed photo on a print; can bill the customer the Photo Add-On' },
   { id: 'orders.message_customer', group: 'Can also do', label: 'Email customers on custom orders', blurb: 'Send proofs and questions from an order' },
   { id: 'tools.samples', group: 'Can also do', label: 'Send samples', blurb: 'Places real orders with the print partner' },
   { id: 'tools.discounts', group: 'Tools', label: 'Discount codes' },
@@ -64,7 +65,7 @@ const EDITABLE_ROLES = ROLES.filter(r => r !== 'admin')
 
 export const DEFAULT_CAPS = {
   sales: ['sales', 'creators', 'tools.discounts', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.reviews', 'settings.stats'],
-  fulfillment: ['support', 'creators', 'orders.render', 'tools.discounts', 'tools.pace', 'tools.weather', 'settings.stats', 'settings.design_needs'],
+  fulfillment: ['support', 'creators', 'orders.render', 'orders.add_photo', 'tools.discounts', 'tools.pace', 'tools.weather', 'settings.stats', 'settings.design_needs'],
   support: ['support', 'hours', 'tools.discounts', 'tools.pace', 'tools.weather'],
   creators: ['creators', 'hours', 'tools.discounts'],
   head_designer: ['orders.assign_custom', 'orders.message_customer', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.stats', 'settings.design_needs'],
@@ -82,7 +83,7 @@ export function normalizeRole(role) {
 // `_known` predates all of these). A role gets a new capability's default
 // until an admin saves the table again, so "on by default" holds for a
 // workspace whose roles were set up before the capability existed.
-const ADDED_LATER = ['hours']
+const ADDED_LATER = ['hours', 'orders.add_photo']
 
 function clean(map) {
   const known = new Set(Array.isArray(map?._known) ? map._known : [...GRANTABLE].filter(c => !ADDED_LATER.includes(c)))

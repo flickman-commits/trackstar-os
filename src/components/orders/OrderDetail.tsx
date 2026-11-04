@@ -2184,7 +2184,11 @@ Thank you!`
                         <Mail className="w-3.5 h-3.5" /> Email customer
                       </button>
                     )}
-                    {!isAdmin ? null : selectedOrder.photoPath ? (
+                    {/* Replacing the photo on a print is design work (orders.render, the
+                        same people as Remove photo); adding one can bill the Photo
+                        Add-On, so it has its own permission (orders.add_photo, on for
+                        Fulfillment). The server checks the same two. */}
+                    {(selectedOrder.photoPath ? !(isAdmin || can('orders.render')) : !(isAdmin || can('orders.add_photo'))) ? null : selectedOrder.photoPath ? (
                       <AddPhotoPanel
                         replace
                         key={`replace-${selectedOrder.id}`}
@@ -2310,10 +2314,10 @@ Thank you!`
                 {selectedOrder.photoUnpaid && (
                   <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                     <span className="font-semibold">Photo not paid.</span> It was added after the order and the customer has not paid the Photo Add-On yet. Hold this print until the Shopify order reads paid; it updates on its own within about 10 minutes of payment.
-                    {isAdmin && (
+                    {(isAdmin || can('orders.add_photo')) && (
                       <button onClick={() => markPhotoFree(selectedOrder.id)} className="ml-2 text-xs font-semibold underline underline-offset-2 text-red-800">Photo is free (don't charge)</button>
                     )}
-                    {isAdmin && selectedOrder.photoAddedManually && (
+                    {(isAdmin || can('orders.render')) && selectedOrder.photoAddedManually && (
                       <button onClick={() => removeManualPhoto(selectedOrder.id)} className="ml-2 text-xs underline underline-offset-2 text-red-700/80">Remove photo</button>
                     )}
                   </div>

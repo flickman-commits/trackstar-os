@@ -1,5 +1,5 @@
 /**
- * POST /api/orders/photo - admin only. Attach a customer's photo after
+ * POST /api/orders/photo. Attach a customer's photo after
  * purchase (they emailed it), to one print or every print on the order.
  *
  *   { action: 'upload-url', filename }        signed upload slot in the
@@ -26,10 +26,10 @@
  * (renderWithPhoto). A paid-for photo that is not paid yet renders once
  * Shopify reads paid (jobs.js rerenderChanged).
  */
-import { rolesOf } from '../_lib/roles.js'
+import { rolesOf, can } from '../_lib/roles.js'
 import crypto from 'node:crypto'
 import { setCors, requireAdmin } from '../_lib/auth.js'
-import { requireAdminRole, requireCapability, recordAudit } from '../_lib/users.js'
+import { requireAdminRole, requireCapability, recordAudit, loadActiveUser } from '../_lib/users.js'
 import prisma from '../_lib/prisma.js'
 import { addVariantToOrder, PHOTO_ADDON_VARIANT_ID } from '../../server/services/shopifyOrderEdit.js'
 import { storage } from '../../server/lib/storage.js'
@@ -77,19 +77,34 @@ async function customPhotoByDesigner(body, actor) {
   return rows.length === ids.length && rows.every(r => r.trackstarOrderType === 'custom') ? actor : null
 }
 
+/** Upload slot for a photo: open to anyone who may add one or replace one. Responds 401/403 and returns null otherwise. */
+async function eitherPhotoCapability(req, res, actor) {
+  const user = await loadActiveUser(actor)
+  if (!user) { res.status(401).json({ error: 'Your account is no longer active. Sign in again.' }); return null }
+  if (await can(user, 'orders.add_photo') || await can(user, 'orders.render')) return user
+  res.status(403).json({ error: 'That is not part of your role. Ask Matt if you need it.', code: 'not_allowed' })
+  return null
+}
+
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'POST, OPTIONS' })) return
   const actor = (await requireAdmin(req, res))
   if (!actor) return
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
   const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})
-  // Re-cropping the photo already on a print (upload, then replace) is design
-  // work, open to anyone who renders designs. Adding a photo bills the
-  // customer, so attach stays with admins. The exception: a photo a customer
-  // emails for a custom order is free, so designers add and replace those.
+  // Who may do what:
+  //   replace, remove   re-cropping or taking off the photo already on a print
+  //                     is design work: anyone who renders designs (orders.render)
+  //   attach, free      adding a photo can bill the customer the Photo Add-On, and
+  //                     free waives it: "Add customer photos" (orders.add_photo),
+  //                     on for Fulfillment by default; admins have every capability
+  //   upload-url        the first step of either, so either capability
+  // A photo a customer emails for a custom order is free, so designers add and
+  // replace those whatever their capabilities.
   const admin = await customPhotoByDesigner(body, actor)
-    || (['upload-url', 'replace', 'remove'].includes(body.action)
-      ? await requireCapability(req, res, 'orders.render')
+    || (['replace', 'remove'].includes(body.action) ? await requireCapability(req, res, 'orders.render')
+      : ['attach', 'free'].includes(body.action) ? await requireCapability(req, res, 'orders.add_photo')
+      : body.action === 'upload-url' ? await eitherPhotoCapability(req, res, actor)
       : await requireAdminRole(req, res, actor))
   if (!admin) return
 
