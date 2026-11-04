@@ -49,16 +49,17 @@ export default function RunningTimer({ onOpen }: { onOpen?: () => void }) {
     } catch (e) { toast.error((e as Error).message) } finally { setBusy(false) }
   }
   return (
-    <div className="fixed z-[150] right-3 md:right-4 bottom-[calc(100px+env(safe-area-inset-bottom))] md:bottom-4 flex items-center gap-3 rounded-xl border border-border-gray bg-white shadow-lg pl-3.5 pr-2 py-2">
-      <button onClick={onOpen} className="flex items-center gap-2.5 text-left min-w-0" title="Open Hours">
-        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+    <div className="fixed z-[150] right-3 md:right-5 bottom-[calc(100px+env(safe-area-inset-bottom))] md:bottom-5 flex items-center gap-4 rounded-2xl border border-border-gray bg-white shadow-xl pl-5 pr-3 py-3 min-w-[260px]">
+      <button onClick={onOpen} className="flex items-center gap-3 text-left min-w-0 flex-1" title="Open the Hours Tracker">
+        <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0" />
         <span className="min-w-0">
-          <span className="block text-base font-bold tabular-nums text-off-black leading-tight">{clock(now - new Date(running.startedAt).getTime())}</span>
-          {running.note && <span className="block text-[11px] text-off-black/50 truncate max-w-[160px]">{running.note}</span>}
+          <span className="block text-[11px] font-medium text-off-black/50 leading-tight">Timer running</span>
+          <span className="block text-xl font-bold tabular-nums text-off-black leading-tight">{clock(now - new Date(running.startedAt).getTime())}</span>
+          {running.note && <span className="block text-xs text-off-black/55 truncate max-w-[170px]">{running.note}</span>}
         </span>
       </button>
-      <button onClick={stop} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-dark-fill px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50">
-        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Square className="w-3 h-3 fill-white" />}Stop
+      <button onClick={stop} disabled={busy} className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-dark-fill px-5 h-12 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-3.5 h-3.5 fill-white" />}Stop
       </button>
     </div>
   )
