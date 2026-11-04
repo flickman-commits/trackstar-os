@@ -9,6 +9,7 @@
  * Closed, and one per teammate. Unread is per person: bold until you have
  * opened the thread since the customer last wrote.
  */
+import { alignTracking } from '../../lib/tracking.js'
 import prisma from '../../db.js'
 import { shopifyGraphQL } from '../../services/shopifyAuth.js'
 import { approvalUrl, shopifyAdminUrl, arteloOrderUrl } from '../../lib/links.js'
@@ -535,7 +536,8 @@ export async function customerContext(email, { linked = [] } = {}) {
       shipToLine: shipToLine(shipTo),
       // Artelo fulfills through Shopify: each fulfillment it creates carries
       // its tracking, so this is Artelo's tracking, read live.
-      tracking: (s.fulfillments || []).flatMap(f => (f.trackingInfo || []).map(t => ({ url: t.url, number: t.number, company: t.company, at: f.createdAt, fromArtelo: f.service?.handle === 'artelo', deliveredAt: f.deliveredAt || (f.displayStatus === 'DELIVERED' ? f.createdAt : null) }))),
+      // The carrier is read from the number so the label and the link agree (lib/tracking.js).
+      tracking: (s.fulfillments || []).flatMap(f => (f.trackingInfo || []).map(t => alignTracking({ url: t.url, number: t.number, company: t.company, at: f.createdAt, fromArtelo: f.service?.handle === 'artelo', deliveredAt: f.deliveredAt || (f.displayStatus === 'DELIVERED' ? f.createdAt : null) }))),
       // When none of our rows exist yet (not imported), what was bought, from Shopify.
       lineItems: rows.length ? [] : (s.lineItems?.nodes || []).filter(li => !/add-?on/i.test(li.title)).map(li => ({ title: li.title, variant: li.variantTitle, quantity: li.quantity })),
       imported: rows.length > 0,
@@ -558,7 +560,7 @@ export async function customerContext(email, { linked = [] } = {}) {
       discountCodes: (first.shopifyOrderData?.discount_codes || []).map(d => d.code).filter(Boolean),
       shipTo,
       shipToLine: shipToLine(shipTo),
-      tracking: first.trackingNumber ? [{ url: null, number: first.trackingNumber, company: first.trackingCarrier, at: first.shippedAt, fromArtelo: false, deliveredAt: null }] : [],
+      tracking: first.trackingNumber ? [alignTracking({ url: null, number: first.trackingNumber, company: first.trackingCarrier, at: first.shippedAt, fromArtelo: false, deliveredAt: null })] : [],
       lineItems: [],
       imported: true,
       ...fromRows(rows),

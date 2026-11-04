@@ -7,6 +7,7 @@
  *
  * Either service being down costs its half only; the answer says so.
  */
+import { alignTracking } from '../../lib/tracking.js'
 import prisma from '../../db.js'
 import { shopifyGraphQL } from '../../services/shopifyAuth.js'
 import { requireConnection } from '../../lib/connections.js'
@@ -75,12 +76,12 @@ export async function productionStatus(orderId) {
   } : (arteloId ? { status: null, itemStatus: null, url: arteloOrderUrl(arteloId) } : null)
 
   const tracking = shopify
-    ? (shopify.fulfillments || []).flatMap(f => (f.trackingInfo || []).map(t => ({
+    ? (shopify.fulfillments || []).flatMap(f => (f.trackingInfo || []).map(t => alignTracking({
         url: t.url || null, number: t.number || null, company: t.company || null,
         shippedAt: f.createdAt, deliveredAt: f.deliveredAt || null, estimatedAt: f.estimatedDeliveryAt || null,
         status: f.displayStatus || null,
       })))
-    : (o.trackingNumber ? [{ url: null, number: o.trackingNumber, company: o.trackingCarrier, shippedAt: o.shippedAt, deliveredAt: null, estimatedAt: null, status: null }] : [])
+    : (o.trackingNumber ? [alignTracking({ url: null, number: o.trackingNumber, company: o.trackingCarrier, shippedAt: o.shippedAt, deliveredAt: null, estimatedAt: null, status: null })] : [])
 
   const fulfillment = shopify ? { status: shopify.displayFulfillmentStatus || null, financial: shopify.displayFinancialStatus || null, cancelled: Boolean(shopify.cancelledAt) } : null
 

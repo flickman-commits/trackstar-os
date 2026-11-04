@@ -14,6 +14,7 @@
  * `replacement`, beside the order it replaces. Artelo being slow or down
  * costs the replacements, never the page.
  */
+import { alignTracking } from '../../lib/tracking.js'
 import { call } from '../render/artelo.js'
 import { arteloOrderUrl } from '../../lib/links.js'
 
@@ -63,7 +64,7 @@ async function lookup(order) {
         shipTo: order.shipTo,
         shipToLine: order.shipToLine,
         arteloAddress: order.arteloAddress,
-        tracking: (r.shipments || []).filter(s => s.trackingNumber).map(s => ({ url: s.trackingUrl || null, number: s.trackingNumber, company: s.carrierCode || null, at: null, fromArtelo: true, deliveredAt: null })),
+        tracking: (r.shipments || []).filter(s => s.trackingNumber).map(s => alignTracking({ url: s.trackingUrl || null, number: s.trackingNumber, company: s.carrierCode || null, at: null, fromArtelo: true, deliveredAt: null })),
         lineItems: [],
         items,
         imported: false,
