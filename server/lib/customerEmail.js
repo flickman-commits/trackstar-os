@@ -16,25 +16,32 @@
  *   }) -> html
  */
 const FONT = "Helvetica, Arial, sans-serif"
-const INK = '#1A1A1A', MUTED = '#666666', FAINT = '#999999', LINE = '#E0E0E0', ACCENT = '#4600D6', OFF = '#F6F5F2'
+const INK = '#1A1A1A', MUTED = '#666666', ACCENT = '#4600D6', OFF = '#F6F5F2'
 const LOGO = 'https://www.trackstar.art/cdn/shop/files/Trackstar_Logo_Cropped.png'
 
 export function escapeHtml(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-const p = (html, extra = '') => `<p style="margin:0 0 16px;font-size:16px;line-height:1.45;color:${INK};letter-spacing:-0.04em;font-family:${FONT};${extra}">${html}</p>`
+const LOGO_WHITE = 'https://www.trackstar.art/cdn/shop/files/Trackstar_White_Logo_Cropped.png'
+const p = (html, extra = '') => `<p style="margin:0 0 20px;font-size:18px;line-height:1.4;color:${INK};letter-spacing:-0.04em;font-family:${FONT};${extra}">${html}</p>`
 
-export function renderCustomerEmail({ greeting, paragraphs = [], note, cta, after = [], signoff = 'Trackstar' }) {
+/**
+ * Short on purpose: what they need to know, one button, and at most one
+ * callout. `signoff` may hold a line break ("Thanks,\nMatt from Trackstar").
+ */
+export function renderCustomerEmail({ greeting, paragraphs = [], note, callout, cta, after = [], signoff = 'Thanks,\nMatt from Trackstar' }) {
+  const box = t => `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;"><tr><td style="background-color:${OFF};border-radius:8px;padding:16px 20px;font-size:16px;line-height:1.4;color:${INK};letter-spacing:-0.04em;font-family:${FONT};">${t}</td></tr></table>`
   const body = [
     greeting ? p(escapeHtml(greeting)) : '',
     ...paragraphs.map(t => p(t)),
-    note ? `<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;"><tr><td style="background-color:${OFF};border-radius:8px;padding:14px 16px;font-size:15px;line-height:1.45;color:${INK};letter-spacing:-0.04em;font-family:${FONT};">${escapeHtml(note).replace(/\n/g, '<br>')}</td></tr></table>` : '',
-    cta ? `<table cellpadding="0" cellspacing="0" style="margin:8px 0 20px;"><tr><td style="border:1.5px solid ${ACCENT};border-radius:5px;">
-          <a href="${cta.url}" style="display:inline-block;padding:14px 28px;font-size:16px;font-weight:700;color:${ACCENT};text-decoration:none;letter-spacing:-0.04em;font-family:${FONT};">${escapeHtml(cta.label)}</a>
+    note ? box(escapeHtml(note).replace(/\n/g, '<br>')) : '',
+    cta ? `<table cellpadding="0" cellspacing="0" style="margin:4px 0 28px;"><tr><td style="border:1.5px solid ${ACCENT};border-radius:5px;">
+          <a href="${cta.url}" style="display:inline-block;padding:16px 32px;font-size:18px;font-weight:700;color:${ACCENT};text-decoration:none;letter-spacing:-0.04em;font-family:${FONT};">${escapeHtml(cta.label)}</a>
         </td></tr></table>` : '',
-    ...after.map(t => `<p style="margin:0 0 8px;font-size:14px;line-height:1.4;color:${MUTED};letter-spacing:-0.04em;font-family:${FONT};">${t}</p>`),
-    p(escapeHtml(signoff), 'margin:20px 0 0;'),
+    callout ? box(callout) : '',
+    ...after.map(t => `<p style="margin:0 0 8px;font-size:16px;line-height:1.4;color:${MUTED};letter-spacing:-0.04em;font-family:${FONT};">${t}</p>`),
+    p(escapeHtml(signoff).replace(/\n/g, '<br>'), 'margin:8px 0 0;'),
   ].filter(Boolean).join('\n')
 
   return `<!DOCTYPE html>
@@ -43,14 +50,16 @@ export function renderCustomerEmail({ greeting, paragraphs = [], note, cta, afte
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#FFFFFF;">
     <tr><td align="center" style="padding:32px 20px;">
       <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
-        <tr><td style="padding:0 0 28px;">
+        <tr><td style="padding:0 0 32px;">
           <img src="${LOGO}" alt="Trackstar" width="140" style="display:block;width:140px;height:auto;" />
         </td></tr>
-        <tr><td>
+        <tr><td style="padding:0 0 40px;">
 ${body}
         </td></tr>
-        <tr><td style="padding:28px 0 0;border-top:1px solid ${LINE};margin-top:28px;">
-          <p style="margin:24px 0 0;font-size:14px;line-height:1.4;color:${FAINT};letter-spacing:-0.04em;font-family:${FONT};">Celebrating athletic achievement. Printed and framed in Kentucky, shipped to your doorstep.</p>
+        <tr><td style="background-color:${INK};border-radius:18px;padding:32px 28px;">
+          <img src="${LOGO_WHITE}" alt="Trackstar" width="130" style="display:block;width:130px;height:auto;margin:0 0 12px;" />
+          <p style="margin:0 0 20px;font-size:18px;line-height:1.3;color:#FFFFFF;letter-spacing:-0.04em;font-family:${FONT};">Celebrating athletic achievement.</p>
+          <p style="margin:0;font-size:14px;line-height:1.4;color:rgba(255,255,255,0.55);letter-spacing:-0.04em;font-family:${FONT};"><a href="https://www.trackstar.art" style="color:rgba(255,255,255,0.75);text-decoration:none;">trackstar.art</a> &nbsp;·&nbsp; Printed and framed in Kentucky</p>
         </td></tr>
       </table>
     </td></tr>

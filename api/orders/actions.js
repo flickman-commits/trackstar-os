@@ -508,22 +508,19 @@ async function handleNotifyCustomDelay({ orderNumber, daysLate }, res, actor) {
   const emailHtml = renderCustomerEmail({
     greeting: `Hey ${firstName},`,
     paragraphs: [
-      "Quick update: we've been swamped with custom orders the past couple of weeks, and things are running slightly behind where we'd hoped.",
-      `We haven't forgotten you. We refuse to put out a design we're not proud of, so ${escapeHtml(dueDateLine.replace(/<[^>]+>/g, ''))}`,
-      "We're sorry for the wait, and we promise it'll be worth it. We wanted to tell you ourselves rather than leave you wondering. Excited to share your design soon.",
+      `Quick heads-up: custom orders are running a little behind, so ${escapeHtml(dueDateLine.replace(/<[^>]+>/g, ''))}`,
+      "We haven't forgotten you, and it'll be worth the wait.",
     ],
-    signoff: 'The Trackstar design team',
   })
 
   // From fast@ through the support mailbox; Resend only while it is not connected.
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'Trackstar <proofs@orders.trackstar.art>'
-  const delaySubject = 'A quick heads-up on your Trackstar order'
+  const delaySubject = `A quick update | Trackstar Order ${displayNum}`
   const delayText = [
     `Hey ${firstName},`, '',
-    "Quick update - we've been swamped with custom orders the past couple of weeks, and things are running slightly behind where we'd hoped.", '',
-    `We haven't forgotten you. We refuse to put out a design we're not proud of, so ${dueDateLine.replace(/<[^>]+>/g, '')}`, '',
-    "We're sorry for the wait, and we promise it'll be worth it. We believe in keeping you in the loop, so we wanted to tell you personally. Excited to share your design soon.", '',
-    'The Trackstar Design Team',
+    `Quick heads-up: custom orders are running a little behind, so ${dueDateLine.replace(/<[^>]+>/g, '')}`,
+    "We haven't forgotten you, and it'll be worth the wait.", '',
+    'Thanks,', 'Matt from Trackstar',
   ].join('\n')
   try {
     if (await customerMailReady()) {
@@ -596,25 +593,19 @@ async function handleMessageCustomer({ orderId, body }, res, actor) {
   // Helvetica Neue). Intentionally does NOT include the question text: we want
   // the customer to answer in the portal, not reply by email.
   const emailHtml = renderCustomerEmail({
-    greeting: `Hey ${firstName},`,
-    paragraphs: [
-      `We're working on your custom design for order ${escapeHtml(displayNum)} and our designer has a quick question for you. It only takes a moment, and it helps us get your design just right.`,
-    ],
-    note: text,
+    paragraphs: ['Your designer has a quick question about your design. Click the button below to read it and reply.'],
     cta: { label: 'Read and reply', url: portalUrl },
-    after: ['Reply on that page rather than to this email, so your designer sees it right away.'],
+    callout: "Please reply in the portal so your answer goes straight to your designer. Please don't reply to this email.",
   })
 
   // From fast@ through the support mailbox; Resend only while it is not connected.
   // No "(Action Required)": from a domain a filter has not seen, that reads as phishing.
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'Trackstar <proofs@orders.trackstar.art>'
-  const questionSubject = `A question about your Trackstar order ${displayNum}`
+  const questionSubject = `A question about your design | Trackstar Order ${displayNum}`
   const questionText = [
-    `Hey ${firstName},`, '',
-    `We're working on your custom design for order ${displayNum} and our designer has a quick question for you. Read it and reply here; it only takes a moment, and it helps us get your design just right:`, portalUrl, '',
-    `The question: ${text}`, '',
-    'Please reply in the portal rather than to this email so your designer sees it right away.', '',
-    'Trackstar',
+    'Your designer has a quick question about your design. Read it and reply here:', portalUrl, '',
+    "Please reply in the portal so your answer goes straight to your designer. Please don't reply to this email.", '',
+    'Thanks,', 'Matt from Trackstar',
   ].join('\n')
   try {
     if (await customerMailReady()) {

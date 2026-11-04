@@ -530,8 +530,8 @@ export default async function handler(req, res) {
 
       // The email: the shared customer template (server/lib/customerEmail.js), per the brand guide
       const subject = hasRevisions
-        ? `Your updated design is ready`
-        : `Your Trackstar Order ${displayNum} (Action Required)`
+        ? `Your updated design is ready | Trackstar Order ${displayNum}`
+        : `Your design ${proofCount > 1 ? 'options are' : 'is'} ready | Trackstar Order ${displayNum}`
 
       const headline = hasRevisions
         ? `Updated based on your feedback.`
@@ -542,17 +542,11 @@ export default async function handler(req, res) {
         : `We've put together ${proofCount > 1 ? `${proofCount} options` : 'a custom design'} for your order ${displayNum}. Review below and pick your favorite.`
 
       const emailHtml = renderCustomerEmail({
-        greeting: `Hi ${customerName},`,
-        paragraphs: [
-          escapeHtml(bodyText),
-          `Open the link below to see ${proofCount > 1 ? 'them' : 'it'}. Approve your favorite, or ask for changes, right there on the page. If you ask for changes, we work on them and send you the updated design.`,
-        ],
-        note: note || null,
+        paragraphs: [hasRevisions
+          ? 'Click the button below to review your updated design.'
+          : `Click the button below to review your ${proofCount > 1 ? `${proofCount} design options` : 'design'}.`],
         cta: { label: `Review your design${proofCount > 1 ? 's' : ''}`, url: approvalUrl },
-        after: [
-          'Changes go through the <strong>Request changes</strong> button on that page rather than a reply here, so nothing gets lost.',
-          'The link works for 30 days.',
-        ],
+        callout: "Please make any revision request in the portal by clicking <strong>Request changes</strong>. This sends it straight to our design team. Please don't reply to this email.",
       })
 
       // From fast@ through the support mailbox, so a reply lands in Support on
@@ -560,10 +554,9 @@ export default async function handler(req, res) {
       // Resend from proofs@orders.trackstar.art only while the mailbox is not connected.
       const fromEmail = process.env.RESEND_FROM_EMAIL || 'Trackstar <proofs@orders.trackstar.art>'
       const emailText = [
-        `Hi ${customerName},`, '', headline, bodyText,
-        ...(note ? ['', `A note from your designer: ${note}`] : []),
-        '', `See your design${proofCount > 1 ? ' options' : ''} and approve your favorite, or request changes, here:`, approvalUrl,
-        '', 'This link expires in 30 days.', '', 'Trackstar',
+        hasRevisions ? 'Review your updated design here:' : `Review your ${proofCount > 1 ? `${proofCount} design options` : 'design'} here:`, approvalUrl, '',
+        "Please make any revision request in the portal by clicking Request changes. This sends it straight to our design team. Please don't reply to this email.", '',
+        'Thanks,', 'Matt from Trackstar',
       ].join('\n')
       try {
         if (await customerMailReady()) {
