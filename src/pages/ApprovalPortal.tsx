@@ -22,8 +22,8 @@ import SlideToApprove from '@/components/SlideToApprove'
  * than approximated.
  */
 const T = {
-  page: '#F6F5F2',
-  card: '#FFFFFF',
+  page: '#FFFFFF',
+  card: '#F6F5F2',
   line: '#E0E0E0',
   ink: '#1A1A1A',
   muted: '#666666',
@@ -36,11 +36,43 @@ const T = {
   font: "Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif",
   /** One card. Used for every section so they cannot drift apart. */
   cardStyle: {
-    backgroundColor: '#FFFFFF',
-    border: '1px solid #E0E0E0',
+    backgroundColor: '#F6F5F2',
     borderRadius: 8,
-    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
   } as const,
+}
+
+/**
+ * The site's footer: an ink panel with the white wordmark, the slogan, Find
+ * their race, the socials and the copyright. Icons are served from
+ * public/email, the same ones the customer emails use.
+ */
+function SiteFooter() {
+  const social: [string, string, string][] = [
+    ['https://www.instagram.com/trackstar_art', '/email/instagram-white.png', 'Instagram'],
+    ['https://www.tiktok.com/@trackstar_art', '/email/tiktok-white.png', 'TikTok'],
+    ['https://www.facebook.com/trackstarArt', '/email/facebook-white.png', 'Facebook'],
+  ]
+  return (
+    <footer className="max-w-3xl mx-auto px-2 pb-2 mt-12">
+      <div style={{ backgroundColor: '#1A1A1A', borderRadius: 18, padding: '36px 32px 28px' }}>
+        <img src="https://www.trackstar.art/cdn/shop/files/Trackstar_White_Logo_Cropped.png" alt="Trackstar" style={{ width: 150, height: 'auto', marginBottom: 14 }} />
+        <p style={{ color: '#E6E6E6', fontSize: '20px', lineHeight: 1.3, margin: '0 0 24px' }}>Celebrating athletic achievement.</p>
+        <a href="https://www.trackstar.art" className="inline-flex items-center justify-center min-h-[48px] px-7 text-[16px] font-bold transition-colors duration-150 hover:bg-[#E0E0E0]" style={{ backgroundColor: '#FFFFFF', color: '#1A1A1A', borderRadius: 5 }}>
+          Find their race
+        </a>
+        <div className="flex items-center gap-5 mt-6 mb-6">
+          {social.map(([href, icon, alt]) => (
+            <a key={alt} href={href} target="_blank" rel="noopener noreferrer" aria-label={alt} className="opacity-85 hover:opacity-100 transition-opacity">
+              <img src={icon} alt={alt} style={{ width: 22, height: 22 }} />
+            </a>
+          ))}
+        </div>
+        <p style={{ borderTop: '1px solid #3A3A3A', paddingTop: 18, margin: 0, color: '#8A8A8A', fontSize: '14px' }}>
+          &copy; {new Date().getFullYear()} Trackstar. All rights reserved.
+        </p>
+      </div>
+    </footer>
+  )
 }
 
 /** Buttons, per the brand guide: 5px corners, sentence case, 16px bold, 48px tall. */
@@ -603,13 +635,8 @@ export default function ApprovalPortal() {
             )
           })()}
 
-          {/* Footer */}
-          <div className="mt-12 pt-6 text-center" style={{ borderTop: '1px solid #E0E0E0' }}>
-            <p style={{ fontSize: '14px', color: '#999999' }}>
-              Trackstar - Celebrating athletic achievement.
-            </p>
-          </div>
         </div>
+        <SiteFooter />
       </div>
     )
   }
@@ -755,42 +782,17 @@ export default function ApprovalPortal() {
 
           The white wordmark from the brand CDN sits straight on the ink bar,
           per the brand guide (white on dark, never retyped). */}
-      <div className="max-w-3xl mx-auto px-4 pt-3 pb-1">
-        <div
-          className="flex items-center justify-between gap-3 pl-1.5 pr-1.5 py-2.5"
-          style={{ backgroundColor: T.bar, borderRadius: 18 }}
-        >
-          <img
-            src="https://www.trackstar.art/cdn/shop/files/Trackstar_White_Logo_Cropped.png"
-            alt="Trackstar"
-            className="shrink-0 h-5 w-auto ml-3"
-          />
-          {/* The partner's name lives in the bar, beside the mark. It is still
-              the page's h1 - it is the title, it just sits where a title sits
-              in the reference. Wraps rather than truncates, per Matt: a
-              partner should see their whole name, so the bar grows to fit. */}
-          {isPartner && (
-            <h1
-              className="flex-1 min-w-0 py-1"
-              style={{ color: '#FFFFFF', fontSize: '15px', fontWeight: 600, letterSpacing: '-0.01em', lineHeight: 1.3, margin: 0 }}
-            >
-              {partnerName}
-            </h1>
-          )}
-          {!isPartner && (
-            <span className="flex items-center gap-2 pr-2 min-w-0">
-              {order?.customerName && (
-                <span className="truncate" style={{ color: '#FFFFFF', fontSize: '13px', fontWeight: 500 }}>
-                  {order.customerName}
-                </span>
-              )}
-              <span className="shrink-0" style={{ color: 'rgba(255,255,255,0.55)', fontSize: '12px' }}>
-                #{order?.displayOrderNumber || order?.parentOrderNumber}
-              </span>
-            </span>
-          )}
-        </div>
-      </div>
+      <header className="max-w-3xl mx-auto px-4 pt-6 pb-2 flex items-center justify-between gap-4">
+        <img src="https://www.trackstar.art/cdn/shop/files/Trackstar_Logo_Cropped.png" alt="Trackstar" className="shrink-0 h-6 w-auto" />
+        {/* A partner's name is the page's title; a customer sees their order number. */}
+        {isPartner ? (
+          <h1 className="min-w-0 text-right" style={{ color: '#1A1A1A', fontSize: '16px', fontWeight: 500, lineHeight: 1.3, margin: 0 }}>{partnerName}</h1>
+        ) : (
+          <span className="shrink-0" style={{ color: '#666666', fontSize: '16px', fontWeight: 500 }}>
+            Order #{order?.displayOrderNumber || order?.parentOrderNumber}
+          </span>
+        )}
+      </header>
 
       {/* Content */}
       <div className="max-w-3xl mx-auto px-4 py-4">
@@ -800,8 +802,8 @@ export default function ApprovalPortal() {
               is the subject of the page rather than a salutation. */}
           {/* Partners' title moved up into the bar. Customers keep the greeting. */}
           {!isPartner && (
-            <h1 style={{ color: '#1A1A1A', fontSize: '26px', fontWeight: 700, marginBottom: '8px', lineHeight: 1.1 }}>
-              {order?.customerName ? `Hey ${order.customerName}.` : 'Your design is ready.'}
+            <h1 style={{ color: '#1A1A1A', fontSize: '32px', fontWeight: 700, marginBottom: '10px', lineHeight: 1.05 }}>
+              {order?.customerName ? `Hey ${order.customerName},` : 'Your design is ready.'}
             </h1>
           )}
           {isPartner && (
@@ -823,7 +825,7 @@ export default function ApprovalPortal() {
             </span>
           )}
           {hasPendingProofs ? (
-            <p style={{ color: '#666666', fontSize: '15px', lineHeight: 1.6 }}>
+            <p style={{ color: '#666666', fontSize: '18px', lineHeight: 1.4 }}>
               {/* A partner is a collaborator, so the ask is an opinion rather
                   than a transaction: no count of what they bought, and an
                   explicit invitation to say what they want changed. */}
@@ -837,8 +839,8 @@ export default function ApprovalPortal() {
                     ? "Take a look and let us know what you think. Feel free to leave comments on how you'd like things revised."
                     : "Choose your favorite below. Feel free to leave comments on how you'd like things revised.")
                 : (pendingProofs.length === 1
-                    ? "Take a look and let us know what you think."
-                    : `We've prepared ${pendingProofs.length} options. Pick your favorite.`)
+                    ? <>Please review your design below. If you have any revision requests, please click <strong style={{ color: '#1A1A1A' }}>Request changes</strong>.</>
+                    : <>Please review your design options below. If you have any revision requests, please click <strong style={{ color: '#1A1A1A' }}>Request changes</strong> on the design option you want revised.</>)
               }
             </p>
           ) : (
@@ -863,13 +865,6 @@ export default function ApprovalPortal() {
               Customers only. Telling a partner not to email us reads as a
               support policy, and that relationship runs on email in both
               directions. */}
-          {hasPendingProofs && !isPartner && (
-            <div style={{ marginTop: '14px', padding: '12px 16px', backgroundColor: '#FFFFFF', border: '1px solid #E0E0E0', borderRadius: 8 }}>
-              <p style={{ color: '#1A1A1A', fontSize: '14px', margin: 0, lineHeight: 1.4 }}>
-                Want something changed? Tap <strong style={{ color: '#4600D6' }}>Request changes</strong> under that design rather than emailing us, so it reaches your designer right away.
-              </p>
-            </div>
-          )}
           {order?.designerNote && (
             <div style={{ ...T.cardStyle, marginTop: '16px', padding: '14px 16px', borderLeft: `3px solid ${T.accent}` }}>
               <p style={{ color: '#666666', fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>Note from our designer</p>
@@ -1006,13 +1001,12 @@ export default function ApprovalPortal() {
                               className="overflow-hidden transition-all mx-1"
                               style={{
                                 backgroundColor: T.card,
-                                border: isRevising ? `2px solid ${T.ink}` : `1px solid ${T.line}`,
+                                border: isRevising ? `2px solid ${T.accent}` : '2px solid transparent',
                                 borderRadius: T.cardRadius,
-                                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                               }}
                             >
                               {/* Option header — compact */}
-                              <div className="flex items-center justify-between px-4 py-2.5" style={{ backgroundColor: '#FBFAF8', borderBottom: `1px solid ${T.line}` }}>
+                              <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: T.card }}>
                                 <div className="flex items-center gap-2">
                                   {/* Both this and the buttons below count
                                       within the visible product. They used to
@@ -1023,21 +1017,21 @@ export default function ApprovalPortal() {
                                       on the order. */}
                                   <span
                                     className="inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold"
-                                    style={{ backgroundColor: '#E0E0E0', color: '#666666' }}
+                                    style={{ backgroundColor: '#4600D6', color: '#FFFFFF' }}
                                   >
                                     {visibleProofs.length === 1 ? '✓' : optionNum}
                                   </span>
-                                  <span style={{ color: '#1A1A1A', fontSize: '13px', fontWeight: 500 }}>
+                                  <span style={{ color: '#1A1A1A', fontSize: '16px', fontWeight: 500 }}>
                                     {/* The pill above already names the product,
                                         so only repeat it when there is no pill. */}
                                     {pendingGroups.length === 1 && proof.groupLabel ? `${proof.groupLabel}: ` : ''}
-                                    {visibleProofs.length === 1 ? 'Your Design' : `Option ${optionNum} of ${visibleProofs.length}`}
+                                    {visibleProofs.length === 1 ? 'Your design' : `Option ${optionNum} of ${visibleProofs.length}`}
                                   </span>
                                 </div>
                               </div>
 
                               {/* Proof display — fits viewport, 1:1 max */}
-                              <div className="relative" style={{ backgroundColor: '#F5F5F5', maxHeight: 'calc(100vh - 280px)' }}>
+                              <div className="relative mx-3 overflow-hidden" style={{ backgroundColor: '#ECEAE5', borderRadius: 4, maxHeight: 'calc(100vh - 280px)' }}>
                               {/* Clicking the artwork opens full screen too, but
                                   that is not discoverable on its own. */}
                               <button
@@ -1311,13 +1305,8 @@ export default function ApprovalPortal() {
           </>
         )}
 
-        {/* Footer */}
-        <div className="mt-12 pt-6 text-center" style={{ borderTop: '1px solid #E0E0E0' }}>
-          <p style={{ fontSize: '14px', color: '#999999' }}>
-            Trackstar - Celebrating athletic achievement.
-          </p>
-        </div>
       </div>
+      <SiteFooter />
     </div>
   )
 }
