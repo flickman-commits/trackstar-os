@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Check, ChevronDown, GraduationCap, Loader2, RefreshCw, Sparkles, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, GraduationCap, Loader2, RefreshCw, Sparkles, X, StickyNote } from 'lucide-react'
 import { newIdempotencyKey, supportApi } from '@/lib/supportApi'
 import { when } from '@/lib/supportDates'
 import type { Address, Note, Proposal } from '@/types/support'
@@ -17,7 +17,7 @@ function proposalDetails(p: Proposal): string[] {
   if (p.type === 'shippingAddress') return [`Order #${p.orderNumber}: the ship-to in Shopify becomes`, ...addressLines(p.address), 'Artelo still needs changing by hand.']
   if (p.type === 'changeItem') return [`Order #${p.orderNumber}: the print becomes ${[p.size, p.frame].filter(Boolean).join(' ')}.`, 'The personalization is copied to the Shopify order note.', 'If the new one costs more, Shopify emails the customer an invoice for the difference.']
   if (p.type === 'discount') return [`A ${p.percent}% code, one use, 30 days, made in Shopify now.`]
-  if (p.type === 'orderNote') return [`On #${p.orderNumber}, for fulfillment:`, p.text || '']
+  if (p.type === 'orderNote') return ['Adds this to the order as a note:', p.text || '']
   return [p.label]
 }
 
@@ -36,7 +36,7 @@ function ProposalRow({ p, onApprove, onDismiss }: { p: Proposal; onApprove: (p: 
   return (
     <div className="rounded-lg border border-[#4600D6]/20 bg-white px-2.5 py-2">
       <div className="flex items-start gap-2">
-        <span className="flex-1 text-xs text-off-black/80 leading-snug">{p.label}</span>
+        <span className="flex-1 text-xs text-off-black/80 leading-snug">{p.type === 'orderNote' && <StickyNote className="inline w-3 h-3 mr-1 -mt-0.5 text-off-black/40" aria-label="Order note" />}{p.label}</span>
         {!confirmKey && <button disabled={busy} onClick={() => setConfirmKey(newIdempotencyKey())} className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[#4600D6] text-white hover:bg-[#3a00b3] disabled:opacity-50"><Check className="w-3 h-3" />Approve</button>}
         {!confirmKey && <button disabled={busy} onClick={() => go(() => onDismiss(p))} className="shrink-0 p-0.5 text-off-black/35 hover:text-off-black" title="Not this one"><X className="w-3.5 h-3.5" /></button>}
       </div>

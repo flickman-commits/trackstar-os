@@ -146,7 +146,7 @@ Suggested actions are things the rep can approve with one click, filled in from 
 - {"type": "shippingAddress", "orderNumber": "<one of their order numbers>", "address": {"name": "", "address1": "", "address2": "", "city": "", "province": "<two-letter state>", "zip": "", "country": "<two-letter, usually US>", "phone": ""}}: they gave a new ship-to for an order that has not shipped. Write the address out in full ("New York", not "NY", for the city).
 - {"type": "changeItem", "orderNumber": "<one of their order numbers>", "size": "<8x10 | 12x18 | 16x24>", "frame": "<Black Oak | Natural Oak | Unframed, or the same frame as now>"}: they want a different size or frame on an order that has not gone to production. Approving it swaps the item on the Shopify order, keeps the personalization in the order note, and emails Shopify's invoice for any balance; say so in the reply ("you'll get an invoice for the difference" only when the new one costs more). If the order is already in production, do not propose it: that is a reprint, so tell them it is too late to change and escalate.
 - {"type": "discount", "percent": 15}: a discount code belongs in the reply (the reply has [CODE]).
-- {"type": "orderNote", "orderNumber": "<one of their order numbers>", "text": "<what fulfillment must know>"}: something the people making the print must see.`
+- {"type": "orderNote", "orderNumber": "<one of their order numbers>", "text": "<the one fact that changes the print>"}: something the people making the print must see. The text is one short line with only the new fact, the way a teammate would scribble it: "Finish time is 4:52:10 (customer emailed)", "Runner name is spelled Katelyn". It is already a note on that order, so never write "note for fulfillment", never the order number, never the runner or race when they are not what changed, and nothing that does not change the print (an address they confirmed, thanks, how they feel).`
 
 /**
  * When their email finds no order, look for one under their name, the way a
@@ -288,8 +288,12 @@ export function cleanProposals(list, orders = []) {
       const percent = Number.isInteger(Number(p.percent)) && Number(p.percent) >= 5 && Number(p.percent) <= 25 ? Number(p.percent) : 15
       out.push({ id: `p${out.length + 1}`, type: 'discount', percent, label: `Create a ${percent}% code (one use, 30 days) and put it in the reply` })
     } else if (p?.type === 'orderNote' && order?.items?.[0] && String(p.text || '').trim()) {
-      const text = noEmDash(clip(String(p.text).trim(), 400))
-      out.push({ id: `p${out.length + 1}`, type: 'orderNote', orderNumber: order.number, orderId: order.items[0].orderId, text, label: `Note for fulfillment on #${order.number}: ${text}` })
+      // Short, and only the fact: a model that still prefixes "Note for
+      // fulfillment on #6593:" or restates the order number gets trimmed.
+      const text = noEmDash(clip(String(p.text).trim()
+        .replace(/^(note( for fulfillment)?|for fulfillment|fulfillment note)\s*(on|for)?\s*(order\s*)?#?\d*\s*[:,-]?\s*/i, '')
+        .replace(/\s*\(?(on|for)\s+(order\s*)?#\d+\)?\.?$/i, ''), 200))
+      if (text) out.push({ id: `p${out.length + 1}`, type: 'orderNote', orderNumber: order.number, orderId: order.items[0].orderId, text, label: text })
     }
   }
   return out
