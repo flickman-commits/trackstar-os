@@ -16,6 +16,11 @@ export function approvalUrl(token) {
   return token ? `${appBaseUrl()}/approve/${token}` : null
 }
 
+/** Where a pre-order customer uploads the photo they chose to add after the race. */
+export function photoLaterUrl(token) {
+  return token ? `${appBaseUrl()}/photo/${token}` : null
+}
+
 /** A partner's intake page for a bulk run. */
 export function bulkIntakeUrl(token) {
   return token ? `${appBaseUrl()}/intake/${token}` : null

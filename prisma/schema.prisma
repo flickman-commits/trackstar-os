@@ -115,6 +115,24 @@ model Order {
   // view: "Photo is free"). Counts as paid, renders with the photo, and
   // never needs a Photo Add-On line on the Shopify order.
   photoFree          Boolean  @default(false)
+  // "Add photo after the race": a pre-order where the customer paid for the
+  // Photo Add-On at checkout but had no race photo yet. The print waits for
+  // the photo; server/domain/orders/photoLater.js emails an upload link the
+  // day after the race, reminds once, and at the deadline prints without it
+  // and refunds the add-on.
+  //   photoLaterToken    the bearer token in /photo/<token>, one per print
+  //   photoLaterEmailedAt / photoLaterRemindedAt   the two emails
+  //   photoLaterClosedAt when it stopped waiting (photoPath is set, or not)
+  //   photoLaterOutcome  "uploaded" | "skipped" (they chose no photo) | "deadline"
+  //   photoLaterRefund   what happened to the add-on money when it closed without a photo:
+  //                      "refunded" | "failed: <why>" (Slack was told) | null
+  photoLater           Boolean   @default(false)
+  photoLaterToken      String?   @unique
+  photoLaterEmailedAt  DateTime?
+  photoLaterRemindedAt DateTime?
+  photoLaterClosedAt   DateTime?
+  photoLaterOutcome    String?
+  photoLaterRefund     String?
   // Why Artelo is holding this order, when it is ("Missing Designs", "Needs
   // Address Review", "Customer Unpaid"); null when it is not. Set by the
   // import's hold check and the daily Artelo check (arteloMismatch.js); the

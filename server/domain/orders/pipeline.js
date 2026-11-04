@@ -23,6 +23,7 @@ import { isTriathlon, triathlonMissing } from './triathlon.js'
 import { resolveTemplate, SIZES } from '../render/spec.js'
 import { sendStateOf } from '../render/sendState.js'
 import { noEditionFor } from '../../scrapers/index.js'
+import { awaitingLaterPhoto } from './photoLaterState.js'
 
 const RESULT_STATES = new Set(['found'])
 // The oldest race year anyone builds a scraper for (Matt, 2026-10-21).
@@ -142,6 +143,9 @@ export function pipelineFor({ order, research, race, render, hasScraper, templat
   if (blockers.length && blockers.every(b => /not verified/.test(b) || /not confirmed/.test(b)) && race?.raceDate && (race.raceDateSourceUrl || race.raceDateEvidence) && blockers.some(b => /not verified/.test(b))) return stage('action', 'Confirm race date', { kind: 'data', fix: 'The race date was read off a results page. Check it against the sources beside the date, then Confirm. It confirms every order of this race year.' })
   if (blockers.length === 1 && /not confirmed/.test(blockers[0])) return stage('action', 'Confirm weather', { kind: 'data', fix: 'The weather for this race year is calculated but nobody has checked it. Open the breakdown (source), then Confirm. It confirms every order of this race year.' })
   if (blockers.length) return stage('action', 'Needs race data', { kind: 'setup', fix: `${blockers.join('. ')}. Fix it in the Race Database.` })
+  if (awaitingLaterPhoto(order)) return stage('waiting', 'Waiting on photo', { fix: order.photoLaterEmailedAt
+    ? 'The customer chose to add their photo after the race and has the upload link. The print renders once it is in. If no photo arrives by the deadline, it prints without one and the Photo Add-On is refunded, on its own.'
+    : 'The customer chose to add their photo after the race. The upload link is emailed the day after race day; the print renders once the photo is in.' })
   if (photoUnpaid) return stage('waiting', 'Photo not paid', { fix: 'The customer has not paid for the photo add-on yet. The print renders once Shopify reads paid.' })
   if (!render) return stage('waiting', workerOnline ? 'Render queued' : 'Waiting for the renderer', { fix: workerOnline ? 'The print is queued for the next render run.' : 'No render worker is online. The print renders when one checks in.' })
   if (render.status === 'done' && render.review === 'closed') return stage('waiting', 'Render queued', { fix: 'The last design was closed. A new one renders on the next run.' })

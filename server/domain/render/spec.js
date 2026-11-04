@@ -11,6 +11,7 @@
  */
 import { formatRaceDate, formatTemp, formatTime, formatPace, formatCondition } from '../../lib/printFormat.js'
 import { unpaidPhotoRows } from '../orders/photoPayment.js'
+import { awaitingLaterPhoto } from '../orders/photoLaterState.js'
 import { printBlockers } from '../races/verification.js'
 import { isMainEvent, getCanonicalRaceName, namedEventsFor } from '../../scrapers/index.js'
 
@@ -89,7 +90,7 @@ export const SPEC_SELECT = {
   id: true, orderNumber: true, parentOrderNumber: true, lineItemIndex: true, trackstarOrderType: true, status: true,
   raceName: true, raceNameOverride: true, raceYear: true, yearOverride: true,
   runnerName: true, runnerNameOverride: true, productSize: true, hadNoTime: true,
-  photoPath: true, photoAddedManually: true, photoFree: true, shopifyOrderData: true, arteloOrderData: true, lineItemIndex: true,
+  photoPath: true, photoAddedManually: true, photoFree: true, photoLater: true, photoLaterClosedAt: true, shopifyOrderData: true, arteloOrderData: true, lineItemIndex: true,
   bulkOrder: { select: { number: true, paidAt: true, printKind: true } },
   runnerResearch: { orderBy: { id: 'desc' }, select: { researchStatus: true, bibNumber: true, officialTime: true, officialPace: true, eventType: true, race: { select: { id: true, raceDate: true, raceDateSource: true, raceDateSourceUrl: true, raceDateEvidence: true, raceDateVerifiedAt: true, raceDateConfirmedByPerson: true, location: true, weatherCondition: true, weatherTemp: true, weatherFetchedAt: true, weatherConfirmedAt: true, firstPrintedAt: true } } } },
 }
@@ -139,6 +140,9 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
   const temp = formatTemp(race?.weatherTemp)
   // Hard gate: a date prints only with evidence on file, and weather only when computed for that date.
   for (const b of printBlockers(race)) reasons.push(b)
+
+  // Paid at checkout for a photo they upload after the race (orders/photoLater.js).
+  if (awaitingLaterPhoto(order)) reasons.push('Waiting for the customer to upload their photo')
 
   if (order.photoPath && order.shopifyOrderData) {
     const unpaid = unpaidPhotoRows([order], order.shopifyOrderData)

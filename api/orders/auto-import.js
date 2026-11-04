@@ -19,6 +19,7 @@ import { autoQueueRenders } from '../../server/domain/render/jobs.js'
 import { deliverPending } from '../../server/domain/render/deliver.js'
 import { uploadPending } from '../../server/domain/render/artelo.js'
 import { refreshUnpaidPhotoOrders } from '../../server/domain/orders/photoRefresh.js'
+import { runPhotoLater } from '../../server/domain/orders/photoLater.js'
 import { checkStorageUploads } from '../../server/lib/storageHealth.js'
 
 export default async function handler(req, res) {
@@ -49,6 +50,9 @@ export default async function handler(req, res) {
       // Prints waiting on a photo payment: re-read those orders from Shopify so a payment shows.
       const photos = await refreshUnpaidPhotoOrders().catch(err => { console.error('[orders.auto-import] photo refresh failed:', err.message); return null })
       if (photos?.updated) console.log(`[orders.auto-import] photo payments refreshed: ${photos.updated} of ${photos.checked} checked`)
+      // Pre-orders whose photo comes after the race: the upload link, one reminder, and at the deadline print without it and refund.
+      const later = await runPhotoLater({ log: m => console.log(`[orders.auto-import] photo later: ${m}`) }).catch(err => { console.error('[orders.auto-import] photo later failed:', err.message); return null })
+      if (later && (later.requested || later.reminded || later.closed || later.unpaid || later.failed)) console.log(`[orders.auto-import] photo later: ${later.requested} emailed, ${later.reminded} reminded, ${later.closed} closed at the deadline, ${later.unpaid} unpaid, ${later.failed} failed`)
       // Orders that have everything get their print rendered without anyone clicking.
       const renders = await autoQueueRenders().catch(err => { console.error('[orders.auto-import] auto renders failed:', err.message); return null })
       if (renders?.queued) console.log(`[orders.auto-import] renders queued: ${renders.queued}`)

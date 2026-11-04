@@ -214,6 +214,7 @@ function extractShopifyPersonalization(lineItem) {
     lookupOutcome: null,
     lookupMatchedName: null,
     photoPath: null,
+    photoLater: false,
     isRush: false
   }
 
@@ -323,6 +324,12 @@ function extractShopifyPersonalization(lineItem) {
       // not the same as the property being absent — both land as null here.
       else if (name === '_photo_path' || name === 'photo_path') {
         result.photoPath = value || null
+      }
+      // Personalization wizard, pre-orders only: the customer paid for the
+      // photo but will upload it after the race (domain/orders/photoLater.js).
+      // The value pairs the print with its Photo Add-On line in the cart.
+      else if (name === '_photo_later') {
+        result.photoLater = Boolean(value)
       }
     }
   }
@@ -1049,6 +1056,7 @@ export async function processOrders(options = {}) {
                   updateData.lookupOutcome = extracted.lookupOutcome
                   updateData.lookupMatchedName = extracted.lookupMatchedName
                   updateData.photoPath = extracted.photoPath
+                  updateData.photoLater = extracted.photoLater
                   // Gift flag applies to ALL orders (Easify + widget both set it).
                   updateData.isGift = extracted.isGift
 
@@ -1259,6 +1267,7 @@ export async function processOrders(options = {}) {
               let lookupOutcome = null
               let lookupMatchedName = null
               let photoPath = null
+              let photoLater = false
 
               if (isShopify && shopifyData) {
                 log(`[processOrders] Processing Shopify line item ${lineItemIndex} for order ${order.orderId}...`)
@@ -1296,6 +1305,7 @@ export async function processOrders(options = {}) {
                   lookupOutcome = extracted.lookupOutcome
                   lookupMatchedName = extracted.lookupMatchedName
                   photoPath = extracted.photoPath
+                  photoLater = extracted.photoLater
                   // Gift flag applies to ALL orders (Easify + widget both set it).
                   // hadNoTime is already captured above.
                   isGiftOrder = extracted.isGift
@@ -1418,7 +1428,8 @@ export async function processOrders(options = {}) {
                   customerEventType,
                   lookupOutcome,
                   lookupMatchedName,
-                  photoPath
+                  photoPath,
+                  photoLater
                 }
               })
 
