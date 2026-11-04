@@ -178,6 +178,12 @@ model Order {
   designCompletedById String?
   designCompletedBy   User?    @relation("DesignCompletedBy", fields: [designCompletedById], references: [id], onDelete: SetNull)
   bulkOrderId      String?
+  // A bulk runner's own Artelo order (server/domain/bulk/send.js): queued
+  // for sending once it has an address and a print, sent (the order is in
+  // arteloOrderData, like an imported one), or stuck with the reason.
+  bulkSendAfter    DateTime?
+  bulkSentAt       DateTime?
+  bulkSendError    String?
   bulkOrder        BulkOrder? @relation(fields: [bulkOrderId], references: [id], onDelete: Cascade)
   renderJobs       RenderJob[]
   galleryPick      GalleryPick?

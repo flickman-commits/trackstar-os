@@ -3,9 +3,9 @@
  *
  * A partner prepays for a run of co-branded prints for one race. The invoice
  * is Stripe, the runner list comes from the partner (names and addresses
- * only; bibs and times are ours to find), the prints are made by Eli from
- * one production file, and the whole run goes to Artelo as a bulk upload
- * sheet: one row per runner, each pointing at a public URL for its file.
+ * only; bibs and times are ours to find), each runner's print is rendered or
+ * uploaded, and each goes to Artelo as its own order through the tool
+ * (send.js), the way every other order does.
  *
  * Runners are ordinary Order rows of type "bulk" with the bulk order as their
  * parent, so research, weather, the filename convention and the order modal
@@ -261,48 +261,3 @@ export async function checkUrl(url) {
 }
 
 /** The Artelo sheet rows, in the template's column order. */
-export function sheetRows(bulk, runners) {
-  const framed = bulk.frameType !== 'Unframed'
-  return runners.map(r => {
-    const a = r.shippingAddress || {}
-    return {
-      'Order ID': r.orderNumber,
-      'Customer Name': r.runnerName,
-      'Address Line 1': a.line1 || '',
-      'Address Line 2': a.line2 || '',
-      'City/Town': a.city || '',
-      'State/Province/Region': a.state || '',
-      'Zip/Postal Code': a.zip || '',
-      'Country': a.country || 'United States',
-      'Quantity': 1,
-      'Product Catalog Type': 'Individual Art Print',
-      'Orientation': 'Portrait',
-      'Paper Type': 'Fine Art - Archival Matte',
-      'Framing': bulk.frameType,
-      'Size': bulk.productSize,
-      'Include Framing Service': framed ? 1 : 0,
-      'Include Hanging Pins': framed ? 1 : 0,
-      'Include Mats': 0,
-      'Design Fit Style': 'Outside',
-      'Design Fit Canvas': 0,
-      'Image URL 1': r.productionFileUrl || '',
-    }
-  })
-}
-
-export const SHEET_COLUMNS = [
-  'Order ID', 'Customer Name', 'Address Line 1', 'Address Line 2', 'City/Town', 'State/Province/Region', 'Zip/Postal Code', 'Country',
-  'Quantity', 'Product Catalog Type', 'Orientation', 'Paper Type', 'Framing', 'Size', 'Include Framing Service', 'Include Hanging Pins',
-  'Include Mats', 'Design Fit Style', 'Design Fit Canvas',
-  'Image URL 1', 'Image URL 2', 'Image URL 3', 'Image URL 4', 'Image URL 5', 'Image URL 6', 'Image URL 7', 'Image URL 8', 'Image URL 9', 'Image URL 10', 'Image URL 11', 'Image URL 12',
-]
-
-/** Rows that would fail Artelo's validation, with the reason. */
-export function sheetProblems(runners) {
-  const out = []
-  for (const r of runners) {
-    if (!addressComplete(r.shippingAddress)) out.push({ orderNumber: r.orderNumber, runnerName: r.runnerName, problem: 'Address is incomplete' })
-    if (!r.productionFileUrl) out.push({ orderNumber: r.orderNumber, runnerName: r.runnerName, problem: 'No print file attached' })
-  }
-  return out
-}

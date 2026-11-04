@@ -91,7 +91,7 @@ export function designsFromArtelo(item) {
 export const REPLACEMENT_SIZES = ['x8x10', 'x12x18', 'x16x24']
 export const REPLACEMENT_FRAMES = ['Unframed', 'BlackPremiumOak', 'NaturalPremiumOak']
 
-function standardProduct(size, frame) {
+export function standardProduct(size, frame) {
   const framed = frame !== 'Unframed'
   return {
     catalogProductId: 'IndividualArtPrint', size, frameColor: frame, frameStyle: framed ? 'PremiumOak' : 'Unframed',

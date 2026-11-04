@@ -12,8 +12,8 @@
  *     remove-runner { id, orderNumber }
  *     update-runner { id, orderNumber, runnerName?, address? }
  *     research    { id, limit? }             research the next batch of unresearched runners
- *     submitted   { id }                     the sheet went to Artelo
- *     send-batch  { id, orderNumbers? }      the ready runners (or these) went to Artelo as the next batch
+ *     hold-runner { id, orderNumber }        keep a runner's Artelo order from going
+ *     send-runner { id, orderNumber }        send it now (after a fix, or a hold)
  *     new-intake-link { id }                 rotate the partner's intake token
  *     delete      { id }                     admins only; refused if paid; removes the runners and the unpaid Shopify draft
  */
@@ -25,9 +25,9 @@ import { setCors, requireAdmin } from '../_lib/auth.js'
 import { requireAdminRole, recordAudit } from '../_lib/users.js'
 import {
   nextNumber, dueDateFor, verifiedRaceDate, parseRunnerList, addRunners, readiness, researchPending,
-  addressComplete, FRAME_OPTIONS, SIZE_OPTIONS, sheetProblems, isAllowedFileUrl,
+  addressComplete, FRAME_OPTIONS, SIZE_OPTIONS, isAllowedFileUrl,
 } from '../../server/domain/bulk/bulkOrders.js'
-import { batchState, markBatchSent } from '../../server/domain/bulk/batches.js'
+import { queueRunnerSend, queueReadyRunners, holdRunner, sendRunnerNow, notReadyReason, sendStateOf, BulkSendError } from '../../server/domain/bulk/send.js'
 import { getCanonicalRaceName } from '../../server/scrapers/index.js'
 import { defaultAssigneeFor } from '../../server/domain/orders/assignment.js'
 import { sendPublicError } from '../../server/lib/publicError.js'
@@ -37,6 +37,7 @@ import { bulkNeedingAttention } from '../../server/domain/bulk/attention.js'
 const RUNNER_SELECT = {
   id: true, orderNumber: true, lineItemIndex: true, runnerName: true, runnerNameOverride: true, customerEmail: true,
   shippingAddress: true, productionFileUrl: true, researchedAt: true, status: true, dueDate: true,
+  bulkSendAfter: true, bulkSentAt: true, bulkSendError: true, arteloOrderData: true,
   runnerResearch: { select: { bibNumber: true, officialTime: true, officialPace: true, researchStatus: true, eventType: true }, take: 1, orderBy: { createdAt: 'desc' } },
 }
 
@@ -58,6 +59,7 @@ function shapeRunner(r) {
     pace: rr?.officialPace || null,
     eventType: rr?.eventType || null,
     completed: r.status === 'completed',
+    send: r.send || null,
   }
 }
 
@@ -65,17 +67,15 @@ async function loadOne(id) {
   const bulk = await prisma.bulkOrder.findUnique({ where: { id } })
   if (!bulk) return null
   const runners = await prisma.order.findMany({ where: { bulkOrderId: id }, orderBy: { lineItemIndex: 'asc' }, select: RUNNER_SELECT })
+  for (const r of runners) r.send = sendStateOf(r, await notReadyReason(r, bulk))
   const ready = await readiness(bulk, runners)
-  const batch = await batchState(bulk, runners)
   return {
-    batch,
     ...bulk,
     paymentStatus: paymentStatus(bulk),
     shopifyOrderUrl: shopifyAdminUrl(bulk.shopifyOrderId),
     runners: runners.map(shapeRunner),
     readiness: ready,
     progress: progressOf(runners),
-    sheetProblems: sheetProblems(runners),
   }
 }
 
@@ -87,6 +87,11 @@ function progressOf(runners) {
     found: runners.filter(r => r.runnerResearch?.[0]?.researchStatus === 'found').length,
     files: runners.filter(r => r.productionFileUrl).length,
     completed: runners.filter(r => r.status === 'completed').length,
+    // Sending through the tool (bulk/send.js).
+    sent: runners.filter(r => r.status === 'completed' || r.bulkSentAt).length,
+    queued: runners.filter(r => !r.bulkSentAt && r.status !== 'completed' && r.bulkSendAfter).length,
+    stuck: runners.filter(r => !r.bulkSentAt && r.status !== 'completed' && !r.bulkSendAfter && r.bulkSendError && !/^Held by /.test(r.bulkSendError)).length,
+    held: runners.filter(r => !r.bulkSentAt && r.status !== 'completed' && !r.bulkSendAfter && /^Held by /.test(r.bulkSendError || '')).length,
   }
 }
 
@@ -217,6 +222,8 @@ export default async function handler(req, res) {
       if (!(await requireAdminRole(req, res, actor))) return
       await prisma.bulkOrder.update({ where: { id: bulk.id }, data: { paidAt: body.paid ? new Date() : null } })
       await audit(`Marked bulk order ${bulk.number} ${body.paid ? 'paid' : 'unpaid'}`)
+      // Paid is what lets prints go: everyone already ready is queued.
+      if (body.paid) await queueReadyRunners(bulk.id)
       return res.status(200).json({ bulkOrder: noMoney(await loadOne(bulk.id)) })
     }
 
@@ -245,6 +252,8 @@ export default async function handler(req, res) {
       }
       await prisma.order.update({ where: { id: runner.id }, data })
       await audit(`Edited runner ${runner.orderNumber} on bulk order ${bulk.number}`, { orderNumber: runner.orderNumber, fields: Object.keys(data) })
+      // A fixed address or a file may be what they were waiting on.
+      if (data.shippingAddress || data.productionFileUrl) await queueRunnerSend(runner.id, { force: Boolean(runner.bulkSendError) && !/^Held by /.test(runner.bulkSendError || '') })
       return res.status(200).json({ bulkOrder: noMoney(await loadOne(bulk.id)) })
     }
 
@@ -268,16 +277,11 @@ export default async function handler(req, res) {
       return res.status(200).json({ ...out, bulkOrder: noMoney(await loadOne(bulk.id)) })
     }
 
-    // A batch of the runners ready now went up to Artelo (server/domain/bulk/batches.js).
-    if (action === 'send-batch') {
-      const out = await markBatchSent(bulk, { orderNumbers: body.orderNumbers, actor })
-      await audit(`Marked batch ${out.n} of ${bulk.number} uploaded to Artelo (${out.count} runner${out.count === 1 ? '' : 's'})`)
-      return res.status(200).json({ ...out, bulkOrder: noMoney(await loadOne(bulk.id)) })
-    }
-
-    if (action === 'submitted') {
-      await prisma.bulkOrder.update({ where: { id: bulk.id }, data: { status: 'submitted', submittedAt: new Date() } })
-      await audit(`Marked bulk order ${bulk.number} submitted`)
+    if (action === 'hold-runner' || action === 'send-runner') {
+      const runner = await prisma.order.findFirst({ where: { bulkOrderId: bulk.id, orderNumber: String(body.orderNumber || '') }, select: { id: true, orderNumber: true } })
+      if (!runner) return res.status(404).json({ error: 'Runner not found' })
+      if (action === 'hold-runner') { await holdRunner(runner.id, actor); await audit(`Held bulk runner ${runner.orderNumber}`) }
+      else await sendRunnerNow(runner.id, actor)
       return res.status(200).json({ bulkOrder: noMoney(await loadOne(bulk.id)) })
     }
 
@@ -300,6 +304,7 @@ export default async function handler(req, res) {
 
     return res.status(400).json({ error: 'Unknown action' })
   } catch (error) {
+    if (error instanceof BulkSendError) return res.status(error.status).json({ error: error.message })
     console.error('[API /bulk]', error)
     return sendPublicError(res, error)
   }

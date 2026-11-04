@@ -9,7 +9,7 @@ import { uploadApprovedToArtelo } from './artelo.js'
 import { deliverApproved } from './deliver.js'
 import { markRacePrinted } from '../races/verification.js'
 import { needFromRejection } from './designNeeds.js'
-import { publishBulkPrint } from '../bulk/bulkRender.js'
+import { queueRunnerSend } from '../bulk/send.js'
 import { describeOrder } from '../orders/complete.js'
 import { queueSend } from './arteloSend.js'
 
@@ -48,9 +48,8 @@ export async function reviewRender({ jobId, decision, note, user, designNeed = f
     if (job.spec?.raceId) await markRacePrinted(job.spec.raceId)
     if (send) job = await queueSend(job)
     delivery = deliverEverywhere(job)
-    // A bulk runner's approved print is their file on the Artelo bulk sheet.
-    const published = publishBulkPrint(job).catch(e => console.error('[render/review] bulk print', job.id, e.message))
-    delivery = Promise.all([delivery, published]).then(([d]) => d)
+    // A bulk runner goes to Artelo as their own order once approved (bulk/send.js).
+    if (send) await queueRunnerSend(job.orderId).catch(e => console.error('[render/review] bulk queue', job.id, e.message))
     await prisma.renderJob.updateMany({ where: { orderId: job.orderId, review: 'pending', id: { not: job.id } }, data: { review: 'closed', reviewNote: 'Another version was approved', reviewedAt: new Date() } })
   }
   // Named by the order, not the template file, so the Activity Log finds it by order number.

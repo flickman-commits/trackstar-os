@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Plus, Loader2, Check, X, Upload, Download, Link2, Copy, ExternalLink, RefreshCw, FlaskConical,
+  Plus, Loader2, Check, X, Upload, Link2, Copy, ExternalLink, RefreshCw, FlaskConical,
   CheckCircle2, ChevronLeft, ChevronDown, ChevronUp, Trash2, FileText, Pencil,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -40,6 +40,8 @@ export interface BulkRunner {
   pace: string | null
   eventType: string | null
   completed: boolean
+  /** Where the runner's own Artelo order stands (server/domain/bulk/send.js). */
+  send: { state: 'sent' | 'queued' | 'held' | 'error' | 'not_ready' | 'ready'; at?: string | null; url?: string | null; reason?: string | null } | null
 }
 
 export interface BulkOrder {
@@ -75,7 +77,7 @@ export interface BulkOrder {
   eventType?: string | null
   /** Who runs it; new ones go to the bulk default in Order Assignment. */
   assigneeId: string | null
-  progress: { total: number; withAddress: number; researched: number; found: number; files: number; completed: number }
+  progress: { total: number; withAddress: number; researched: number; found: number; files: number; completed: number; sent: number; queued: number; stuck: number; held: number }
   runners?: BulkRunner[]
   readiness?: {
     paid: boolean
@@ -84,25 +86,12 @@ export interface BulkOrder {
     design: { ok: boolean; status: string | null; approvedImageUrl: string | null }
     runners: { total: number; withAddress: number; ok: boolean }
   }
-  sheetProblems?: { orderNumber: string; runnerName: string; problem: string }[]
-  /** Sending in batches (server/domain/bulk/batches.js): what went, who is ready, who is waiting, and names still to come. */
-  batch?: {
-    batches: { n: number; sentAt: string; by: string; count: number }[]
-    batchOf: Record<string, number>
-    sent: number
-    ready: string[]
-    readyCount: number
-    waiting: number
-    waitingReasons: Record<string, number>
-    toCome: number
-    nextBatch: number
-  }
 }
 
 const STATUS_LABEL: Record<string, string> = {
   collecting: 'Collecting Info',
   fulfillment: 'Fulfillment',
-  submitted: 'Sent to Artelo',
+  submitted: 'All sent to Artelo',
 }
 /** Same treatment as the order modal's design status: an icon, a tint, and the stages above it. */
 const STATUS_STYLE: Record<string, { dot: string; color: string; bg: string; border: string }> = {
@@ -119,9 +108,13 @@ const PAYMENT: Record<string, { label: string; dot: string; color: string; bg: s
 const STAGES: { key: string; label: string }[] = [
   { key: 'collecting', label: 'Collecting Info' },
   { key: 'fulfillment', label: 'Fulfillment' },
-  { key: 'submitted', label: 'Sent to Artelo' },
+  { key: 'submitted', label: 'All sent to Artelo' },
 ]
 
+/** "4:56 PM" for a send that is minutes away. */
+function fmtTime(s?: string | null) {
+  return s ? new Date(s).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
+}
 function fmtDate(s?: string | null) {
   return s ? new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
 }
@@ -377,22 +370,6 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
     } catch { toast.error('Check failed') } finally { setChecking(false) }
   }
 
-  const downloadSheet = async (force = false, batch?: string) => {
-    const res = await apiFetch(`${API_BASE}/api/bulk/sheet?id=${id}${force ? '&force=1' : ''}${batch ? `&batch=${batch}` : ''}`)
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      toast.error(data.error || 'Could not build the sheet', { duration: 8000 })
-      return
-    }
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = (res.headers.get('content-disposition') || '').match(/filename="([^"]+)"/)?.[1] || `${b?.number}_Artelo.xlsx`
-    document.body.appendChild(a); a.click(); document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
-
   const intakeLink = useMemo(() => (b ? `${window.location.origin}/intake/${b.intakeToken}` : ''), [b])
   const runnerLink = useMemo(() => (b ? `${window.location.origin}/runner/${b.runnerToken}` : ''), [b])
 
@@ -502,14 +479,16 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
                   <th className="text-left px-3 py-2 font-semibold">Time</th>
                   <th className="text-left px-3 py-2 font-semibold">Research</th>
                   <th className="text-left px-3 py-2 font-semibold">File</th>
-                  <th className="text-left px-3 py-2 font-semibold">Done</th>
+                  <th className="text-left px-3 py-2 font-semibold">Artelo</th>
                 </>}
                 <th className="px-2 py-2"></th>
               </tr>
             </thead>
             <tbody>
               {runners.map(x => (
-                <RunnerRow key={x.id} r={x} batch={b.batch?.batchOf?.[x.id]} compact={collecting} reach={reach[x.orderNumber]} editing={editing === x.orderNumber} removeArmed={isArmed(`remove:${x.orderNumber}`)}
+                <RunnerRow key={x.id} r={x} compact={collecting} reach={reach[x.orderNumber]}
+                  onHold={() => act({ action: 'hold-runner', orderNumber: x.orderNumber }, `${x.runnerName} held`)}
+                  onSendNow={() => act({ action: 'send-runner', orderNumber: x.orderNumber }, `${x.runnerName} queued to send now`)} editing={editing === x.orderNumber} removeArmed={isArmed(`remove:${x.orderNumber}`)}
                   onEdit={() => setEditing(editing === x.orderNumber ? null : x.orderNumber)}
                   onSave={async (fields) => { await act({ action: 'update-runner', orderNumber: x.orderNumber, ...fields }, 'Saved'); setEditing(null); refreshRunners() }}
                   onRemove={async () => { if (arm(`remove:${x.orderNumber}`)) { await act({ action: 'remove-runner', orderNumber: x.orderNumber }, 'Removed'); refreshRunners() } }}
@@ -553,50 +532,24 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
     </div>
   )
 
-  const bt = b.batch
+  const pg = b.progress
+  const notReady = runners.length - pg.sent - pg.queued - pg.stuck - pg.held
+  const toCome = Math.max(0, (b.quantity || 0) - runners.length)
   const arteloCard = (
     <div className="bg-white border border-border-gray rounded-md p-4 space-y-3">
       <div>
-        <h3 className="text-sm font-semibold uppercase tracking-tight">Artelo bulk upload, in batches</h3>
-        <p className="text-xs text-off-black/60 mt-0.5">Send whoever is ready now and the rest when their names, results or prints come in. Download the batch's sheet, upload it on Artelo's Orders page, then mark it uploaded.</p>
+        <h3 className="text-sm font-semibold uppercase tracking-tight">Production, through the tool</h3>
+        <p className="text-xs text-off-black/60 mt-0.5">Each runner goes to Artelo as their own order once they have an address and an approved print, after the usual short hold. One sheet for the whole run is no longer needed. Their Artelo order shows on their row.</p>
       </div>
-
-      {bt && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <div className="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2"><p className="text-[11px] text-emerald-800">Sent</p><p className="text-lg font-bold tabular-nums text-emerald-900">{bt.sent}</p></div>
-          <div className="rounded-md bg-[#4600D6]/[0.05] border border-[#4600D6]/20 px-3 py-2"><p className="text-[11px] text-[#4600D6]">Ready for batch {bt.nextBatch}</p><p className="text-lg font-bold tabular-nums text-off-black">{bt.readyCount}</p></div>
-          <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2"><p className="text-[11px] text-amber-800">Not ready yet</p><p className="text-lg font-bold tabular-nums text-amber-900">{bt.waiting}</p></div>
-          <div className="rounded-md bg-subtle-gray border border-border-gray px-3 py-2" title={`Paid for ${b.quantity}, ${runners.length} names in`}><p className="text-[11px] text-off-black/60">Names still to come</p><p className="text-lg font-bold tabular-nums text-off-black">{bt.toCome}</p></div>
-        </div>
-      )}
-
-      {bt && bt.readyCount > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-md border border-[#4600D6]/20 bg-[#4600D6]/[0.03] px-3 py-2.5">
-          <span className="text-sm text-off-black flex-1 min-w-[12rem]">Batch {bt.nextBatch}: {bt.readyCount} runner{bt.readyCount === 1 ? '' : 's'} with an address and an approved print.</span>
-          <button onClick={() => downloadSheet(false, 'next')} className={btnPrimary}><Download className="w-4 h-4" /> Download batch {bt.nextBatch}</button>
-          <button onClick={() => { if (arm('send-batch')) act({ action: 'send-batch' }, `Batch ${bt.nextBatch} marked uploaded: ${bt.readyCount} runner${bt.readyCount === 1 ? '' : 's'} sent`) }} className={btnSecondary}><FileText className="w-3.5 h-3.5" /> {isArmed('send-batch') ? `Click again: ${bt.readyCount} sent to Artelo` : `Mark batch ${bt.nextBatch} uploaded`}</button>
-        </div>
-      )}
-
-      {bt && bt.waiting > 0 && (
-        <p className="text-xs text-amber-800">Not ready: {Object.entries(bt.waitingReasons).map(([why, n]) => `${n} ${why.charAt(0).toLowerCase()}${why.slice(1)}`).join(' · ')}.</p>
-      )}
-
-      {bt && bt.batches.length > 0 && (
-        <div className="divide-y divide-border-gray rounded-md border border-border-gray">
-          {bt.batches.map(x => (
-            <div key={x.n} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
-              <span className="font-semibold text-off-black">Batch {x.n}</span>
-              <span className="text-off-black/60">{x.count} runner{x.count === 1 ? '' : 's'} · {fmtDate(x.sentAt)} · {x.by}</span>
-              <button onClick={() => downloadSheet(true, String(x.n))} className={`${btnGhost} ml-auto`}><Download className="w-3.5 h-3.5" /> Sheet again</button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {bt && bt.sent === 0 && bt.readyCount === 0 && runners.length > 0 && <p className="text-xs text-off-black/55">Nobody is ready yet. A runner joins the next batch once they are researched and their print is approved.</p>}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        <div className="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2"><p className="text-[11px] text-emerald-800">Sent to Artelo</p><p className="text-lg font-bold tabular-nums text-emerald-900">{pg.sent}</p></div>
+        <div className="rounded-md bg-[#4600D6]/[0.05] border border-[#4600D6]/20 px-3 py-2"><p className="text-[11px] text-[#4600D6]">Sending</p><p className="text-lg font-bold tabular-nums text-off-black">{pg.queued}</p></div>
+        <div className={`rounded-md px-3 py-2 border ${pg.stuck ? 'bg-red-50 border-red-200' : 'bg-subtle-gray border-border-gray'}`}><p className={`text-[11px] ${pg.stuck ? 'text-red-800' : 'text-off-black/60'}`}>Needs a fix</p><p className={`text-lg font-bold tabular-nums ${pg.stuck ? 'text-red-900' : 'text-off-black'}`}>{pg.stuck}{pg.held ? <span className="text-xs font-medium text-off-black/50"> · {pg.held} held</span> : null}</p></div>
+        <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2"><p className="text-[11px] text-amber-800">Not ready yet</p><p className="text-lg font-bold tabular-nums text-amber-900">{notReady}</p></div>
+        <div className="rounded-md bg-subtle-gray border border-border-gray px-3 py-2" title={`Paid for ${b.quantity}, ${runners.length} names in`}><p className="text-[11px] text-off-black/60">Names still to come</p><p className="text-lg font-bold tabular-nums text-off-black">{toCome}</p></div>
+      </div>
+      {!r.paid && runners.length > 0 && <p className="text-xs text-amber-800">Nothing goes to Artelo until the invoice is paid.</p>}
       {b.submittedAt && <p className="text-xs text-green-700 inline-flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Every paid-for print went to Artelo ({fmtDate(b.submittedAt)}).</p>}
-      {!bt && <button onClick={() => downloadSheet(false)} disabled={runners.length === 0} className={btnPrimary}><Download className="w-4 h-4" /> Download sheet</button>}
     </div>
   )
 
@@ -676,8 +629,6 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
                 {researching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FlaskConical className="w-3.5 h-3.5" />} Research all runners
               </button>
             )}
-            {!collecting && <button onClick={() => downloadSheet(false)} disabled={runners.length === 0} className={link}><Download className="w-3.5 h-3.5" /> Download the Artelo sheet</button>}
-            {fulfilling && <button onClick={() => { if (arm('submitted')) update({ status: 'submitted' }) }} className={link}><FileText className="w-3.5 h-3.5" /> {isArmed('submitted') ? 'Click again to mark uploaded to Artelo' : 'Mark uploaded to Artelo'}</button>}
             {isAdmin && !submitted && <button onClick={remove} className={`${link} text-red-600 hover:text-red-700`}><Trash2 className="w-3.5 h-3.5" /> {isArmed('delete') ? deleteWarning : 'Delete this bulk order'}</button>}
           </div>
         </div>
@@ -704,10 +655,9 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   )
 }
 
-function RunnerRow({ r, batch, compact, reach, editing, removeArmed, onEdit, onSave, onRemove, onOpen, onUpload, onDetach }: {
-  /** The batch it went to Artelo in, once sent. */
-  batch?: number
+function RunnerRow({ r, compact, reach, editing, removeArmed, onEdit, onSave, onRemove, onOpen, onUpload, onDetach, onHold, onSendNow }: {
   r: BulkRunner; compact?: boolean; reach?: boolean; editing: boolean; removeArmed?: boolean
+  onHold: () => void; onSendNow: () => void
   onEdit: () => void; onSave: (fields: { runnerName?: string; address?: BulkRunner['address'] }) => Promise<void>; onRemove: () => void; onOpen: () => void
   onUpload: (f: File) => void; onDetach: () => void
 }) {
@@ -740,7 +690,14 @@ function RunnerRow({ r, batch, compact, reach, editing, removeArmed, onEdit, onS
             <label className="text-[11px] text-off-black/50 hover:text-off-black cursor-pointer inline-flex items-center gap-1"><Upload className="w-3 h-3" /> Add<input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" onChange={e => { if (e.target.files?.[0]) onUpload(e.target.files[0]); e.target.value = '' }} /></label>
           )}
         </td>
-        <td className="px-3 py-2 whitespace-nowrap">{r.completed ? <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-700"><Check className="w-3.5 h-3.5" />{batch ? `Batch ${batch}` : 'Sent'}</span> : <span className="text-off-black/30">·</span>}</td>
+        <td className="px-3 py-2 whitespace-nowrap text-[11px]">
+          {r.send?.state === 'sent' ? (r.send.url ? <a href={r.send.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-green-700 hover:underline"><Check className="w-3.5 h-3.5" /> Sent <ExternalLink className="w-3 h-3" /></a> : <span className="inline-flex items-center gap-1 font-semibold text-green-700"><Check className="w-3.5 h-3.5" /> Sent</span>)
+          : r.send?.state === 'queued' ? <span className="inline-flex items-center gap-1.5 text-[#4600D6] font-semibold">Sending{r.send.at ? ` ${fmtTime(r.send.at)}` : ''}<button onClick={onHold} className="text-off-black/45 hover:text-off-black font-medium" title="Keep it from going">Hold</button></span>
+          : r.send?.state === 'held' ? <span className="inline-flex items-center gap-1.5 text-off-black/60">Held<button onClick={onSendNow} className="text-[#4600D6] hover:underline font-semibold">Send now</button></span>
+          : r.send?.state === 'error' ? <span className="inline-flex items-center gap-1.5 text-red-700" title={r.send.reason || ''}><span className="max-w-[180px] truncate">{r.send.reason}</span><button onClick={onSendNow} className="text-[#4600D6] hover:underline font-semibold shrink-0">Send now</button></span>
+          : r.send?.state === 'ready' ? <span className="inline-flex items-center gap-1.5 text-off-black/60">Ready<button onClick={onSendNow} className="text-[#4600D6] hover:underline font-semibold">Send</button></span>
+          : <span className="text-off-black/40" title={r.send?.reason || ''}>{r.send?.reason || '·'}</span>}
+        </td>
         </>}
         <td className="px-2 py-2 text-right whitespace-nowrap">
           <button onClick={onEdit} className={btnGhost}>{editing ? 'Close' : 'Edit'}</button>

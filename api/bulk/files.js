@@ -10,6 +10,7 @@
  * can guess. That is what Artelo needs: a plain GET with no login. The check
  * action proves it before the sheet is generated.
  */
+import { queueRunnerSend } from '../../server/domain/bulk/send.js'
 import fs from 'fs'
 import { randomUUID } from 'crypto'
 import formidable from 'formidable'
@@ -47,7 +48,7 @@ function parseBody(req) {
   })
 }
 
-const RUNNER_SELECT = { id: true, orderNumber: true, runnerName: true, runnerNameOverride: true, productionFileUrl: true }
+const RUNNER_SELECT = { id: true, orderNumber: true, runnerName: true, runnerNameOverride: true, productionFileUrl: true, bulkSentAt: true }
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'POST, OPTIONS' })) return
@@ -76,7 +77,7 @@ export default async function handler(req, res) {
     if (fields.action === 'detach') {
       const runner = runners.find(r => r.orderNumber === String(fields.orderNumber || ''))
       if (!runner) return res.status(404).json({ error: 'Runner not found' })
-      await prisma.order.update({ where: { id: runner.id }, data: { productionFileUrl: null } })
+      await prisma.order.update({ where: { id: runner.id }, data: { productionFileUrl: null, ...(runner.bulkSentAt ? {} : { bulkSendAfter: null }) } })
       return res.status(200).json({ success: true })
     }
 
@@ -122,6 +123,8 @@ export default async function handler(req, res) {
     const url = supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
 
     await prisma.order.update({ where: { id: runner.id }, data: { productionFileUrl: url } })
+    // With a file and an address, the runner's Artelo order is queued (bulk/send.js).
+    await queueRunnerSend(runner.id).catch(err => console.warn('[API /bulk/files] queue', runner.orderNumber, err.message))
     const reach = await checkUrl(url)
     return res.status(200).json({ matched: true, how, orderNumber: runner.orderNumber, runnerName: runner.runnerName, url, replaced: Boolean(runner.productionFileUrl), reachable: reach.ok })
   } catch (error) {

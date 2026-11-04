@@ -138,7 +138,6 @@ const routes = [
   { method: 'get',    path: '/api/bulk',                   handler: '../api/bulk/index.js' },
   { method: 'post',   path: '/api/bulk',                   handler: '../api/bulk/index.js' },
   { method: 'post',   path: '/api/bulk/files',             handler: '../api/bulk/files.js' },
-  { method: 'get',    path: '/api/bulk/sheet',             handler: '../api/bulk/sheet.js' },
   { method: 'get',    path: '/api/public/creator-preview', handler: '../api/public/creator-preview.js' },
   { method: 'get',    path: '/api/public/survey-preview',  handler: '../api/public/survey-preview.js' },
   { method: 'get',    path: '/api/public/race-status',     handler: '../api/public/race-status.js' },
