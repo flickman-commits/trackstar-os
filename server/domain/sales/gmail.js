@@ -268,7 +268,7 @@ function base64Lines(buf) {
  *
  * `attachment` (singular) is still accepted for the old callers and tests.
  */
-export function buildMime({ to, subject, html, inReplyTo, attachment, attachments, messageId }) {
+export function buildMime({ to, subject, html, text, inReplyTo, attachment, attachments, messageId }) {
   const list = [...(attachments || []), ...(attachment ? [attachment] : [])]
     .map(a => ({ ...a, inline: a.inline ?? /^image\//.test(a.contentType || '') }))
   const headers = [
@@ -284,10 +284,19 @@ export function buildMime({ to, subject, html, inReplyTo, attachment, attachment
     headers.push(`References: ${inReplyTo}`)
   }
 
-  if (!list.length) {
-    headers.push('Content-Type: text/html; charset=utf-8', 'Content-Transfer-Encoding: base64')
-    return `${headers.join('\r\n')}\r\n\r\n${base64Lines(Buffer.from(html, 'utf8'))}`
+  // With `text`, the body is multipart/alternative: the plain text first,
+  // the HTML second. HTML with no text part is one of the oldest spam
+  // signals there is, and these emails were landing in spam. Each part comes
+  // with its own Content-Type line, so it drops into related or mixed as is.
+  const htmlOnly = h => ['Content-Type: text/html; charset=utf-8', 'Content-Transfer-Encoding: base64', '', base64Lines(Buffer.from(h, 'utf8'))].join('\r\n')
+  const bodyPart = h => {
+    if (!text) return htmlOnly(h)
+    const alt = `ts_${crypto.randomBytes(16).toString('hex')}`
+    const textPart = ['Content-Type: text/plain; charset=utf-8', 'Content-Transfer-Encoding: base64', '', base64Lines(Buffer.from(text, 'utf8'))].join('\r\n')
+    return [`Content-Type: multipart/alternative; boundary="${alt}"`, '', `--${alt}`, textPart, `--${alt}`, htmlOnly(h), `--${alt}--`].join('\r\n')
   }
+
+  if (!list.length) return `${headers.join('\r\n')}\r\n${bodyPart(html)}\r\n`
 
   const inline = list.filter(a => a.inline)
   const files = list.filter(a => !a.inline)
@@ -302,12 +311,7 @@ export function buildMime({ to, subject, html, inReplyTo, attachment, attachment
     : end >= 0 ? `${html.slice(0, end)}${imgTags}\n${html.slice(end)}`
     : `${html}\n${imgTags}`
 
-  const htmlPart = [
-    'Content-Type: text/html; charset=utf-8',
-    'Content-Transfer-Encoding: base64',
-    '',
-    base64Lines(Buffer.from(body, 'utf8')),
-  ].join('\r\n')
+  const htmlPart = bodyPart(body)
 
   let inner = htmlPart
   let innerType = 'text/html; charset=utf-8'

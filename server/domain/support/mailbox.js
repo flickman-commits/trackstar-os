@@ -139,9 +139,10 @@ export async function status() {
   ])
   const lastSync = await prisma.supportMessage.aggregate({ where: { channel: 'email' }, _max: { createdAt: true } })
   return {
-    configured,
-    connected: Boolean(refresh),
-    email,
+    configured: configured || serviceAccountMode(),
+    connected: Boolean(refresh) || serviceAccountMode(),
+    auth: serviceAccountMode() ? 'service_account' : 'oauth',
+    email: serviceAccountMode() ? mailboxEmail() : email,
     expectedEmail: mailboxEmail(),
     backfill: { done: done === 'true', count: Number(count || 0), inProgress: Boolean(page) && done !== 'true' },
     lastImportedAt: lastSync._max.createdAt,
@@ -153,8 +154,35 @@ export async function status() {
 // the access token itself when it expires.
 let cachedClient = null
 
+/**
+ * The mailbox through the service account instead of a person's OAuth
+ * grant: SUPPORT_GMAIL_AUTH=service_account, with the Drive service account
+ * (GOOGLE_SERVICE_ACCOUNT_EMAIL / KEY) given domain-wide delegation for the
+ * gmail.modify scope in the Workspace admin console. No consent screen, no
+ * refresh token, nothing that expires: the OAuth grant died every seven
+ * days while the consent screen sat in Testing, and each time the inbox
+ * went quiet until someone pressed Connect.
+ */
+export function serviceAccountMode() {
+  return String(process.env.SUPPORT_GMAIL_AUTH || '').toLowerCase() === 'service_account'
+    && Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_SERVICE_ACCOUNT_KEY)
+}
+
+function serviceAccountAuth() {
+  return new google.auth.JWT({
+    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    key: String(process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '').replace(/\\n/g, '\n'),
+    scopes: [SCOPE_MODIFY],
+    subject: mailboxEmail(),
+  })
+}
+
 async function client() {
   await requireConnection('support_gmail')
+  if (serviceAccountMode()) {
+    if (cachedClient?.refresh !== 'service_account') cachedClient = { refresh: 'service_account', gmail: google.gmail({ version: 'v1', auth: serviceAccountAuth() }) }
+    return cachedClient.gmail
+  }
   const refresh = await getConfig(KEY_REFRESH)
   if (!refresh) throw new UserError('The support mailbox is not connected. An admin connects it from the Support page.')
   if (cachedClient?.refresh === refresh) return cachedClient.gmail
@@ -166,6 +194,7 @@ async function client() {
 
 /** One read: whether the mailbox is connected. What the sync cron needs; status() is for the page. */
 export async function isConnected() {
+  if (serviceAccountMode()) return true
   return Boolean(process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET) && Boolean(await getConfig(KEY_REFRESH))
 }
 
@@ -198,13 +227,45 @@ export async function withRetry(fn, { tries = 5, label = 'gmail' } = {}) {
   }
 }
 
+const KEY_DOWN_ALERT = 'support_gmail_down_alerted_at'
+const DOWN_ALERT_EVERY_MS = 6 * 60 * 60 * 1000
+
+/**
+ * #trackstar-alerts when the mailbox stops working, at most once every six
+ * hours while it stays down. Called on a dead grant, and by the sync cron
+ * when it finds the mailbox not connected. Never throws.
+ */
+export async function alertMailboxDown(why) {
+  try {
+    const last = await getConfig(KEY_DOWN_ALERT)
+    if (last && Date.now() - new Date(last).getTime() < DOWN_ALERT_EVERY_MS) return false
+    await setConfig(KEY_DOWN_ALERT, new Date().toISOString())
+    const { slackTo } = await import('../../lib/slack.js')
+    await slackTo('alerts', `:rotating_light: *Support mailbox down* (${mailboxEmail()})\n${why}`)
+    return true
+  } catch (err) {
+    console.warn(`[support] could not send the mailbox-down alert: ${err.message}`)
+    return false
+  }
+}
+
+/** Once the mailbox is back, the next outage alerts right away. */
+export async function clearMailboxDownAlert() {
+  await delConfig(KEY_DOWN_ALERT).catch(() => {})
+}
+
 /** A revoked grant is forgotten so the page offers Connect again, with the usual advice. */
 async function onGmailError(err) {
   if (isQuotaError(err)) {
     throw new UserError('Gmail is rate limiting us for a minute. The import picks up where it left off; press it again shortly, or just wait, it retries on its own.')
   }
   if (!isRevokedToken(err)) throw err
+  if (serviceAccountMode()) {
+    await alertMailboxDown('Google refused the service account for the support mailbox. Check that domain-wide delegation for the Gmail scope is still granted in the Workspace admin console.')
+    throw new UserError('The support mailbox refused the service account. Check domain-wide delegation in the Workspace admin console.')
+  }
   await delConfig(KEY_REFRESH)
+  await alertMailboxDown('Google rejected the saved credential, so the support mailbox is disconnected: no new email comes in and nothing goes out from fast@ until an admin presses Connect on the Support page. If this keeps happening weekly, the OAuth consent screen is still in Testing (7-day tokens); switch to the service account (SUPPORT_GMAIL_AUTH=service_account).')
   throw new UserError(
     'The support mailbox disconnected: Google rejected the saved credential. An admin has to press Connect again. '
     + 'If this keeps happening weekly, the OAuth consent screen is still in Testing, which expires refresh tokens after 7 days.'
@@ -679,7 +740,7 @@ export async function sendReply({ userId, thread, html, text, attachments = [] }
   if (!to) throw new UserError('This thread has no customer address to reply to.')
   const subject = last?.subject && /^\s*re:/i.test(last.subject) ? last.subject : `Re: ${thread.subject || last?.subject || ''}`.trim()
   const messageId = newMessageId()
-  const raw = base64url(buildMime({ to, subject, html, inReplyTo: lastIn?.rfcMessageId || last?.rfcMessageId || undefined, messageId, attachments }))
+  const raw = base64url(buildMime({ to, subject, html, text, inReplyTo: lastIn?.rfcMessageId || last?.rfcMessageId || undefined, messageId, attachments }))
   let sent
   try {
     sent = await gmail.users.messages.send({ userId: 'me', requestBody: { raw, threadId: thread.gmailThreadId } })
@@ -718,7 +779,7 @@ export async function sendNew({ userId, to: given, subject, html, text, attachme
   const gmail = await client()
   const mailbox = mailboxEmail()
   const messageId = newMessageId()
-  const raw = base64url(buildMime({ to, subject, html, messageId, attachments }))
+  const raw = base64url(buildMime({ to, subject, html, text, messageId, attachments }))
   let sent
   try {
     sent = await gmail.users.messages.send({ userId: 'me', requestBody: { raw } })

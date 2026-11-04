@@ -45,6 +45,7 @@ import WeatherService from '../../server/services/WeatherService.js'
 import { slackTo, slackApi } from '../../server/lib/slack.js'
 import { sendPublicError } from '../../server/lib/publicError.js'
 import { sendEmail } from '../../server/lib/email.js'
+import { sendOrderEmail, customerMailReady } from '../../server/domain/support/customerMail.js'
 import { designDueDate } from '../../server/domain/orders/designDue.js'
 
 // Build the customer-facing approval/portal URL. Prod uses the Vercel
@@ -252,9 +253,9 @@ async function dispatch(action, body, res, actor) {
       case 'design-status':
         return await handleDesignStatus(body, res, actor)
       case 'notify-custom-delay':
-        return await handleNotifyCustomDelay(body, res)
+        return await handleNotifyCustomDelay(body, res, actor)
       case 'message-customer':
-        return await handleMessageCustomer(body, res)
+        return await handleMessageCustomer(body, res, actor)
       case 'create-discount':
         return await handleCreateDiscount(body, res)
       case 'calculate-weather':
@@ -468,7 +469,7 @@ async function handleDesignStatus({ orderNumber, designStatus }, res, actor) {
 // sent so the dashboard shows a "delay notice sent" badge. Pings Matt in
 // Slack each time, so we have visibility into how often this is used (the
 // goal is "rarely").
-async function handleNotifyCustomDelay({ orderNumber, daysLate }, res) {
+async function handleNotifyCustomDelay({ orderNumber, daysLate }, res, actor) {
   if (!orderNumber) return res.status(400).json({ error: 'orderNumber is required' })
   const days = parseInt(daysLate, 10)
   if (!Number.isFinite(days) || days < 1 || days > 60) {
@@ -484,9 +485,6 @@ async function handleNotifyCustomDelay({ orderNumber, daysLate }, res) {
     return res.status(400).json({ error: 'No customer email on file for this order - cannot send delay notice' })
   }
 
-  if (!process.env.RESEND_API_KEY) {
-    return res.status(500).json({ error: 'Email service not configured (RESEND_API_KEY missing)' })
-  }
 
   // Format the original due date in ET so it reads naturally to the customer
   const TZ = 'America/New_York'
@@ -544,16 +542,26 @@ async function handleNotifyCustomDelay({ orderNumber, daysLate }, res) {
   </table>
 </body></html>`
 
+  // From fast@ through the support mailbox; Resend only while it is not connected.
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'Trackstar <proofs@orders.trackstar.art>'
-
+  const delaySubject = 'A quick heads-up on your Trackstar order'
+  const delayText = [
+    `Hey ${firstName},`, '',
+    "Quick update - we've been swamped with custom orders the past couple of weeks, and things are running slightly behind where we'd hoped.", '',
+    `We haven't forgotten you. We refuse to put out a design we're not proud of, so ${dueDateLine.replace(/<[^>]+>/g, '')}`, '',
+    "We're sorry for the wait, and we promise it'll be worth it. We believe in keeping you in the loop, so we wanted to tell you personally. Excited to share your design soon.", '',
+    'The Trackstar Design Team',
+  ].join('\n')
   try {
-    await sendEmail({
-      from: fromEmail,
-      to: [existing.customerEmail],
-      cc: ['fast@trackstar.art'],
-      subject: 'A quick heads-up on your Trackstar order',
-      html: emailHtml,
-    })
+    if (await customerMailReady()) {
+      await sendOrderEmail({
+        order: existing, subject: delaySubject, html: emailHtml, text: delayText, actor, waiting: false,
+        event: `Delay notice emailed for ${displayNum} (${days} day${days === 1 ? '' : 's'} late)`,
+        comment: `Delay notice emailed to the customer from fast@ (${days} day${days === 1 ? '' : 's'})`,
+      })
+    } else {
+      await sendEmail({ from: fromEmail, to: [existing.customerEmail], replyTo: 'fast@trackstar.art', subject: delaySubject, html: emailHtml, text: delayText })
+    }
   } catch (emailErr) {
     console.error('[actions/notify-custom-delay] Email send failed:', emailErr)
     await alertError('Custom-order delay email', emailErr, { orderNumber, customerEmail: existing.customerEmail })
@@ -583,7 +591,7 @@ async function handleNotifyCustomDelay({ orderNumber, daysLate }, res) {
 // short "your designer has a question — action required" note linking to the
 // portal (where they answer inline), and pings Slack so we have visibility.
 // The customer's reply comes back through api/proofs (action=customer-message).
-async function handleMessageCustomer({ orderId, body }, res) {
+async function handleMessageCustomer({ orderId, body }, res, actor) {
   if (!orderId) return res.status(400).json({ error: 'orderId is required' })
   const text = (body || '').toString().trim()
   if (!text) return res.status(400).json({ error: 'Message body is required' })
@@ -596,9 +604,6 @@ async function handleMessageCustomer({ orderId, body }, res) {
   }
   if (!existing.customerEmail) {
     return res.status(400).json({ error: 'No customer email on file for this order' })
-  }
-  if (!process.env.RESEND_API_KEY) {
-    return res.status(500).json({ error: 'Email service not configured (RESEND_API_KEY missing)' })
   }
 
   // Make sure a portal token exists, then record the designer's question.
@@ -648,15 +653,27 @@ async function handleMessageCustomer({ orderId, body }, res) {
   </table>
 </body></html>`
 
+  // From fast@ through the support mailbox; Resend only while it is not connected.
+  // No "(Action Required)": from a domain a filter has not seen, that reads as phishing.
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'Trackstar <proofs@orders.trackstar.art>'
-
+  const questionSubject = `A question about your Trackstar order ${displayNum}`
+  const questionText = [
+    `Hey ${firstName},`, '',
+    `We're working on your custom design for order ${displayNum} and our designer has a quick question for you. Read it and reply here; it only takes a moment, and it helps us get your design just right:`, portalUrl, '',
+    `The question: ${text}`, '',
+    'Please reply in the portal rather than to this email so your designer sees it right away.', '',
+    'Trackstar',
+  ].join('\n')
   try {
-    await sendEmail({
-      from: fromEmail,
-      to: [existing.customerEmail],
-      subject: `A question about your Trackstar Order ${displayNum} (Action Required)`,
-      html: emailHtml,
-    })
+    if (await customerMailReady()) {
+      await sendOrderEmail({
+        order: existing, subject: questionSubject, html: emailHtml, text: questionText, actor, waiting: true,
+        event: `Designer question emailed for ${displayNum}: "${text.slice(0, 120)}"`,
+        comment: `Designer question emailed to the customer from fast@: "${text.slice(0, 160)}"`,
+      })
+    } else {
+      await sendEmail({ from: fromEmail, to: [existing.customerEmail], replyTo: 'fast@trackstar.art', subject: questionSubject, html: emailHtml, text: questionText })
+    }
   } catch (emailErr) {
     console.error('[actions/message-customer] Email send failed:', emailErr)
     await alertError('Customer question email', emailErr, { orderId, customerEmail: existing.customerEmail })

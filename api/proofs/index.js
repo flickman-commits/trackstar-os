@@ -29,6 +29,7 @@ import fs from 'fs'
 import { sendPublicError } from '../../server/lib/publicError.js'
 import { storage } from '../../server/lib/storage.js'
 import { sendEmail } from '../../server/lib/email.js'
+import { sendOrderEmail, customerMailReady } from '../../server/domain/support/customerMail.js'
 // sharp loaded dynamically in processImage() — top-level import crashes Vercel cold start
 
 // Disable Vercel's default body parser for multipart support
@@ -586,25 +587,27 @@ export default async function handler(req, res) {
   </table>
 </body></html>`
 
-      // Send email via Resend
-      if (!process.env.RESEND_API_KEY) {
-        return res.status(500).json({ error: 'Email service not configured (RESEND_API_KEY missing)' })
-      }
+      // From fast@ through the support mailbox, so a reply lands in Support on
+      // a conversation linked to this order (server/domain/support/customerMail.js).
+      // Resend from proofs@orders.trackstar.art only while the mailbox is not connected.
       const fromEmail = process.env.RESEND_FROM_EMAIL || 'Trackstar <proofs@orders.trackstar.art>'
-
+      const emailText = [
+        `Hi ${customerName},`, '', headline, bodyText,
+        ...(note ? ['', `A note from your designer: ${note}`] : []),
+        '', `See your design${proofCount > 1 ? ' options' : ''} and approve your favorite, or request changes, here:`, approvalUrl,
+        '', 'This link expires in 30 days.', '', 'Trackstar',
+      ].join('\n')
       try {
-        await sendEmail({
-          from: fromEmail,
-          to: [order.customerEmail],
-          cc: ['fast@trackstar.art'],
-          // Route replies to a real inbox so we can set up an auto-responder
-          // that redirects customers back to the portal. Customers were
-          // emailing edits to proofs@orders.trackstar.art (a Resend send-only
-          // address) and the messages were vanishing.
-          replyTo: process.env.PROOF_REPLY_TO_EMAIL || 'fast@trackstar.art',
-          subject,
-          html: emailHtml
-        })
+        if (await customerMailReady()) {
+          await sendOrderEmail({
+            order: { id: orderId, customerEmail: order.customerEmail, customerName: order.customerName },
+            subject, html: emailHtml, text: emailText, actor, waiting: true,
+            event: `Proofs emailed for ${displayNum}: ${proofCount} design${proofCount === 1 ? '' : 's'} to approve`,
+            comment: `Emailed ${proofCount} proof${proofCount === 1 ? '' : 's'} to the customer from fast@: "${subject}"`,
+          })
+        } else {
+          await sendEmail({ from: fromEmail, to: [order.customerEmail], replyTo: process.env.PROOF_REPLY_TO_EMAIL || 'fast@trackstar.art', subject, html: emailHtml, text: emailText })
+        }
       } catch (emailErr) {
         console.error('[send-to-customer] Email send failed:', emailErr)
         await alertError('Proof Email Send', emailErr, { orderNumber: order.orderNumber })

@@ -12,7 +12,7 @@
  */
 import { setCors, isCronRequest } from '../_lib/auth.js'
 import { requireCapability } from '../_lib/users.js'
-import { sync, isConnected } from '../../server/domain/support/mailbox.js'
+import { sync, isConnected, alertMailboxDown, clearMailboxDownAlert } from '../../server/domain/support/mailbox.js'
 import { refreshTokenIfDue, ensureSubscribed, catchUpIfDue } from '../../server/domain/support/instagram.js'
 import { draftPending } from '../../server/domain/support/draft.js'
 
@@ -37,8 +37,13 @@ export default async function handler(req, res) {
     } catch (err) {
       console.warn(`[support.instagram] upkeep: ${err.message}`)
     }
-    if (!(await isConnected())) return res.status(200).json({ skipped: 'not_connected' })
+    if (!(await isConnected())) {
+      // Every five minutes, so the quiet inbox is noticed within the hour, not next Monday.
+      if (cron) await alertMailboxDown('The support mailbox is not connected: no new email comes in and nothing goes out from fast@ (proofs, designer questions, Support replies) until an admin presses Connect on the Support page.')
+      return res.status(200).json({ skipped: 'not_connected' })
+    }
     const out = await sync()
+    await clearMailboxDownAlert()
     if (out.imported || out.failed) console.log(`[support.sync] ${out.mode}: imported ${out.imported}, failed ${out.failed}`)
     // Claude's drafts for what just came in (and anything still waiting on one). Never fails the sync.
     let drafts = null
