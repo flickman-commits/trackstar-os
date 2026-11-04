@@ -159,7 +159,7 @@ const whoOf = t => slackText(t.customerName || t.customerEmail || (t.igUsername 
 
 /**
  * The cron: triage, then say so in #trackstar-reports: that it ran, how many
- * it read and how many it marked urgent, by kind. Once the 'support'
+ * it read and how many it marked urgent, in two lines. Once the 'support'
  * destination has a channel (server/lib/slack.js), the support team also
  * gets a short summary there: how many are open, how many urgent, and the
  * three oldest urgent ones to start with. Why each is urgent is a note in
@@ -177,15 +177,11 @@ export async function scheduledTriage() {
   const link = t => `<${base}/support?thread=${encodeURIComponent(t.id)}|${whoOf(t)}>`
   const when = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
-  const fresh = out.urgent.filter(u => !u.alreadyStarred)
-  const kinds = Object.entries(URGENT).map(([k, label]) => [label, fresh.filter(u => u.category === k).length]).filter(([, n]) => n)
+  // Short: that it ran and the counts. Who and why are in Support and in each conversation's note.
   const report = [
     `_Support Triage_ · ${when} ET`,
-    `Read ${out.read} new conversation${out.read === 1 ? '' : 's'}, marked *${out.starred} urgent*. ${starred.length} starred conversation${starred.length === 1 ? ' is' : 's are'} open in <${base}/support|Support>.${out.left ? ` ${out.left} more wait for the next pass.` : ''}${out.failed ? ` ${out.failed} could not be read.` : ''}`,
-    kinds.length ? kinds.map(([label, n]) => `${label}: ${n}`).join(' · ') : null,
-    ...fresh.slice(0, 15).map(u => `• ${link({ id: u.id, customerName: u.who })}: ${slackText(u.reason || URGENT[u.category], 200)}`),
-    fresh.length > 15 ? `…and ${fresh.length - 15} more.` : null,
-  ].filter(Boolean).join('\n')
+    `Read ${out.read} new conversation${out.read === 1 ? '' : 's'}, marked *${out.starred} urgent*. ${starred.length} urgent open in <${base}/support|Support>.${out.left ? ` ${out.left} wait for the next pass.` : ''}${out.failed ? ` ${out.failed} could not be read.` : ''}`,
+  ].join('\n')
   await slackTo('reports', report, { or: 'matt' })
 
   // The support team's summary: how many are open, how many are urgent, and the three to start with.

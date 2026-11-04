@@ -107,7 +107,7 @@ export async function findOrdersByNumber(wanted) {
  */
 export async function mayHoldLinks(principal) {
   if (!principal?.user) return false
-  return principal.role === 'admin' || await can(principal.role, 'orders.render')
+  return principal.role === 'admin' || await can(principal, 'orders.render')
 }
 
 /** The link itself for someone who may hold it, else only whether there is one. */

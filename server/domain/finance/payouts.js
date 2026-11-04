@@ -12,7 +12,7 @@
  * Timesheet.payoutLineId and PayoutLine.sourceRef are unique.
  */
 import prisma from '../../db.js'
-import { customCounter, ratesFor } from '../orders/customCounter.js'
+import { customCounter, ratesFor, designRole } from '../orders/customCounter.js'
 import { summaryBetween } from './ledger.js'
 import { loadRules } from './rules.js'
 import { todayET, monthOf, shiftMonth, lastOfMonth, monthLabel, isValidMonth, isValidDay, dayLabel, mondayOf, addDays } from './periods.js'
@@ -23,7 +23,7 @@ export class PayoutError extends Error {
 }
 
 export const LINE_KINDS = ['customs', 'hours', 'designer_fee', 'bonus', 'reimbursement', 'other']
-const USER_SELECT = { id: true, firstName: true, lastName: true, role: true, hourlyRateCents: true, customRateCents: true, customRepeatRateCents: true }
+const USER_SELECT = { id: true, firstName: true, lastName: true, role: true, extraRoles: true, hourlyRateCents: true, customRateCents: true, customRepeatRateCents: true }
 const name = u => [u?.firstName, u?.lastName].filter(Boolean).join(' ') || 'Someone'
 export const hoursAmount = (minutes, rateCents) => Math.round((minutes * rateCents) / 60)
 
@@ -32,7 +32,7 @@ export async function rates() {
   const users = await prisma.user.findMany({ where: { isActive: true }, select: USER_SELECT, orderBy: [{ role: 'asc' }, { firstName: 'asc' }] })
   return users.map(u => {
     const r = ratesFor(u)
-    const designer = u.role === 'head_designer' || u.role === 'designer'
+    const designer = Boolean(designRole(u))
     return { userId: u.id, name: name(u), role: u.role, hourlyRateCents: u.hourlyRateCents, customs: designer ? { newCents: r.newCents, repeatCents: r.repeatCents, custom: r.custom } : null }
   })
 }

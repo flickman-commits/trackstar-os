@@ -22,9 +22,10 @@
  */
 import crypto from 'crypto'
 import prisma from '../_lib/prisma.js'
+import { splitRoles } from '../_lib/roles.js'
 import { setCors, requireAdmin, bumpSessionVersion, buildSessionCookie, createSessionToken } from '../_lib/auth.js'
 import {
-  ROLES, hashPassword, verifyPassword, normalizeEmail, isValidEmail, fullName, roleLabel,
+  hashPassword, verifyPassword, normalizeEmail, isValidEmail, fullName, roleLabel,
   loadActiveUser, requireAdminRole, recordAudit,
 } from '../_lib/users.js'
 
@@ -32,7 +33,7 @@ const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const MIN_PASSWORD = 10
 
 const PUBLIC_FIELDS = {
-  id: true, email: true, firstName: true, lastName: true, role: true, isActive: true,
+  id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true, isActive: true,
   lastLoginAt: true, lastSeenAt: true, createdAt: true, inviteExpiresAt: true, passwordHash: true,
 }
 
@@ -133,7 +134,7 @@ export default async function handler(req, res) {
         // can correct it from My Account once they accept the invite.
         const firstName = String(body.firstName || '').trim() || email.split('@')[0]
         const lastName = String(body.lastName || '').trim()
-        const role = ROLES.includes(body.role) ? body.role : 'designer'
+        const { role, extraRoles } = splitRoles(Array.isArray(body.roles) ? body.roles : [body.role]) || { role: 'designer', extraRoles: [] }
         if (!isValidEmail(email)) return res.status(400).json({ error: 'Enter a valid email address' })
 
         const existing = await prisma.user.findUnique({ where: { email } })
@@ -141,7 +142,7 @@ export default async function handler(req, res) {
 
         const invite = newInvite()
         const user = await prisma.user.create({
-          data: { email, firstName, lastName, role, ...invite },
+          data: { email, firstName, lastName, role, extraRoles, ...invite },
           select: PUBLIC_FIELDS,
         })
         await recordAudit({
@@ -159,20 +160,21 @@ export default async function handler(req, res) {
       if (!target) return res.status(404).json({ error: 'No such user' })
 
       if (action === 'role') {
-        const role = body.role
-        if (!ROLES.includes(role)) {
-          return res.status(400).json({ error: 'Role must be admin or team member' })
-        }
+        // A list of roles (checkboxes), or the old single role.
+        const split = splitRoles(Array.isArray(body.roles) ? body.roles : [body.role])
+        if (!split) return res.status(400).json({ error: 'Pick at least one role.' })
         // Demoting the last admin locks everyone out of user management, and
         // the only way back is database access. Refuse rather than explain.
-        if (target.role === 'admin' && role !== 'admin' && await lastAdmin(target.id)) {
+        if (target.role === 'admin' && split.role !== 'admin' && await lastAdmin(target.id)) {
           return res.status(400).json({ error: 'This is the only admin. Promote someone else first.' })
         }
-        const user = await prisma.user.update({ where: { id: target.id }, data: { role }, select: PUBLIC_FIELDS })
+        const user = await prisma.user.update({ where: { id: target.id }, data: split, select: PUBLIC_FIELDS })
+        const label = rs => rs.map(roleLabel).join(' + ')
+        const from = [target.role, ...(target.extraRoles || [])], to = [split.role, ...split.extraRoles]
         await recordAudit({
           action: 'user.role',
-          summary: `Changed ${target.email} from ${roleLabel(target.role)} to ${roleLabel(role)}`,
-          detail: { userId: target.id, from: target.role, to: role },
+          summary: `Changed ${target.email} from ${label(from)} to ${label(to)}`,
+          detail: { userId: target.id, from, to },
           actor: admin,
         })
         return res.status(200).json({ user: shape(user) })

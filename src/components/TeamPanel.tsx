@@ -14,7 +14,7 @@
  * team member's ability to change their own password. It is the one piece of
  * the old People panel everyone still needs.
  */
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
 import { toast } from 'sonner'
 import { Loader2, RefreshCw, UserPlus, Copy, Check, LogOut, ChevronDown, Eye } from 'lucide-react'
 import { useAuth, fullName, PasswordInput } from '@/lib/auth'
@@ -31,41 +31,72 @@ function roleLabel(role?: string) {
 }
 
 /**
- * The role picker. The browser's own arrow sits wherever the platform puts
- * it and collided with "Sales & Marketing", so the arrow is drawn here, with
- * room kept for it.
+ * The roles picker: checkboxes, since one person can wear several hats
+ * (support and a designer, say). What they can do is all of their roles
+ * together. At least one stays ticked. Opens as a small list under the
+ * button so the table row stays one line.
  */
-function RoleSelect({ value, onChange, disabled, title, className = '' }: {
-  value: string
-  onChange: (role: string) => void
+function RoleChecks({ value, onChange, disabled, title, className = '' }: {
+  value: string[]
+  onChange: (roles: string[]) => void
   disabled?: boolean
   title?: string
   className?: string
 }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const off = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', off)
+    return () => document.removeEventListener('mousedown', off)
+  }, [open])
+  const picked = ROLES.filter(r => value.includes(r))
+  const toggle = (r: Role) => {
+    const next = picked.includes(r) ? picked.filter(x => x !== r) : ROLES.filter(x => x === r || picked.includes(x))
+    if (next.length) onChange(next)
+  }
   return (
-    <div className={`relative ${className}`}>
-      <select
-        className="w-full appearance-none bg-white border border-border-gray rounded-md pl-2.5 pr-8 py-1.5 text-xs text-off-black focus:outline-none focus:ring-2 focus:ring-off-black/10 disabled:opacity-50"
-        value={value}
-        title={title}
+    <div ref={ref} className={`relative ${className}`}>
+      <button
+        type="button"
         disabled={disabled}
-        onChange={e => onChange(e.target.value)}
+        title={title}
+        onClick={() => setOpen(o => !o)}
+        className="w-full text-left bg-white border border-border-gray rounded-md pl-2.5 pr-8 py-1.5 text-xs text-off-black focus:outline-none focus:ring-2 focus:ring-off-black/10 disabled:opacity-50 truncate"
       >
-        {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-      </select>
+        {picked.length ? picked.map(r => ROLE_LABEL[r]).join(' + ') : 'Pick roles'}
+      </button>
       <ChevronDown className="w-3.5 h-3.5 text-off-black/45 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+      {open && (
+        <div className="absolute z-30 left-0 mt-1 w-56 rounded-md border border-border-gray bg-white shadow-lg py-1">
+          {ROLES.map(r => {
+            const on = picked.includes(r)
+            const last = on && picked.length === 1
+            return (
+              <label key={r} className={`flex items-center gap-2 px-3 py-1.5 text-xs ${last ? 'text-off-black/50' : 'text-off-black cursor-pointer hover:bg-subtle-gray'}`} title={last ? 'Everyone needs at least one role' : undefined}>
+                <input type="checkbox" checked={on} disabled={last || disabled} onChange={() => toggle(r)} className="accent-off-black" />
+                {ROLE_LABEL[r]}
+              </label>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
 
 type RoleTable = Record<Exclude<Role, 'admin'>, Capability[]>
 
-/** What a role includes, from the live table (admin is everything). */
-function capsOf(table: RoleTable | null, role?: string): Caps | undefined {
-  const r = normalizeRole(role)
-  if (r === 'admin') return '*'
-  return table?.[r]
+/** What these roles include together, from the live table (admin is everything). */
+function capsOf(table: RoleTable | null, roles?: string | string[]): Caps | undefined {
+  const list = (Array.isArray(roles) ? roles : [roles]).map(r => normalizeRole(r))
+  if (list.includes('admin')) return '*'
+  if (!table) return undefined
+  return [...new Set(list.flatMap(r => table[r as Exclude<Role, 'admin'>] || []))]
 }
+
+const rolesOfMember = (m: { role: string; extraRoles?: string[] }) => [m.role, ...(m.extraRoles || [])].map(r => normalizeRole(r))
 
 interface TeamMember {
   id: string
@@ -75,6 +106,7 @@ interface TeamMember {
   /** Composed server-side so the table and the toasts agree on one spelling. */
   name: string
   role: string
+  extraRoles?: string[]
   isActive: boolean
   hasPassword: boolean
   lastLoginAt: string | null
@@ -139,7 +171,7 @@ export function PeoplePanel() {
   const { arm, isArmed } = useArmed()
   const [inviteUrl, setInviteUrl] = useState('')
   const [showInvite, setShowInvite] = useState(false)
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', role: 'designer' as string })
+  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', roles: ['designer'] as string[] })
 
   const [roleTable, setRoleTable] = useState<RoleTable | null>(null)
 
@@ -183,7 +215,7 @@ export function PeoplePanel() {
     if (data?.inviteUrl) {
       setInviteUrl(data.inviteUrl)
       setShowInvite(false)
-      setForm({ firstName: '', lastName: '', email: '', role: 'designer' })
+      setForm({ firstName: '', lastName: '', email: '', roles: ['designer'] })
     }
   }
 
@@ -281,9 +313,9 @@ export function PeoplePanel() {
               />
             </div>
             <div>
-              <label className={fieldLabel}>Role</label>
-              <RoleSelect value={form.role} onChange={role => setForm({ ...form, role })} />
-              <p className="text-[11px] text-off-black/45 mt-1">{describeCaps(capsOf(roleTable, form.role))}</p>
+              <label className={fieldLabel}>Roles</label>
+              <RoleChecks value={form.roles} onChange={roles => setForm({ ...form, roles })} />
+              <p className="text-[11px] text-off-black/45 mt-1">{describeCaps(capsOf(roleTable, form.roles))}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -332,18 +364,18 @@ export function PeoplePanel() {
                   </td>
                   <td className="px-3 py-2">
                     {m.isActive ? (
-                      <RoleSelect
-                        className="w-44"
-                        value={normalizeRole(m.role)}
-                        title={describeCaps(capsOf(roleTable, m.role))}
+                      <RoleChecks
+                        className="w-52"
+                        value={rolesOfMember(m)}
+                        title={describeCaps(capsOf(roleTable, rolesOfMember(m)))}
                         disabled={busyId === m.id}
-                        onChange={role => post(
-                          { action: 'role', id: m.id, role },
-                          `${m.name} is now ${roleLabel(role).toLowerCase()}`
+                        onChange={roles => post(
+                          { action: 'role', id: m.id, roles },
+                          `${m.name} is now ${roles.map(r => roleLabel(r)).join(' + ').toLowerCase()}`
                         )}
                       />
                     ) : (
-                      <span className="text-off-black/70">{roleLabel(m.role)}</span>
+                      <span className="text-off-black/70">{rolesOfMember(m).map(r => roleLabel(r)).join(' + ')}</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-off-black/55">
@@ -479,7 +511,7 @@ export function AccountPanel() {
         <p className="text-sm font-medium text-off-black">
           {fullName(user)}
           <span className="ml-2 px-1.5 py-0.5 text-[10px] font-medium rounded bg-off-black/5 text-off-black/50 align-middle">
-            {roleLabel(user?.role).toLowerCase()}
+            {(user ? rolesOfMember(user) : []).map(r => roleLabel(r)).join(' + ').toLowerCase()}
           </span>
         </p>
         <p className="text-xs text-off-black/50">{user?.email}</p>

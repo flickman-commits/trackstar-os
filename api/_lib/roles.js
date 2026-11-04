@@ -108,15 +108,41 @@ export async function saveRoleCaps(map) {
   return value
 }
 
-/** Everything this role includes: '*' for admin, else a list of capability ids. */
-export async function capsFor(role) {
-  const r = normalizeRole(role)
-  if (r === 'admin') return '*'
-  return (await loadRoleCaps())[r] || []
+/** Every role a person has: their main role plus any extras. Accepts a role string or a user. */
+export function rolesOf(who) {
+  if (!who) return []
+  if (typeof who === 'string') return [normalizeRole(who)]
+  return [...new Set([who.role, ...(Array.isArray(who.extraRoles) ? who.extraRoles : [])].filter(Boolean).map(normalizeRole))]
 }
 
-/** Whether this role may use this part of the app. */
-export async function can(role, capability) {
-  const caps = await capsFor(role)
+/** Whether this person has this role, as main or extra. */
+export function hasRole(who, role) {
+  return rolesOf(who).includes(role)
+}
+
+/**
+ * Checked roles to what is stored: the main role (admin when it is among
+ * them, else the first in ROLES order) and the rest as extras.
+ */
+export function splitRoles(list) {
+  const picked = ROLES.filter(r => (list || []).includes(r))
+  if (!picked.length) return null
+  return { role: picked[0], extraRoles: picked.slice(1) }
+}
+
+/**
+ * Everything this person includes: '*' for admin, else the capability ids of
+ * all their roles together. Takes a role string or a user with extraRoles.
+ */
+export async function capsFor(who) {
+  const roles = rolesOf(who)
+  if (roles.includes('admin')) return '*'
+  const table = await loadRoleCaps()
+  return [...new Set(roles.flatMap(r => table[r] || []))]
+}
+
+/** Whether this person (or role) may use this part of the app. */
+export async function can(who, capability) {
+  const caps = await capsFor(who)
   return caps === '*' || caps.includes(capability)
 }

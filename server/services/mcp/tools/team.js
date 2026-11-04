@@ -21,7 +21,7 @@ export async function resolveTeammate(who, principal) {
     if (!principal.user) throw new ToolError('"me" needs a key that acts as a person.')
     return principal.user
   }
-  const users = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, firstName: true, lastName: true, email: true, role: true } })
+  const users = await prisma.user.findMany({ where: { isActive: true }, select: { id: true, firstName: true, lastName: true, email: true, role: true, extraRoles: true } })
   const full = u => `${u.firstName} ${u.lastName || ''}`.trim().toLowerCase()
   const hits = users.filter(u => u.firstName.toLowerCase() === w || full(u) === w)
   if (hits.length === 1) return hits[0]
@@ -85,7 +85,7 @@ export const teamTools = [
       if (!rows.length) throw new ToolError(`No order matching "${orderNumber}".`)
       // Design jobs are handed out by whoever runs design (Head of Design, or an
       // admin), the same rule as api/orders/assign.js.
-      if (rows.some(r => DESIGN_TYPES.has(r.trackstarOrderType)) && !(principal.role === 'admin' || await can(principal.role, 'orders.assign_custom'))) {
+      if (rows.some(r => DESIGN_TYPES.has(r.trackstarOrderType)) && !(principal.role === 'admin' || await can(principal, 'orders.assign_custom'))) {
         throw new ToolError('Only the Head of Design or an admin can assign custom and partner orders.')
       }
       const who = await resolveTeammate(to, principal)

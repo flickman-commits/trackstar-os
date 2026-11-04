@@ -47,7 +47,7 @@ export default async function handler(req, res) {
     // Re-read so a deactivated or signed-out account cannot keep browsing on a live token.
     const user = await prisma.user.findUnique({
       where: { id: actor.id },
-      select: { id: true, email: true, firstName: true, lastName: true, role: true, isActive: true, sessionVersion: true },
+      select: { id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true, isActive: true, sessionVersion: true },
     })
     if (!user || !user.isActive || user.sessionVersion !== actor.version) {
       res.setHeader('Set-Cookie', buildSessionCookie(req, { clear: true }))
@@ -60,16 +60,16 @@ export default async function handler(req, res) {
     if (viewing) {
       const target = await prisma.user.findUnique({
         where: { id: viewing.id },
-        select: { id: true, email: true, firstName: true, lastName: true, role: true },
+        select: { id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true },
       })
       if (target) {
         return res.status(200).json({
           authenticated: true,
-          user: { ...target, caps: await capsFor(target.role), viewedBy: { id: user.id, firstName: user.firstName, lastName: user.lastName } },
+          user: { ...target, caps: await capsFor(target), viewedBy: { id: user.id, firstName: user.firstName, lastName: user.lastName } },
         })
       }
     }
-    return res.status(200).json({ authenticated: true, user: { ...shown, caps: await capsFor(user.role) } })
+    return res.status(200).json({ authenticated: true, user: { ...shown, caps: await capsFor(user) } })
   }
 
   if (req.method === 'DELETE') {
@@ -120,7 +120,7 @@ export default async function handler(req, res) {
         role: 'admin',
         lastLoginAt: new Date(),
       },
-      select: { id: true, email: true, firstName: true, lastName: true, role: true },
+      select: { id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true },
     })
     console.log(`[auth/login] Bootstrapped first admin: ${created.email}`)
     res.setHeader('Set-Cookie', buildSessionCookie(req, { token: createSessionToken(created) }))
@@ -145,9 +145,9 @@ export default async function handler(req, res) {
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date(), lastSeenAt: new Date() } })
 
   const actor = {
-    id: user.id, email: user.email, role: user.role,
+    id: user.id, email: user.email, role: user.role, extraRoles: user.extraRoles || [],
     firstName: user.firstName, lastName: user.lastName,
   }
   res.setHeader('Set-Cookie', buildSessionCookie(req, { token: createSessionToken({ ...actor, sessionVersion: user.sessionVersion }) }))
-  return res.status(200).json({ ok: true, user: { ...actor, caps: await capsFor(actor.role) } })
+  return res.status(200).json({ ok: true, user: { ...actor, caps: await capsFor(actor) } })
 }

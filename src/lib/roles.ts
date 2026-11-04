@@ -57,6 +57,12 @@ export function normalizeRole(role?: string | null): Role {
   return (ROLES as string[]).includes(role || '') ? (role as Role) : 'designer'
 }
 
+/** Every role a person has: their main role plus any extras (Settings > People ticks several). */
+export function rolesOf(u?: { role?: string | null; extraRoles?: string[] | null } | null): Role[] {
+  if (!u) return []
+  return [...new Set([u.role, ...(u.extraRoles || [])].filter(Boolean).map(r => normalizeRole(r)))]
+}
+
 export function capsCan(caps: Caps | undefined, capability: Capability) {
   return caps === '*' || Boolean(caps?.includes(capability))
 }

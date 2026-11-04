@@ -58,7 +58,7 @@ export default async function handler(req, res) {
 
     switch (action) {
       case 'discount15': {
-        if (!(user.isSystem || user.role === 'admin' || await can(user.role, 'tools.discounts'))) {
+        if (!(user.isSystem || user.role === 'admin' || await can(user, 'tools.discounts'))) {
           return res.status(403).json({ error: 'Discount codes are not part of your role. Ask Matt.', code: 'not_allowed' })
         }
         const out = await discount15({ thread, actor: user, percent: body.percent ?? 15, prefix: body.prefix })

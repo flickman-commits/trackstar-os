@@ -108,7 +108,7 @@ export async function loadActiveUser(actor) {
   if (!actor.id) return null
   const user = await prisma.user.findUnique({
     where: { id: actor.id },
-    select: { id: true, email: true, firstName: true, lastName: true, role: true, isActive: true },
+    select: { id: true, email: true, firstName: true, lastName: true, role: true, extraRoles: true, isActive: true },
   })
   if (!user || !user.isActive) return null
   // An admin viewing as someone is not that person being seen.
@@ -151,7 +151,7 @@ export async function requireCapability(req, res, capability) {
     res.status(401).json({ error: 'Your account is no longer active. Sign in again.' })
     return null
   }
-  if (user.isSystem || await can(user.role, capability)) return user
+  if (user.isSystem || await can(user, capability)) return user
   res.status(403).json({ error: 'That is not part of your role. Ask Matt if you need it.', code: 'not_allowed' })
   return null
 }
@@ -188,7 +188,7 @@ export async function requireSalesRep(req, res) {
     return null
   }
   if (user.role === 'admin' || user.isSystem) return user
-  if (!(await can(user.role, 'sales'))) {
+  if (!(await can(user, 'sales'))) {
     res.status(403).json({ error: 'Sales is not part of your role. Ask Matt if you need it.', code: 'not_a_rep' })
     return null
   }

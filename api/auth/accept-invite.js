@@ -62,11 +62,11 @@ export default async function handler(req, res) {
     })
 
     const actor = {
-      id: user.id, email: user.email, role: user.role,
+      id: user.id, email: user.email, role: user.role, extraRoles: user.extraRoles || [],
       firstName: user.firstName, lastName: user.lastName,
     }
     res.setHeader('Set-Cookie', buildSessionCookie(req, { token: createSessionToken({ ...actor, sessionVersion: user.sessionVersion }) }))
-    return res.status(200).json({ ok: true, user: { ...actor, caps: await capsFor(actor.role) } })
+    return res.status(200).json({ ok: true, user: { ...actor, caps: await capsFor(actor) } })
   } catch (error) {
     console.error('[auth/accept-invite] Error:', error)
     return res.status(500).json({ error: 'Something went wrong. Try the link again.' })

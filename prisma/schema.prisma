@@ -796,6 +796,11 @@ model User {
   // admin | sales | fulfillment | designer (api/_lib/roles.js). "staff" from
   // before roles reads as designer.
   role         String    @default("designer")
+  // More roles on top of `role`, when someone wears several hats (support and
+  // a designer, say). What they can do is everything their roles include
+  // together. `role` stays the main one: admin whenever admin is among them,
+  // so every role === 'admin' check holds (api/_lib/roles.js splitRoles).
+  extraRoles   String[]  @default([])
   // Pay per custom design, in cents (USD), for the Custom Counter and the
   // month-end statement. Null = the level default (senior head designer
   // $50 / $25 repeat, junior designer $40 / $20). Set in Settings > Custom Counter.

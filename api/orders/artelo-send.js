@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     if (!user) return res.status(401).json({ error: 'Your account is no longer active. Sign in again.' })
     const order = await prisma.order.findUnique({ where: { id: String(body.orderId || '') }, select: { id: true, trackstarOrderType: true } })
     if (!order) return res.status(404).json({ error: 'Order not found' })
-    if (order.trackstarOrderType === 'standard' && !user.isSystem && !(await can(user.role, 'orders.render'))) {
+    if (order.trackstarOrderType === 'standard' && !user.isSystem && !(await can(user, 'orders.render'))) {
       return res.status(403).json({ error: 'That is not part of your role. Ask Matt if you need it.', code: 'not_allowed' })
     }
 

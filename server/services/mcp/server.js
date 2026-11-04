@@ -42,7 +42,7 @@ export async function toolsFor(principal) {
     // A write that only an admin may make, whatever the key's scopes.
     if (t.adminOnly && principal.role !== 'admin') continue
     // A capability belongs to a person's role; a service key has no person, so no capability tools.
-    if (t.cap && (!principal.user || !(await can(principal.role, t.cap)))) continue
+    if (t.cap && (!principal.user || !(await can(principal, t.cap)))) continue
     out.push(t)
   }
   return out

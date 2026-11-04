@@ -76,7 +76,7 @@ export default async function handler(req, res) {
         createdAt: o.createdAt,
       }
     })
-    const threads = await can(user.role, 'support') ? await searchThreads(q) : []
+    const threads = await can(user, 'support') ? await searchThreads(q) : []
     return res.status(200).json({ results, threads })
   } catch (error) {
     console.error('[API /search] Error:', error)

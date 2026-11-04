@@ -143,9 +143,9 @@ function row(t, readAt) {
 
 /** Who can work the inbox: active people whose role includes Support (admins always). */
 export async function team() {
-  const users = await prisma.user.findMany({ where: { isActive: true }, orderBy: { firstName: 'asc' }, select: { ...TEAM_SELECT, role: true } })
+  const users = await prisma.user.findMany({ where: { isActive: true }, orderBy: { firstName: 'asc' }, select: { ...TEAM_SELECT, role: true, extraRoles: true } })
   const out = []
-  for (const u of users) if (await can(u.role, 'support')) out.push({ id: u.id, firstName: u.firstName, lastName: u.lastName })
+  for (const u of users) if (await can(u, 'support')) out.push({ id: u.id, firstName: u.firstName, lastName: u.lastName })
   return out
 }
 

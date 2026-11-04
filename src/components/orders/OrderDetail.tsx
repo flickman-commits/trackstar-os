@@ -1,3 +1,4 @@
+import { rolesOf } from '@/lib/roles'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
@@ -1604,7 +1605,7 @@ Thank you!`
                         </button>
                       )}
                       {/* A customer emails a photo after ordering: it goes on the order for the designer. */}
-                      {selectedOrder.trackstarOrderType === 'custom' && (isAdmin || user?.role === 'head_designer' || user?.role === 'designer') && !isProductionStage && (
+                      {selectedOrder.trackstarOrderType === 'custom' && (isAdmin || rolesOf(user).some(r => r === 'head_designer' || r === 'designer')) && !isProductionStage && (
                         <AddPhotoPanel
                           custom
                           replace={!!selectedOrder.photoPath}

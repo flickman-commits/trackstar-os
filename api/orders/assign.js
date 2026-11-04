@@ -185,7 +185,7 @@ export default async function handler(req, res) {
     if (!target) return res.status(404).json({ error: 'Order not found' })
     if (target.trackstarOrderType === 'custom') {
       const me = await loadActiveUser(actor)
-      if (!me || !(me.isSystem || await can(me.role, 'orders.assign_custom'))) {
+      if (!me || !(me.isSystem || await can(me, 'orders.assign_custom'))) {
         return res.status(403).json({ error: 'Only the Head of Design or an admin can assign custom orders.', code: 'not_allowed' })
       }
     }

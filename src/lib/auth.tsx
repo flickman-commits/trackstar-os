@@ -25,6 +25,8 @@ export interface CurrentUser {
   lastName: string
   /** admin | sales | fulfillment | designer; older accounts may still say "staff". See src/lib/roles.ts. */
   role: string
+  /** More roles on top of `role`; what they can do is all of them together. */
+  extraRoles?: string[]
   /** What the role includes, as set in Settings > Admin > Roles. */
   caps?: Caps
   /** Set while an admin is viewing TrackstarOS as this person (read-only): the admin. */
