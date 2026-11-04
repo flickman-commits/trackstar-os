@@ -8,7 +8,8 @@ import { getOrderTotalUsd, isBigSpender, BIG_SPENDER_THRESHOLD_USD } from '../..
 import { getProductInfo, loadProductCatalog } from '../../server/lib/productCatalog.js'
 import { isRushAddonLineItem, isRemovedLineItem } from '../../server/lib/lineItemMatching.js'
 import { unpaidPhotoRows } from '../../server/domain/orders/photoPayment.js'
-import { shopifyAdminUrl, arteloOrderUrl, etsyOrderUrl } from '../../server/lib/links.js'
+import { shopifyAdminUrl, arteloOrderUrl, etsyOrderUrl, photoLaterUrl } from '../../server/lib/links.js'
+import { photoLaterDeadline } from '../../server/domain/orders/photoLaterState.js'
 import { getEtsyListingImageUrl } from '../../server/lib/etsyImageCache.js'
 import { formatRaceDate, formatTemp, formatTime, formatPace } from '../../server/lib/printFormat.js'
 import { resolveEvent } from '../../server/lib/raceEvent.js'
@@ -320,6 +321,17 @@ export default async function handler(req, res) {
         photoPath: order.photoPath || null,
         // When a designer confirmed the photo is on the artwork. Gates completion.
         photoPlacedAt: order.photoPlacedAt ? order.photoPlacedAt.toISOString() : null,
+        // "Add photo after the race" (server/domain/orders/photoLater.js): the
+        // order view's card says where the customer's photo is, with the link.
+        photoLater: order.photoLater ? {
+          url: photoLaterUrl(order.photoLaterToken),
+          emailedAt: order.photoLaterEmailedAt ? order.photoLaterEmailedAt.toISOString() : null,
+          remindedAt: order.photoLaterRemindedAt ? order.photoLaterRemindedAt.toISOString() : null,
+          deadline: photoLaterDeadline(order)?.toISOString() || null,
+          closedAt: order.photoLaterClosedAt ? order.photoLaterClosedAt.toISOString() : null,
+          outcome: order.photoLaterOutcome || null,
+          refund: order.photoLaterRefund || null,
+        } : null,
         researchNotes: research?.researchNotes || null,
         // Persisted candidate matches — populates the dashboard's accept-button
         // picker for ambiguous orders (so it shows even after page reload, not

@@ -91,6 +91,17 @@ export interface Order {
   // When a designer confirmed the photo is on the artwork. Completing a photo
   // order is blocked until this is set.
   photoPlacedAt?: string | null
+  // "Add photo after the race": paid for at checkout, the customer uploads it
+  // from an emailed link (server/domain/orders/photoLater.js). Null otherwise.
+  photoLater?: {
+    url: string | null
+    emailedAt: string | null
+    remindedAt: string | null
+    deadline: string | null
+    closedAt: string | null
+    outcome: 'uploaded' | 'skipped' | 'deadline' | 'unpaid' | null
+    refund: string | null
+  } | null
   // Instant Lookup widget signal: true = customer confirmed an official match,
   // false = customer typed it manually, null/undefined = no widget data
   lookupVerified?: boolean | null

@@ -298,7 +298,7 @@ export default function OrderDetail({
     } finally { setCropBusy(false) }
   }
 
-  const photoCard = selectedOrder?.photoPath ? (
+  const uploadedPhotoCard = selectedOrder?.photoPath ? (
       <div
         className={`rounded-md border p-3 ${
           photoPlaced
@@ -404,6 +404,37 @@ export default function OrderDetail({
         )}
       </div>
     ) : null
+
+  // "Add photo after the race": paid for, but the photo is still with the
+  // customer. Same purple card, saying where it is and what happens next, so
+  // nobody prints it plain or chases the customer by hand.
+  const later = selectedOrder?.photoLater
+  const day = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const photoLaterCard = later && !selectedOrder?.photoPath ? (
+    <div className={`rounded-md border p-3 ${later.closedAt ? 'bg-subtle-gray border-border-gray' : 'bg-[#4600D6]/5 border-[#4600D6]/40'}`}>
+      <p className={`text-xs font-semibold ${later.closedAt ? 'text-off-black' : 'text-[#4600D6]'}`}>
+        {later.closedAt ? 'Printing without a photo' : 'Photo add-on paid: we need the photo from the customer'}
+      </p>
+      <p className={`text-[11px] mt-0.5 ${later.closedAt ? 'text-off-black/60' : 'text-[#4600D6]/80'}`}>
+        {later.closedAt
+          ? `${later.outcome === 'skipped' ? 'The customer chose no photo' : later.outcome === 'unpaid' ? 'There was no paid Photo Add-On for it' : 'No photo arrived by the deadline'}. ${later.outcome === 'unpaid' ? '' : later.refund === 'refunded' ? 'The add-on was refunded.' : later.refund ? 'The add-on refund FAILED: refund it in Shopify.' : ''}`
+          : later.emailedAt
+            ? `They chose to add it after the race. Upload link emailed ${day(later.emailedAt)}${later.remindedAt ? `, reminded ${day(later.remindedAt)}` : ''}. ${later.deadline ? `No photo by ${day(later.deadline)}: it prints without one and the add-on is refunded, on its own.` : ''}`
+            : 'They chose to add it after the race. The upload link is emailed the day after race day; the print waits for the photo.'}
+      </p>
+      {!later.closedAt && later.url && (
+        <button
+          type="button"
+          onClick={() => { navigator.clipboard?.writeText(later.url || ''); setToast({ message: 'Upload link copied. It only works for this print.', type: 'success' }) }}
+          className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1.5 rounded border border-[#4600D6]/30 bg-white text-[#4600D6] hover:bg-[#4600D6]/5"
+        >
+          <Copy className="w-3 h-3" />
+          Copy the customer's upload link
+        </button>
+      )}
+    </div>
+  ) : null
+  const photoCard = uploadedPhotoCard ?? photoLaterCard
 
   // Comments state for custom orders
   const [orderComments, setOrderComments] = useState<OrderComment[]>([])
