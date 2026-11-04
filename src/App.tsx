@@ -29,6 +29,7 @@ const ApprovalPortal = lazyPage(() => import('@/pages/ApprovalPortal'))
 const BulkIntake = lazyPage(() => import('@/pages/BulkIntake'))
 const RunnerClaim = lazyPage(() => import('@/pages/RunnerClaim'))
 const PhotoLater = lazyPage(() => import('@/pages/PhotoLater'))
+const UpdateAddress = lazyPage(() => import('@/pages/UpdateAddress'))
 const SurveyVote = lazyPage(() => import('@/pages/SurveyVote'))
 const DesignSurveys = lazyPage(() => import('@/pages/DesignSurveys'))
 const CreatorsHome = lazyPage(() => import('@/pages/CreatorsHome'))
@@ -264,6 +265,8 @@ export default function App() {
           <Route path="/runner/:token" element={<RunnerClaim />} />
           {/* A pre-order customer adding the photo they chose to send after the race. */}
           <Route path="/photo/:token" element={<PhotoLater />} />
+          {/* The customer fixing their own shipping address from the order confirmation link. */}
+          <Route path="/ship/:order/:sig" element={<UpdateAddress />} />
           {/* Design Survey: the community votes on new designs from a story link. */}
           <Route path="/vote/:token" element={<SurveyVote />} />
           <Route path="/creator/:token" element={<CreatorPortal />} />

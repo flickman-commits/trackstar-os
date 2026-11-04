@@ -181,7 +181,7 @@ const ADDRESS_FIELDS = ['name', 'address1', 'address2', 'city', 'province', 'zip
 export function formatAddress(a) {
   return [a.name, a.address1, a.address2, [a.city, a.province, a.zip].filter(Boolean).join(' '), a.country].filter(Boolean).join('\n')
 }
-export async function shippingAddress({ thread, shopifyOrderId, address, actor }) {
+export async function shippingAddress({ thread, shopifyOrderId, address, actor, source = 'support' }) {
   const a = {}
   for (const k of ADDRESS_FIELDS) a[k] = String(address?.[k] || '').trim()
   a.country = a.country.toUpperCase()
@@ -217,9 +217,12 @@ export async function shippingAddress({ thread, shopifyOrderId, address, actor }
   const pasted = formatAddress(a)
   if (rows.length) {
     await prisma.order.updateMany({ where: { id: { in: rows.map(r => r.id) } }, data: { shippingAddress: ours } })
-    await prisma.orderComment.createMany({ data: rows.map(r => ({ orderId: r.id, text: `Ship-to changed by support to: ${pasted.replace(/\n/g, ', ')}. Change it in Artelo too.`, authorId: actor?.id || null, authorName: actorName(actor) })) })
+    const comment = source === 'customer'
+      ? `The customer changed the ship-to from their confirmation email to: ${pasted.replace(/\n/g, ', ')}.${taxNote ? ` ${taxNote}` : ''}`
+      : `Ship-to changed by support to: ${pasted.replace(/\n/g, ', ')}. Change it in Artelo too.`
+    await prisma.orderComment.createMany({ data: rows.map(r => ({ orderId: r.id, text: comment, authorId: actor?.id || null, authorName: source === 'customer' ? 'Customer' : actorName(actor) })) })
   }
-  await event(thread.id, `${actorName(actor)} changed #${number}'s ship-to in Shopify to ${pasted.replace(/\n/g, ', ')}. Artelo still needs it.${taxNote ? ` ${taxNote}` : ''}`, actor)
+  if (thread) await event(thread.id, `${actorName(actor)} changed #${number}'s ship-to in Shopify to ${pasted.replace(/\n/g, ', ')}. Artelo still needs it.${taxNote ? ` ${taxNote}` : ''}`, actor)
   return { number, address: a, pasted, taxNote, arteloUrl: arteloOrderUrl(rows[0]?.arteloOrderData?.id) || null }
 }
 

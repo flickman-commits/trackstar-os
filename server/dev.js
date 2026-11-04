@@ -132,6 +132,8 @@ const routes = [
   // Public storefront results lookup (gated behind PUBLIC_LOOKUP_ENABLED).
   { method: 'get',    path: '/api/public/results-lookup',  handler: '../api/public/results-lookup.js' },
   { method: 'get',    path: '/api/public/approval-preview', handler: '../api/public/approval-preview.js' },
+  { method: 'get',    path: '/api/public/ship-address',    handler: '../api/public/ship-address.js' },
+  { method: 'post',   path: '/api/public/ship-address',    handler: '../api/public/ship-address.js' },
   // Bulk partner orders
   { method: 'get',    path: '/api/bulk',                   handler: '../api/bulk/index.js' },
   { method: 'post',   path: '/api/bulk',                   handler: '../api/bulk/index.js' },

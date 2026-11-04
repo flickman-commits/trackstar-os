@@ -40,6 +40,7 @@ import { slackTo, slackText } from '../../lib/slack.js'
 import { arteloOrderUrl } from '../../lib/links.js'
 import { sendStateOf, WAITING, EXPEDITED } from './sendState.js'
 import { isExpeditedShipping } from '../../lib/shipping.js'
+import { windowEndsAt } from '../orders/changeWindow.js'
 
 export const SEND_TYPES = ['standard', 'custom']
 const OFF_KEY = 'artelo_auto_send_off'
@@ -83,11 +84,16 @@ export async function queueSend(job, { orderType } = {}) {
     // Held before it was approved (the mockup went to the customer to approve,
     // holdForCustomer): it stays held, and Send now releases it once they say yes.
     if (job.sendHeldAt) return job
-    const type = orderType || (await prisma.order.findUnique({ where: { id: job.orderId }, select: { trackstarOrderType: true } }))?.trackstarOrderType
+    const order = await prisma.order.findUnique({ where: { id: job.orderId }, select: { trackstarOrderType: true, shopifyOrderData: true, createdAt: true } })
+    const type = orderType || order?.trackstarOrderType
     if (!SEND_TYPES.includes(type) || !(await autoSendOn())) return job
+    // Not before the customer's change window closes (changeWindow.js): the
+    // confirmation email says they can fix the address for that long.
+    const hold = Date.now() + holdMinutes() * MIN
+    const windowEnd = windowEndsAt(order)?.getTime() || 0
     return await prisma.renderJob.update({
       where: { id: job.id },
-      data: { sendAfter: new Date(Date.now() + holdMinutes() * MIN), sendHeldAt: null, sendHeldBy: null, sendError: null },
+      data: { sendAfter: new Date(Math.max(hold, windowEnd)), sendHeldAt: null, sendHeldBy: null, sendError: null },
     })
   } catch (e) {
     console.error('[artelo.send] queue', job.id, e.message)
