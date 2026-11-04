@@ -2,11 +2,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ExternalLink, RefreshCw } from 'lucide-react'
-import { Bar, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Cell, ReferenceDot, BarChart } from 'recharts'
+import { Bar, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, ReferenceDot } from 'recharts'
 import { btnGhost, segment, segmentGroup } from '@/lib/ui'
 import { financeApi, usd, usdShort, pctText, xText, intText, dayLabel, SERIES } from '@/lib/financeApi'
 import type { OverviewPayload, TrendDay, WaterfallLine } from '@/types/finance'
-import { card, DeltaPill, ErrorCard, Spark, Spinner, Tile, num } from './bits'
+import { card, DeltaPill, ErrorCard, Spark, Spinner, Tile } from './bits'
+
+/** "Up from $14,443 in September 2026": what the pill's percent is measured against. */
+function versus(now: number | null, before: number | null, fmt: (v: number) => string, label: string) {
+  if (before == null) return null
+  const when = /^(the|last|yesterday|today)/i.test(label) ? label.charAt(0).toLowerCase() + label.slice(1) : `in ${label}`
+  if (now == null || now === before) return `Same as ${when}`
+  return `${now > before ? 'Up' : 'Down'} from ${fmt(before)} ${when}`
+}
 
 const SHORT: Record<string, string> = { today: 'Today', yesterday: 'Yesterday', '7d': '7d', '30d': '30d', mtd: 'MTD', last_month: 'Last month', qtd: 'QTD', ytd: 'YTD' }
 const PERIOD_KEY = 'finance.period'
@@ -77,19 +85,19 @@ export default function Overview() {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-            <Tile label="Revenue" value={usd(t.revenue)} pill={<DeltaPill now={t.revenue} before={c.revenue} />} compare={`vs ${usd(c.revenue)} ${data.period.compareLabel}`}
+            <Tile label="Revenue" value={usd(t.revenue)} pill={<DeltaPill now={t.revenue} before={c.revenue} />} compare={versus(t.revenue, c.revenue, usd, data.period.compareLabel)}
               spark={spark && <Spark values={spark.revenue} color={SERIES.revenue} />}
               details={[['Shopify', usd(t.shopifyRevenue)], ['Etsy', usd(t.etsyRevenue)]]}
               title="Shopify net sales plus Etsy net sales, as the raw tabs report them." />
-            <Tile label="Contribution margin" value={usd(t.cm)} pill={<DeltaPill now={t.cm} before={c.cm} />} compare={`vs ${usd(c.cm)} ${data.period.compareLabel}`}
+            <Tile label="Contribution margin" value={usd(t.cm)} pill={<DeltaPill now={t.cm} before={c.cm} />} compare={versus(t.cm, c.cm, usd, data.period.compareLabel)}
               spark={spark && <Spark values={spark.cm} color={SERIES.cm} />}
               details={[['Of revenue', pctText(t.cmPct)], ['Gross margin', pctText(t.grossMarginPct)]]}
               title={data.feeBase === 'cm' ? 'Revenue less fees, production, shipping and ad spend, less the designer fee (7.5% of that).' : 'Revenue less fees, production, shipping and the designer fee (7.5% of gross profit), less ad spend.'} />
-            <Tile label="Ad spend" value={usd(t.adSpend)} pill={<DeltaPill now={t.adSpend} before={c.adSpend} costly />} compare={`vs ${usd(c.adSpend)} ${data.period.compareLabel}`}
+            <Tile label="Ad spend" value={usd(t.adSpend)} pill={<DeltaPill now={t.adSpend} before={c.adSpend} costly />} compare={versus(t.adSpend, c.adSpend, usd, data.period.compareLabel)}
               spark={spark && <Spark values={spark.adSpend} color={SERIES.adSpend} />}
               details={[['Blended ROAS', <>{xText(t.roas)} <span className="text-[11px] font-normal text-off-black/45">/ {data.breakevenRoas}x even</span></>], ['CPA', usd(t.cpa)]]}
               title="Meta plus Google. ROAS is revenue over ad spend; CPA is ad spend per order." />
-            <Tile label="Orders" value={intText(t.orders)} pill={<DeltaPill now={t.orders} before={c.orders} />} compare={`vs ${intText(c.orders)} ${data.period.compareLabel}`}
+            <Tile label="Orders" value={intText(t.orders)} pill={<DeltaPill now={t.orders} before={c.orders} />} compare={versus(t.orders, c.orders, intText, data.period.compareLabel)}
               spark={spark && <Spark values={spark.orders} color={SERIES.cogs} />}
               details={[['AOV', usd(t.aov)], ['Organic', <>{intText(t.organicOrders)} <span className="text-[11px] font-normal text-off-black/45">{pctText(t.organicPct)}</span></>]]}
               title="Shopify plus Etsy orders. Organic is whatever Meta and Google do not claim." />
@@ -145,45 +153,37 @@ export default function Overview() {
   )
 }
 
-/** Revenue stepping down to contribution margin: a bridge chart with the lines beside it as rows. */
+/**
+ * Revenue stepping down to contribution margin, one row per line: a bar on
+ * a track as wide as revenue shows where each cost takes its bite, so the
+ * eye reads top to bottom instead of across a chart with slanted labels.
+ */
 function Waterfall({ lines }: { lines: WaterfallLine[] }) {
+  const top = Math.max(1, ...lines.filter(l => l.kind === 'total' || l.kind === 'subtotal').map(l => Math.abs(l.cents)))
+  const colorOf = (l: WaterfallLine) => l.key === 'revenue' ? SERIES.revenue : l.key === 'cm' ? SERIES.cm
+    : (l.kind === 'subtotal') ? SERIES.muted : l.key === 'meta' || l.key === 'google' ? SERIES.adSpend : l.key === 'designerFee' ? SERIES.designerFee : SERIES.cogs
   let running = 0
-  const bars = lines.map(l => {
-    if (l.kind === 'total' || l.kind === 'subtotal') { running = l.cents; return { ...l, range: [Math.min(0, l.cents), Math.max(0, l.cents)], fill: l.key === 'revenue' ? SERIES.revenue : l.key === 'cm' ? SERIES.cm : SERIES.muted } }
-    const from = running; running += l.cents
-    return { ...l, range: [Math.min(from, running), Math.max(from, running)], fill: l.key === 'meta' || l.key === 'google' ? SERIES.adSpend : l.key === 'designerFee' ? SERIES.designerFee : SERIES.cogs }
+  const rows = lines.map(l => {
+    if (l.kind === 'total' || l.kind === 'subtotal') { running = l.cents; return { l, from: 0, to: Math.max(0, l.cents) } }
+    const before = running; running += l.cents
+    return { l, from: Math.max(0, Math.min(before, running)), to: Math.max(0, Math.max(before, running)) }
   })
+  const pct = (v: number) => `${(v / top) * 100}%`
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-      <div className="lg:col-span-3 h-56">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={bars} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap={6}>
-            <CartesianGrid vertical={false} stroke="#eeeeee" />
-            <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#52514e' }} interval={0} tickLine={false} axisLine={false} angle={-20} dy={6} height={38} />
-            <YAxis tickFormatter={v => usdShort(v)} tick={{ fontSize: 10, fill: '#52514e' }} tickLine={false} axisLine={false} width={44} />
-            <Tooltip cursor={{ fill: 'rgba(0,0,0,0.04)' }} content={({ payload }) => payload?.[0] ? <div className="bg-white border border-border-gray rounded-md px-2.5 py-1.5 text-xs shadow"><div className="font-semibold">{(payload[0].payload as WaterfallLine).label}</div><div className="tabular-nums">{usd((payload[0].payload as WaterfallLine).cents)}{(payload[0].payload as WaterfallLine).pctOfRevenue != null && <span className="text-off-black/50"> · {pctText((payload[0].payload as WaterfallLine).pctOfRevenue)} of revenue</span>}</div></div> : null} />
-            <Bar dataKey="range" radius={[4, 4, 4, 4]} isAnimationActive={false}>
-              {bars.map(b => <Cell key={b.key} fill={b.fill} />)}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="lg:col-span-2">
-        <table className="w-full text-xs">
-          <tbody>
-            {lines.map(l => (
-              <tr key={l.key} className={l.kind ? 'font-semibold text-off-black' : 'text-off-black/75'}>
-                <td className="py-1 pr-2 whitespace-nowrap">{l.label}</td>
-                <td className="py-1 w-full">
-                  {!l.kind && l.pctOfRevenue != null && <div className="h-1.5 rounded bg-off-black/[0.06] overflow-hidden"><div className="h-full rounded" style={{ width: `${Math.min(100, l.pctOfRevenue)}%`, background: l.key === 'meta' || l.key === 'google' ? SERIES.adSpend : l.key === 'designerFee' ? SERIES.designerFee : SERIES.cogs }} /></div>}
-                </td>
-                <td className={`py-1 pl-2 ${num} whitespace-nowrap`}>{usd(l.cents)}</td>
-                <td className={`py-1 pl-2 ${num} text-off-black/45 w-12`}>{l.pctOfRevenue != null ? pctText(l.pctOfRevenue, 0) : ''}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className="space-y-1.5">
+      {rows.map(({ l, from, to }) => {
+        const strong = Boolean(l.kind)
+        return (
+          <div key={l.key} className={`grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[10rem_minmax(0,1fr)_7rem_3rem] items-center gap-x-3 gap-y-1 ${strong ? 'pt-1.5' : ''}`}>
+            <span className={`text-sm ${strong ? 'font-semibold text-off-black' : 'text-off-black/75'}`}>{l.label}</span>
+            <div className="col-span-2 md:col-span-1 md:order-none order-last relative h-3 rounded-full bg-off-black/[0.05]">
+              <div className="absolute inset-y-0 rounded-full" style={{ left: pct(from), width: `max(3px, ${pct(to - from)})`, background: colorOf(l) }} />
+            </div>
+            <span className={`text-sm tabular-nums text-right ${strong ? 'font-semibold text-off-black' : 'text-off-black/75'}`}>{usd(l.cents)}</span>
+            <span className="hidden md:block text-xs tabular-nums text-right text-off-black/45">{l.pctOfRevenue != null ? pctText(l.pctOfRevenue, 0) : ''}</span>
+          </div>
+        )
+      })}
     </div>
   )
 }

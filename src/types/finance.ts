@@ -46,7 +46,10 @@ export type OwedItem = { userId: string; name: string; kind: string; quantity: n
 export type Owed = { hours: { userId: string; name: string; weeks: OwedWeek[]; minutes: number; amountCents: number }[]; months: { month: string; label: string; items: OwedItem[]; totalCents: number }[]; totalCents: number }
 export type PayoutLine = { id: string; userId: string; name: string; kind: string; quantity: number | null; rateCents: number | null; amountCents: number; note: string | null; paidAt: string | null; paidRef: string | null; sourceRef: string | null }
 export type PayRun = { id: string; kind: 'hours' | 'monthly'; periodStart: string; periodEnd: string; label: string; status: 'draft' | 'approved' | 'paid'; note: string | null; approvedAt: string | null; paidAt: string | null; createdAt: string; totalCents: number; lines: PayoutLine[] }
-export type PayoutsPayload = { owed: Owed; runs: PayRun[]; rates: Rate[] }
+export type LedgerStatus = 'owed' | 'draft' | 'approved' | 'paid'
+export type LedgerItem = { key: string; userId: string; name: string; kind: string; note: string | null; amountCents: number; status: LedgerStatus; paidAt: string | null; paidRef: string | null; run: { id: string; label: string } | null }
+export type LedgerMonth = { month: string; label: string; inProgress: boolean; items: LedgerItem[]; status: 'owed' | 'on_run' | 'paid' | 'empty'; totalCents: number; owedCents: number; onRunCents: number; paidCents: number; canCreateRun: boolean }
+export type PayoutsPayload = { owed: Owed; runs: PayRun[]; rates: Rate[]; ledger: LedgerMonth[] }
 
 export type RaceTerms = { structure: 'percent' | 'per_order'; pct: number | null; perOrderCents: number | null; assumed: boolean }
 export type RaceSales = { grossCents: number; discountCents: number; refundCents: number; netSalesCents: number; unitsSold: number; orders: number; computedAt: string; products: string[]; canonical: string | null }

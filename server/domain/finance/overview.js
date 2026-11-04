@@ -80,9 +80,21 @@ export async function overview({ period = 'today', now = new Date() } = {}) {
     const late = Object.entries(yRow.has).filter(([, ok]) => !ok).map(([k]) => ({ shopify: 'Shopify', etsy: 'Etsy', printShop: 'Artelo', meta: 'Meta', google: 'Google Ads' }[k]))
     if (late.length) needs.push({ kind: 'feed', text: `${late.join(', ')} ${late.length === 1 ? 'has' : 'have'} not landed for ${dayLabel(yesterday)} yet`, to: '/finance/daily' })
   }
-  for (const d of s.days.filter(d => d.landed && d.revenue > 0)) {
-    if (d.roas != null && d.adSpend > 0 && d.roas < breakeven) needs.push({ kind: 'roas', text: `${dayLabel(d.day)}: blended ROAS ${d.roas.toFixed(2)}x, under the ${breakeven}x break-even`, to: `/finance/daily?month=${monthOf(d.day)}` })
-    if (d.cmPct != null && d.cmPct < 20) needs.push({ kind: 'cm', text: `${dayLabel(d.day)}: contribution margin ${d.cmPct.toFixed(1)}%`, to: `/finance/daily?month=${monthOf(d.day)}` })
+  // Days the ads did not pay for themselves, and days that kept too little,
+  // as one line each with the worst day, not a line per day: a year view
+  // used to list hundreds.
+  const landedDays = s.days.filter(d => d.landed && d.revenue > 0)
+  const dayLink = d => `/finance/daily?month=${monthOf(d.day)}`
+  const lowRoas = landedDays.filter(d => d.roas != null && d.adSpend > 0 && d.roas < breakeven)
+  if (lowRoas.length) {
+    const worst = lowRoas.reduce((a, d) => (d.roas < a.roas ? d : a))
+    needs.push({ kind: 'roas', text: `Ads did not pay for themselves on ${lowRoas.length} of ${landedDays.length} day${landedDays.length === 1 ? '' : 's'}: every $1 of ads brought back under $${breakeven.toFixed(2)}, the break-even. Worst was ${dayLabel(worst.day)} at $${worst.roas.toFixed(2)}.`, to: dayLink(worst) })
+  }
+  const lowCm = landedDays.filter(d => d.cmPct != null && d.cmPct < 20)
+  if (lowCm.length) {
+    const worst = lowCm.reduce((a, d) => (d.cmPct < a.cmPct ? d : a))
+    const lost = lowCm.filter(d => d.cmPct < 0).length
+    needs.push({ kind: 'cm', text: `Kept less than 20 cents of each dollar on ${lowCm.length} of ${landedDays.length} day${landedDays.length === 1 ? '' : 's'}${lost ? `, and lost money on ${lost}` : ''}. Worst was ${dayLabel(worst.day)} at ${worst.cmPct.toFixed(0)}%.`, to: dayLink(worst) })
   }
 
   return {

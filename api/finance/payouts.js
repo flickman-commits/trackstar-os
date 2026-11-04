@@ -25,8 +25,8 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       if (req.query?.user) return res.status(200).json(await payouts.personHistory(String(req.query.user)))
-      const [owed, runs, rates] = await Promise.all([payouts.owed(), payouts.listRuns(), payouts.rates()])
-      return res.status(200).json({ owed, runs, rates })
+      const [owed, runs, rates, ledger] = await Promise.all([payouts.owed(), payouts.listRuns(), payouts.rates(), payouts.monthlyLedger()])
+      return res.status(200).json({ owed, runs, rates, ledger })
     }
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
     const b = body(req)

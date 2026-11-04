@@ -7,7 +7,7 @@ import CustomCounter from '@/components/CustomCounter'
 import RacePayouts from '@/components/finance/RacePayouts'
 import { btnPrimary, btnSecondary, btnGhost, inputBase, modalInput, modalPrimary, modalCancel, segment, segmentGroup } from '@/lib/ui'
 import { financeApi, usd, hoursText, dayLabel, todayET, mondayOf, addDays } from '@/lib/financeApi'
-import type { PayoutsPayload, PayRun, Rate } from '@/types/finance'
+import type { LedgerMonth, LedgerStatus, PayoutsPayload, PayRun, Rate } from '@/types/finance'
 import { card, ErrorCard, Spinner, StatusChip, tableHead, num } from './bits'
 
 type Tab = 'owed' | 'runs' | 'customs' | 'races' | 'rates'
@@ -36,56 +36,121 @@ export default function Payouts() {
   )
 }
 
+/** Where a line stands, as a chip: owed, on a run, approved, or paid on a date. */
+function LineStatus({ status, paidAt }: { status: LedgerStatus; paidAt?: string | null }) {
+  const tone: Record<LedgerStatus, string> = {
+    owed: 'bg-amber-50 border-amber-300 text-amber-800',
+    draft: 'bg-white border-border-gray text-off-black/65',
+    approved: 'bg-blue-50 border-blue-200 text-blue-800',
+    paid: 'bg-emerald-50 border-emerald-300 text-emerald-800',
+  }
+  const label: Record<LedgerStatus, string> = { owed: 'Owed', draft: 'On a run', approved: 'Approved', paid: 'Paid' }
+  const when = status === 'paid' && paidAt ? ` ${new Date(paidAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] font-semibold whitespace-nowrap ${tone[status]}`}>{label[status]}{when}</span>
+}
+
+const MONTH_TONE: Record<LedgerMonth['status'], [string, string]> = {
+  owed: ['Owed', 'text-amber-800'], on_run: ['On a run', 'text-off-black/60'], paid: ['All paid', 'text-emerald-700'], empty: ['Nothing yet', 'text-off-black/40'],
+}
+
+/**
+ * Owed, month by month like the Custom Counter: each month's customs, the
+ * designer fee and the hours whose week starts in it, with where each line
+ * stands. A month that is over can go on a run, or be marked paid in one go
+ * when it was paid outside the app.
+ */
 function Owed({ data, reload }: { data: PayoutsPayload; reload: () => Promise<void> }) {
   const today = todayET()
   const lastSunday = addDays(mondayOf(today), -1)
   const [start, setStart] = useState(addDays(lastSunday, -13))
   const [end, setEnd] = useState(lastSunday)
   const [busy, setBusy] = useState<string | null>(null)
-  const run = async (body: Record<string, unknown>, key: string) => {
+  const [paying, setPaying] = useState<LedgerMonth | null>(null)
+  const act = async (key: string, fn: () => Promise<string>) => {
     setBusy(key)
-    try { const r = await financeApi.payoutAction(body); toast.success(`Created "${r.label}" (${usd(r.totalCents)})`); await reload() } catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
+    try { toast.success(await fn()); await reload() } catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
   }
-  const o = data.owed
+  const createMonthRun = (m: LedgerMonth) => act(m.month, async () => {
+    const r = await financeApi.payoutAction({ action: 'create_run', kind: 'monthly', month: m.month })
+    return `Created "${r.label}" (${usd(r.totalCents)}). Approve and pay it under Pay runs.`
+  })
+  const markMonthPaid = (m: LedgerMonth, ref: string, at: string) => act(m.month, async () => {
+    const r = await financeApi.payoutAction({ action: 'create_run', kind: 'monthly', month: m.month })
+    await financeApi.payoutAction({ action: 'mark_paid', id: r.id, paidRef: ref, paidAt: at })
+    setPaying(null)
+    return `${m.label} marked paid (${usd(r.totalCents)})`
+  })
+  const hoursOwed = data.owed.hours.reduce((a, p) => a + p.amountCents, 0)
+  const ledger = data.ledger || []
   return (
-    <div className="space-y-4">
-      <div className={`${card} p-4`}>
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div><h3 className="text-sm font-semibold text-off-black">Hours</h3><p className="text-[11px] text-off-black/50">Approved weeks not on a run yet. Hourly people are paid every two weeks.</p></div>
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <input type="date" value={start} onChange={e => setStart(e.target.value)} className={`${inputBase} py-1`} /><span className="text-off-black/40">to</span><input type="date" value={end} onChange={e => setEnd(e.target.value)} className={`${inputBase} py-1`} />
-            <button onClick={() => run({ action: 'create_run', kind: 'hours', periodStart: start, periodEnd: end }, 'hours')} disabled={busy !== null || !o.hours.length} className={btnPrimary}><Plus className="w-3.5 h-3.5" /> Create hours run</button>
-          </div>
+    <div className="space-y-3">
+      <div className={`${card} p-4 flex flex-wrap items-center justify-between gap-2`}>
+        <div>
+          <p className="text-xs text-off-black/50">Owed in all</p>
+          <p className="text-2xl font-bold tabular-nums text-off-black leading-tight">{usd(data.owed.totalCents)}</p>
         </div>
-        {o.hours.length === 0 ? <p className="text-sm text-off-black/50">Nothing owed for hours.</p> : (
-          <table className="w-full text-xs">
-            <thead><tr className="border-b border-border-gray"><th className={`py-1.5 text-left ${tableHead}`}>Person</th><th className={`py-1.5 text-left ${tableHead}`}>Weeks</th><th className={`py-1.5 ${tableHead} ${num}`}>Hours</th><th className={`py-1.5 ${tableHead} ${num}`}>Owed</th></tr></thead>
-            <tbody>{o.hours.map(p => (
-              <tr key={p.userId} className="border-b border-border-gray/60 align-top">
-                <td className="py-1.5 font-medium">{p.name}</td>
-                <td className="py-1.5 text-off-black/70">{p.weeks.map(w => <div key={w.timesheetId}>{dayLabel(w.weekStart)}: {hoursText(w.minutes)} at {usd(w.rateCents)}/h</div>)}</td>
-                <td className={`py-1.5 ${num}`}>{hoursText(p.minutes)}</td><td className={`py-1.5 ${num} font-semibold`}>{usd(p.amountCents)}</td>
-              </tr>
-            ))}</tbody>
-          </table>
+        {data.owed.hours.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-off-black/60">Hours, {usd(hoursOwed)}:</span>
+            <input type="date" value={start} onChange={e => setStart(e.target.value)} className={`${inputBase} py-1`} /><span className="text-off-black/40">to</span><input type="date" value={end} onChange={e => setEnd(e.target.value)} className={`${inputBase} py-1`} />
+            <button onClick={() => act('hours', async () => { const r = await financeApi.payoutAction({ action: 'create_run', kind: 'hours', periodStart: start, periodEnd: end }); return `Created "${r.label}" (${usd(r.totalCents)})` })} disabled={busy !== null} className={btnPrimary}><Plus className="w-3.5 h-3.5" /> Create hours run</button>
+          </div>
         )}
       </div>
-      <div className={`${card} p-4`}>
-        <div className="mb-3"><h3 className="text-sm font-semibold text-off-black">Month end</h3><p className="text-[11px] text-off-black/50">Customs per designer (the Custom Counter) and the head designer's fee, for months that are over and not on a run yet.</p></div>
-        {o.months.length === 0 ? <p className="text-sm text-off-black/50">Every closed month is on a run.</p> : o.months.map(m => (
-          <div key={m.month} className="mb-3 last:mb-0">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm font-semibold">{m.label} <span className="font-normal text-off-black/50">· {usd(m.totalCents)}</span></span>
-              <button onClick={() => run({ action: 'create_run', kind: 'monthly', month: m.month }, m.month)} disabled={busy !== null} className={btnSecondary}><Plus className="w-3.5 h-3.5" /> Create {m.label.split(' ')[0]} run</button>
+
+      {ledger.map(m => {
+        const [mLabel, mTone] = MONTH_TONE[m.status]
+        return (
+          <div key={m.month} className={`${card} overflow-hidden`}>
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-border-gray">
+              <div className="min-w-0">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-off-black">{m.label}</span>
+                  <span className="text-sm tabular-nums text-off-black/60">{usd(m.totalCents)}</span>
+                  <span className={`text-xs font-medium ${mTone}`}>{m.inProgress ? 'In progress' : mLabel}</span>
+                </div>
+                <p className="text-[11px] text-off-black/45">
+                  {m.inProgress ? 'Customs and the designer fee are paid once the month is over.' : [m.owedCents ? `${usd(m.owedCents)} owed` : null, m.onRunCents ? `${usd(m.onRunCents)} on a run` : null, m.paidCents ? `${usd(m.paidCents)} paid` : null].filter(Boolean).join(' · ')}
+                </p>
+              </div>
+              {m.canCreateRun && (
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => setPaying(m)} disabled={busy !== null} className={btnGhost} title="It was paid outside the app: put it on a run and mark it paid">Mark paid</button>
+                  <button onClick={() => createMonthRun(m)} disabled={busy !== null} className={btnSecondary}><Plus className="w-3.5 h-3.5" /> Create run</button>
+                </div>
+              )}
             </div>
-            <table className="w-full text-xs"><tbody>{m.items.map(i => (
-              <tr key={i.sourceRef} className="border-b border-border-gray/60"><td className="py-1 font-medium w-32">{i.name}</td><td className="py-1 text-off-black/60 w-24">{KIND[i.kind]}</td><td className="py-1 text-off-black/70">{i.note}</td><td className={`py-1 ${num} font-semibold w-24`}>{usd(i.amountCents)}</td></tr>
-            ))}</tbody></table>
+            {m.items.length === 0 ? <p className="px-4 py-3 text-sm text-off-black/45">Nothing yet this month.</p> : (
+              <div className="divide-y divide-border-gray/60">
+                {m.items.map(i => (
+                  <div key={i.key} className="px-4 py-2 flex flex-wrap md:flex-nowrap items-center gap-x-3 gap-y-1 text-sm">
+                    <span className="font-medium text-off-black w-32 shrink-0">{i.name}</span>
+                    <span className="text-off-black/55 w-24 shrink-0 text-xs">{KIND[i.kind] || i.kind}</span>
+                    <span className="text-off-black/65 text-xs flex-1 min-w-[12rem]">{i.note}{i.run ? <span className="text-off-black/40"> · {i.run.label}</span> : null}</span>
+                    <span className="tabular-nums font-semibold text-off-black w-24 text-right ml-auto">{usd(i.amountCents)}</span>
+                    <span className="w-24 text-right"><LineStatus status={i.status} paidAt={i.paidAt} /></span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        ))}
-      </div>
-      <div className={`${card} p-4 flex items-center justify-between`}><span className="text-sm font-semibold">Owed in all</span><span className="text-lg font-semibold tabular-nums">{usd(o.totalCents)}</span></div>
+        )
+      })}
+      {paying && <MonthPaidModal month={paying} busy={busy === paying.month} onClose={() => setPaying(null)} onPay={(ref, at) => markMonthPaid(paying, ref, at)} />}
     </div>
+  )
+}
+
+function MonthPaidModal({ month, busy, onClose, onPay }: { month: LedgerMonth; busy: boolean; onClose: () => void; onPay: (ref: string, at: string) => void }) {
+  const [ref, setRef] = useState('')
+  const [at, setAt] = useState(todayET())
+  const owedItems = month.items.filter(i => i.status === 'owed' && i.kind !== 'hours')
+  return (
+    <ActionModal icon={DollarSign} title={`Mark ${month.label} paid`} sub={usd(owedItems.reduce((a, i) => a + i.amountCents, 0))} description={`For a month that was already paid outside the app: ${owedItems.map(i => `${i.name}, ${KIND[i.kind] || i.kind}`).join('; ')}. It goes on a run marked paid.`} onClose={onClose} busy={busy} size="sm"
+      footer={<><button onClick={onClose} className={modalCancel} disabled={busy}>Cancel</button><button onClick={() => onPay(ref, at)} disabled={busy} className={modalPrimary}>Mark paid</button></>}>
+      <input type="date" value={at} onChange={e => setAt(e.target.value)} className={modalInput} />
+      <input value={ref} onChange={e => setRef(e.target.value)} placeholder="How: Venmo, Wise, bank, a reference" className={modalInput} />
+    </ActionModal>
   )
 }
 

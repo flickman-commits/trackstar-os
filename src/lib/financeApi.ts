@@ -62,4 +62,4 @@ export const mondayOf = (d: string) => { const dow = parseDay(d).getUTCDay(); re
 export const shiftMonth = (month: string, by: number) => { const [y, m] = month.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + by, 1)); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}` }
 
 /** The chart series, in the validated order (dataviz reference palette, light). */
-export const SERIES = { cogs: '#2a78d6', adSpend: '#eb6834', designerFee: '#1baf7a', cm: '#eda100', revenue: '#121212', muted: '#9a9a9a' }
+export const SERIES = { cogs: '#2a78d6', adSpend: '#eb6834', designerFee: '#9b6fd0', cm: '#1baf7a', revenue: '#eda100', muted: '#9a9a9a' }

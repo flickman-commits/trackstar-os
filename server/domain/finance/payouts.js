@@ -63,7 +63,8 @@ export async function unpaidMonths({ today = todayET(), back = 3 } = {}) {
   const months = Array.from({ length: back }, (_, i) => shiftMonth(current, -(i + 1)))
   const refs = new Set((await prisma.payoutLine.findMany({ where: { sourceRef: { not: null } }, select: { sourceRef: true } })).map(l => l.sourceRef))
   const rules = await loadRules()
-  const heads = await prisma.user.findMany({ where: { isActive: true, role: 'head_designer' }, select: USER_SELECT })
+  // Any of their roles: a head designer may hold it as an extra role.
+  const heads = await prisma.user.findMany({ where: { isActive: true, OR: [{ role: 'head_designer' }, { extraRoles: { has: 'head_designer' } }] }, select: USER_SELECT })
   const out = []
   for (const month of months) {
     const items = []
@@ -85,9 +86,64 @@ export async function unpaidMonths({ today = todayET(), back = 3 } = {}) {
   return out
 }
 
+/**
+ * Payouts month by month, like the Custom Counter: for each month, every
+ * line that belongs to it with where it stands. A line is owed (not on a
+ * run yet), on a run (draft), approved, or paid (with the date). Customs and
+ * the designer fee belong to their month; hours to the month their week
+ * starts in; anything added to a monthly run (a bonus) to that run's month.
+ * The month in progress shows its hours only: customs and the fee are paid
+ * once it is over.
+ */
+export async function monthlyLedger({ back = 6, today = todayET() } = {}) {
+  const current = monthOf(today)
+  const months = [current, ...Array.from({ length: back }, (_, i) => shiftMonth(current, -(i + 1)))]
+  const oldest = `${months[months.length - 1]}-01`
+  const [owedMonths, weeks, lines, sheets] = await Promise.all([
+    unpaidMonths({ today, back }),
+    unpaidWeeks({ periodStart: oldest }),
+    prisma.payoutLine.findMany({ include: { payRun: { select: { id: true, label: true, status: true, kind: true, periodStart: true } }, user: { select: { id: true, firstName: true, lastName: true } } }, where: { payRun: { periodEnd: { gte: oldest } } } }),
+    prisma.timesheet.findMany({ where: { payoutLineId: { not: null }, weekStart: { gte: oldest } }, select: { payoutLineId: true, weekStart: true } }),
+  ])
+  const weekOfLine = new Map(sheets.map(t => [t.payoutLineId, t.weekStart]))
+  const monthOfLine = l => {
+    const m = /^(customs|fee):(\d{4}-\d{2}):/.exec(l.sourceRef || '')
+    if (m) return m[2]
+    if (weekOfLine.has(l.id)) return monthOf(weekOfLine.get(l.id))
+    return monthOf(l.payRun.periodStart)
+  }
+  const byMonth = new Map(months.map(m => [m, []]))
+  const statusOf = l => (l.paidAt || l.payRun.status === 'paid') ? 'paid' : l.payRun.status === 'approved' ? 'approved' : 'draft'
+  for (const l of lines) {
+    const m = monthOfLine(l)
+    if (!byMonth.has(m)) continue
+    byMonth.get(m).push({ key: l.id, userId: l.userId, name: name(l.user), kind: l.kind, note: l.note, amountCents: l.amountCents, status: statusOf(l), paidAt: l.paidAt || null, paidRef: l.paidRef || null, run: { id: l.payRun.id, label: l.payRun.label } })
+  }
+  for (const om of owedMonths) {
+    if (!byMonth.has(om.month)) continue
+    for (const it of om.items) byMonth.get(om.month).push({ key: it.sourceRef, userId: it.userId, name: it.name, kind: it.kind, note: it.note, amountCents: it.amountCents, status: 'owed', paidAt: null, paidRef: null, run: null })
+  }
+  for (const w of weeks) {
+    const m = monthOf(w.weekStart)
+    if (!byMonth.has(m)) continue
+    byMonth.get(m).push({ key: `timesheet:${w.timesheetId}`, userId: w.userId, name: w.name, kind: 'hours', note: `Week of ${dayLabel(w.weekStart)}: ${(w.minutes / 60).toFixed(1)}h at $${(w.rateCents / 100).toFixed(2)}/h`, amountCents: w.amountCents, status: 'owed', paidAt: null, paidRef: null, run: null })
+  }
+  const ORDER = { owed: 0, draft: 1, approved: 2, paid: 3 }
+  return months.map(month => {
+    const items = byMonth.get(month).sort((a, b) => ORDER[a.status] - ORDER[b.status] || a.name.localeCompare(b.name))
+    const sum = st => items.filter(i => st.includes(i.status)).reduce((a, i) => a + i.amountCents, 0)
+    const status = !items.length ? 'empty' : items.every(i => i.status === 'paid') ? 'paid' : items.some(i => i.status === 'owed') ? 'owed' : 'on_run'
+    return {
+      month, label: monthLabel(month), inProgress: month === current, items, status,
+      totalCents: sum(['owed', 'draft', 'approved', 'paid']), owedCents: sum(['owed']), onRunCents: sum(['draft', 'approved']), paidCents: sum(['paid']),
+      canCreateRun: month !== current && items.some(i => i.status === 'owed' && i.kind !== 'hours'),
+    }
+  }).filter(m => m.items.length || m.inProgress)
+}
+
 /** The Owed view: hours by person, months by designer, and the total. */
 export async function owed(opts = {}) {
-  const [weeks, months] = await Promise.all([unpaidWeeks(), unpaidMonths(opts)])
+  const [weeks, months] = await Promise.all([unpaidWeeks(), unpaidMonths({ back: 6, ...opts })])
   const byPerson = new Map()
   for (const w of weeks) {
     const p = byPerson.get(w.userId) || { userId: w.userId, name: w.name, weeks: [], minutes: 0, amountCents: 0 }
