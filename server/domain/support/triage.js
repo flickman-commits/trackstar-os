@@ -161,7 +161,9 @@ const whoOf = t => slackText(t.customerName || t.customerEmail || (t.igUsername 
  * The cron: triage, then say so in #trackstar-reports: that it ran, how many
  * it read and how many it marked urgent, by kind. Once the 'support'
  * destination has a channel (server/lib/slack.js), the support team also
- * gets every starred open conversation there, where to start.
+ * gets a short summary there: how many are open, how many urgent, and the
+ * three oldest urgent ones to start with. Why each is urgent is a note in
+ * the conversation, not in Slack.
  */
 export async function scheduledTriage() {
   const out = await triagePending()
@@ -186,9 +188,16 @@ export async function scheduledTriage() {
   ].filter(Boolean).join('\n')
   await slackTo('reports', report, { or: 'matt' })
 
-  if (starred.length) {
-    const lines = starred.slice(0, 40).map(t => `• ${link(t)}: ${slackText(t.priorityReason || t.subject || 'Marked priority', 200)}`)
-    await slackTo('support', `:rotating_light: *Start with these ${starred.length}* (Support, sort Priority first):\n${lines.join('\n')}${starred.length > 40 ? `\n…and ${starred.length - 40} more.` : ''}`)
-  }
+  // The support team's summary: how many are open, how many are urgent, and the three to start with.
+  const open = await prisma.supportThread.count({ where: { status: 'open', filtered: false, mergedIntoId: null } })
+  const hour = Number(new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' }))
+  const greeting = hour < 12 ? 'Good morning' : 'Good afternoon'
+  const summary = [
+    `${greeting}. *${open}* open conversation${open === 1 ? '' : 's'}, *${starred.length}* urgent.`,
+    starred.length ? `Start with ${starred.length === 1 ? 'this one' : `these ${Math.min(3, starred.length)}`}:` : 'Nothing urgent. Work the inbox oldest first.',
+    ...starred.slice(0, 3).map(t => `• ${link(t)}`),
+    starred.length > 3 ? `The rest are in <${base}/support|Support>, sorted Priority first.` : null,
+  ].filter(Boolean).join('\n')
+  await slackTo('support', summary)
   return out
 }
