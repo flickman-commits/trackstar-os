@@ -16,6 +16,7 @@
  *   POST { id, action: 'linkOrder', number }    attach an order to this customer by its number, for when they
  *                                               wrote in from a different email than they ordered under
  *   POST { id, action: 'unlinkOrder', number }
+ *   POST { id, action: 'mockups', orderIds }    the newest mockups for these order rows (Refresh beside Attach mockup)
  *
  * Every change leaves an event in the thread and a line in the audit log.
  */
@@ -24,6 +25,7 @@ import { setCors } from '../_lib/auth.js'
 import { requireCapability, recordAudit } from '../_lib/users.js'
 import { getThread, assign, setStatus, snooze, setPriority, setTags, addNote, deleteNote, markRead, markUnread, noteRow, setProposal, linkOrder, unlinkOrder } from '../../server/domain/support/threads.js'
 import { draftThread } from '../../server/domain/support/draft.js'
+import { listMockups } from '../../server/domain/support/mockups.js'
 import { mergeThreads } from '../../server/domain/support/merge.js'
 import { publicMessage, publicStatus, isUserError } from '../../server/domain/support/errors.js'
 
@@ -48,6 +50,11 @@ export default async function handler(req, res) {
     const audit = (summary, detail) => recordAudit({ action: `support.${body.action}`, summary, detail: { threadId: id, ...detail }, actor: user })
 
     switch (body.action) {
+      // Here, not its own function: the build packages every api/ file separately, and 128 ran it out of memory (2026-11-05).
+      case 'mockups': {
+        const ids = (Array.isArray(body.orderIds) ? body.orderIds : []).map(String).filter(Boolean).slice(0, 20)
+        return res.status(200).json({ mockups: ids.length ? await listMockups(ids) : [] })
+      }
       case 'assign': {
         const t = await assign(id, body.assigneeId ? String(body.assigneeId) : null, user)
         await audit(`Assigned "${t.subject}" to ${t.assignee ? t.assignee.firstName : 'nobody'}`, { assigneeId: t.assignee?.id || null })

@@ -748,7 +748,7 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
     setRefreshing(true)
     try {
       const ids = [...new Set(o.items.map(it => it.orderId).filter(Boolean))] as string[]
-      const out = await supportApi.mockups(ids)
+      const out = await supportApi.mockups(thread.id, ids)
       setFresh(out.mockups)
       setPicking(false)
       toast.success(out.mockups.length ? `Newest: ${out.mockups.map(m => m.label).join(', ')}` : 'No finished design on this order yet')
