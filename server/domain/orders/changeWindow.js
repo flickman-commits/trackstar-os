@@ -7,7 +7,8 @@
  */
 import crypto from 'crypto'
 
-export const CHANGE_WINDOW_HOURS = 24
+// 48 since 2026-11-05 (Matt): the customer has two days to ask for a change before the print is made.
+export const CHANGE_WINDOW_HOURS = 48
 const HOUR = 3600_000
 
 /** When the customer placed the order: Shopify's created_at, else when we imported it. */

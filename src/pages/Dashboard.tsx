@@ -212,7 +212,7 @@ export default function Dashboard() {
   // The race and queue filters live in the address (?race=...&queue=review),
   // so a reload or a shared link keeps the view. Changing one replaces the
   // history entry; the back button is for orders, not filter clicks.
-  type StageFilter = '' | 'review' | 'attach' | 'action' | 'waiting' | 'not_run' | 'late'
+  type StageFilter = '' | 'review' | 'hold' | 'attach' | 'action' | 'waiting' | 'not_run' | 'late'
   const setUrlParam = useCallback((key: string, value: string) => {
     setSearchParams(prev => { const next = new URLSearchParams(prev); if (value) next.set(key, value); else next.delete(key); return next }, { replace: true })
   }, [setSearchParams])
@@ -221,7 +221,7 @@ export default function Dashboard() {
   const [customStatus, setCustomStatus] = useState<string>('')
   const setRaceFilter = useCallback((v: string) => setUrlParam('race', v), [setUrlParam])
   // Standard orders: the queue to work. '' is everything open.
-  const stageFilter: StageFilter = (['review', 'attach', 'action', 'waiting', 'not_run', 'late'] as const).find(k => k === searchParams.get('queue')) || ''
+  const stageFilter: StageFilter = (['review', 'hold', 'attach', 'action', 'waiting', 'not_run', 'late'] as const).find(k => k === searchParams.get('queue')) || ''
   const setStageFilter = useCallback((v: StageFilter) => setUrlParam('queue', v), [setUrlParam])
   // Custom orders: open ones by due date (the default), or every custom order, completed too.
   const customAll = searchParams.get('show') === 'all'
@@ -451,7 +451,9 @@ export default function Dashboard() {
       ? { stage: 'action', reason: 'Design rejected', kind: 'data', fix: `The design was rejected: ${note || 'no note'}. Fix the data; a new design renders on the next import.` }
       : review !== 'approved' ? undefined
       : send === 'sent' ? { stage: 'done', reason: 'Completed' }
+      : send === 'queued' && design.job?.send?.inHold ? { stage: 'hold', reason: 'In hold', fix: 'Approved. It waits out the customer\'s 48-hour window to ask for a change, then goes to Artelo production on its own.' }
       : send === 'queued' ? { stage: 'attach', reason: 'Sending to production', fix: 'Approved. It is attached in Artelo and sent to production in a few minutes, unless someone holds it.' }
+      : send === 'support' ? { stage: 'hold', reason: 'Support conversation open', threadId: design.job?.send?.threadId || null, fix: 'Approved, and held from production while a Support conversation with the customer is open. Closing the conversation releases it within 15 minutes. Send anyway sends it now.' }
       : send === 'held' ? { stage: 'attach', reason: 'Held', fix: 'Approved, and held from production. Send it to production when it is ready, or attach it in Artelo by hand.' }
       : send === 'waiting' ? { stage: 'attach', reason: 'Uploaded, waiting on other prints', fix: 'Attached to its item in Artelo. The Artelo order goes to production once every print on it has its design. Mark it complete if the rest is handled in Artelo.' }
       : send === 'manual' ? { stage: 'action', reason: 'Expedited shipping', kind: 'artelo', fix: 'Manually attach and add expedited shipping to this order in Artelo, then mark it complete.' }
@@ -929,12 +931,13 @@ export default function Dashboard() {
   }, [fulfillable])
 
   const stageCounts = useMemo(() => {
-    const c = { review: 0, attach: 0, action: 0, waiting: 0, notRun: 0 }
+    const c = { review: 0, hold: 0, attach: 0, action: 0, waiting: 0, notRun: 0 }
     if (activeView !== 'standard') return c
     for (const o of ordersToFulfill) {
       const s = o.pipeline?.stage
       if (isNotRun(o)) c.notRun++
       else if (s === 'review') c.review++
+      else if (s === 'hold') c.hold++
       else if (s === 'attach') c.attach++
       else if (s === 'action') c.action++
       // Waiting holds both kinds: on something outside (a race, a worker) and on a customer's reply.
@@ -1161,7 +1164,7 @@ export default function Dashboard() {
         <div>
           <div className="hidden md:block text-[10px] font-semibold uppercase tracking-wider text-off-black/40 mb-1">Queue</div>
           <div className="flex md:inline-flex w-full md:w-auto rounded-md border border-border-gray bg-subtle-gray p-0.5">
-            {([['', 'All', fulfillable.length], ['review', 'Review', stageCounts.review], ['attach', 'Attach', stageCounts.attach], ['action', 'Action', stageCounts.action], ['waiting', 'Waiting', stageCounts.waiting]] as const).map(([key, label, n]) => (
+            {([['', 'All', fulfillable.length], ['review', 'Review', stageCounts.review], ['hold', 'In hold', stageCounts.hold], ['attach', 'Attach', stageCounts.attach], ['action', 'Action', stageCounts.action], ['waiting', 'Waiting', stageCounts.waiting]] as const).map(([key, label, n]) => (
               <button
                 key={key || 'all'}
                 onClick={() => setStageFilter(key)}

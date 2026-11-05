@@ -14,6 +14,7 @@
  * leaves its reason as a note from Claude in the timeline, and the
  * run's list goes to Slack. api/cron/support-triage.js runs it.
  */
+import { SUPPORT_OPEN } from './holdsPrint.js'
 import prisma from '../../db.js'
 import { complete, isLlmConfigured } from '../../lib/llm.js'
 import { slackTo, slackText } from '../../lib/slack.js'
@@ -215,11 +216,14 @@ export async function scheduledTriage({ retryOnly = false } = {}) {
   const link = t => `<${base}/support?thread=${encodeURIComponent(t.id)}|${whoOf(t)}>`
   const when = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
+  // Approved prints the sender is holding because a conversation is open (support/holdsPrint.js).
+  const heldBySupport = await prisma.renderJob.count({ where: { review: 'approved', arteloSentAt: null, sendHeldAt: null, sendError: { startsWith: SUPPORT_OPEN } } }).catch(() => 0)
   // Short: that it ran and the counts. Who and why are in Support and in each conversation's note.
   const report = [
     `_Support Triage_ · ${when} ET`,
     `Read ${out.read} new conversation${out.read === 1 ? '' : 's'}, marked *${out.starred} urgent*. ${starred.length} urgent open in <${base}/support|Support>.${out.left ? ` ${out.left} wait for the next pass.` : ''}${out.failed ? ` *${out.failed} could not be read* (${slackText(out.firstError || 'unknown error', 160)}); it tries them again within the hour.` : ''}`,
     `Cost ${costLine(out.usage)}.`,
+    ...(heldBySupport ? [`${heldBySupport} approved print${heldBySupport === 1 ? ' is' : 's are'} held from production by an open conversation; closing it sends the print.`] : []),
   ].join('\n')
   await slackTo('reports', report, { or: 'matt' })
 

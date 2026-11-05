@@ -129,6 +129,8 @@ function needsConfirm() {
 function rememberConfirm() { try { localStorage.setItem(confirmKey(), '1') } catch { /* asks again next visit */ } }
 
 const clock = (t?: string | null) => t ? new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
+// "Thu 3:15 PM": a print in hold goes up to two days out.
+const dayClock = (t?: string | null) => t ? new Date(t).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : ''
 
 /** An approved print on its way to production: queued (Hold), waiting on the order's other prints, or sent. */
 function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; onComplete?: () => void }) {
@@ -140,10 +142,10 @@ function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; o
       {s.state === 'sent' ? <Check className="w-5 h-5 text-green-700 shrink-0" /> : <Send className="w-5 h-5 text-[#4600D6] shrink-0" />}
       <div className="flex-1 min-w-0">
         <p className={`font-semibold ${s.state === 'sent' ? 'text-green-800' : 'text-[#4600D6]'}`}>
-          {s.state === 'sent' ? `Sent to production ${clock(s.at)}` : s.state === 'waiting' ? 'Uploaded, waiting on other prints' : `Sending to production at ${clock(s.at)}`}
+          {s.state === 'sent' ? `Sent to production ${clock(s.at)}` : s.state === 'waiting' ? 'Uploaded, waiting on other prints' : s.inHold ? `In hold until ${dayClock(s.at)}` : `Sending to production at ${clock(s.at)}`}
         </p>
         <p className="text-xs text-off-black/60">
-          {s.state === 'sent' ? 'Artelo has it as Received.' : s.state === 'waiting' ? 'Attached to its item in Artelo. The order goes to production once every print on it has its design.' : 'Attached to the Artelo order and sent. Hold it if something is wrong.'}
+          {s.state === 'sent' ? 'Artelo has it as Received.' : s.state === 'waiting' ? 'Attached to its item in Artelo. The order goes to production once every print on it has its design.' : s.inHold ? 'The customer has 48 hours from ordering to ask for a change. It goes to Artelo on its own after that, unless a Support conversation about it is open.' : 'Attached to the Artelo order and sent. Hold it if something is wrong.'}
         </p>
       </div>
       {/* Send right away: skip the rest of the hold; the sender takes it within a minute. */}
@@ -232,6 +234,7 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
   // Attach stays, because a click is not proof the attaching got done.
   if (d.visible && job?.status === 'done' && job.review === 'approved' && arteloOrderUrl) {
     const held = job.send?.state === 'held'
+    const talking = job.send?.state === 'support'
     // Expedited: the API only sends Standard shipping, so this one is attached by hand.
     const manual = job.send?.state === 'manual'
     return (
@@ -245,8 +248,15 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
       {d.canManage && d.autoSend && !manual && (
         <>
           {held && <p className="text-xs text-amber-700">Held{job.send?.by ? ` by ${job.send.by}` : ''} {clock(job.send?.at)}. It stays approved until someone sends it.</p>}
+          {talking && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] leading-snug text-amber-900">
+              <span className="font-semibold mr-1.5">Support conversation open.</span>
+              Held from production in case the customer is asking for a change. Closing the conversation releases it within 15 minutes.
+              {job.send?.threadId && <> <a href={`/support?thread=${encodeURIComponent(job.send.threadId)}`} className="underline font-semibold">Open the conversation</a></>}
+            </div>
+          )}
           <button onClick={() => { void d.sendAction('send-now') }} disabled={d.busy} className={`w-full inline-flex items-center justify-center gap-2 ${pad} rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors`}>
-            {d.busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} {job.send?.state === 'blocked' ? 'Try sending again' : 'Send to production'}
+            {d.busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} {job.send?.state === 'blocked' ? 'Try sending again' : talking ? 'Send anyway' : 'Send to production'}
           </button>
         </>
       )}

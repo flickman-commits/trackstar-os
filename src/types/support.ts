@@ -194,6 +194,8 @@ export interface ThreadDetail extends ThreadRow {
   pastThreads: PastThread[]
   /** Order numbers the customer wrote that are real orders and not in the panel yet. */
   suggestedOrders?: { number: string; orderedAt: string; items: { race: string; year: number | null; runner: string | null }[] }[]
+  /** Prints waiting out the 48-hour change window, or held by an open conversation (server/domain/support/holdsPrint.js). */
+  printHolds?: { number: string; runner: string | null; state: 'hold' | 'support'; until?: string; threadId?: string | null }[]
 }
 
 export interface Macro { id: string; name: string; shortcut: string | null; body: string; uses: number; updatedAt: string; createdBy: { id: string; firstName: string } | null }

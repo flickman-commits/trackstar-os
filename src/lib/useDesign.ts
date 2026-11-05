@@ -11,7 +11,7 @@ export type Job = {
   deliveredAt: string | null; deliveredPath: string | null; deliveryError: string | null
   arteloUploadedAt: string | null; arteloUrl: string | null; arteloError: string | null
   // On its way to Artelo production (server/domain/render/arteloSend.js); null when approved without sending.
-  send: { state: 'queued' | 'held' | 'waiting' | 'blocked' | 'manual' | 'sent'; at?: string | null; by?: string | null; reason?: string; next?: string | null } | null
+  send: { state: 'queued' | 'held' | 'support' | 'waiting' | 'blocked' | 'manual' | 'sent'; at?: string | null; by?: string | null; reason?: string; next?: string | null; inHold?: boolean; threadId?: string | null } | null
   output: { trimIn: string | null; bleedIn: { left: number; right: number; top: number; bottom: number } | null; color: 'CMYK' | 'RGB' | 'mixed' | null } | null
   pdfUrl: string | null; previewUrl: string | null
 }

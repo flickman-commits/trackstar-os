@@ -111,6 +111,8 @@ export const formatOrderPlacedAt = (dateStr?: string | null): string | null => {
 /** Colors per pipeline stage, for StatusPill. */
 export const STAGE_TONE = {
   review: { dot: 'bg-green-500', color: 'text-green-700', bg: 'bg-green-50' },
+  // Approved and waiting out the 48-hour change window (or an open Support conversation): nothing to do.
+  hold: { dot: 'bg-amber-500', color: 'text-amber-800', bg: 'bg-amber-50' },
   attach: { dot: 'bg-[#4600D6]', color: 'text-[#4600D6]', bg: 'bg-[#4600D6]/[0.06]' },
   action: { dot: 'bg-red-500', color: 'text-red-700', bg: 'bg-red-50' },
   needs_research: { dot: 'bg-off-black/30', color: 'text-off-black/60', bg: 'bg-off-black/5' },

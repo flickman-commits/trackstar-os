@@ -307,7 +307,7 @@ export const orderTools = [
         r.count++
         r.orders.push(n)
       }
-      const ORDER = ['review', 'attach', 'action', 'needs_research', 'waiting', 'done']
+      const ORDER = ['review', 'hold', 'attach', 'action', 'needs_research', 'waiting', 'done']
       return {
         open: rows.length,
         stages: ORDER.filter(s => stages[s]).map(s => ({

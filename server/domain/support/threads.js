@@ -9,6 +9,7 @@
  * Closed, and one per teammate. Unread is per person: bold until you have
  * opened the thread since the customer last wrote.
  */
+import { printHolds } from './holdsPrint.js'
 import { alignTracking } from '../../lib/tracking.js'
 import prisma from '../../db.js'
 import { shopifyGraphQL } from '../../services/shopifyAuth.js'
@@ -215,6 +216,8 @@ export async function getThread(id, { userId, money = false } = {}) {
     },
     context: money ? context : withoutSpend(context),
     suggestedOrders: await mentionedOrders(t, context),
+    // Prints waiting on the change window or on this conversation (support/holdsPrint.js).
+    printHolds: await printHolds(context.orders.map(x => x.number)).catch(() => []),
     pastThreads,
   }
 }

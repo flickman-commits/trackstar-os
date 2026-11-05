@@ -114,7 +114,7 @@ export interface Order {
   // Scraper availability
   hasScraperAvailable?: boolean
   // One status from everything the server knows (server/domain/orders/pipeline.js).
-  pipeline?: { stage: 'review' | 'attach' | 'action' | 'needs_research' | 'waiting' | 'done'; reason: string; kind?: 'data' | 'setup' | 'render' | 'artelo'; fix?: string }
+  pipeline?: { stage: 'review' | 'hold' | 'attach' | 'action' | 'needs_research' | 'waiting' | 'done'; reason: string; kind?: 'data' | 'setup' | 'render' | 'artelo'; fix?: string; threadId?: string | null }
   // Override fields
   yearOverride?: number | null
   raceNameOverride?: string | null

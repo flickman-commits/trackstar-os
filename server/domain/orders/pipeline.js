@@ -6,6 +6,9 @@
  *
  * Five stages, in the order a person cares about them:
  *   review          a design is waiting for a yes or no
+ *   hold            approved, in hold: waiting out the customer's 48-hour change window
+ *                   (orders/changeWindow.js), or held by an open Support conversation
+ *                   (support/holdsPrint.js). Nothing to do; it goes on its own.
  *   attach          approved: on its way to Artelo production (arteloSend.js), held, or approved
  *                   without sending, for a person to send or attach by hand. One Artelo would
  *                   not take is under action, with Artelo's reason.
@@ -47,9 +50,16 @@ function raceRun(race, year) {
  * @param {boolean} p.workerOnline
  * @param {Date|string|null} [p.waitingOnCustomer] since when Support has been waiting on this customer's reply
  */
+/** "Thu 3:15 PM", Eastern: when a print in hold goes. */
+export function holdUntil(at) {
+  return new Date(at).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', hour: 'numeric', minute: '2-digit' })
+}
+
 /** An approved print: where it is on the way to production (server/domain/render/sendState.js). */
 function approvedStage(render, stage) {
   const s = sendStateOf({ ...render, review: 'approved' })
+  if (s?.state === 'support') return stage('hold', 'Support conversation open', { threadId: s.threadId || null, fix: `Approved, and held from production while a Support conversation with ${s.reason.replace(/^Support conversation open with /, '') || 'the customer'} is open, in case they are asking for a change. Closing the conversation releases it within 15 minutes. Send anyway sends it now.` })
+  if (s?.state === 'queued' && s.inHold) return stage('hold', `In hold until ${holdUntil(s.at)}`, { fix: `Approved. It waits out the customer's 48-hour window to ask for a change, then goes to Artelo production on its own at ${holdUntil(s.at)} ET, unless a Support conversation about it is open then. Send right away skips the wait; Hold keeps it back.` })
   if (s?.state === 'held') return stage('attach', 'Held', { fix: `Approved, and held from production${s.by ? ` by ${s.by}` : ''}. Send it to production when it is ready, or attach it in Artelo by hand.` })
   if (s?.state === 'waiting') return stage('attach', 'Uploaded, waiting on other prints', { fix: 'Attached to its item in Artelo. The Artelo order goes to production once every print on it has its design. Mark it complete if the rest is handled in Artelo.' })
   if (s?.state === 'manual') return stage('action', 'Expedited shipping', { kind: 'artelo', fix: 'Manually attach and add expedited shipping to this order in Artelo, then mark it complete.' })

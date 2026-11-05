@@ -503,6 +503,18 @@ export default function Details({ thread, tagSuggestions, onOpenThread, onMerge,
               : <div className="space-y-3">{thread.context.orders.map(o => (
                   <OrderCard key={`${o.source}-${o.number}`} o={o} onUnlink={o.linked ? () => unlinkOrder(thread.id, o.number, onChanged) : undefined} />
                 ))}</div>}
+            {(thread.printHolds || []).length > 0 && (
+              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-900 space-y-1">
+                {(thread.printHolds || []).map(h => (
+                  <div key={h.number}>
+                    <span className="font-semibold">#{h.number}{h.runner ? ` (${h.runner})` : ''}:</span>{' '}
+                    {h.state === 'support'
+                      ? (h.threadId === thread.id ? 'held from production while this conversation is open. Close it once their change is made, and the print goes within 15 minutes.' : 'held from production by another open conversation with this customer.')
+                      : `in its 48-hour change window. It goes to production ${new Date(h.until || '').toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}, or later if a conversation about it is still open then.`}
+                  </div>
+                ))}
+              </div>
+            )}
             {(thread.suggestedOrders || []).length > 0 && (
               <div className="mt-3 space-y-1.5">
                 <div className="text-[11px] font-semibold text-off-black/45 uppercase tracking-wider">Mentioned in the conversation</div>

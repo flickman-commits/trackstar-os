@@ -41,6 +41,7 @@ import { arteloOrderUrl } from '../../lib/links.js'
 import { sendStateOf, WAITING, EXPEDITED } from './sendState.js'
 import { isExpeditedShipping } from '../../lib/shipping.js'
 import { windowEndsAt } from '../orders/changeWindow.js'
+import { openConversationFor, supportOpenError, sentAnywayAt, sentAnywayMark } from '../support/holdsPrint.js'
 
 export const SEND_TYPES = ['standard', 'custom']
 const OFF_KEY = 'artelo_auto_send_off'
@@ -147,7 +148,9 @@ export async function sendNow({ orderId, actor }) {
   if (!job) throw new SendError('This order has no approved print')
   if (job.arteloSentAt) throw new SendError('This order was already sent to production')
   const now = new Date()
-  const out = await prisma.renderJob.update({ where: { id: job.id }, data: { sendAfter: now, sendHeldAt: null, sendHeldBy: null, sendError: null, arteloAttachedAt: null } })
+  // A person's Send now also overrides an open Support conversation (support/holdsPrint.js),
+  // until the customer writes again.
+  const out = await prisma.renderJob.update({ where: { id: job.id }, data: { sendAfter: now, sendHeldAt: null, sendHeldBy: sentAnywayMark(personName(actor), now), sendError: null, arteloAttachedAt: null } })
   await recordAudit({ action: 'artelo.send_now', summary: `Sent ${describeOrder(order)} to production (Send now)`, detail: { jobId: job.id, orderId: order.id, orderNumber: order.orderNumber }, actor })
   const claimed = await prisma.renderJob.updateMany({ where: { id: job.id, sendAfter: now, sendHeldAt: null, arteloSentAt: null }, data: { sendAfter: new Date(Date.now() + 3 * MIN) } })
   if (claimed.count) await sendOne(out)
@@ -162,7 +165,7 @@ export const sendState = sendStateOf
 const ORDER_SELECT = {
   id: true, orderNumber: true, parentOrderNumber: true, lineItemIndex: true, status: true, trackstarOrderType: true,
   runnerName: true, raceName: true, raceYear: true, productSize: true, photoPath: true, photoAddedManually: true, photoFree: true,
-  shopifyOrderData: true, arteloOrderData: true, designStatus: true,
+  shopifyOrderData: true, arteloOrderData: true, designStatus: true, customerEmail: true, createdAt: true,
 }
 
 /** "x12x18" and "12x18" and "18x12" are the same print. */
@@ -237,6 +240,11 @@ export async function sendOne(job) {
     const newest = await sendableJob(order.id)
     if (newest && newest.id !== job.id) return outcome(job, {})
     if (order.status === 'completed') return outcome(job, { error: 'The order was marked done by hand, so it was not sent' })
+
+    // An open Support conversation about this order holds it (support/holdsPrint.js).
+    // Looked at again every 15 minutes, so closing the conversation releases it.
+    const talking = await openConversationFor(order, { after: sentAnywayAt(job) })
+    if (talking) return outcome(job, { error: supportOpenError(talking), retryIn: 15 })
 
     // A photo added after purchase is printed only once it is paid for.
     if (order.photoAddedManually) {
