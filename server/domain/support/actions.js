@@ -350,30 +350,47 @@ export async function refund({ thread, shopifyOrderId, cents, reason, actor }) {
 export async function cancelOrder({ thread, shopifyOrderId, reason, customerConfirmed, actor }) {
   if (!customerConfirmed) throw new UserError('Only after the customer says yes to cancelling. Ask them first.')
   const why = String(reason || '').trim() || 'Customer asked to cancel'
+  const o = await cancellable(shopifyOrderId)
+  guardLimit(o.availableCents, actor, { alreadyCents: o.refundedCents })
+  const out = await cancelAndRefund({ order: o, why, by: `support: ${why}`, actor })
+  await event(thread.id, `${actorName(actor)} cancelled #${o.name} and refunded ${money(o.availableCents)}: ${why}. Artelo still needs cancelling.`, actor)
+  return out
+}
+
+/** The Shopify order, or why it cannot be cancelled (already cancelled, shipped, in production). */
+export async function cancellable(shopifyOrderId) {
   const o = await refundable(shopifyOrderId)
   if (o.cancelled) throw new UserError(`#${o.name} is already cancelled in Shopify.`)
   if (o.fulfillment === 'FULFILLED' || o.fulfillment === 'PARTIALLY_FULFILLED') throw new UserError(`#${o.name} has shipped. It cannot be cancelled; a refund is Matt's call.`)
-
   const rows = await prisma.order.findMany({ where: { source: 'shopify', parentOrderNumber: o.id }, select: { id: true, status: true, designStatus: true, trackingNumber: true, arteloOrderData: true } })
   const produced = rows.find(r => r.status === 'completed' || r.designStatus === 'sent_to_production' || r.trackingNumber)
   if (produced) throw new UserError(`#${o.name} has gone to production. Too late to cancel; see the playbook's "too late" reply.`)
-  guardLimit(o.availableCents, actor, { alreadyCents: o.refundedCents })
+  if (await prisma.renderJob.findFirst({ where: { order: { source: 'shopify', parentOrderNumber: o.id }, arteloSentAt: { not: null } }, select: { id: true } })) throw new UserError(`#${o.name} has gone to production. Too late to cancel; see the playbook's "too late" reply.`)
+  return { ...o, rows }
+}
 
-  // One call: cancel, and refund what was paid to the original payment. No
-  // Shopify email; the reply says it. Shopify runs this as a job; wait a few
-  // seconds for it so the rep hears the truth, not just "accepted".
-  const data = await shopifyGraphQL(ORDER_CANCEL, { orderId: o.gid, staffNote: `Support: ${why}`.slice(0, 255) })
+/**
+ * Cancel in Shopify and refund what was paid to the original payment, in one
+ * call, then close our rows with a note. Shared by Support (cancelOrder, after
+ * its own checks) and the customer's own Manage your order page
+ * (orders/selfServeOrder.js). No Shopify email; the caller says it. Shopify
+ * runs the cancel as a job; this waits a few seconds for it so the caller
+ * hears the truth, not just "accepted". Artelo has no cancel API: the note
+ * says it still needs cancelling there.
+ */
+export async function cancelAndRefund({ order: o, why, by, actor = null }) {
+  const data = await shopifyGraphQL(ORDER_CANCEL, { orderId: o.gid, staffNote: String(by || why).slice(0, 255) })
   const errs = data?.orderCancel?.orderCancelUserErrors?.length ? data.orderCancel.orderCancelUserErrors : data?.orderCancel?.userErrors || []
   if (errs.length) throw new UserError(`Shopify would not cancel #${o.name}: ${errs.map(e => e.message).join('; ')}`)
   const cancelled = await waitForCancel(o.id)
   if (!cancelled) throw new UserError(`Shopify accepted the cancel for #${o.name} but has not finished it yet. Check the order in Shopify in a minute before trying again.`)
 
-  const note = `Cancelled and refunded ${money(o.availableCents)} by support: ${why}. Cancel it in Artelo too.`
+  const rows = o.rows || []
+  const note = `Cancelled and refunded ${money(o.availableCents)} ${actor ? 'by support' : 'by the customer from Manage your order'}: ${why}. Cancel it in Artelo too.`
   if (rows.length) {
     await prisma.order.updateMany({ where: { id: { in: rows.map(r => r.id) } }, data: { status: 'completed' } })
-    await prisma.orderComment.createMany({ data: rows.map(r => ({ orderId: r.id, text: note, authorId: actor?.id || null, authorName: actorName(actor) })) })
+    await prisma.orderComment.createMany({ data: rows.map(r => ({ orderId: r.id, text: note, authorId: actor?.id || null, authorName: actor ? actorName(actor) : 'Customer' })) })
   }
-  await event(thread.id, `${actorName(actor)} cancelled #${o.name} and refunded ${money(o.availableCents)}: ${why}. Artelo still needs cancelling.`, actor)
   return { number: o.name, cents: o.availableCents, display: money(o.availableCents), arteloUrl: arteloOrderUrl(rows[0]?.arteloOrderData?.id) || null }
 }
 

@@ -29,7 +29,7 @@ const ApprovalPortal = lazyPage(() => import('@/pages/ApprovalPortal'))
 const BulkIntake = lazyPage(() => import('@/pages/BulkIntake'))
 const RunnerClaim = lazyPage(() => import('@/pages/RunnerClaim'))
 const PhotoLater = lazyPage(() => import('@/pages/PhotoLater'))
-const UpdateAddress = lazyPage(() => import('@/pages/UpdateAddress'))
+const ManageOrder = lazyPage(() => import('@/pages/ManageOrder'))
 const SurveyVote = lazyPage(() => import('@/pages/SurveyVote'))
 const DesignSurveys = lazyPage(() => import('@/pages/DesignSurveys'))
 const CreatorsHome = lazyPage(() => import('@/pages/CreatorsHome'))
@@ -266,7 +266,9 @@ export default function App() {
           {/* A pre-order customer adding the photo they chose to send after the race. */}
           <Route path="/photo/:token" element={<PhotoLater />} />
           {/* The customer fixing their own shipping address from the order confirmation link. */}
-          <Route path="/ship/:order/:sig" element={<UpdateAddress />} />
+          {/* Manage your order, from the confirmation email: name, time, frame, address, cancel. /ship is the older address-only link; same page. */}
+          <Route path="/order/:order/:sig" element={<ManageOrder />} />
+          <Route path="/ship/:order/:sig" element={<ManageOrder />} />
           {/* Design Survey: the community votes on new designs from a story link. */}
           <Route path="/vote/:token" element={<SurveyVote />} />
           <Route path="/creator/:token" element={<CreatorPortal />} />

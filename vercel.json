@@ -126,6 +126,9 @@
     "api/public/results-lookup.js": {
       "maxDuration": 300
     },
+    "api/public/*.js": {
+      "maxDuration": 60
+    },
     "api/auth/**/*.js": {
       "maxDuration": 60
     },
@@ -184,36 +187,6 @@
       "maxDuration": 60
     },
     "api/orders/update.js": {
-      "maxDuration": 60
-    },
-    "api/public/approval-preview.js": {
-      "maxDuration": 60
-    },
-    "api/public/bulk-intake.js": {
-      "maxDuration": 60
-    },
-    "api/public/creator-preview.js": {
-      "maxDuration": 60
-    },
-    "api/public/creator.js": {
-      "maxDuration": 60
-    },
-    "api/public/monopoly.js": {
-      "maxDuration": 60
-    },
-    "api/public/photo-upload-url.js": {
-      "maxDuration": 60
-    },
-    "api/public/photo-verify.js": {
-      "maxDuration": 60
-    },
-    "api/public/race-status.js": {
-      "maxDuration": 60
-    },
-    "api/public/survey-preview.js": {
-      "maxDuration": 60
-    },
-    "api/public/survey.js": {
       "maxDuration": 60
     },
     "api/races/**/*.js": {
