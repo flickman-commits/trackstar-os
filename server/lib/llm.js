@@ -198,6 +198,7 @@ export async function complete({
       // Cached tokens are billed apart from input_tokens; counted in so usage is the whole prompt.
       usage.input += (response.usage?.input_tokens || 0) + (response.usage?.cache_read_input_tokens || 0) + (response.usage?.cache_creation_input_tokens || 0)
       usage.cached = (usage.cached || 0) + (response.usage?.cache_read_input_tokens || 0)
+      usage.cacheWrite = (usage.cacheWrite || 0) + (response.usage?.cache_creation_input_tokens || 0)
       usage.output += response.usage?.output_tokens || 0
       usage.searches += response.usage?.server_tool_use?.web_search_requests || 0
 

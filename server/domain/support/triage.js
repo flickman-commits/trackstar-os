@@ -23,6 +23,17 @@ import { ordersBrief, quotedOrderNumbers } from './draft.js'
 import { stripQuoted } from './mailbox.js'
 
 const MODEL = 'claude-sonnet-5-5'
+// Sonnet 5.5 list prices, USD per million tokens (platform.claude.com pricing, Nov 2026). Only for the cost line in Slack.
+const PRICE = { input: 2, cacheWrite: 2.5, cacheRead: 0.1, output: 10 }
+
+/** What a pass's tokens cost, in dollars. `usage.input` includes cached tokens (server/lib/llm.js). */
+export function costOf(u) {
+  const plain = Math.max(0, u.input - u.cached - u.cacheWrite)
+  return (plain * PRICE.input + u.cacheWrite * PRICE.cacheWrite + u.cached * PRICE.cacheRead + u.output * PRICE.output) / 1e6
+}
+const fmtTokens = n => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n)
+/** "~$0.42 (310k in, 12k out)" for Slack. */
+export const costLine = u => `~$${costOf(u).toFixed(2)} (${fmtTokens(u.input)} tokens in, ${fmtTokens(u.output)} out)`
 const MAX_THREADS = 200
 const CONCURRENCY = 5
 // Stop starting new threads before the function's 300s runs out; the rest wait for the next pass.
@@ -101,7 +112,7 @@ export async function triageThread(t) {
   const j = out.json || {}
   const category = Object.hasOwn(URGENT, j.category) ? j.category : null
   const urgent = j.urgent === true
-  return { urgent, category: urgent ? (category || 'upset') : null, reason: clip(String(j.reason || '').replace(/\s*[—–]\s*/g, ', '), 200) }
+  return { usage: out.usage, urgent, category: urgent ? (category || 'upset') : null, reason: clip(String(j.reason || '').replace(/\s*[—–]\s*/g, ', '), 200) }
 }
 
 /**
@@ -126,12 +137,14 @@ export async function triagePending({ dryRun = false } = {}) {
   const started = Date.now()
   const results = []
   let failed = 0, next = 0, firstError = null
+  const usage = { input: 0, cached: 0, cacheWrite: 0, output: 0 }
   const down = () => failed >= DOWN_AFTER && results.length === 0
   async function worker() {
     while (next < due.length && Date.now() - started < BUDGET_MS && !down()) {
       const t = due[next++]
       try {
         const d = await triageThread(t)
+        for (const k of Object.keys(usage)) usage[k] += d.usage?.[k] || 0
         results.push({ t, ...d })
         if (dryRun) continue
         if (d.urgent && !t.priority) {
@@ -156,6 +169,8 @@ export async function triagePending({ dryRun = false } = {}) {
     read: results.length,
     failed,
     firstError,
+    usage,
+    cost: Math.round(costOf(usage) * 100) / 100,
     due: due.length,
     left: due.length - next,
     starred: urgent.filter(r => !r.t.priority).length,
@@ -202,6 +217,7 @@ export async function scheduledTriage({ retryOnly = false } = {}) {
   const report = [
     `_Support Triage_ · ${when} ET`,
     `Read ${out.read} new conversation${out.read === 1 ? '' : 's'}, marked *${out.starred} urgent*. ${starred.length} urgent open in <${base}/support|Support>.${out.left ? ` ${out.left} wait for the next pass.` : ''}${out.failed ? ` *${out.failed} could not be read* (${slackText(out.firstError || 'unknown error', 160)}); it tries them again within the hour.` : ''}`,
+    `Cost ${costLine(out.usage)}.`,
   ].join('\n')
   await slackTo('reports', report, { or: 'matt' })
 

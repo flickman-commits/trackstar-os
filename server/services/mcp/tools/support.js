@@ -73,7 +73,7 @@ export const supportTools = [
       if (out.status === 'down') throw new ToolError(`Could not reach the model, so nothing was read (${out.failed} tries failed). Try again shortly.`)
       return {
         summary: dryRun ? `Triage dry run: ${out.urgent.length} of ${out.read} urgent` : `Triaged ${out.read} Support conversations, starred ${out.starred}`,
-        dryRun, read: out.read, failed: out.failed, left: out.left, starred: dryRun ? 0 : out.starred,
+        dryRun, read: out.read, failed: out.failed, left: out.left, starred: dryRun ? 0 : out.starred, costUsd: out.cost,
         urgent: out.urgent.slice(0, 60).map(u => ({ threadId: u.id, who: u.who, subject: u.subject.slice(0, 120), category: u.category, reason: u.reason, alreadyStarred: u.alreadyStarred })),
       }
     },
