@@ -780,7 +780,7 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
       {multiple && <div className={heading}>#{o.number}{o.items[0] ? ` · ${o.items[0].race}` : ''}</div>}
       <div className="flex flex-col items-stretch gap-1.5">
         {tracking
-          ? <ActionLink icon={Truck} title={`${tracking.company || 'Carrier'} ${tracking.number || ''}`} onClick={() => onInsert(tracking.url ? `Here's your tracking link: ${tracking.url}` : `Your ${tracking.company || ''} tracking number is ${tracking.number}.`.replace('  ', ' '))}>Insert {tracking.fromArtelo ? 'Artelo ' : ''}tracking link</ActionLink>
+          ? <ActionLink icon={Truck} title={`${tracking.company || 'Carrier'} ${tracking.number || ''}`} onClick={() => onInsert(tracking.url ? `Here's your [tracking link](${tracking.url}).` : `Your ${tracking.company || ''} tracking number is ${tracking.number}.`.replace('  ', ' '))}>Insert {tracking.fromArtelo ? 'Artelo ' : ''}tracking link</ActionLink>
           : <span className="self-start inline-flex items-center gap-1.5 text-xs text-off-black/40"><Truck className="w-3.5 h-3.5" />No tracking from Artelo yet</span>}
         {o.items.length > 0 && (
           <span className="self-start inline-flex items-center gap-2">
