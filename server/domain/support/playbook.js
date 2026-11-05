@@ -54,7 +54,8 @@ Trackstar sells personalized race prints: an illustrated course map with the run
 
 ## Shipping
 - Free US shipping over $100; $7 flat under $100; international calculated at checkout.
-- Standard delivery 7 to 10 days from the order date; holidays 10 to 12 business days. Production itself is 5 to 7 business days.
+- Standard delivery 10 to 12 days from the order date.
+- Changes window: customers have 48 hours from ordering to ask for a change (name, time, size, frame, address). The print does not go to production before then, and not while a Support conversation about the order is open. Close the conversation once the change is made; that releases the print.
 
 ## Returns and refunds
 - No returns or exchanges on correctly fulfilled personalized items.
@@ -71,7 +72,7 @@ Trackstar sells personalized race prints: an illustrated course map with the run
 - Anything not covered here. Do not guess.
 
 ## Situations
-1. Where is my order: check fulfillment. Not shipped means in production (5 to 7 business days, tracking email comes automatically). Shipped means give the tracking link. Delivered but missing: check neighbors and the mailroom, look for a delivery photo, give it 24 hours, then we make it right. Stuck with Artelo, or lost in transit after shipping: tell them we are on it and a replacement goes out once production confirms.
+1. Where is my order: check fulfillment. Not shipped means in production (10 to 12 days from the order to their door, tracking email comes automatically). Shipped means give the tracking link. Delivered but missing: check neighbors and the mailroom, look for a delivery photo, give it 24 hours, then we make it right. Stuck with Artelo, or lost in transit after shipping: tell them we are on it and a replacement goes out once production confirms.
 2. Damaged print: ask for a photo, then a free replacement, no return needed.
 3. Broken frame in transit (most common): ask for TWO photos, the broken frame and the shipping label on the box. Do not promise a replacement until Artelo confirms the ticket.
 4. Wrong personalization: our error means remake under the Accuracy Guarantee. Their typo before production: fix it free. Their typo after production: offer a corrected print at 50% off.
@@ -80,7 +81,7 @@ Trackstar sells personalized race prints: an illustrated course map with the run
 7. Product questions: answer from the facts above, briefly.
 8. Custom order status: designs land 2 weeks after the order date (give the date). Proofs already sent: resend the approval link. Past due: apologize, give a new date, flag Matt.
 9. Race organizer: escalate, see above.
-10. Pre-race order: held until results post, then made and shipped in 7 to 10 days.
+10. Pre-race order: held until results post, then delivered 10 to 12 days later.
 11. Pre-race motivation print: we can make it now without time, bib and weather; confirm with them.
 12. Happy customer: thank them, ask for a review (if they have 2 minutes, it really helps us as a young brand) and, once it has arrived, a photo on the wall. Ask whenever they are happy, before or after the print arrives.
 13. Missing detail on the print: send an updated print with it, they can reuse the frame.

@@ -533,7 +533,7 @@ export default function ApprovalPortal() {
             <p style={{ color: '#666666', fontSize: '14px', lineHeight: 1.6, marginBottom: '4px' }}>
               We'll send your design to production right away.
               <br />
-              It will arrive in 7 business days - stoked for you to get it!
+              It will arrive in 10 to 12 days. Stoked for you to get it!
             </p>
             <p style={{ color: '#999999', fontSize: '13px' }}>Order #{order?.displayOrderNumber || order?.parentOrderNumber}</p>
           </div>

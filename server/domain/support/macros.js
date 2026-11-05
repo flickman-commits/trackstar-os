@@ -127,8 +127,8 @@ export function fillMacro(body, { firstName = '', rep = '' } = {}) {
  * composer wraps every reply in them. Kept in the playbook's own words.
  */
 const DEFAULTS = [
-  ['Order still in production', 'Your order is currently being produced. Every Trackstar print is custom-made with your race data, so production takes 5 to 7 business days. You\'ll get a tracking email automatically once it ships.'],
-  ['Order shipped', 'Your order has shipped! Here\'s your tracking link: [TRACKING LINK]\n\nDelivery typically takes 7 to 10 days from your order date. Let us know if you have any issues once it arrives.'],
+  ['Order still in production', 'Your order is currently being produced. Every Trackstar print is custom-made with your race data, so it takes 10 to 12 days from your order to your door. You\'ll get a tracking email automatically once it ships.'],
+  ['Order shipped', 'Your order has shipped! Here\'s your tracking link: [TRACKING LINK]\n\nDelivery typically takes 10 to 12 days from your order date. Let us know if you have any issues once it arrives.'],
   ['Delivered but not received', 'According to the carrier, your package was marked as delivered on [DATE]. A couple things to try:\n1. Check with neighbors or your building\'s front desk or mailroom\n2. Look for a delivery photo in your carrier\'s tracking app\n3. Sometimes packages are marked delivered a day early, so give it 24 hours\n\nIf it still doesn\'t show up, reply back and we\'ll make it right.'],
   ['Production holdup', 'Looks like there\'s a holdup in production on our end. It should be getting printed and shipped in the next couple of days. Sorry about the delay, I\'m on it!'],
   ['Lost in transit, replacement coming', 'Apologies on the delay. I just checked in with production and it looks like your order may have been lost in transit after we shipped it on [DATE]. We\'re sending a replacement out right away!'],
@@ -146,7 +146,7 @@ const DEFAULTS = [
   ['Custom: designs not ready yet', 'We\'ll send you design options for your custom order 2 weeks after your order date, so for you that\'ll be [DATE]. Excited for you to see them!'],
   ['Custom: options are ready', 'Your design options are ready! You can view them here: [APPROVAL LINK]\n\nApprove your favorite or request any changes right on that page, and we\'ll take it from there.'],
   ['Race organizer: loop in Matt', 'Thanks for reaching out! I\'m looping in Matt, our founder, who handles all race partnerships directly. He\'ll be in touch shortly.'],
-  ['Pre-race order: holding for results', 'Since you ordered before race day, we\'re holding your order until official results are posted, usually the day of the race or the next day. Once results are in, we\'ll produce and ship your print, and it should arrive within 7 to 10 days.\n\nYou\'ll get a tracking email as soon as it\'s on the way!'],
+  ['Pre-race order: holding for results', 'Since you ordered before race day, we\'re holding your order until official results are posted, usually the day of the race or the next day. Once results are in, we\'ll produce and ship your print, and it should arrive within 10 to 12 days.\n\nYou\'ll get a tracking email as soon as it\'s on the way!'],
   ['Order change: done', 'No problem! I\'ve updated your order to [NEW SIZE/FRAME]. You\'re all set.'],
   ['Order change: already in production (size)', 'Your order is already in production so we can\'t modify it. The easiest way is for me to cancel and refund you, then you reorder with the correct size. Want me to go ahead?'],
   ['Order change: already in production (frame)', 'Your order is in production so we can\'t swap the frame. I\'ve made a note to our team to try to catch it, but if it arrives with the wrong frame, just email me and I\'ll send you the correct one right away.'],

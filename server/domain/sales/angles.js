@@ -341,7 +341,7 @@ export const HOUSE_STYLE = `
 - Mention research only where it is relevant. Never recite facts back at them.
 - ONE ask, at the end, phrased as a question.
 - Say "the NYC Marathon" for the race and "NYC" only for a location.
-- Turnaround, whenever it comes up, is 7 to 10 days after the race.
+- Turnaround, whenever it comes up, is 10 to 12 days after the race.
 - Subject lines: seven words or fewer, lower case, no colons unless the template uses one.
 - Return the body as plain text with blank lines between paragraphs. No HTML.
 `.trim()
