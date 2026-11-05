@@ -206,6 +206,7 @@ const routes = [
   { method: 'get',    path: '/api/support/attachment',     handler: '../api/support/attachment.js' },
   { method: 'get',    path: '/api/support/compose',        handler: '../api/support/compose.js' },
   { method: 'post',   path: '/api/support/upload',         handler: '../api/support/upload.js' },
+  { method: 'post',   path: '/api/support/mockups',        handler: '../api/support/mockups.js' },
   { method: 'post',   path: '/api/support/artelo',         handler: '../api/support/artelo.js' },
   { method: 'post',   path: '/api/support/compose',        handler: '../api/support/compose.js' },
   { method: 'get',    path: '/api/support/macros',         handler: '../api/support/macros.js' },

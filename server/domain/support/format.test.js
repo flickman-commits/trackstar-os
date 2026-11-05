@@ -34,3 +34,13 @@ test('a sent reply reads back from its HTML exactly as it was typed', async () =
   assert.equal(htmlToText('<div dir="ltr">Hi,<div><br></div><div>Line one</div><div>Line two</div></div>'), 'Hi,\n\nLine one\nLine two')
   assert.equal(htmlToText('<p>One\nsentence across\nsource lines.</p><p>Two</p>'), 'One sentence across source lines.\nTwo')
 })
+
+test('a link macro reads as words with the link on them, in email and in a DM', async () => {
+  const { linkMarkup, labelOf } = await import('./macros.js')
+  assert.equal(labelOf('Link: Columbus Marathon'), 'Columbus Marathon print')
+  assert.equal(labelOf('Link: Catch Me If You Can poster (Cube)'), 'Catch Me If You Can poster (Cube)')
+  assert.equal(labelOf('Link: Marathons collection'), 'Marathons')
+  const md = linkMarkup('Marathons', 'https://www.trackstar.art/collections/marathons')
+  assert.equal(replyToHtml(md), '<div>\n<div><a href="https://www.trackstar.art/collections/marathons">Marathons</a></div>\n</div>')
+  assert.equal(replyToPlain(md), 'Marathons: https://www.trackstar.art/collections/marathons')
+})

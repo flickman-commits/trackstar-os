@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Ban, BadgePercent, Palette, Repeat, Check, Copy, Image as ImageIcon, Link2, Loader2, MapPin, MessageSquareWarning, Pencil, Plus, Receipt, Ruler, Search, Star, Truck, X } from 'lucide-react'
+import { Ban, BadgePercent, Palette, Repeat, Check, Copy, Image as ImageIcon, Link2, Loader2, MapPin, MessageSquareWarning, Pencil, Plus, Receipt, RefreshCw, Ruler, Search, Star, Truck, X } from 'lucide-react'
 import { reviewAsk, reviewLinkFor } from '@/lib/reviewLinks'
 import { toast } from 'sonner'
 import { newIdempotencyKey, supportApi } from '@/lib/supportApi'
@@ -739,6 +739,22 @@ function DiscountForm({ thread, first, isAdmin, onInsert, onDone, onCancel }: { 
 
 function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChanged }: { o: CustomerOrder; thread: ThreadDetail; multiple: boolean; isAdmin: boolean; onInsert: (text: string) => void; onAttach: (m: Mockup) => void; onChanged: () => void }) {
   const [picking, setPicking] = useState(false)
+  // Refresh: the newest mockups after a re-render, in place of what the page loaded with.
+  const [fresh, setFresh] = useState<Mockup[] | null>(null)
+  useEffect(() => { setFresh(null) }, [o.mockups])
+  const mockups = fresh ?? o.mockups
+  const [refreshing, setRefreshing] = useState(false)
+  const refreshMockups = async () => {
+    setRefreshing(true)
+    try {
+      const ids = [...new Set(o.items.map(it => it.orderId).filter(Boolean))] as string[]
+      const out = await supportApi.mockups(ids)
+      setFresh(out.mockups)
+      setPicking(false)
+      toast.success(out.mockups.length ? `Newest: ${out.mockups.map(m => m.label).join(', ')}` : 'No finished design on this order yet')
+    } catch (e) { toast.error((e as Error).message) }
+    finally { setRefreshing(false) }
+  }
   const [busy, setBusy] = useState<string | null>(null)
   // The one modal open for this order, if any.
   const [open, setOpen] = useState<null | 'address' | 'change' | 'fix' | 'note' | 'claim' | 'reorder' | 'refund' | 'cancel'>(null)
@@ -766,12 +782,22 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
         {tracking
           ? <ActionLink icon={Truck} title={`${tracking.company || 'Carrier'} ${tracking.number || ''}`} onClick={() => onInsert(tracking.url ? `Here's your tracking link: ${tracking.url}` : `Your ${tracking.company || ''} tracking number is ${tracking.number}.`.replace('  ', ' '))}>Insert {tracking.fromArtelo ? 'Artelo ' : ''}tracking link</ActionLink>
           : <span className="self-start inline-flex items-center gap-1.5 text-xs text-off-black/40"><Truck className="w-3.5 h-3.5" />No tracking from Artelo yet</span>}
-        {o.mockups.length > 0 && (o.mockups.length === 1
-          ? <ActionLink icon={ImageIcon} title={o.mockups[0].label} onClick={() => { onAttach(o.mockups[0]); toast.success('Mockup attached to the reply') }}>Attach mockup</ActionLink>
-          : <ActionLink icon={ImageIcon} onClick={() => setPicking(v => !v)}>Attach mockup <span className="text-off-black/40 font-normal">({o.mockups.length})</span></ActionLink>)}
-        {picking && o.mockups.length > 1 && (
+        {o.items.length > 0 && (
+          <span className="self-start inline-flex items-center gap-2">
+            {mockups.length === 0
+              ? <span className="inline-flex items-center gap-1.5 text-xs text-off-black/40"><ImageIcon className="w-3.5 h-3.5" />No mockup yet</span>
+              : mockups.length === 1
+                ? <ActionLink icon={ImageIcon} title={mockups[0].label} onClick={() => { onAttach(mockups[0]); toast.success(`${mockups[0].label} attached to the reply`) }}>Attach mockup <span className="text-off-black/40 font-normal">({mockups[0].label.replace(/^Design /, '')})</span></ActionLink>
+                : <ActionLink icon={ImageIcon} onClick={() => setPicking(v => !v)}>Attach mockup <span className="text-off-black/40 font-normal">({mockups.length})</span></ActionLink>}
+            {/* After a re-render: pick up the newest design without reloading the page. */}
+            <button onClick={refreshMockups} disabled={refreshing} title="Look for the newest render of this order" className="inline-flex items-center gap-1 text-xs text-off-black/45 hover:text-[#4600D6] disabled:opacity-50">
+              <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />Refresh
+            </button>
+          </span>
+        )}
+        {picking && mockups.length > 1 && (
           <div className="flex flex-wrap gap-1.5 pl-5">
-            {o.mockups.map(m => (
+            {mockups.map(m => (
               <button key={m.ref} onClick={() => { onAttach(m); toast.success(`${m.label} attached`) }} className="w-16 text-left group" title={`Attach ${m.label}`}>
                 <span className="block w-16 h-16 rounded border border-border-gray bg-white overflow-hidden group-hover:border-[#4600D6]">
                   {m.thumbUrl ? <img src={m.thumbUrl} alt="" className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 m-auto mt-5 text-off-black/25" />}
