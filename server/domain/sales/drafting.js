@@ -217,6 +217,7 @@ export async function draftVariants({ dealId, personId, useTemplate = false, act
       json: true,
       effort: 'low',
       maxTokens: 3000,
+      cacheSystem: true,
       purpose: `sales.draft.t${touchNumber}`,
     }))
   } catch (err) {
@@ -259,6 +260,7 @@ export async function reviseDraft({ dealId, subject, body, instruction, actor })
     json: true,
     effort: 'low',
     maxTokens: 1200,
+    cacheSystem: true,
     purpose: 'sales.revise',
   })
   const out = { subject: String(json?.subject || subject).trim(), body: String(json?.body || '').trim() }

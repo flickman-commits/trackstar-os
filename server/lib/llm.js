@@ -133,8 +133,21 @@ export function extractJson(text) {
 }
 
 /**
+ * The `system` field for the Anthropic API. Uncached: one string. Cached: one
+ * text block per part, each with a breakpoint (the API allows four).
+ */
+export function anthropicSystem(parts, cache) {
+  if (!parts.length) return undefined
+  if (!cache) return parts.join('\n')
+  const cache_control = cache === '1h' ? { type: 'ephemeral', ttl: '1h' } : { type: 'ephemeral' }
+  return parts.map((text, i) => ({ type: 'text', text, ...(i >= parts.length - 4 ? { cache_control } : {}) }))
+}
+
+/**
  * @param {object} opts
- * @param {string} opts.system        System prompt.
+ * @param {string|string[]} opts.system  System prompt. A list of parts, most stable first, gets a cache
+ *   breakpoint on each part, so requests that share the first parts share that cache (e.g. the same
+ *   playbook with a different channel's rules after it).
  * @param {string} opts.prompt        User message.
  * @param {boolean} [opts.json]       Parse the reply as JSON and return it as `json`.
  * @param {number}  [opts.maxTokens]  Output cap. Default 4000.
@@ -144,7 +157,10 @@ export function extractJson(text) {
  * @param {string}  [opts.purpose]    Short label for logs, e.g. "sales.draft".
  * @param {boolean} [opts.webSearch]   Let the model search the live web (Anthropic only).
  * @param {number}  [opts.maxSearches] Cap on searches per call. Default 5.
- * @param {boolean} [opts.cacheSystem] Cache the system prompt (Anthropic only): for one that is the same on every call.
+ * @param {boolean|'1h'} [opts.cacheSystem] Cache the system prompt (Anthropic only): for one that is the same on every call.
+ *   Prompts under 512 tokens are never cached. '1h' keeps it an hour (a write costs 2x input instead of 1.25x,
+ *   a hit 0.05x): for calls spread minutes apart, where a 5-minute entry would expire unread and every
+ *   call would pay the write premium for nothing.
  * @returns {Promise<{ text: string, json?: any, provider: string, model: string,
  *   usage: { input: number, output: number, searches: number }, ms: number,
  *   sources: string[] }>}
@@ -168,6 +184,7 @@ export async function complete({
     throw new Error('No model configured. Set ANTHROPIC_API_KEY, or LLM_BASE_URL + LLM_API_KEY for an OpenAI-compatible endpoint.')
   }
   const startedAt = Date.now()
+  const systemParts = (Array.isArray(system) ? system : [system]).filter(Boolean)
   const userMessage = json
     ? `${prompt}\n\nRespond with valid JSON only. No prose before or after it, no code fences.`
     : prompt
@@ -190,7 +207,7 @@ export async function complete({
       response = await client.messages.create({
         model: usedModel,
         max_tokens: maxTokens,
-        system: cacheSystem && system ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] : system,
+        system: anthropicSystem(systemParts, cacheSystem),
         output_config: { effort },
         ...(tools ? { tools } : {}),
         messages,
@@ -236,7 +253,7 @@ export async function complete({
         max_tokens: maxTokens,
         temperature,
         messages: [
-          { role: 'system', content: system },
+          { role: 'system', content: systemParts.join('\n') },
           { role: 'user', content: userMessage },
         ],
       }),
@@ -251,7 +268,7 @@ export async function complete({
   }
 
   const ms = Date.now() - startedAt
-  console.log(`[llm] ${purpose} provider=${provider} model=${usedModel} in=${usage.input} out=${usage.output} searches=${usage.searches} ${ms}ms`)
+  console.log(`[llm] ${purpose} provider=${provider} model=${usedModel} in=${usage.input} cacheRead=${usage.cached || 0} cacheWrite=${usage.cacheWrite || 0} out=${usage.output} searches=${usage.searches} ${ms}ms`)
 
   const result = { text, provider, model: usedModel, usage, ms, sources: [...new Set(sources)] }
   if (json) result.json = extractJson(text)

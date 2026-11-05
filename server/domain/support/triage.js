@@ -139,28 +139,30 @@ export async function triagePending({ dryRun = false } = {}) {
   let failed = 0, next = 0, firstError = null
   const usage = { input: 0, cached: 0, cacheWrite: 0, output: 0 }
   const down = () => failed >= DOWN_AFTER && results.length === 0
-  async function worker() {
-    while (next < due.length && Date.now() - started < BUDGET_MS && !down()) {
-      const t = due[next++]
-      try {
-        const d = await triageThread(t)
-        for (const k of Object.keys(usage)) usage[k] += d.usage?.[k] || 0
-        results.push({ t, ...d })
-        if (dryRun) continue
-        if (d.urgent && !t.priority) {
-          await prisma.supportThread.update({ where: { id: t.id }, data: { priority: true, priorityReason: d.reason, triagedAt: new Date() } })
-          // A note in the timeline, where the team reads what is going on, not a line under the header.
-          await prisma.supportNote.create({ data: { threadId: t.id, kind: 'note', body: `Marked this priority (${URGENT[d.category]}): ${d.reason || URGENT[d.category]}`, authorName: 'Claude' } })
-        } else {
-          await prisma.supportThread.update({ where: { id: t.id }, data: { triagedAt: new Date() } })
-        }
-      } catch (err) {
-        failed++
-        firstError ||= String(err?.message || err).slice(0, 300)
-        console.warn(`[support.triage] ${t.id}: ${err.message}`)
+  async function triageOne(t) {
+    try {
+      const d = await triageThread(t)
+      for (const k of Object.keys(usage)) usage[k] += d.usage?.[k] || 0
+      results.push({ t, ...d })
+      if (dryRun) return
+      if (d.urgent && !t.priority) {
+        await prisma.supportThread.update({ where: { id: t.id }, data: { priority: true, priorityReason: d.reason, triagedAt: new Date() } })
+        // A note in the timeline, where the team reads what is going on, not a line under the header.
+        await prisma.supportNote.create({ data: { threadId: t.id, kind: 'note', body: `Marked this priority (${URGENT[d.category]}): ${d.reason || URGENT[d.category]}`, authorName: 'Claude' } })
+      } else {
+        await prisma.supportThread.update({ where: { id: t.id }, data: { triagedAt: new Date() } })
       }
+    } catch (err) {
+      failed++
+      firstError ||= String(err?.message || err).slice(0, 300)
+      console.warn(`[support.triage] ${t.id}: ${err.message}`)
     }
   }
+  async function worker() {
+    while (next < due.length && Date.now() - started < BUDGET_MS && !down()) await triageOne(due[next++])
+  }
+  // The first one alone writes the prompt cache; the rest read it instead of each writing their own.
+  if (due.length > 1) await triageOne(due[next++])
   await Promise.all(Array.from({ length: CONCURRENCY }, worker))
 
   const urgent = results.filter(r => r.urgent)
