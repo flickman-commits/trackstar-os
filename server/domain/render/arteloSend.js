@@ -91,7 +91,8 @@ export async function queueSend(job, { orderType } = {}) {
     // Not before the customer's change window closes (changeWindow.js): the
     // confirmation email says they can fix the address for that long.
     const hold = Date.now() + holdMinutes() * MIN
-    const windowEnd = windowEndsAt(order)?.getTime() || 0
+    // Expedited orders paid for speed: no change window, only the short hold (Matt, 2026-11-05).
+    const windowEnd = isExpeditedShipping(order?.shopifyOrderData) ? 0 : windowEndsAt(order)?.getTime() || 0
     return await prisma.renderJob.update({
       where: { id: job.id },
       data: { sendAfter: new Date(Math.max(hold, windowEnd)), sendHeldAt: null, sendHeldBy: null, sendError: null },
