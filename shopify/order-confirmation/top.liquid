@@ -16,10 +16,12 @@
   {% if line_item.product_id == 10068385759515 %}
     {% assign is_custom_order = true %}
   {% endif %}
-  {% if line_item.properties['Pre-order'] != blank %}
-    {% assign has_preorder = true %}
-    {% assign preorder_note = line_item.properties['Pre-order'] %}
-  {% endif %}
+  {% for prop in line_item.properties %}
+    {% if prop.first == 'Pre-order' and prop.last != blank %}
+      {% assign has_preorder = true %}
+      {% assign preorder_note = prop.last %}
+    {% endif %}
+  {% endfor %}
 {% endfor %}
 
 {% assign delivery_method_types = delivery_agreements | map: 'delivery_method_type' | uniq %}
@@ -170,7 +172,7 @@
             <tr><td class="ts-pad" style="padding: 16px 0 8px;">
               <table cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
                 {% assign whose = 'your' %}
-                {% for line in line_items %}{% if line.properties['Gift'] != blank %}{% assign whose = 'their' %}{% endif %}{% endfor %}
+                {% for line in line_items %}{% for prop in line.properties %}{% if prop.first == 'Gift' and prop.last != blank %}{% assign whose = 'their' %}{% endif %}{% endfor %}{% endfor %}
                 {% if is_custom_order %}
                   {% assign steps = 'Today~Order confirmed|48 hrs~Change the name, frame or address. After that, our design team starts on your route|' | append: mockup_date | append: '~Your mockup arrives for approval|On approval~Printed, framed and shipped from Kentucky|7 to 10 days after approval~Delivered to ' | append: whose | append: ' doorstep' | split: '|' %}
                 {% elsif has_preorder %}
@@ -204,12 +206,30 @@
             {% comment %} The prints: the details that will be on them, from the order's line item properties. {% endcomment %}
             {% for line in line_items %}
               {% assign is_addon = false %}
-              {% if line.properties['_addon_for'] != blank or line.title contains 'Photo Add-On' or line.gift_card %}{% assign is_addon = true %}{% endif %}
-              {% assign runner = line.properties['Runner Name (First & Last)'] %}
+              {% assign p_runner = '' %}{% assign p_year = '' %}{% assign p_event = '' %}{% assign p_bib = '' %}{% assign p_time = '' %}{% assign p_pace = '' %}{% assign p_notime = '' %}{% assign p_gift = '' %}{% assign p_preorder = '' %}{% assign p_photo = '' %}{% assign p_photo_later = '' %}{% assign p_outcome = '' %}{% assign p_addon_for = '' %}
+              {% for prop in line.properties %}
+                {% assign k = prop.first | strip %}{% assign v = prop.last | strip %}
+                {% if k contains 'Runner Name' %}{% assign p_runner = v %}
+                {% elsif k == 'Race Year' %}{% assign p_year = v %}
+                {% elsif k == 'Event' %}{% assign p_event = v %}
+                {% elsif k contains 'Bib' %}{% assign p_bib = v %}
+                {% elsif k == 'Time' %}{% assign p_time = v %}
+                {% elsif k == 'Pace' %}{% assign p_pace = v %}
+                {% elsif k == 'No Time' %}{% assign p_notime = v %}
+                {% elsif k == 'Gift' %}{% assign p_gift = v %}
+                {% elsif k == 'Pre-order' %}{% assign p_preorder = v %}
+                {% elsif k == '_photo_path' %}{% assign p_photo = v %}
+                {% elsif k == '_photo_later' %}{% assign p_photo_later = v %}
+                {% elsif k == '_lookup_outcome' %}{% assign p_outcome = v %}
+                {% elsif k == '_addon_for' %}{% assign p_addon_for = v %}
+                {% endif %}
+              {% endfor %}
+              {% if p_addon_for != blank or line.title contains 'Photo Add-On' or line.gift_card %}{% assign is_addon = true %}{% endif %}
+              {% assign runner = p_runner %}
               {% if is_addon == false and runner != blank %}
-              {% assign print_photo = line.properties['_photo_path'] %}
-              {% assign photo_later = line.properties['_photo_later'] %}
-              {% assign outcome = line.properties['_lookup_outcome'] %}
+              {% assign print_photo = p_photo %}
+              {% assign photo_later = p_photo_later %}
+              {% assign outcome = p_outcome %}
               {% assign race_title = line.title | remove: 'Personalized Race Print' | remove: 'Personalized Race Poster' | strip %}
               {% assign v = line.variant.title | split: ' / ' %}
               <tr><td class="ts-pad" style="padding: 16px 0 0;">
@@ -222,7 +242,7 @@
                       <p class="ts-f13" style="margin: 0 0 6px; font-size: 13px; font-weight: 500; color: #666666;">Order details</p>
                       <p class="ts-f22" style="margin: 0 0 10px; font-size: 22px; font-weight: 700; line-height: 1.1; color: #1A1A1A;">{{ race_title }}</p>
                       <div style="line-height: 44px;">
-                        {% if line.properties['Race Year'] != blank %}<span class="ts-f15" style="display: inline-block; margin: 0 4px 0 0; padding: 6px 12px; line-height: 1.3; border: 1px solid #E0E0E0; border-radius: 8px; white-space: nowrap; font-size: 15px; font-weight: 700; color: #1A1A1A;">{{ line.properties['Race Year'] }}</span>{% endif %}
+                        {% if p_year != blank %}<span class="ts-f15" style="display: inline-block; margin: 0 4px 0 0; padding: 6px 12px; line-height: 1.3; border: 1px solid #E0E0E0; border-radius: 8px; white-space: nowrap; font-size: 15px; font-weight: 700; color: #1A1A1A;">{{ p_year }}</span>{% endif %}
                         {% if v[0] != blank and line.variant.title != 'Default Title' %}<span class="ts-f15" style="display: inline-block; margin: 0 4px 0 0; padding: 6px 12px; line-height: 1.3; border: 1px solid #E0E0E0; border-radius: 8px; white-space: nowrap; font-size: 15px; font-weight: 700; color: #1A1A1A;">{{ v[0] }}</span>{% endif %}
                         {% if v[1] != blank %}<span class="ts-f15" style="display: inline-block; margin: 0 4px 0 0; padding: 6px 12px; line-height: 1.3; border: 1px solid #1A1A1A; border-radius: 8px; background-color: #1A1A1A; white-space: nowrap; font-size: 15px; font-weight: 700; color: #FFFFFF;">{{ v[1] }}</span>{% endif %}
                       </div>
@@ -235,16 +255,16 @@
                         <td style="vertical-align: top;">
                           <table class="ts-f15" cellpadding="0" cellspacing="0" style="font-size: 15px; line-height: 1.5; color: #1A1A1A;">
                             <tr><td style="padding: 0 20px 0 0; color: #666666;">Runner</td><td style="font-weight: 700;">{{ runner }}</td></tr>
-                            {% if line.properties['Event'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Event</td><td>{{ line.properties['Event'] }}</td></tr>{% endif %}
-                            {% if line.properties['Bib #'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Bib</td><td>{{ line.properties['Bib #'] }}</td></tr>{% endif %}
-                            {% if line.properties['Time'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Time</td><td>{{ line.properties['Time'] }}</td></tr>{% endif %}
-                            {% if line.properties['Pace'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Pace</td><td>{{ line.properties['Pace'] }}</td></tr>{% endif %}
+                            {% if p_event != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Event</td><td>{{ p_event }}</td></tr>{% endif %}
+                            {% if p_bib != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Bib</td><td>{{ p_bib }}</td></tr>{% endif %}
+                            {% if p_time != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Time</td><td>{{ p_time }}</td></tr>{% endif %}
+                            {% if p_pace != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Pace</td><td>{{ p_pace }}</td></tr>{% endif %}
                           </table>
                           {% if outcome == 'race_not_yet_run' %}
                             <p class="ts-f14" style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">We'll add the official time, pace and bib after race day.</p>
-                          {% elsif line.properties['No Time'] != blank %}
+                          {% elsif p_notime != blank %}
                             <p class="ts-f14" style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">Printed without the time and pace, as you asked.</p>
-                          {% elsif line.properties['Time'] == blank %}
+                          {% elsif p_time == blank %}
                             <p class="ts-f14" style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">We'll track down the official time, pace and bib for the print.</p>
                           {% endif %}
                           {% if photo_later != blank %}

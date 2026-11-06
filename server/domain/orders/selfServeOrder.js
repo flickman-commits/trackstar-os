@@ -37,6 +37,7 @@ import { storage } from '../../lib/storage.js'
 import { addVariantToOrder, PHOTO_ADDON_VARIANT_ID } from '../../services/shopifyOrderEdit.js'
 import { PHOTO_ADDON_PRICE } from '../../services/pricing.js'
 import { loadProductCatalog, getProductInfo } from '../../lib/productCatalog.js'
+import { shopifyFetch } from '../../services/shopifyAuth.js'
 
 const PHOTO_BUCKET = 'personalization-photos'
 // What photo-verify hands back: a sanitized JPEG, PNG or WEBP.
@@ -62,9 +63,21 @@ async function load(shopifyOrderId, signature) {
   const id = String(shopifyOrderId || '').trim()
   if (!/^\d{6,20}$/.test(id) || !linkIsValid(id, signature)) throw new ManageError('bad_link', 404)
   const rows = await prisma.order.findMany({ where: { source: 'shopify', parentOrderNumber: id }, orderBy: { lineItemIndex: 'asc' }, select: ROW })
-  if (!rows.length) throw new ManageError('not_found', 404)
+  if (!rows.length) throw new ManageError(await justPlaced(id) ? 'not_ready' : 'not_found', 404)
   const closesAt = closesAtFor(rows[0], await raceDays(rows))
   return { id, rows, closesAt, reason: closedReasonFor(rows, closesAt) }
+}
+
+/**
+ * The confirmation email goes out the moment the order is placed, and the
+ * import picks the order up within about 10 minutes. A valid link in that gap
+ * is "still setting it up", not a dead link: the page waits and tries again.
+ */
+async function justPlaced(id) {
+  try {
+    const o = (await shopifyFetch(`/orders/${id}.json?fields=id,created_at,cancelled_at`))?.order
+    return Boolean(o?.created_at && !o.cancelled_at && Date.now() - new Date(o.created_at).getTime() < 2 * 3600e3)
+  } catch { return false }
 }
 
 /** The verified race day of each print's race year, for the pre-order rule. */

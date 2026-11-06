@@ -79,16 +79,23 @@ function fractionLeft(placedAt: string | null, closesAt: string, now: number) {
 export default function ManageOrder() {
   const { order, sig } = useParams<{ order: string; sig: string }>()
   const [info, setInfo] = useState<Info | null>(null)
-  const [state, setState] = useState<'loading' | 'ready' | 'bad' | 'cancelled'>('loading')
+  const [state, setState] = useState<'loading' | 'ready' | 'bad' | 'cancelled' | 'not_ready'>('loading')
+  const [tries, setTries] = useState(0)
   const [refunded, setRefunded] = useState('')
   const [now, setNow] = useState(Date.now())
 
   useEffect(() => {
     document.title = 'Manage your order | Trackstar'
     fetch(`${API_BASE}/api/public/manage-order?order=${encodeURIComponent(order || '')}&sig=${encodeURIComponent(sig || '')}`)
-      .then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) { setState('bad'); return } setInfo(d); setState('ready') })
+      .then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) { setState(d.error === 'not_ready' ? 'not_ready' : 'bad'); return } setInfo(d); setState('ready') })
       .catch(() => setState('bad'))
-  }, [order, sig])
+  }, [order, sig, tries])
+  // A brand new order is still on its way in from Shopify: look again every 30 seconds.
+  useEffect(() => {
+    if (state !== 'not_ready') return
+    const t = setTimeout(() => setTries(n => n + 1), 30e3)
+    return () => clearTimeout(t)
+  }, [state, tries])
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30e3); return () => clearInterval(t) }, [])
 
   // One call shape for every change. A window that closed since the page
@@ -119,6 +126,13 @@ export default function ManageOrder() {
 
       <main className="flex-1 max-w-xl w-full mx-auto px-5 pt-6 pb-4 space-y-5">
         {state === 'loading' && <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-[#999999]" /></div>}
+
+        {state === 'not_ready' && (
+          <div className={card}>
+            <p className="flex items-center gap-2 text-[20px] font-bold"><Loader2 className="w-5 h-5 animate-spin text-[#4600D6]" />We're setting up your order</p>
+            <p className="text-[17px] text-[#666666] mt-2 leading-snug">Your order just came in. It takes a few minutes to get it ready to change here, so this page will refresh on its own. You can also come back to the link in your email any time in the next 48 hours.</p>
+          </div>
+        )}
 
         {state === 'bad' && (
           <div className={card}>
