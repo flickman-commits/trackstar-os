@@ -17,6 +17,7 @@ import { autoResearchNew, autoResearchAfterRace } from '../../../server/domain/r
 import { watchOfficialResults } from '../../../server/domain/research/resultsWatch.js'
 import { autoQueueRenders } from '../../../server/domain/render/jobs.js'
 import { researchRacedRunners } from '../../../server/domain/bulk/bulkOrders.js'
+import { closeShopifyCancels } from '../../../server/domain/orders/shopifyCancels.js'
 import { deliverPending } from '../../../server/domain/render/deliver.js'
 import { uploadPending } from '../../../server/domain/render/artelo.js'
 import { refreshUnpaidPhotoOrders } from '../../../server/domain/orders/photoRefresh.js'
@@ -68,6 +69,9 @@ export default async function handler(req, res) {
       // Bulk runs paid through Shopify: link or create their runs, mark paid.
       const bulk = await syncShopifyBulkOrders().catch(err => { console.error('[orders.auto-import] bulk sync failed:', err.message); return null })
       if (bulk && (bulk.created || bulk.linked || bulk.paid)) console.log(`[orders.auto-import] bulk: ${bulk.created} created, ${bulk.linked} linked, ${bulk.paid} paid`)
+      // Orders cancelled in Shopify itself leave the queue as complete.
+      const cancels = await closeShopifyCancels().catch(err => { console.error('[orders.auto-import] Shopify cancels failed:', err.message); return null })
+      if (cancels?.closed) console.log(`[orders.auto-import] closed ${cancels.closed} order(s) cancelled in Shopify`)
       return imported
     })
     await storageCheck
