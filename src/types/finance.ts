@@ -73,3 +73,21 @@ export type MonthPayouts = {
   totals: { totalCents: number; inProgressCents: number; submittedCents: number; approvedCents: number; customsCents: number; designerFeeCents: number; hoursCents: number; racesCents: number; unpriced: number }
   racesError: string | null
 }
+
+/** The forecast (Finance > Forecast). Money is cents. */
+export type ForecastScenario = 'base' | 'upside' | 'downside'
+export type ForecastDriver = { key: string; label: string; unit: 'x' | 'orders' | 'cents' | '%'; help: string; value: number; computed: number; overridden: boolean }
+export type ForecastAmounts = { revenue: number; orders: number; cogs: number; adSpend: number; cm: number; designerFee: number; raceOrders?: number }
+export type ForecastWeek = { weekStart: string; weekEnd: string; actual: ForecastAmounts; forecast: ForecastAmounts; revenue: number; orders: number; cm: number; adSpend: number; cogs: number; designerFee: number; partial: boolean; past: boolean; races: string[] }
+export type ForecastRace = { key: string; name: string; year: number; date: string; lastYear: number; received: number; expected: number; override: number | null; remaining: number; inHorizon?: number; noHistory: boolean }
+export type ForecastMonth = { month: string; label: string; target: { revenueCents: number | null; cmCents: number | null; adSpendCents: number | null } | null; toDate: { revenue: number; cm: number; adSpend: number; designerFee: number }; projected: { revenue: number; cm: number; adSpend: number; designerFee: number } }
+export type CashWeek = { weekStart: string; start: number; in: number; out: { costs: number; ads: number; hours: number; customsAndFee: number; partners: number; fixed: number; draws: number }; totalOut: number; net: number; end: number }
+export type Bank = { name: string; cents: number; asOf: string }
+export type FixedCost = { name: string; cents: number; cadence: 'monthly' | 'weekly' }
+export type ForecastPayload = {
+  asOf: string; scenario: ForecastScenario; scenarios: ForecastScenario[]; horizon: { start: string; end: string; weeks: number }
+  drivers: ForecastDriver[]; growthHint: { growth: number; races: number }; curve: { fromData: boolean; orders: number }
+  weeks: ForecastWeek[]; races: ForecastRace[]; months: ForecastMonth[]
+  totals: { revenue: number; forecastRevenue: number; cm: number; orders: number }
+  cash: { opening: number; banks: Bank[]; bufferCents: number; fixedCosts: FixedCost[]; ownerDrawMonthlyCents: number; weeks: CashWeek[]; lowest: { cents: number; weekStart: string }; weeksBelowBuffer: number; partners: { name: string; dueDate: string; cents: number; estimated: boolean }[]; hasBalance: boolean }
+}

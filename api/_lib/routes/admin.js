@@ -21,6 +21,7 @@ export default {
   'auth/accept-invite': () => import('../../_routes/auth/accept-invite.js'),
   'auth/login': () => import('../../_routes/auth/login.js'),
   'finance/daily': () => import('../../_routes/finance/daily.js'),
+  'finance/forecast': () => import('../../_routes/finance/forecast.js'),
   'finance/hours': () => import('../../_routes/finance/hours.js'),
   'finance/overview': () => import('../../_routes/finance/overview.js'),
   'finance/payouts': () => import('../../_routes/finance/payouts.js'),

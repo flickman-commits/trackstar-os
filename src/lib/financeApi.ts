@@ -1,6 +1,6 @@
 /** Typed client for /api/finance/*, and the money and time spellings the pages share. */
 import { apiFetch } from '@/lib/api'
-import type { MonthPayouts, DailyPayload, DayInput, HoursPayload, OverviewPayload, PayRun, Person, RacePayout, RacePayoutsPayload, Rate, SyncInfo, Timesheet } from '@/types/finance'
+import type { ForecastPayload, MonthPayouts, DailyPayload, DayInput, HoursPayload, OverviewPayload, PayRun, Person, RacePayout, RacePayoutsPayload, Rate, SyncInfo, Timesheet } from '@/types/finance'
 
 export class FinanceApiError extends Error {}
 
@@ -27,6 +27,8 @@ export const financeApi = {
   racePayouts: () => request<RacePayoutsPayload>('/api/finance/race-payouts'),
   racePayoutAction: (body: Record<string, unknown>) => post<{ race: RacePayout }>('/api/finance/race-payouts', body),
   racePayoutsDue: () => post<{ computed: number; failed: { name: string; error: string }[] }>('/api/finance/race-payouts', { action: 'compute_due' }),
+  forecast: (scenario: string) => request<ForecastPayload>(`/api/finance/forecast?scenario=${scenario}`),
+  forecastAction: (body: Record<string, unknown>) => post<ForecastPayload>('/api/finance/forecast', body),
   payoutsMonth: (month: string) => request<MonthPayouts>(`/api/finance/payouts?month=${month}`),
   payoutRates: () => request<{ rates: Rate[] }>('/api/finance/payouts?rates=1'),
   setHourlyRate: (userId: string, cents: number | null) => post<{ rates: Rate[] }>('/api/finance/payouts', { action: 'set_hourly_rate', userId, cents }),
