@@ -120,14 +120,14 @@
         <td>
           <center>
           <table class="container" cellpadding="0" cellspacing="0">
-            <tr><td class="ts-pad" style="padding: 36px 0 28px;">
+            <tr><td class="ts-pad" style="padding: 36px 0 18px; border-bottom: 1px solid #E0E0E0;">
               <table width="100%" cellpadding="0" cellspacing="0"><tr>
                 <td style="vertical-align: middle;"><a href="{{ shop.url }}"><img src="https://www.trackstar.art/cdn/shop/files/Trackstar_Logo_Cropped.png" alt="Trackstar" width="140" style="display: block; width: 140px; height: auto; border: 0;"></a></td>
                 <td style="vertical-align: middle; text-align: right; font-size: 15px; font-weight: 500; color: #666666;">Order {{ order_name }}</td>
               </tr></table>
             </td></tr>
 
-            <tr><td class="ts-pad" style="padding: 0 0 8px;">
+            <tr><td class="ts-pad" style="padding: 28px 0 8px;">
               <h1 class="ts-h1" style="margin: 0 0 12px; font-size: 32px; font-weight: 700; line-height: 1.05; color: #1A1A1A;">{{ email_title | strip }}{% if customer.first_name %}, {{ customer.first_name }}{% endif %}.</h1>
               <p style="margin: 0 0 8px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">
                 {% if has_pending_payment %}
@@ -150,13 +150,15 @@
             {% comment %} What happens next. Purple numbers on white, the only purple fill on the page. {% endcomment %}
             <tr><td class="ts-pad" style="padding: 16px 0 8px;">
               <table cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+                {% assign whose = 'your' %}
+                {% for line in line_items %}{% if line.properties['Gift'] != blank %}{% assign whose = 'their' %}{% endif %}{% endfor %}
                 {% if is_custom_order %}
-                  {% assign steps = 'Order confirmed|We review your race details and start the design|Your mockup arrives by ' | append: mockup_date | append: '|You approve it, then it goes to print|At your door 7 to 10 days after approval' | split: '|' %}
+                  {% assign steps = 'Today~Order confirmed|48 hrs~Change the name, frame or address. After that, our design team starts on your route|' | append: mockup_date | append: '~Your mockup arrives for approval|On approval~Printed, framed and shipped from Kentucky|7 to 10 days after approval~Delivered to ' | append: whose | append: ' doorstep' | split: '|' %}
                 {% elsif has_preorder %}
                   {% assign race_day = preorder_note | remove: 'Ships after race day, ' | strip %}
-                  {% assign steps = 'Order confirmed|After race day on ' | append: race_day | append: ', we add the official results|Printed and framed in Kentucky|At your door 10 to 12 days after race day' | split: '|' %}
+                  {% assign steps = 'Today~Order confirmed|Until race day~Change the name, frame or address any time before the race|' | append: race_day | append: '~After race day, we add the official results and send your print to production|Next 7 days~Printed, framed and shipped from Kentucky|10 to 12 days after race day~Delivered to ' | append: whose | append: ' doorstep' | split: '|' %}
                 {% else %}
-                  {% assign steps = 'Order confirmed|We find the official results and build your design|Printed and framed in Kentucky|At your door in 10 to 12 days' | split: '|' %}
+                  {% assign steps = 'Today~Order confirmed|48 hrs~Change the name, frame or address. After that, we send your print to production|Days 3 to 7~Printed, framed and shipped from Kentucky|10 to 12 days~Delivered to ' | append: whose | append: ' doorstep' | split: '|' %}
                 {% endif %}
                 {% for step in steps %}
                 <tr class="ts-step ts-step-{{ forloop.index }}">
@@ -165,11 +167,15 @@
                       <td style="width: 28px; height: 28px; border-radius: 999px; background-color: #4600D6; color: #FFFFFF; font-size: 14px; font-weight: 700; text-align: center; vertical-align: middle; line-height: 28px;">{{ forloop.index }}</td>
                     </tr>
                     {% unless forloop.last %}
-                    <tr><td style="padding: 4px 0 4px 13px;"><div class="ts-line ts-line-{{ forloop.index }}" style="width: 2px; height: 26px; background-color: #E0E0E0;"></div></td></tr>
+                    <tr><td style="padding: 3px 0 3px 13px;"><div class="ts-line ts-line-{{ forloop.index }}" style="width: 2px; height: 16px; background-color: #E0E0E0;"></div></td></tr>
                     {% endunless %}
                     </table>
                   </td>
-                  <td style="padding: 3px 0 0 14px; vertical-align: top; font-size: 16px; line-height: 1.35; color: #1A1A1A;{% if forloop.first %} font-weight: 700;{% endif %}">{{ step }}</td>
+                  {% assign parts = step | split: '~' %}
+                  <td style="padding: 0 0 0 14px; vertical-align: top;">
+                    <span style="display: inline-block; margin: 5px 0 3px; padding: 1px 8px; border-radius: 999px; background-color: #F6F5F2; font-size: 12px; font-weight: 700; line-height: 1.4; color: #4600D6;">{{ parts[0] }}</span>
+                    <div style="padding: 0 0 6px; font-size: 16px; line-height: 1.3; color: #1A1A1A;{% if forloop.first %} font-weight: 700;{% endif %}">{{ parts[1] }}</div>
+                  </td>
                 </tr>
                 {% endfor %}
               </table>
@@ -185,39 +191,55 @@
               {% assign print_photo = line.properties['_photo_path'] %}
               {% assign photo_later = line.properties['_photo_later'] %}
               {% assign outcome = line.properties['_lookup_outcome'] %}
-              <tr><td class="ts-pad" style="padding: 20px 0 0;">
-                <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #F6F5F2; border-radius: 8px;">
+              {% assign race_title = line.title | remove: 'Personalized Race Print' | remove: 'Personalized Race Poster' | strip %}
+              {% assign v = line.variant.title | split: ' / ' %}
+              <tr><td class="ts-pad" style="padding: 16px 0 0;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 12px;">
                   <tr>
-                    <td style="padding: 20px 20px 18px; vertical-align: top;">
-                      <p style="margin: 0 0 2px; font-size: 14px; color: #666666;">{{ line.title | remove: 'Personalized Race Print' | remove: 'Personalized Race Poster' | strip }}{% if line.variant.title != 'Default Title' %} &middot; {{ line.variant.title | replace: ' / ', ' &middot; ' }}{% endif %}</p>
-                      <p style="margin: 0 0 12px; font-size: 22px; font-weight: 700; line-height: 1.1; color: #1A1A1A;">{{ runner }}</p>
-                      <table cellpadding="0" cellspacing="0" style="font-size: 15px; line-height: 1.5; color: #1A1A1A;">
-                        {% if line.properties['Race Year'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Year</td><td>{{ line.properties['Race Year'] }}</td></tr>{% endif %}
-                        {% if line.properties['Event'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Event</td><td>{{ line.properties['Event'] }}</td></tr>{% endif %}
-                        {% if line.properties['Bib #'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Bib</td><td>{{ line.properties['Bib #'] }}</td></tr>{% endif %}
-                        {% if line.properties['Time'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Time</td><td>{{ line.properties['Time'] }}</td></tr>{% endif %}
-                        {% if line.properties['Pace'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Pace</td><td>{{ line.properties['Pace'] }}</td></tr>{% endif %}
-                      </table>
-                      {% if outcome == 'race_not_yet_run' %}
-                        <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">We'll add the official time, pace and bib after race day.</p>
-                      {% elsif line.properties['No Time'] != blank %}
-                        <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">Printed without the time and pace, as you asked.</p>
-                      {% elsif line.properties['Time'] == blank %}
-                        <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">We'll track down the official time, pace and bib for the print.</p>
-                      {% endif %}
-                      {% if photo_later != blank %}
-                        <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">Your photo: we'll email you a link to upload it the day after race day.</p>
-                      {% endif %}
-                      {% if line.properties['Gift'] != blank %}
-                        <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">Marked as a gift.</p>
-                      {% endif %}
+                    <td style="padding: 16px 0 16px 16px; vertical-align: top; width: 96px;">
+                      {% if line.image %}<img src="{{ line | img_url: 'medium' }}" alt="{{ race_title | escape }}" width="96" style="display: block; width: 96px; height: auto; border-radius: 4px; border: 0;">{% endif %}
                     </td>
-                    {% if print_photo != blank %}
-                    <td style="padding: 20px 20px 18px 0; vertical-align: top; text-align: right; width: 120px;">
-                      <img class="ts-photo" src="https://fast.trackstar.art/api/public/order-photo?order={{ ship_order_id }}&amp;sig={{ ship_sig }}&amp;line={{ forloop.index0 }}" alt="Your photo for the print" width="120" height="120" style="display: inline-block; width: 120px; height: 120px; border-radius: 4px; border: 1px solid #E0E0E0; object-fit: cover;">
-                      <p style="margin: 6px 0 0; font-size: 13px; color: #666666;">Your photo</p>
+                    <td style="padding: 16px 16px 16px 16px; vertical-align: top;">
+                      <p style="margin: 0 0 6px; font-size: 13px; font-weight: 500; color: #666666;">Order details</p>
+                      <p style="margin: 0 0 10px; font-size: 22px; font-weight: 700; line-height: 1.1; color: #1A1A1A;">{{ race_title }}</p>
+                      <table cellpadding="0" cellspacing="0" style="border-collapse: separate; border-spacing: 0 6px;"><tr>
+                        {% if line.properties['Race Year'] != blank %}<td style="padding: 0 6px 0 0;"><span style="display: inline-block; padding: 6px 12px; border: 1px solid #E0E0E0; border-radius: 8px; white-space: nowrap; font-size: 15px; font-weight: 700; color: #1A1A1A;">{{ line.properties['Race Year'] }}</span></td>{% endif %}
+                        {% if v[0] != blank and line.variant.title != 'Default Title' %}<td style="padding: 0 6px 0 0;"><span style="display: inline-block; padding: 6px 12px; border: 1px solid #E0E0E0; border-radius: 8px; white-space: nowrap; font-size: 15px; font-weight: 700; color: #1A1A1A;">{{ v[0] }}</span></td>{% endif %}
+                        {% if v[1] != blank %}<td><span style="display: inline-block; padding: 6px 12px; border: 1px solid #1A1A1A; border-radius: 8px; background-color: #1A1A1A; white-space: nowrap; font-size: 15px; font-weight: 700; color: #FFFFFF;">{{ v[1] }}</span></td>{% endif %}
+                      </tr></table>
                     </td>
-                    {% endif %}
+                  </tr>
+                  <tr><td colspan="2" style="padding: 0 16px;"><div style="height: 1px; background-color: #E0E0E0;"></div></td></tr>
+                  <tr>
+                    <td colspan="2" style="padding: 14px 16px 16px;">
+                      <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                        <td style="vertical-align: top;">
+                          <table cellpadding="0" cellspacing="0" style="font-size: 15px; line-height: 1.5; color: #1A1A1A;">
+                            <tr><td style="padding: 0 20px 0 0; color: #666666;">Runner</td><td style="font-weight: 700;">{{ runner }}</td></tr>
+                            {% if line.properties['Event'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Event</td><td>{{ line.properties['Event'] }}</td></tr>{% endif %}
+                            {% if line.properties['Bib #'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Bib</td><td>{{ line.properties['Bib #'] }}</td></tr>{% endif %}
+                            {% if line.properties['Time'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Time</td><td>{{ line.properties['Time'] }}</td></tr>{% endif %}
+                            {% if line.properties['Pace'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Pace</td><td>{{ line.properties['Pace'] }}</td></tr>{% endif %}
+                          </table>
+                          {% if outcome == 'race_not_yet_run' %}
+                            <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">We'll add the official time, pace and bib after race day.</p>
+                          {% elsif line.properties['No Time'] != blank %}
+                            <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">Printed without the time and pace, as you asked.</p>
+                          {% elsif line.properties['Time'] == blank %}
+                            <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">We'll track down the official time, pace and bib for the print.</p>
+                          {% endif %}
+                          {% if photo_later != blank %}
+                            <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">Your photo: we'll email you a link to upload it the day after race day.</p>
+                          {% endif %}
+                        </td>
+                        {% if print_photo != blank %}
+                        <td style="padding: 0 0 0 16px; vertical-align: top; text-align: right; width: 96px;">
+                          <img class="ts-photo" src="https://fast.trackstar.art/api/public/order-photo?order={{ ship_order_id }}&amp;sig={{ ship_sig }}&amp;line={{ forloop.index0 }}" alt="Your photo for the print" width="96" height="96" style="display: inline-block; width: 96px; height: 96px; border-radius: 4px; border: 1px solid #E0E0E0; object-fit: cover;">
+                          <p style="margin: 6px 0 0; font-size: 13px; color: #666666;">Your photo</p>
+                        </td>
+                        {% endif %}
+                      </tr></table>
+                    </td>
                   </tr>
                 </table>
               </td></tr>
@@ -226,7 +248,7 @@
 
             {% if can_manage %}
             <tr><td class="ts-pad" style="padding: 28px 0 0;">
-              <p style="margin: 0 0 12px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">Need to fix a name, change the frame or update your address? You can for 48 hours after ordering.</p>
+              <p style="margin: 0 0 12px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">Need to fix a name, change the frame or update your address? You can {% if has_preorder %}any time before race day{% else %}for 48 hours after ordering{% endif %}.</p>
               <table class="ts-btn" cellpadding="0" cellspacing="0"><tr><td style="border: 1.5px solid #4600D6; border-radius: 5px;">
                 <a href="https://fast.trackstar.art/order/{{ ship_order_id }}/{{ ship_sig }}" style="display: inline-block; padding: 16px 32px; font-size: 16px; font-weight: 700; color: #4600D6; text-decoration: none;">Manage your order</a>
               </td></tr></table>
