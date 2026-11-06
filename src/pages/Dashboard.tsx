@@ -268,6 +268,8 @@ export default function Dashboard() {
   const [bulkCreating, setBulkCreating] = useState(false)
   // A run opened from the Standard view's Bulk orders panel.
   const [bulkOpenId, setBulkOpenId] = useState<string | null>(null)
+  // The bulk order a runner was opened from: going back from the runner returns to it, not to the list.
+  const bulkReturnId = useRef<string | null>(null)
 
   // Old links with ?settings=1 go to the Settings page.
   const goToSettings = useNavigate()
@@ -314,6 +316,13 @@ export default function Dashboard() {
   const [completedCount, setCompletedCount] = useState<number | null>(null)
   // The view the orders in state belong to, so the cache below files them under it.
   const ordersViewRef = useRef<ActiveView | null>(null)
+  // Closing a bulk runner reopens the bulk order it came from.
+  useEffect(() => {
+    if (selectedOrder || !bulkReturnId.current) return
+    // Only when still on Bulk: switching to another view while in the runner just goes there.
+    if (activeView === 'bulk') setBulkOpenId(bulkReturnId.current)
+    bulkReturnId.current = null
+  }, [selectedOrder, activeView])
   const activeViewRef = useRef(activeView)
   activeViewRef.current = activeView
   useEffect(() => {
@@ -1424,7 +1433,7 @@ export default function Dashboard() {
               runner rows are still orders, so the modal below opens them. */}
           {inlineDetail ? null : activeView === 'bulk' ? (
             <BulkView
-              onOpenRunner={(orderNumber) => { const o = orders.find(x => x.orderNumber === orderNumber); if (o) setSelectedOrder(o); else fetchOrders().then(() => { const oo = orders.find(x => x.orderNumber === orderNumber); if (oo) setSelectedOrder(oo) }) }}
+              onOpenRunner={(orderNumber, bulkId) => { bulkReturnId.current = bulkId || null; const o = orders.find(x => x.orderNumber === orderNumber); if (o) setSelectedOrder(o); else fetchOrders().then(() => { const oo = orders.find(x => x.orderNumber === orderNumber); if (oo) setSelectedOrder(oo) }) }}
               refreshRunners={() => { fetchOrders() }}
               onCount={setBulkCount}
               toolbar={toolbar}

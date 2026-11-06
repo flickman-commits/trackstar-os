@@ -166,7 +166,8 @@ export default function BulkView({ onOpenRunner, refreshRunners, onCount, toolba
   creating?: boolean
   onCreatingChange?: (open: boolean) => void
   /** Open a runner in the ordinary order modal. */
-  onOpenRunner: (orderNumber: string) => void
+  /** Open a runner's order; bulkId is the bulk order it was opened from, to come back to. */
+  onOpenRunner: (orderNumber: string, bulkId?: string) => void
   /** Ask the dashboard to reload its bulk-runner orders so the modal has fresh data. */
   refreshRunners: () => void
   /** How many bulk orders exist, for the header badge. */
@@ -190,7 +191,7 @@ export default function BulkView({ onOpenRunner, refreshRunners, onCount, toolba
   useEffect(() => { load() }, [load])
 
   if (selectedId) {
-    return <BulkDetail key={selectedId} id={selectedId} onBack={() => { setSelectedId(null); load() }} onOpenRun={setSelectedId} onOpenRunner={onOpenRunner} refreshRunners={refreshRunners} team={team} meId={meId} />
+    return <BulkDetail key={selectedId} id={selectedId} onBack={() => { setSelectedId(null); load() }} onOpenRun={setSelectedId} onOpenRunner={n => onOpenRunner(n, selectedId)} refreshRunners={refreshRunners} team={team} meId={meId} />
   }
 
   return (
