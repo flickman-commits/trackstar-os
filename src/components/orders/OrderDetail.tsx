@@ -2178,7 +2178,7 @@ Thank you!`
                     {/* The print already went out and the customer wants it in another size too:
                         render it at that size here, approve it, then Support's New Artelo order
                         uses it. Approving it never sends it on its own (render/jobs.js). */}
-                    {design.canManage && selectedOrder.status === 'completed' && !isEditing && (
+                    {design.canManage && !isEditing && (
                       altSizeOpen ? (
                         <div className="self-start flex flex-wrap items-center gap-1.5 text-xs">
                           <span className="text-off-black/60">Render at</span>

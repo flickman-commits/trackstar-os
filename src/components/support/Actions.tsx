@@ -784,6 +784,78 @@ function DiscountForm({ thread, first, isAdmin, onInsert, onDone, onCancel }: { 
   )
 }
 
+/**
+ * A Shopify invoice for any amount, for a request that does not make one by
+ * itself (a second size, an extra frame, rush shipping). Shopify emails it
+ * with a pay link; the paid draft becomes an ordinary order. Over the limit
+ * ($200) is an admin's; the server holds the same line.
+ */
+function InvoiceForm({ thread, orderName, onDone, onCancel }: { thread: ThreadDetail; orderName?: string; onDone: () => void; onCancel: () => void }) {
+  const [amount, setAmount] = useState('35')
+  const [title, setTitle] = useState('')
+  const [email, setEmail] = useState('')
+  const [message, setMessage] = useState('')
+  const [info, setInfo] = useState<{ limitCents: number; isAdmin: boolean } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [pressKey, setPressKey] = useState('')
+  const [sent, setSent] = useState<{ draftName: string; dollars: string; to: string; invoiceUrl: string | null } | null>(null)
+  useEffect(() => {
+    supportApi.action<{ limitCents: number; isAdmin: boolean; email: string }>('invoiceLimit', { id: thread.id })
+      .then(r => { setInfo(r); setEmail(e => e || r.email) }).catch(() => {})
+  }, [thread.id])
+  const cents = Math.round(Number(amount) * 100) || 0
+  const over = info ? cents > info.limitCents && !info.isAdmin : false
+  const ok = cents >= 100 && !over && title.trim().length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+  const send = async () => {
+    if (!ok) return
+    if (!confirming) { setConfirming(true); setPressKey(newIdempotencyKey()); return }
+    setBusy(true)
+    try {
+      const out = await supportApi.action<{ draftName: string; dollars: string; to: string; invoiceUrl: string | null }>('sendInvoice', { id: thread.id, cents, title: title.trim(), email: email.trim(), orderName: orderName || undefined, message: message.trim() || undefined, idempotencyKey: pressKey })
+      setSent(out); onDone()
+    } catch (e) { toast.error((e as Error).message); setConfirming(false) } finally { setBusy(false) }
+  }
+  if (sent) {
+    return (
+      <ActionModal icon={Receipt} title="Invoice sent" sub={sent.draftName} onClose={onCancel}
+        footer={<button onClick={onCancel} className={modalPrimary}>Done</button>}>
+        <Done title={`$${sent.dollars} invoice emailed to ${sent.to}`}>
+          Shopify sent it with a pay link. Once paid it shows as an order in Shopify.{sent.invoiceUrl && <> <a href={sent.invoiceUrl} target="_blank" rel="noopener noreferrer" className="text-[#4600D6] hover:underline">Open the invoice</a></>}
+        </Done>
+      </ActionModal>
+    )
+  }
+  return (
+    <ActionModal icon={Receipt} title="Send invoice" sub={orderName ? `For #${orderName}` : undefined} onClose={onCancel} busy={busy}
+      hint={confirming ? <span className="font-medium">Email a ${(cents / 100).toFixed(2)} invoice to {email.trim()}?</span> : 'Shopify emails it with a pay link. Nothing is charged until they pay.'}
+      footer={<>
+        <button onClick={() => (confirming ? setConfirming(false) : onCancel())} disabled={busy} className={modalCancel}>{confirming ? 'Back' : 'Cancel'}</button>
+        <button onClick={send} disabled={busy || !ok} className={modalPrimary}>{busy && <Spin />}{confirming ? 'Yes, send it' : `Send $${cents ? (cents / 100).toFixed(2) : '?'} invoice`}</button>
+      </>}>
+      <Field label="Amount">
+        <div className="flex flex-wrap items-center gap-2">
+          {[15, 25, 35, 50].map(n => <button key={n} type="button" onClick={() => { setAmount(String(n)); setConfirming(false) }} className={modalChip(amount === String(n))}>${n}</button>)}
+          <div className="relative w-28 ml-1">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-off-black/45">$</span>
+            <input value={amount} onChange={e => { setAmount(e.target.value.replace(/[^0-9.]/g, '').slice(0, 8)); setConfirming(false) }} inputMode="decimal" className={`${modalInput} pl-7 text-right`} />
+          </div>
+        </div>
+      </Field>
+      <Field label="What it is for (the line on the invoice)">
+        <input value={title} onChange={e => { setTitle(e.target.value.slice(0, 120)); setConfirming(false) }} placeholder="Upgrade to 12x18" className={modalInput} autoFocus />
+      </Field>
+      <Field label="Send to">
+        <input value={email} onChange={e => { setEmail(e.target.value); setConfirming(false) }} className={modalInput} />
+      </Field>
+      <Field label="Message in the email (optional)">
+        <textarea value={message} onChange={e => setMessage(e.target.value.slice(0, 1000))} rows={2} className={`${modalInput} resize-none`} />
+      </Field>
+      {over && <div className={bad}>Over ${(info!.limitCents / 100).toFixed(0)} is Matt's call. Slack Matt instead.</div>}
+    </ActionModal>
+  )
+}
+
 function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChanged }: { o: CustomerOrder; thread: ThreadDetail; multiple: boolean; isAdmin: boolean; onInsert: (text: string) => void; onAttach: (m: Mockup) => void; onChanged: () => void }) {
   const [picking, setPicking] = useState(false)
   // Refresh: the newest mockups after a re-render, in place of what the page loaded with.
@@ -804,7 +876,7 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
   }
   const [busy, setBusy] = useState<string | null>(null)
   // The one modal open for this order, if any.
-  const [open, setOpen] = useState<null | 'address' | 'change' | 'fix' | 'note' | 'claim' | 'reorder' | 'refund' | 'cancel'>(null)
+  const [open, setOpen] = useState<null | 'address' | 'change' | 'fix' | 'note' | 'claim' | 'reorder' | 'refund' | 'cancel' | 'invoice'>(null)
   const close = () => setOpen(null)
   const form = { o, thread, onDone: onChanged, onCancel: close }
   const [converting, setConverting] = useState<string | null>(null)
@@ -915,6 +987,7 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
         {o.shopifyOrderId && o.items.length > 0 && <ActionLink icon={MessageSquareWarning} onClick={() => setOpen('claim')} title="Emails support@artelo.com about this order, with the order number in the subject. Damage and loss get a free replacement.">Create Artelo ticket</ActionLink>}
         {/* A reprint or replacement: the same print to this customer, built in Artelo from here. */}
         {o.shopifyOrderId && o.items.length > 0 && <ActionLink icon={Repeat} onClick={() => setOpen('reorder')} title="The same print to this customer: a reprint or a replacement. Artelo bills us for it, so damage goes through the claim instead.">New Artelo order</ActionLink>}
+        <ActionLink icon={Receipt} onClick={() => setOpen('invoice')} title="A Shopify invoice for any amount, for something that does not invoice itself: a second size, an extra frame, rush shipping">Send invoice</ActionLink>
         {o.shopifyOrderId && o.financialStatus !== 'REFUNDED' && <ActionLink icon={Receipt} onClick={() => setOpen('refund')} title="All or part, to the card they paid with. Over $150 is Matt's call.">Refund</ActionLink>}
         {/* Cancel only before anything is made or shipped. */}
         {o.shopifyOrderId && !shipped && !o.items.some(it => it.status === 'completed' || it.designStatus === 'sent_to_production') && o.financialStatus !== 'REFUNDED' && <ActionLink icon={Ban} onClick={() => setOpen('cancel')} title="Only after the customer says yes, and only before production">Cancel and refund</ActionLink>}
@@ -931,6 +1004,7 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
       {open === 'reorder' && <ArteloOrderForm {...form} isAdmin={isAdmin} />}
       {open === 'refund' && <RefundForm {...form} />}
       {open === 'cancel' && <CancelForm {...form} />}
+      {open === 'invoice' && <InvoiceForm thread={thread} orderName={o.number} onDone={onChanged} onCancel={close} />}
     </div>
   )
 }
@@ -972,7 +1046,7 @@ export default function Actions({ thread, onInsert, onAttach, onChanged }: { thr
   const first = (thread.customerName || '').trim().split(/\s+/)[0] || ''
   // Replacements exist only in Artelo: the actions work on the orders customers placed.
   const orders = thread.context.orders.filter(o => !o.replacement)
-  const [open, setOpen] = useState<null | 'code' | 'slack'>(null)
+  const [open, setOpen] = useState<null | 'code' | 'slack' | 'invoice'>(null)
   return (
     <div className="space-y-4">
       {orders.map(o => <OrderActions key={`${o.source}-${o.number}`} o={o} thread={thread} multiple={orders.length > 1} isAdmin={isAdmin} onInsert={onInsert} onAttach={onAttach} onChanged={onChanged} />)}
@@ -980,10 +1054,12 @@ export default function Actions({ thread, onInsert, onAttach, onChanged }: { thr
         {orders.length > 1 && <div className={heading}>Customer</div>}
         <div className="flex flex-col items-stretch gap-1.5">
           <ActionLink icon={BadgePercent} title="One use, 30 days, named after them" onClick={() => setOpen('code')}>Create discount code for {first || 'them'}</ActionLink>
+          {!orders.length && <ActionLink icon={Receipt} title="A Shopify invoice for any amount" onClick={() => setOpen('invoice')}>Send invoice</ActionLink>}
           <ActionLink icon={MessageSquareWarning} title="Posts to Slack with a link to this thread, and marks it escalated" onClick={() => setOpen('slack')}>Slack Matt</ActionLink>
         </div>
       </div>
       <CodeCheck />
+      {open === 'invoice' && <InvoiceForm thread={thread} onDone={onChanged} onCancel={() => setOpen(null)} />}
       {open === 'code' && <DiscountForm thread={thread} first={first} isAdmin={isAdmin} onInsert={onInsert} onDone={onChanged} onCancel={() => setOpen(null)} />}
       {open === 'slack' && (
         <TextForm icon={MessageSquareWarning} title="Slack Matt" label="What should Matt know?" action="Send to Slack"

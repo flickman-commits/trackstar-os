@@ -75,9 +75,10 @@ async function raceRowLookup(name, year) {
 
 /**
  * `size` renders the same print at another size (8x10, 12x18, 16x24), for a
- * customer who wants a second size after theirs went out. Only on a completed
- * order, so it never stands in for the print in the pipeline: the job is
- * marked altSize, approving it never sends it to production (review.js), and
+ * customer who wants a second size (theirs already out, or still open). It
+ * never stands in for the print in the pipeline: the job is marked altSize,
+ * whatever picks "the newest approved render" to send, deliver or show the
+ * order's status skips it, approving it never sends it to production (review.js), and
  * Support's New Artelo order uses it when the rep picks that size
  * (support/arteloOrder.js).
  */
@@ -87,14 +88,16 @@ export async function createJob({ orderId, requestedBy = 'admin', requestedById 
     if (!SIZES.includes(size)) throw new Error(`No artboard for size "${size}"`)
     const order = await prisma.order.findUnique({ where: { id: String(orderId) }, select: SPEC_SELECT })
     if (!order) throw new Error('Order not found')
-    if (order.status !== 'completed') throw new Error('Another size is for an order that already went out. Before that, change the size on the order itself.')
+    if (order.trackstarOrderType !== 'standard') throw new Error('Another size is for standard prints')
     if (order.productSize === size) throw new Error(`This order is already ${size}. Use Re-render for the same size.`)
     ctx = { order: { ...order, productSize: size } }
   }
   const { ok, reasons, spec: built } = await checkOrder(orderId, ctx)
   if (!ok) throw new Error(reasons.join('. '))
   const spec = size ? { ...built, altSize: true } : built
-  const open = await prisma.renderJob.findFirst({ where: { orderId: String(orderId), status: { in: ['queued', 'rendering'] } } })
+  // One open render per kind: the print, or each other size.
+  const open = (await prisma.renderJob.findMany({ where: { orderId: String(orderId), status: { in: ['queued', 'rendering'] } } }))
+    .find(j => (j.spec?.altSize ? j.spec.size : null) === (size || null))
   if (open) return open
   const last = await prisma.renderJob.findFirst({ where: { orderId: String(orderId) }, orderBy: { version: 'desc' }, select: { version: true } })
   return prisma.renderJob.create({
@@ -102,8 +105,14 @@ export async function createJob({ orderId, requestedBy = 'admin', requestedById 
   })
 }
 
+/**
+ * The render the order view shows: the newest one, except a render at another
+ * size that has been reviewed, so approving a 12x18 for Support puts the
+ * order's own print back in view.
+ */
 export async function latestJob(orderId) {
-  return prisma.renderJob.findFirst({ where: { orderId: String(orderId) }, orderBy: { version: 'desc' }, include: { reviewer: { select: { firstName: true, lastName: true } } } })
+  const jobs = await prisma.renderJob.findMany({ where: { orderId: String(orderId) }, orderBy: { version: 'desc' }, take: 10, include: { reviewer: { select: { firstName: true, lastName: true } } } })
+  return jobs.find(j => !(j.spec?.altSize && ['approved', 'rejected', 'closed'].includes(j.review))) || jobs[0] || null
 }
 
 /** The oldest queued job, now owned by this worker. A claim left hanging is handed out again. */

@@ -45,7 +45,9 @@ export async function deliverApproved(job) {
   if (job.deliveredAt) return job
   // Only the newest approved version of an order goes to the folder. An older
   // approved version that was re-rendered and approved again is superseded.
-  const newer = await prisma.renderJob.findFirst({ where: { orderId: job.orderId, review: 'approved', version: { gt: job.version } }, select: { version: true } })
+  // Another size (render/jobs.js createJob) supersedes only the same size of itself, and never the print.
+  const newer = (await prisma.renderJob.findMany({ where: { orderId: job.orderId, review: 'approved', version: { gt: job.version } }, orderBy: { version: 'desc' }, select: { version: true, spec: true } }))
+    .find(j => Boolean(j.spec?.altSize) === Boolean(job.spec?.altSize) && (!job.spec?.altSize || j.spec?.size === job.spec?.size))
   if (newer) return prisma.renderJob.update({ where: { id: job.id }, data: { deliveryError: `Superseded by v${newer.version}` } })
   try {
     const { pdfUrl } = await signedFiles(job)

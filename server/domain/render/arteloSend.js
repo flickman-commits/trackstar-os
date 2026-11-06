@@ -103,9 +103,10 @@ export async function queueSend(job, { orderType } = {}) {
   }
 }
 
-/** The newest approved job on an order: the one that would be sent. */
+/** The newest approved job on an order: the one that would be sent. Never a render at another size (render/jobs.js). */
 async function sendableJob(orderId) {
-  return prisma.renderJob.findFirst({ where: { orderId: String(orderId || ''), status: 'done', review: 'approved' }, orderBy: { version: 'desc' } })
+  const jobs = await prisma.renderJob.findMany({ where: { orderId: String(orderId || ''), status: 'done', review: 'approved' }, orderBy: { version: 'desc' }, take: 10 })
+  return jobs.find(j => !j.spec?.altSize) || null
 }
 
 /** Hold an order that is waiting to send. It stays approved; Send now releases it. */
@@ -127,7 +128,7 @@ export async function holdSend({ orderId, actor }) {
  * order has no print that could send.
  */
 export async function holdForCustomer({ orderId, actor }) {
-  const job = await prisma.renderJob.findFirst({ where: { orderId: String(orderId || ''), status: 'done', review: { in: ['pending', 'approved'] }, arteloSentAt: null }, orderBy: { version: 'desc' } })
+  const job = (await prisma.renderJob.findMany({ where: { orderId: String(orderId || ''), status: 'done', review: { in: ['pending', 'approved'] }, arteloSentAt: null }, orderBy: { version: 'desc' }, take: 10 })).find(j => !j.spec?.altSize)
   if (!job) return null
   return prisma.renderJob.update({ where: { id: job.id }, data: { sendHeldAt: new Date(), sendHeldBy: `${personName(actor)}, waiting on the customer's approval`, sendAfter: null } })
 }

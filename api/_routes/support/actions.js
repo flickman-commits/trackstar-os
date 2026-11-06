@@ -12,6 +12,7 @@
  *   refundable          { id, shopifyOrderId }                  -> what is left to refund, and the $150 line
  *   refund              { id, shopifyOrderId, cents, reason }   over $150 refused unless admin (re-read from the database)
  *   cancelOrder         { id, shopifyOrderId, reason, customerConfirmed: true }
+ *   sendInvoice         { id, cents, title, email?, orderName?, message? }  a Shopify invoice for any amount; over $200 admin only
  *
  * Anyone on Support; a discount code also needs the Discount codes
  * capability, the same gate as the dashboard's discount tool. Every
@@ -28,12 +29,13 @@ import { can } from '../../_lib/roles.js'
 import prisma from '../../_lib/prisma.js'
 import { changeItemPrep, changeItem } from '../../../server/domain/support/changeItem.js'
 import { discount15, lookupCode, orderNote, fixPersonalization, slackMatt, shippingAddress, refundable, refund, cancelOrder, REFUND_LIMIT_CENTS, DISCOUNT_LIMIT_PERCENT } from '../../../server/domain/support/actions.js'
+import { sendSupportInvoice, INVOICE_LIMIT_CENTS } from '../../../server/domain/support/invoice.js'
 import { assertOrderInThread } from '../../../server/domain/support/threads.js'
 import { claimOnce } from '../../../server/domain/support/idempotency.js'
 import { publicMessage, publicStatus } from '../../../server/domain/support/errors.js'
 
 /** Actions that move money or change an order in Shopify: once per press. */
-const ONCE = new Set(['refund', 'cancelOrder', 'changeItem'])
+const ONCE = new Set(['refund', 'cancelOrder', 'changeItem', 'sendInvoice'])
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'POST, OPTIONS' })) return
@@ -98,6 +100,12 @@ export default async function handler(req, res) {
       case 'cancelOrder': {
         const out = await cancelOrder({ thread, shopifyOrderId: body.shopifyOrderId, reason: body.reason, customerConfirmed: body.customerConfirmed === true, actor: user })
         await audit(`Cancelled #${out.number} and refunded ${out.display}`, { shopifyOrderId: body.shopifyOrderId, cents: out.cents, currency: 'USD', reason: body.reason || null })
+        return res.status(200).json(out)
+      }
+      case 'invoiceLimit': return res.status(200).json({ limitCents: INVOICE_LIMIT_CENTS, isAdmin: user.role === 'admin', email: thread.customerEmail || '' })
+      case 'sendInvoice': {
+        const out = await sendSupportInvoice({ thread, cents: body.cents, title: body.title, email: body.email, orderName: body.orderName, message: body.message, actor: user, isAdmin: user.role === 'admin' })
+        await audit(`Sent Shopify invoice ${out.draftName} for $${out.dollars} to ${out.to}`, { cents: Math.round(Number(body.cents)), currency: 'USD', title: body.title || null, orderName: body.orderName || null })
         return res.status(200).json(out)
       }
       case 'slackMatt': {

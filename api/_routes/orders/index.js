@@ -235,7 +235,8 @@ export default async function handler(req, res) {
         _count: { select: { comments: true, proofs: true } },
         assignee: { select: { id: true, firstName: true, lastName: true } },
         // The newest render, for the pipeline status.
-        renderJobs: { orderBy: { version: 'desc' }, take: 1, select: { status: true, review: true, error: true, reviewNote: true, sendAfter: true, sendHeldAt: true, sendHeldBy: true, sendError: true, arteloSentAt: true } },
+        // A few, so a render at another size (render/jobs.js) is skipped for the order's status.
+        renderJobs: { orderBy: { version: 'desc' }, take: 3, select: { spec: true, status: true, review: true, error: true, reviewNote: true, sendAfter: true, sendHeldAt: true, sendHeldBy: true, sendError: true, arteloSentAt: true } },
       },
       // The raw Shopify, Etsy and Artelo payloads are about 20MB across all
       // orders and the list reads a handful of keys from them. Pulling them
@@ -512,7 +513,7 @@ export default async function handler(req, res) {
       if (!o || o.trackstarOrderType !== 'standard') continue
       const research = o.runnerResearch?.find(r => r.researchStatus === 'found') || o.runnerResearch?.[0] || null
       const race = research?.race || raceFor(o.raceNameOverride ?? o.raceName, o.yearOverride ?? o.raceYear)
-      t.pipeline = pipelineFor({ order: o, research, race, render: o.renderJobs?.[0] || null, hasScraper: t.hasScraperAvailable, templates: templateKeys, noTimeGaps: gaps, photoUnpaid: t.photoUnpaid, workerOnline, waitingOnCustomer: t.waitingOnCustomerSince || null })
+      t.pipeline = pipelineFor({ order: o, research, race, render: o.renderJobs?.find(j => !j.spec?.altSize) || null, hasScraper: t.hasScraperAvailable, templates: templateKeys, noTimeGaps: gaps, photoUnpaid: t.photoUnpaid, workerOnline, waitingOnCustomer: t.waitingOnCustomerSince || null })
     }
 
     return res.status(200).json({ orders: transformedOrders, ...(openOnly ? { completedCount } : {}) })

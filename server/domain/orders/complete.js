@@ -70,7 +70,7 @@ export async function completeOrder({ orderId, orderNumber, actor = null, via = 
   // photo on it: that approval is the confirmation, so no checkbox.
   let photoByRender = false
   if (existing.photoPath && !existing.photoPlacedAt) {
-    const approved = await prisma.renderJob.findFirst({ where: { orderId: existing.id, review: 'approved', status: 'done' }, orderBy: { version: 'desc' }, select: { spec: true } })
+    const approved = (await prisma.renderJob.findMany({ where: { orderId: existing.id, review: 'approved', status: 'done' }, orderBy: { version: 'desc' }, take: 10, select: { spec: true } })).find(j => !j.spec?.altSize)
     photoByRender = via === 'approve' || (approved?.spec?.photoPath && approved.spec.photoPath === existing.photoPath)
     if (!photoByRender) throw new CompleteError('photo_not_confirmed', 'This print includes a customer photo and was not made by the script. Confirm the photo is placed before completing the order.')
   }

@@ -79,7 +79,9 @@ export async function uploadPdfToLibrary(pdfUrl, name) {
  */
 export async function uploadApprovedToArtelo(job) {
   if (job.arteloUploadedAt) return job
-  const newer = await prisma.renderJob.findFirst({ where: { orderId: job.orderId, review: 'approved', version: { gt: job.version } }, select: { version: true } })
+  // Another size (render/jobs.js createJob) supersedes only the same size of itself, and never the print.
+  const newer = (await prisma.renderJob.findMany({ where: { orderId: job.orderId, review: 'approved', version: { gt: job.version } }, orderBy: { version: 'desc' }, select: { version: true, spec: true } }))
+    .find(j => Boolean(j.spec?.altSize) === Boolean(job.spec?.altSize) && (!job.spec?.altSize || j.spec?.size === job.spec?.size))
   if (newer) return prisma.renderJob.update({ where: { id: job.id }, data: { arteloError: `Superseded by v${newer.version}` } })
   try {
     const { pdfUrl } = await signedFiles(job, 900)
