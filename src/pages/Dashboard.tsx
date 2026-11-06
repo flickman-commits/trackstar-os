@@ -15,7 +15,7 @@ import EmailCustomerModal from '@/components/support/EmailCustomerModal'
 import PageHeader from '@/components/PageHeader'
 import OrderTags, { HoverTip } from '@/components/OrderTags'
 import OrderDetail from '@/components/orders/OrderDetail'
-import BulkAttention from '@/components/bulk/BulkAttention'
+import BulkAttentionRows from '@/components/bulk/BulkAttention'
 import StatusPill from '@/components/orders/StatusPill'
 import DesignStatusPicker from '@/components/orders/DesignStatusPicker'
 import {
@@ -1448,7 +1448,6 @@ export default function Dashboard() {
           ) : (
           <div className="bg-white border border-border-gray rounded-lg shadow-sm overflow-hidden flex-1 flex flex-col min-h-0">
             {toolbar}
-            {activeView === 'standard' && <BulkAttention onOpen={id => { setBulkOpenId(id); setActiveView('bulk') }} />}
 
             {/* Scrollable Container */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
@@ -1700,6 +1699,8 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border-gray">
+                      {/* Bulk runs near or past their race, first, in the same columns. */}
+                      {activeView === 'standard' && <BulkAttentionRows onOpen={id => { setBulkOpenId(id); setActiveView('bulk') }} />}
                       {filteredOrders.map((order, index) => {
                         const statusDisplay = getStatusDisplay(order)
                         const itemCount = getOrderItemCount(order.parentOrderNumber)

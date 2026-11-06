@@ -24,12 +24,12 @@ export async function bulkNeedingAttention(now = new Date()) {
   const runs = await prisma.bulkOrder.findMany({
     where: { status: { not: 'submitted' }, raceDate: { not: null, lte: new Date(now.getTime() + LEAD_DAYS * DAY) } },
     orderBy: [{ dueDate: 'asc' }, { raceDate: 'asc' }],
-    include: { assignee: { select: { firstName: true } } },
+    include: { assignee: { select: { id: true, firstName: true, lastName: true } } },
   })
   if (!runs.length) return []
   const runners = await prisma.order.findMany({
     where: { bulkOrderId: { in: runs.map(r => r.id) } },
-    select: { bulkOrderId: true, shippingAddress: true, researchedAt: true, productionFileUrl: true, runnerResearch: { select: { researchStatus: true }, take: 1, orderBy: { createdAt: 'desc' } } },
+    select: { bulkOrderId: true, shippingAddress: true, researchedAt: true, productionFileUrl: true, status: true, bulkSentAt: true, runnerResearch: { select: { researchStatus: true }, take: 1, orderBy: { createdAt: 'desc' } } },
   })
   const designs = await prisma.order.findMany({ where: { id: { in: runs.map(r => r.partnerOrderId).filter(Boolean) } }, select: { id: true, designStatus: true } })
   const templates = await prisma.printTemplate.findMany({ where: { key: { in: runs.map(r => templateKey(r.raceName, r.number)) } }, select: { key: true, lastCheckOk: true } })
@@ -67,6 +67,9 @@ export async function bulkNeedingAttention(now = new Date()) {
       // A run made after its due date (gifts for a race long past) is not overdue by that date.
       overdue: Boolean(run.dueDate && run.dueDate.getTime() < now.getTime() && run.createdAt < run.dueDate),
       quantity: run.quantity, entered: rs.length, researched, found, files,
+      // Prints gone to production at Artelo (bulk/send.js), for the progress bar.
+      sent: rs.filter(r => r.bulkSentAt || r.status === 'completed').length,
+      assignee: run.assignee ? { id: run.assignee.id, firstName: run.assignee.firstName, lastName: run.assignee.lastName } : null,
       owner: run.assignee?.firstName || null, blockers,
     })
   }
