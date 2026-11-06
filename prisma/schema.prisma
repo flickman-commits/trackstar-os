@@ -29,6 +29,8 @@ model Order {
   hadNoTime          Boolean   @default(false) // Flag: customer entered "no time" in runner name
   status             String    @default("pending") // "pending", "missing_year", "ready", "flagged", "completed"
   researchedAt       DateTime?
+  // The last research attempt by a bulk pass (bulk/bulkOrders.js researchPending), found or not, so a pass moves down the list
+  researchAttemptedAt DateTime?
   createdAt          DateTime  @default(now())
 
   // Trackstar order classification

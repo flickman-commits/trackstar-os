@@ -190,10 +190,12 @@ export async function readiness(bulk, runners) {
 // A runner looked up in the last six hours and not found is not tried again
 // yet. "Not found" leaves researchedAt empty, so without this the first few
 // runners were looked up over and over and everyone after them never was.
+// Order.researchAttemptedAt marks each attempt (the research row keeps its
+// first createdAt when a lookup is repeated, so it cannot tell).
 const RETRY_AFTER_MS = 6 * 3600e3
 
 export async function researchPending(bulk, { limit = 10, now = new Date() } = {}) {
-  const due = { bulkOrderId: bulk.id, researchedAt: null, runnerResearch: { none: { createdAt: { gte: new Date(now.getTime() - RETRY_AFTER_MS) } } } }
+  const due = { bulkOrderId: bulk.id, researchedAt: null, OR: [{ researchAttemptedAt: null }, { researchAttemptedAt: { lt: new Date(now.getTime() - RETRY_AFTER_MS) } }] }
   const runners = await prisma.order.findMany({
     where: due,
     orderBy: { lineItemIndex: 'asc' },
@@ -202,6 +204,7 @@ export async function researchPending(bulk, { limit = 10, now = new Date() } = {
   const service = new ResearchService()
   const results = []
   for (const r of runners) {
+    await prisma.order.update({ where: { id: r.id }, data: { researchAttemptedAt: new Date() } })
     try {
       const out = await service.researchOrder(r.orderNumber)
       results.push({ orderNumber: r.orderNumber, runnerName: r.runnerName, status: out?.runnerResearch?.researchStatus || 'done' })
@@ -276,7 +279,7 @@ export async function checkUrl(url) {
  */
 export async function researchRacedRunners({ limit = 10, now = new Date() } = {}) {
   const runs = await prisma.bulkOrder.findMany({
-    where: { status: { not: 'submitted' }, paidAt: { not: null }, raceDate: { not: null, lte: new Date(now.getTime() - 12 * 3600e3) }, runners: { some: { researchedAt: null, runnerResearch: { none: { createdAt: { gte: new Date(now.getTime() - RETRY_AFTER_MS) } } } } } },
+    where: { status: { not: 'submitted' }, paidAt: { not: null }, raceDate: { not: null, lte: new Date(now.getTime() - 12 * 3600e3) }, runners: { some: { researchedAt: null, OR: [{ researchAttemptedAt: null }, { researchAttemptedAt: { lt: new Date(now.getTime() - RETRY_AFTER_MS) } }] } } },
     orderBy: { dueDate: 'asc' },
   })
   const out = { researched: 0, runs: [] }
