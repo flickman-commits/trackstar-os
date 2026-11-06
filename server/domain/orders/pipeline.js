@@ -27,6 +27,7 @@ import { resolveTemplate, SIZES } from '../render/spec.js'
 import { sendStateOf } from '../render/sendState.js'
 import { noEditionFor } from '../../scrapers/index.js'
 import { awaitingLaterPhoto } from './photoLaterState.js'
+import { arteloHoldText } from '../../lib/arteloHolds.js'
 
 const RESULT_STATES = new Set(['found'])
 // The oldest race year anyone builds a scraper for (Matt, 2026-10-21).
@@ -78,7 +79,7 @@ export function pipelineFor({ order, research, race, render, hasScraper, templat
   // Artelo is holding it (server/domain/orders/arteloMismatch.js): nothing
   // prints until someone acts there, whatever the tool thinks of the design.
   if (order.arteloHold === 'Missing Designs') return stage('action', 'Not sent in Artelo', { kind: 'artelo', fix: 'This was marked complete, but Artelo still has the order as Missing Designs. Attach the design in Artelo (or Send to production if it was approved here), then complete it.' })
-  if (order.arteloHold) return stage('action', `Artelo: ${order.arteloHold}`, { kind: 'artelo', fix: /address/i.test(order.arteloHold) ? 'Artelo could not verify the shipping address and will not print until it is reviewed. Open the order in Artelo, fix or confirm the address, then send it to production.' : `Artelo is holding this order (${order.arteloHold}). Sort it out in Artelo; nothing prints until then.` })
+  if (order.arteloHold) { const h = arteloHoldText(order.arteloHold); return stage('action', h.label, { kind: 'artelo', fix: h.fix }) }
 
   // We asked the customer something (Support has the conversation waiting on
   // them): nothing to review or fix until they answer. An approved print

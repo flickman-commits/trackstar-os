@@ -16,6 +16,7 @@
 import prisma from '../../db.js'
 import { call } from '../render/artelo.js'
 import { slackTo, slackText } from '../../lib/slack.js'
+import { arteloHoldText } from '../../lib/arteloHolds.js'
 
 const DONE_AT_ARTELO = ['Received', 'InProduction', 'Shipped', 'Delivered', 'Canceled', 'Ignored']
 const STATE_KEY = 'artelo_completed_not_sent'
@@ -155,7 +156,8 @@ export async function alertArteloHolds(arteloOrders, { link } = {}) {
       const r = ours.find(x => x.parentOrderNumber === String(o.orderId))
       const name = r ? String(r.shopifyOrderData?.name || o.orderId).replace('#', '') : o.orderId
       const url = link ? link(o.id) : null
-      return `• *${slackText(o.productionStatus)}*: #${slackText(name)}${r ? ` (${slackText(r.raceName || '')}${r.runnerName ? ` / ${slackText(r.runnerName)}` : ''})` : ''}${url ? ` <${url}|Open in Artelo>` : ''}`
+      const h = arteloHoldText(o.productionStatus)
+      return `• *${slackText(h.label)}*: #${slackText(name)}${r ? ` (${slackText(r.raceName || '')}${r.runnerName ? ` / ${slackText(r.runnerName)}` : ''})` : ''}${url ? ` <${url}|Open in Artelo>` : ''}\n    _${slackText(h.why)}._`
     })
     await slackTo('alerts', `:octagonal_sign: *Artelo is holding ${fresh.length === 1 ? 'an order' : `${fresh.length} orders`}* and will not print until someone sorts it out in Artelo:\n${lines.join('\n')}`)
   }
