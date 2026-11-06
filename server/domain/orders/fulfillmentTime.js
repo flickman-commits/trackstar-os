@@ -4,7 +4,8 @@
  * personalization and handling the team controls. The goal (since Oct 25,
  * 2026) is an average of a day and a half (GOAL_MEAN_HOURS), and since Oct
  * 26 each order also counts as late past a day and a half (GOAL_HOURS, the
- * header's on-time; it was two days).
+ * header's on-time; it was two days). Both are two days again since Nov 6,
+ * 2026, the length of the hold before a print goes to Artelo.
  *
  * The clock starts at the order, or at race day for an order placed before
  * the race (nothing can happen until the runner has run). It stops when the
@@ -29,8 +30,10 @@
 import prisma from '../../db.js'
 
 const HOUR = 3600e3
-export const GOAL_HOURS = 36
-export const GOAL_MEAN_HOURS = 36
+// Two days since Nov 6, 2026, to match the 48-hour hold: an approved print
+// cannot reach Artelo (where the clock stops) before 48 hours, so 36 could not be met.
+export const GOAL_HOURS = 48
+export const GOAL_MEAN_HOURS = 48
 
 function quantile(sorted, p) {
   if (!sorted.length) return null

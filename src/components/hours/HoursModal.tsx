@@ -87,7 +87,7 @@ function HoursBody({ onClose }: { onClose: () => void }) {
   void tick
 
   return (
-    <ActionModal icon={Clock} title="Hours Tracker" sub={ts ? `week of ${dayLabel(ts.weekStart)}` : undefined} onClose={onClose} size="xl" bare
+    <ActionModal icon={Clock} title="Hours Tracker" sub={ts ? `week of ${dayLabel(ts.weekStart)}` : undefined} onClose={onClose} size="xl" bare draggable
       actions={<div className="flex items-center gap-1 mr-2">
         <button onClick={() => setWeek(w => addDays(w, -7))} className={btnGhost} aria-label="Previous week"><ChevronLeft className="w-4 h-4" /></button>
         <button onClick={() => setWeek(w => addDays(w, 7))} disabled={week >= thisMonday} className={btnGhost} aria-label="Next week"><ChevronRight className="w-4 h-4" /></button>

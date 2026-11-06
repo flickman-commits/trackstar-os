@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import Toast, { type ToastMessage } from '@/components/orders/Toast'
-import { Search, Plus, Loader2, ChevronDown as ChevronDownIcon, ImagePlus, MessageSquareText, SlidersHorizontal } from 'lucide-react'
+import { Search, Plus, Loader2, ChevronDown as ChevronDownIcon, ImagePlus, MessageSquareText, SlidersHorizontal, Clock } from 'lucide-react'
+import { openHours } from '@/lib/openHours'
 import { apiFetch } from '@/lib/api'
 import { segment, segmentGroup } from '@/lib/ui'
 import BulkView from '@/components/bulk/BulkView'
@@ -243,7 +244,7 @@ export default function Dashboard() {
     return next
   })
   const [showCompleted, setShowCompleted] = useState(false)
-  // Header stat: share of standard orders out by their deadline (1.5 days), past 7 days (goal 90%), and the ones late now.
+  // Header stat: share of standard orders out by their deadline (2 days, the hold window), past 7 days (goal 90%), and the ones late now.
   const [onTime, setOnTime] = useState<OnTime | null>(null)
   // And standard orders sent to production in the last 24 hours. Read again
   // every five minutes while the tab is visible.
@@ -252,7 +253,7 @@ export default function Dashboard() {
     if (!can('settings.stats')) return
     const read = () => apiFetch('/api/admin/stats?range=7d&only=fulfillment').then(r => r.ok ? r.json() : null)
       .then(d => {
-        const t = d?.onTime; if (t?.due) setOnTime({ pct: t.onTimePct, goalHours: t.goalHours || 36, due: t.due, onTime: t.onTime, lateNow: t.lateNow, oldestLateDays: t.oldestLateDays, lateOrders: t.lateOrders || [] })
+        const t = d?.onTime; if (t?.due) setOnTime({ pct: t.onTimePct, goalHours: t.goalHours || 48, due: t.due, onTime: t.onTime, lateNow: t.lateNow, oldestLateDays: t.oldestLateDays, lateOrders: t.lateOrders || [] })
         if (typeof d?.sentToday?.count === 'number') setSentToday({ count: d.sentToday.count, byPerson: d.sentToday.byPerson || [] })
       }).catch(() => {})
     read()
@@ -1363,6 +1364,13 @@ export default function Dashboard() {
               </h2>
               {isRefreshing && <Loader2 className="w-4 h-4 animate-spin text-off-black/30" />}
               {activeView === 'standard' && onTime && <OnTimeStat stat={onTime} lateActive={stageFilter === 'late'} onLate={() => setStageFilter(stageFilter === 'late' ? '' : 'late')} />}
+              {/* The Hours Tracker, one click from the queue (it is also under Tools in the rail). */}
+              {can('hours') && (
+                <button onClick={openHours} title="Log your time and run the timer"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border-gray text-xs font-medium text-off-black/70 hover:text-off-black hover:bg-subtle-gray whitespace-nowrap">
+                  <Clock className="w-3.5 h-3.5" />Hours
+                </button>
+              )}
             </div>
             {lastImportedAt && (
               <button

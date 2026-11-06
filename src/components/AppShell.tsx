@@ -7,6 +7,7 @@ import StandardTools from '@/components/StandardTools'
 import CommandSearch from '@/components/CommandSearch'
 import HoursModal from '@/components/hours/HoursModal'
 import RunningTimer from '@/components/hours/RunningTimer'
+import { OPEN_HOURS_EVENT } from '@/lib/openHours'
 
 /**
  * Everything that has to outlive a page change.
@@ -58,6 +59,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     : path.startsWith('/samples') ? 'samples'
     : 'fulfillment'
 
+  // Any page can open the Hours Tracker (the fulfillment header's Hours button) without its own copy of it.
+  useEffect(() => {
+    const open = () => setRailPanel('hours')
+    window.addEventListener(OPEN_HOURS_EVENT, open)
+    return () => window.removeEventListener(OPEN_HOURS_EVENT, open)
+  }, [])
   const openSettings = () => {
     // Close whatever panel is open first. Without this the old tile keeps
     // its white card while the settings modal is up, and its popup sits

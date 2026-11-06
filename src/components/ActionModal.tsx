@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { modalBody, modalCard, modalFooter, modalHeader, modalOverlay } from '@/lib/ui'
@@ -8,8 +8,11 @@ import { modalBody, modalCard, modalFooter, modalHeader, modalOverlay } from '@/
  * the global search: icon and title in the header, the form in the body, the
  * buttons in the footer with a grey hint on the left. Esc and a click outside
  * close it, except while it is saving.
+ *
+ * `draggable` (the Hours Tracker): the title bar moves it, and the page
+ * behind stays visible and usable, so a click outside does not close it.
  */
-export default function ActionModal({ icon: Icon, title, sub, description, actions, onClose, busy, hint, footer, size = 'md', bare, children }: {
+export default function ActionModal({ icon: Icon, title, sub, description, actions, onClose, busy, hint, footer, size = 'md', bare, draggable, children }: {
   icon?: typeof X
   title: ReactNode
   /** Grey, after the title: the order number, the customer. */
@@ -28,17 +31,41 @@ export default function ActionModal({ icon: Icon, title, sub, description, actio
   size?: 'sm' | 'md' | 'lg' | 'xl'
   /** The body without padding, for panels that lay out their own (lists, cards). */
   bare?: boolean
+  /** Moved by its title bar, over a page that stays usable. */
+  draggable?: boolean
   children?: ReactNode
 }) {
+  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const cardRef = useRef<HTMLDivElement>(null)
+  const startDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!draggable || e.button !== 0 || (e.target as HTMLElement).closest('button, a, input, select, textarea')) return
+    e.preventDefault()
+    const from = { x: e.clientX - offset.x, y: e.clientY - offset.y }
+    const rect = cardRef.current?.getBoundingClientRect()
+    const base = rect ? { left: rect.left - offset.x, top: rect.top - offset.y, width: rect.width } : null
+    const move = (ev: PointerEvent) => {
+      let x = ev.clientX - from.x, y = ev.clientY - from.y
+      // Keep the title bar on screen so it can always be grabbed again.
+      if (base) {
+        x = Math.min(Math.max(x, 80 - base.left - base.width), window.innerWidth - 80 - base.left)
+        y = Math.min(Math.max(y, -base.top), window.innerHeight - 60 - base.top)
+      }
+      setOffset({ x, y })
+    }
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) { e.stopPropagation(); onClose() } }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [busy, onClose])
   return createPortal(
-    <div className={modalOverlay} onMouseDown={() => { if (!busy) onClose() }}>
-      <div role="dialog" aria-modal="true" className={`${modalCard} ${size === 'xl' ? 'max-w-[960px]' : size === 'lg' ? 'max-w-[760px]' : size === 'sm' ? 'max-w-[440px]' : 'max-w-[560px]'}`} onMouseDown={e => e.stopPropagation()}>
-        <div className={modalHeader}>
+    <div className={draggable ? `${modalOverlay} !bg-transparent pointer-events-none` : modalOverlay} onMouseDown={() => { if (!busy && !draggable) onClose() }}>
+      <div ref={cardRef} role="dialog" aria-modal={draggable ? undefined : true} style={draggable ? { transform: `translate(${offset.x}px, ${offset.y}px)` } : undefined}
+        className={`${modalCard} ${draggable ? 'pointer-events-auto ring-1 ring-off-black/10' : ''} ${size === 'xl' ? 'max-w-[960px]' : size === 'lg' ? 'max-w-[760px]' : size === 'sm' ? 'max-w-[440px]' : 'max-w-[560px]'}`} onMouseDown={e => e.stopPropagation()}>
+        <div className={`${modalHeader} ${draggable ? 'cursor-move select-none touch-none' : ''}`} onPointerDown={startDrag} title={draggable ? 'Drag to move' : undefined}>
           {Icon && <Icon className="w-5 h-5 text-off-black/80 flex-shrink-0" strokeWidth={2} />}
           <div className="flex-1 min-w-0">
             <h2 className="text-lg font-semibold text-off-black truncate">
