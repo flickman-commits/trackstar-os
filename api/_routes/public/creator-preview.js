@@ -33,6 +33,11 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store')
     return res.status(503).send('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Trackstar Creator Program</title><p style="font-family:Helvetica,Arial,sans-serif;text-align:center;margin-top:30vh">Please refresh this page.</p>')
   }
+  // The host the link was shared on (creator.trackstar.art), so the preview
+  // image comes from the same place. These were never defined, and /apply
+  // threw a ReferenceError on every request.
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim()
+  const proto = /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host) ? 'http' : 'https'
   html = injectMeta(html, {
     title: 'Trackstar Creator Program',
     description: 'A personalized Trackstar print of the race you ran, in exchange for 3 short videos.',
