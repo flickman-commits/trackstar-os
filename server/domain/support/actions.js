@@ -19,10 +19,10 @@
 import prisma from '../../db.js'
 import { shopifyGraphQL } from '../../services/shopifyAuth.js'
 import { appBaseUrl, arteloOrderUrl } from '../../lib/links.js'
-import { setStatus } from './threads.js'
+import { setStatus, assign } from './threads.js'
 import { UserError } from './errors.js'
 import { requireConnection } from '../../lib/connections.js'
-import { slackTo, slackText, slackUserId, DESTINATIONS } from '../../lib/slack.js'
+import { slackTo, slackText } from '../../lib/slack.js'
 
 function actorName(actor) {
   return [actor?.firstName, actor?.lastName].filter(Boolean).join(' ') || 'Someone'
@@ -467,17 +467,33 @@ export async function cancelAndRefund({ order: o, why, by, actor = null }) {
 // ---------------------------------------------------------------------------
 
 /**
- * The Escalate button: the thread marked escalated and, when that is a change
- * and someone other than Matt pressed it, a DM to Matt with the link. Slack
- * failing never blocks the escalation; the event in the thread says whether
- * he was pinged.
+ * Who an escalation goes to: Matt, found by SUPPORT_ESCALATE_EMAIL (his
+ * TrackstarOS login). Null when no active person has that email.
+ */
+export async function escalationOwner() {
+  const email = String(process.env.SUPPORT_ESCALATE_EMAIL || 'matt@trackstar.art').trim()
+  return prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' }, isActive: true }, select: { id: true, firstName: true, email: true } })
+}
+
+/** Escalated threads are Matt's: assigned to him unless they already are. */
+async function assignToOwner(thread, owner, actor) {
+  if (!owner || thread.assignee?.id === owner.id || thread.assigneeId === owner.id) return thread
+  return assign(thread.id, owner.id, actor)
+}
+
+/**
+ * The Escalate button: the thread marked escalated and assigned to Matt and,
+ * when that is a change and someone else pressed it, a DM to Matt with the
+ * link. Slack failing never blocks the escalation; the thread notes when he
+ * was pinged.
  */
 export async function escalate(id, actor) {
   const before = await prisma.supportThread.findUnique({ where: { id }, select: { status: true } })
-  const t = await setStatus(id, 'escalated', actor)
+  const owner = await escalationOwner()
+  let t = await setStatus(id, 'escalated', actor)
+  t = await assignToOwner(t, owner, actor)
   if (before?.status === 'escalated') return t
-  const mattId = DESTINATIONS.matt.user()
-  if (actor?.email && (await slackUserId(actor.email)) === mattId) return t
+  if (owner && actor?.id === owner.id) return t
   const who = t.customerName || t.customerEmail || 'a customer'
   const msg = `:rotating_light: ${slackText(actorName(actor), 80)} escalated a support conversation to you\n*${slackText(who, 120)}*: ${slackText(t.subject || '(no subject)', 200)}\n<${threadUrl(id)}|Open the conversation>`
   const sent = await slackTo('matt', msg).catch(() => false)
@@ -492,6 +508,7 @@ export async function slackMatt({ thread, text, actor }) {
   const msg = `:rotating_light: *Support escalation* from ${actorName(actor)}\n*${who}*: ${thread.subject || '(no subject)'}\n${String(text || '').trim() || 'Needs your call.'}\n${threadUrl(thread.id)}`
   if (!(await slackTo('matt', msg, { or: 'alerts' }))) throw new UserError('Slack did not take the message. Check Settings > Connections > Slack.')
   if (thread.status !== 'escalated') await setStatus(thread.id, 'escalated', actor)
+  await assignToOwner(thread, await escalationOwner(), actor)
   await event(thread.id, `${actorName(actor)} pinged Matt in Slack${text ? `: ${String(text).trim()}` : ''}`, actor)
   return { ok: true }
 }
