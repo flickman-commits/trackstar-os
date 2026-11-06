@@ -16,7 +16,7 @@
 import sharedPrisma from './db.js'
 import { shopifyFetch } from './services/shopifyAuth.js'
 import { etsyFetch } from './services/etsyAuth.js'
-import { parseEtsyRaceName, parseEtsyPersonalization } from './services/etsyPersonalization.js'
+import { parseEtsyRaceName, parseEtsyPersonalization, decodeHtmlEntities } from './services/etsyPersonalization.js'
 import { researchService } from './services/ResearchService.js'
 import { hasScraperForRace } from './scrapers/index.js'
 import { parseRaceNameFromTitle } from './scrapers/raceNameNormalization.js'
@@ -594,7 +594,8 @@ export function extractEtsyPersonalization(transaction) {
   // present they are the whole answer and the freeform parse never runs.
   const q = (label) => {
     const v = variations.find(x => String(x.formatted_name || '').trim().toLowerCase() === label)
-    const val = String(v?.formatted_value || '').trim()
+    // Etsy sends formatted_value HTML-escaped ("O&#39;Brien")
+    const val = decodeHtmlEntities(String(v?.formatted_value || '')).trim()
     return val || null
   }
   const qRunner = q('runner name')
@@ -627,12 +628,13 @@ export function extractEtsyPersonalization(transaction) {
     result.creativeDirection = direction.join('\n') || null
     result.rawPersonalization = variations
       .filter(x => x.question_id)
-      .map(x => `${x.formatted_name}: ${x.formatted_value}`)
+      .map(x => `${x.formatted_name}: ${decodeHtmlEntities(x.formatted_value)}`)
       .join('\n') || null
     result.needsAttention = !result.raceYear
   } else if (personalization?.formatted_value) {
-    result.rawPersonalization = personalization.formatted_value
     const parsed = parseEtsyPersonalization(personalization.formatted_value)
+    // Decoded: Etsy sends formatted_value HTML-escaped
+    result.rawPersonalization = parsed.rawText
     result.raceYear = parsed.raceYear
     result.needsAttention = parsed.needsAttention
     // A bib the buyer typed ("Bib: 54772"), kept so a person can see it
@@ -646,6 +648,10 @@ export function extractEtsyPersonalization(transaction) {
       result.hadNoTime = parsed.hadNoTime || cleaned.hadNoTime
       result.customerTime = cleaned.customerTime
     }
+    // A finish time typed anywhere in the box ("2:51:51" on the line under the
+    // name), kept exactly as typed: it is what prints, never the official result
+    result.customerTime = result.customerTime || parsed.customerTime
+    result.timeCustomer = result.customerTime
   } else {
     result.needsAttention = true
   }

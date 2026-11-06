@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseEtsyPersonalization } from './etsyPersonalization.js'
+import { parseEtsyPersonalization, decodeHtmlEntities } from './etsyPersonalization.js'
 
 // Golden set: the shapes of every distinct Personalization box on the 94
 // most recent Etsy orders (read from production on 2026-10-20, 81 distinct
@@ -35,7 +35,6 @@ const UNCHANGED = [
   ["Cormont Pelsby, 2022", "Cormont Pelsby", 2022, false],
   ["Holdale Pelley 2026", "Holdale Pelley", 2026, false],
   ["Jaswin Marsby, 2025", "Jaswin Marsby", 2025, false],
-  ["Lorsby Kelwin. 1983.", "Lorsby Kelwin", null, true],
   ["Talmont Torwin 2026", "Talmont Torwin", 2026, false],
   ["Talton Holwick 2026", "Talton Holwick", 2026, false],
   ["Normore Wenton 2026", "Normore Wenton", 2026, false],
@@ -66,7 +65,6 @@ const UNCHANGED = [
   ["Talsby Varmore 2026", "Talsby Varmore", 2026, false],
   ["Rossby Fenwin 2023", "Rossby Fenwin", 2023, false],
   ["Talford Garsby 2026", "Talford Garsby", 2026, false],
-  ["Keldale & Jassby Garton - 1990", "Keldale & Jassby Garton", null, true],
   ["Varholt and Rosmont Garholt 2026", "Varholt and Rosmont Garholt", 2026, false],
   ["Fenford Jasmont 2024", "Fenford Jasmont", 2024, false],
   ["Kelmore Jaswick", "Kelmore Jaswick", null, true],
@@ -193,6 +191,67 @@ test('initials and hyphenated names survive the sentence cut', () => {
   assert.equal(parseEtsyPersonalization('Holholt L. Varford, 2025').runnerName, 'Holholt L. Varford')
   assert.equal(parseEtsyPersonalization('Marley-Kelwick Wenwin 2024').runnerName, 'Marley-Kelwick Wenwin')
   assert.equal(parseEtsyPersonalization('Lorsby Kelwin. 1983.').runnerName, 'Lorsby Kelwin')
+})
+
+// Etsy receipt 4222621106 (2026-11-06): imported as missing_year with the name
+// "Daniel O&#39;Brien". The entity left digits in the name, which sent it for
+// review, and the time on the next line was never read.
+const OBRIEN = 'Daniel O&#39;Brien 2026\n\n2:51:51, 6:33/mile\n\nIf able, can you include &quot;BQ&quot; ...'
+
+test('receipt 4222621106: entities decoded, year off the name line, typed time kept', () => {
+  const r = parseEtsyPersonalization(OBRIEN)
+  assert.equal(r.runnerName, "Daniel O'Brien")
+  assert.equal(r.raceYear, 2026)
+  assert.equal(r.customerTime, '2:51:51')
+  assert.equal(r.nameNeedsReview, false)
+  assert.equal(r.needsAttention, false)
+  assert.equal(r.rawText, 'Daniel O\'Brien 2026\n\n2:51:51, 6:33/mile\n\nIf able, can you include "BQ" ...')
+})
+
+test('HTML entities: named, decimal and hex, decoded once', () => {
+  assert.equal(decodeHtmlEntities('O&#39;Brien &amp; &quot;BQ&quot; &lt;3 &#x27;hi&#x27; &apos;x&apos;'), 'O\'Brien & "BQ" <3 \'hi\' \'x\'')
+  assert.equal(decodeHtmlEntities('&amp;#39;'), '&#39;')
+  assert.equal(decodeHtmlEntities('AT&T &unknown;'), 'AT&T &unknown;')
+  assert.equal(parseEtsyPersonalization('Kelwin D&#39;Arcy-Holmore, 2025').runnerName, "Kelwin D'Arcy-Holmore")
+  assert.equal(parseEtsyPersonalization('Keldale &amp; Jassby Garton 2026').runnerName, 'Keldale & Jassby Garton')
+})
+
+test('a year on the name line, 1970 through next year, is the race year and leaves the name', () => {
+  const next = new Date().getFullYear() + 1
+  for (const [text, name, year] of [
+    ['Lorsby Kelwin. 1983.', 'Lorsby Kelwin', 1983],
+    ['Keldale & Jassby Garton - 1990', 'Keldale & Jassby Garton', 1990],
+    ['Fenwick Holmore 1970', 'Fenwick Holmore', 1970],
+    [`Fenwick Holmore ${next}`, 'Fenwick Holmore', next],
+    ['2019 Fenwick Holmore', 'Fenwick Holmore', 2019],
+  ]) {
+    const r = parseEtsyPersonalization(text)
+    assert.deepEqual([r.runnerName, r.raceYear, r.needsAttention], [name, year, false], text)
+  }
+  // Out of range: not a year, and the name goes to review with the number in it
+  const old = parseEtsyPersonalization('Fenwick Holmore 1969')
+  assert.equal(old.raceYear, null)
+  assert.equal(old.needsAttention, true)
+  assert.equal(parseEtsyPersonalization(`Fenwick Holmore ${next + 1}`).raceYear, null)
+  // The name line wins over a year further down
+  assert.equal(parseEtsyPersonalization('Fenwick Holmore 2024\nran it again in 2025').raceYear, 2024)
+})
+
+test('typed finish time: as typed, anywhere in the box, never a pace or a clock time', () => {
+  for (const [text, time] of [
+    ['Corholt Jasmore 2026\n\n4:30:40\n\n#79991', '4:30:40'],
+    ['Davmont Norton\n2026\n58139\n3:14:49', '3:14:49'],
+    ['Torton Fenley BIB: 69894 TIME: 4:05:45', '4:05:45'],
+    ['Fenwick Holmore 2025 4:59.22', '4:59.22'],
+    ['Fenwick Holmore 2025 pace 8:10, time 3:34:12', '3:34:12'],
+    ['Fenwick Holmore 2025 8:10 per mile 3:34:12', '3:34:12'],
+    ['Fenwick Holmore 2025 5K 25:30', '25:30'],
+    ['Fenwick Holmore 2025, 6:33/mile', null],
+    ['Fenwick Holmore 2025 started at 7:00 am', null],
+    ['Fenwick Holmore 2025', null],
+  ]) {
+    assert.equal(parseEtsyPersonalization(text).customerTime, time, text)
+  }
 })
 
 test('empty text needs attention', () => {

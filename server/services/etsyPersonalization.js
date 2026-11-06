@@ -14,6 +14,27 @@
  *   "2025 Tom Brady"
  */
 
+const NAMED_ENTITIES = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ', rsquo: '\u2019', lsquo: '\u2018', rdquo: '\u201d', ldquo: '\u201c', ndash: '\u2013', mdash: '\u2014', hellip: '\u2026' }
+
+/**
+ * Decode the HTML entities Etsy puts in its text fields. Etsy returns titles and
+ * a buyer's formatted_value HTML-escaped ("O&#39;Brien", "&quot;BQ&quot;").
+ * One pass, so "&amp;#39;" stays "&#39;" rather than decoding twice.
+ * @param {string|null|undefined} text
+ * @returns {string}
+ */
+export function decodeHtmlEntities(text) {
+  if (!text) return text || ''
+  return String(text).replace(/&(#\d{1,7}|#x[0-9a-f]{1,6}|[a-z]+);/gi, (whole, code) => {
+    if (code[0] === '#') {
+      const n = code[1] === 'x' || code[1] === 'X' ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10)
+      return Number.isFinite(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : whole
+    }
+    const named = NAMED_ENTITIES[code.toLowerCase()]
+    return named ?? whole
+  })
+}
+
 /**
  * Extract race name from Etsy listing title
  *
@@ -32,12 +53,7 @@ export function parseEtsyRaceName(listingTitle) {
   if (!listingTitle) return null
 
   // Decode HTML entities (Etsy returns &#39; for apostrophes, etc.)
-  let name = listingTitle
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
+  let name = decodeHtmlEntities(listingTitle)
 
   // Special cases: custom order products. Normalized to the Shopify product
   // titles so processOrders classifies both channels the same way.
@@ -105,6 +121,28 @@ const NO_TIME = [
   /\b(?:don'?t|do\s+not)\s+(?:include|add|put|show|print)\s+(?:the\s+|my\s+)?(?:finish(?:ing)?\s+)?time\b/i,
   /\bomit\s+(?:the\s+|my\s+)?(?:finish(?:ing)?\s+)?time\b/i,
 ]
+// A finish time the buyer typed: "2:51:51", "04:32:15", "25:30", "4:59.22".
+// Not a pace ("6:33/mile", "pace 13:47", "8:10 per mile") or a clock time ("7:00 am").
+const TYPED_TIME = /(?<![\d:.])(\d{1,2}:\d{2}(?:[:.]\d{2})?)(?![\d:])/g
+const AFTER_PACE = /^\s*(?:\/|per\b|min(?:ute)?s?\s*\/|(?:min(?:ute)?s?\s+)?(?:pace|a\s+mile|mi\b|km\b)|[ap]\.?m\b)/i
+const BEFORE_PACE = /\bpace\s*(?:of|was|is)?\s*[:=-]?\s*$/i
+
+/** The first finish time typed anywhere in the box, exactly as typed, or null. */
+function typedFinishTime(text) {
+  for (const m of text.matchAll(TYPED_TIME)) {
+    const after = text.slice(m.index + m[0].length, m.index + m[0].length + 16)
+    const before = text.slice(Math.max(0, m.index - 16), m.index)
+    if (AFTER_PACE.test(after) || BEFORE_PACE.test(before)) continue
+    return m[1]
+  }
+  return null
+}
+
+// A race year: 1970 through next year (a print can be ordered ahead of the race)
+function isRaceYear(y) {
+  return y >= 1970 && y <= new Date().getFullYear() + 1
+}
+
 // Where the name stops: a bracket, the end of a sentence (not an initial like
 // "Darci L. Thompson"), a field label, or a request to us.
 const NAME_STOPS = [
@@ -136,7 +174,9 @@ function numberedAnswers(text) {
 /**
  * Parse buyer personalization text to extract runner name and race year
  * @param {string} rawText - Freeform buyer text, e.g. "John Smith, 2024"
- * @returns {{ runnerName: string|null, raceYear: number|null, bib: string|null, hadNoTime: boolean, rawText: string, needsAttention: boolean, nameNeedsReview: boolean }}
+ * @returns {{ runnerName: string|null, raceYear: number|null, bib: string|null, customerTime: string|null, hadNoTime: boolean, rawText: string, needsAttention: boolean, nameNeedsReview: boolean }}
+ *   rawText is the text with Etsy's HTML entities decoded. customerTime is a
+ *   finish time the buyer typed anywhere in the box, exactly as typed (never a pace).
  *   needsAttention is set when the name or year is missing, or when the name
  *   left over still looks wrong (more than 4 words, or digits in it);
  *   nameNeedsReview says it was the name.
@@ -146,8 +186,9 @@ export function parseEtsyPersonalization(rawText) {
     runnerName: null,
     raceYear: null,
     bib: null,
+    customerTime: null,
     hadNoTime: false,
-    rawText: rawText || '',
+    rawText: decodeHtmlEntities(rawText),
     needsAttention: false,
     nameNeedsReview: false,
   }
@@ -157,7 +198,11 @@ export function parseEtsyPersonalization(rawText) {
     return result
   }
 
-  let text = rawText.trim()
+  // Etsy sends formatted_value HTML-escaped: decode before anything reads it
+  let text = result.rawText.trim()
+
+  // A finish time typed anywhere in the box ("Name 2026\n\n2:51:51, 6:33/mile")
+  result.customerTime = typedFinishTime(text)
 
   // A request to leave the time off the poster
   result.hadNoTime = NO_TIME.some(re => re.test(text))
@@ -178,13 +223,21 @@ export function parseEtsyPersonalization(rawText) {
     text = text.replace(bibMatch[0], ' ')
   }
 
-  // 2. Extract 4-digit year (20XX) - most reliable pattern
-  const yearMatch = text.match(/\b(20\d{2})\b/)
+  // 2. The year. A 4-digit year on the name line (the first line with a letter)
+  // wins, 1970 through next year: "Daniel O'Brien 2026", "Lorsby Kelwin. 1983."
+  // Otherwise the first 20XX anywhere ("Davmont Norton\n2026").
+  const nameLine = text.split(/\r?\n/).find(l => /[a-zA-Z]/.test(l)) || ''
+  const onNameLine = [...nameLine.matchAll(/\b((?:19|20)\d{2})\b/g)].find(m => isRaceYear(parseInt(m[1], 10)))
+  const yearMatch = onNameLine || [...text.matchAll(/\b(20\d{2})\b/g)].find(m => isRaceYear(parseInt(m[1], 10)))
   if (yearMatch) {
     result.raceYear = parseInt(yearMatch[1], 10)
+    // Out of the line it was found on, so a bib or number elsewhere keeps its digits
+    if (onNameLine) {
+      text = text.replace(nameLine, nameLine.slice(0, onNameLine.index) + ' ' + nameLine.slice(onNameLine.index + onNameLine[0].length))
+    }
     // Numeric dates go whole ("04-26-2026"), then the year itself
     text = text.replace(NUMERIC_DATE, ' ')
-    text = text.replace(yearMatch[0], '')
+    if (!onNameLine) text = text.replace(yearMatch[0], '')
   }
 
   // 3. Date fragments: a month with a day number, and ordinal days
