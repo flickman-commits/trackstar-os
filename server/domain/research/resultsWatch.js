@@ -27,8 +27,8 @@ const RESEARCH_BUDGET_MS = 120 * 1000
 const BACKLOG_DAYS = 3
 const POSTED = 'results_posted:'
 
-// Matt's DM, or the team channel if that is not set up.
-const post = text => slackTo('matt', text, { or: 'alerts' })
+// A ping for the team: #trackstar-alerts.
+const post = text => slackTo('alerts', text, { or: 'matt' })
 
 export async function watchOfficialResults() {
   await ensureOverridesLoaded()

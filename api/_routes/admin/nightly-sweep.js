@@ -126,12 +126,14 @@ async function storeFailedRun(notes) {
 
   // This is the one thing that always pages: a run that could not look is not
   // a quiet night, and the email alone would under-sell it.
-  await postToSlack(`:rotating_light: *Nightly run could not sweep*\n${notes}`).catch(() => {})
+  await postToSlack(`:rotating_light: *Nightly run could not sweep*\n${notes}`, 'alerts').catch(() => {})
   return stored
 }
 
-async function postToSlack(text) {
-  if (await slackTo('matt', text, { or: 'alerts' })) return { sent: true }
+// The nightly report is a summary: #trackstar-reports. A run that could not
+// sweep is a ping: #trackstar-alerts.
+async function postToSlack(text, dest = 'reports') {
+  if (await slackTo(dest, text, { or: dest === 'reports' ? 'alerts' : 'matt' })) return { sent: true }
   console.warn('[nightly-sweep] Slack did not take the report')
   return { sent: false, reason: 'Slack is not set up or did not answer' }
 }
@@ -246,7 +248,8 @@ export default async function handler(req, res) {
       await postToSlack(
         `:rotating_light: *Nightly sweep failed to run*\n` +
         `\`${error.message}\`\n` +
-        `No checks completed, so tonight's silence is not an all-clear.`
+        `No checks completed, so tonight's silence is not an all-clear.`,
+        'alerts',
       ).catch(() => {})
     }
     return res.status(500).json({ healthy: false, error: 'The sweep failed. See the server log.' })

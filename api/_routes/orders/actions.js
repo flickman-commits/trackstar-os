@@ -547,9 +547,9 @@ async function handleNotifyCustomDelay({ orderNumber, daysLate }, res, actor) {
     }
   })
 
-  // Slack DM to Matt, fire-and-forget; #trackstar-alerts if his DM does not go through.
+  // A ping for the team, fire-and-forget.
   const dueDateText = originalDueDate ? ` (was due ${originalDueDate})` : ''
-  slackTo('matt', `⏰ *Custom-order delay notice sent* - order *${displayNum}* for ${existing.customerName || 'customer'} (${existing.raceName || 'custom design'}). Promised *${days} day${days === 1 ? '' : 's'}* late${dueDateText}. Email went to ${existing.customerEmail}.`, { or: 'alerts' })
+  slackTo('alerts', `⏰ *Custom-order delay notice sent* - order *${displayNum}* for ${existing.customerName || 'customer'} (${existing.raceName || 'custom design'}). Promised *${days} day${days === 1 ? '' : 's'}* late${dueDateText}. Email went to ${existing.customerEmail}.`, { or: 'matt' })
 
   console.log(`[actions/notify-custom-delay] Order ${orderNumber}: delay email sent (${days} days late)`)
   return res.status(200).json({ success: true, order: withoutRawOrderData(order) })
@@ -1474,7 +1474,7 @@ async function handleHealthCheck(res, { sendSlack = false } = {}) {
   if (statuses.some(s => s === 'error')) results.overall = 'degraded'
   if (statuses.filter(s => s === 'error').length >= 3) results.overall = 'critical'
 
-  // Send to Matt's DM (#trackstar-alerts if that does not go through)
+  // A weekly summary: #trackstar-reports (#trackstar-alerts if that does not go through)
   if (sendSlack) {
     const emoji = { healthy: '✅', degraded: '⚠️', critical: '🚨' }
     const checkLines = Object.entries(results.checks).map(([name, check]) => {
@@ -1487,7 +1487,7 @@ async function handleHealthCheck(res, { sendSlack = false } = {}) {
       '', ...checkLines, '', `_${results.timestamp}_`
     ].join('\n')
 
-    if (!(await slackTo('matt', text, { or: 'alerts' }))) console.error('[health] Failed to send Slack report')
+    if (!(await slackTo('reports', text, { or: 'alerts' }))) console.error('[health] Failed to send Slack report')
   }
 
   const httpStatus = results.overall === 'healthy' ? 200 : 503

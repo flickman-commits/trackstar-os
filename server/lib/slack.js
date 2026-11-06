@@ -23,11 +23,20 @@ import { isConnectionOn } from './connections.js'
  * `env` is the webhook used when there is no bot token, no channel, or the
  * bot's post fails. The bot must be invited to a private channel once.
  */
+// Where a message goes (Matt, 2026-11-06):
+//   alerts   a short ping the moment something happens or breaks, that
+//            someone on the team may need to act on: errors and outages,
+//            Artelo holds and refusals, customer changes, proofs sent,
+//            comments, files ready, Instant Lookup down, results posted.
+//   reports  a summary on a schedule, read when it lands: support triage,
+//            bulk orders this week, the nightly sweep, the weekly health
+//            check and playbook review.
+//   matt     the TrackstarOS DM: only what is Matt's own to act on, a
+//            conversation escalated to him or an @mention, a week of hours to
+//            approve, a refund or fix only he can make.
 export const DESTINATIONS = {
   // Customers approving a custom design, and nothing else.
   proofs: { label: '#proof-approvals', channel: 'C0AMW4YKY9L', env: 'SLACK_PROOF_WEBHOOK_URL' },
-  // Everything the team should see that is not an approval: errors, Artelo
-  // problems, proofs sent, comments, questions, bulk runs, files ready.
   alerts: { label: '#trackstar-alerts', channel: 'C0CELD9LGNM', env: 'SLACK_PROOF_WEBHOOK_URL' },
   reports: { label: '#trackstar-reports', channel: 'C0CD55QHYJU', env: 'SLACK_REPORTS_WEBHOOK_URL' },
   team: { label: '#all-hands', channel: 'C0A6NQD4PLH', env: 'SLACK_WEBHOOK_URL' },
