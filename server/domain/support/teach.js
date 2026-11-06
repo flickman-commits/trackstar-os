@@ -67,3 +67,57 @@ export async function addLessons(lessons, user) {
   const next = text.includes(HEADING) ? text.replace(HEADING, `${HEADING}\n${lines}`) : `${text.trim()}\n\n${HEADING}\nThese come from corrections to real drafts and win over anything above that disagrees.\n${lines}\n`
   return savePlaybook(next, { source: 'lesson', summary: list.join(' | '), actor: user })
 }
+
+// ---------------------------------------------------------------------------
+// Rules a rep writes directly (Support > Settings > Rules for Claude). They
+// are the same lines as the lessons above: one "- rule (Name, date)" each
+// under the Lessons heading, so every draft reads them and every change is a
+// playbook version an admin can undo.
+// ---------------------------------------------------------------------------
+
+/** The section's lines: [start, end) of the rule lines in the playbook text. */
+function lessonSpan(lines) {
+  const at = lines.findIndex(l => l.trim() === HEADING)
+  if (at < 0) return null
+  let end = at + 1
+  while (end < lines.length && !/^##\s/.test(lines[end])) end++
+  return { at, end }
+}
+
+const RULE_LINE = /^-\s+(.*?)(?:\s+\(([^,()]+),\s*([A-Z][a-z]{2} \d{1,2}, \d{4})\))?\s*$/
+
+/** Every rule under Lessons from the team, newest first as they are written. */
+export async function listRules() {
+  const { text } = await getPlaybook()
+  const lines = text.split('\n')
+  const span = lessonSpan(lines)
+  if (!span) return []
+  const out = []
+  for (let i = span.at + 1; i < span.end; i++) {
+    const m = lines[i].match(RULE_LINE)
+    if (m && m[1].trim()) out.push({ line: lines[i], text: m[1].trim(), author: m[2]?.trim() || null, date: m[3] || null })
+  }
+  return out
+}
+
+/** One rule, written by a person, as is (no model in between). */
+export async function addRule(text, user) {
+  const rule = noDash(text).replace(/^[-*]\s*/, '').replace(/\s+/g, ' ').trim()
+  if (rule.length < 8) throw new UserError('Write the rule as a full sentence, like "When a customer asks for a rush, offer expedited shipping first."')
+  if (rule.length > 400) throw new UserError('Keep a rule under 400 characters. Split a long one into two.')
+  return addLessons([rule], user)
+}
+
+/** Take a rule out. A rep removes their own; an admin removes any. */
+export async function removeRule(line, user, { isAdmin = false } = {}) {
+  const { text } = await getPlaybook()
+  const lines = text.split('\n')
+  const span = lessonSpan(lines)
+  const i = span ? lines.findIndex((l, j) => j > span.at && j < span.end && l === String(line || '')) : -1
+  if (i < 0) throw new UserError('That rule is already gone. Reload to see the current list.')
+  const author = lines[i].match(RULE_LINE)?.[2]?.trim() || null
+  if (!isAdmin && author !== (user?.firstName || 'team')) throw new UserError(`That rule is ${author ? `${author}'s` : 'from the playbook'}. Ask ${author || 'Matt'} or an admin to remove it.`)
+  const removed = lines[i].match(RULE_LINE)?.[1]?.trim() || lines[i]
+  lines.splice(i, 1)
+  return savePlaybook(lines.join('\n'), { source: 'lesson', summary: `Removed: ${removed}`, actor: user })
+}

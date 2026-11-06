@@ -44,6 +44,8 @@ export type PlaybookVersion = { id: string; source: 'edit' | 'lesson' | 'reset' 
 export type PlaybookReview = { status: 'proposal' | 'unchanged' | 'skipped'; reason: string | null; line: string | null; changes: { what: string; why: string }[]; playbook: string | null }
 type PlaybookSaved = { playbook: { text: string; edited: boolean }; playbookVersions?: PlaybookVersion[] }
 
+export type TeachRule = { line: string; text: string; author: string | null; date: string | null }
+
 export const supportApi = {
   status: () => request<MailboxStatus>('/api/support/gmail?action=status'),
   // TrackstarOS's "Email customer": a new conversation about one order.
@@ -86,6 +88,10 @@ export const supportApi = {
   /** Turn a correction to a draft into playbook rules, then save the approved ones. */
   proposeLessons: (noteId: string, feedback: string) => post<{ lessons: string[] }>('/api/support/teach', { action: 'propose', noteId, feedback }),
   saveLessons: (lessons: string[]) => post<{ playbook: { text: string; edited: boolean } }>('/api/support/teach', { action: 'save', lessons }),
+  /** Rules for Claude (the playbook's Lessons from the team), written by anyone on Support. */
+  rules: () => post<{ rules: TeachRule[] }>('/api/support/teach', { action: 'list' }),
+  addRule: (text: string) => post<{ rules: TeachRule[] }>('/api/support/teach', { action: 'add', text }),
+  removeRule: (line: string) => post<{ rules: TeachRule[] }>('/api/support/teach', { action: 'remove', line }),
   redraft: (id: string, instruction: string) => act<Note>(id, 'redraft', { instruction }),
   setProposal: (id: string, noteId: string, proposalId: string, status: 'done' | 'dismissed') => act<Note>(id, 'proposal', { noteId, proposalId, status }),
   merge: (id: string, sourceIds: string[]) => act<ThreadDetail>(id, 'merge', { sourceIds }),

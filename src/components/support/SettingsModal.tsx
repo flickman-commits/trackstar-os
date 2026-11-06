@@ -6,6 +6,7 @@ import { FilterList } from './SenderFilter'
 import PlaybookEditor from './PlaybookEditor'
 import ForwardersCard from './ForwardersCard'
 import DraftModelCard from './DraftModelCard'
+import RulesCard from './RulesCard'
 import type { InstagramStatus, MailboxStatus, SenderFilter, Teammate } from '@/types/support'
 
 /**
@@ -25,10 +26,11 @@ export default function SettingsModal({ team, unassignedCount, status, instagram
   onClose: () => void
 }) {
   return (
-    <ActionModal icon={Settings} title="Support settings" description="Routing, filtered senders, drafting, the mailbox and Instagram." onClose={onClose} size="lg" bare>
+    <ActionModal icon={Settings} title="Support settings" description="Routing, filtered senders, rules for Claude, drafting, the mailbox and Instagram." onClose={onClose} size="lg" bare>
       {isAdmin && <RoutingRules team={team} unassignedCount={unassignedCount} onChanged={onChanged} />}
       <FilterList filters={filters} onChanged={onChanged} />
       <ForwardersCard isAdmin={isAdmin} />
+      <RulesCard isAdmin={isAdmin} />
       <DraftModelCard isAdmin={isAdmin} />
       <PlaybookEditor isAdmin={isAdmin} />
       <MailboxCard status={status} isAdmin={isAdmin} onChanged={onChanged} />
