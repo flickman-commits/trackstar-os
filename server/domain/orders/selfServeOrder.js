@@ -6,10 +6,15 @@
  *
  * While the window is open (selfServeWindow.js), per print:
  *   name      the runner's name on the print (a typo, "Jonathan" not "Jon")
- *   time      show or hide the time and pace
  *   frames    the frames this print can change to, at its size, and the cost
  *   frame     change it: Shopify order edit, invoice for any difference,
  *             Artelo follows (support/changeItem.js)
+ *   photo     add a photo to a print that has none: the page uploads it the
+ *             storefront's way (photo-upload-url, photo-verify), and this adds
+ *             a $20 Photo Add-On to the Shopify order (Shopify emails the
+ *             invoice). The photo counts as hand-added, so the print waits
+ *             until Shopify reads paid (photoPayment.js), like one support adds
+ * The time and pace are not offered: hiding them is rare and support does it.
  * and for the order:
  *   address   the ship-to (support/actions.shippingAddress)
  *   cancel    cancel and refund in Shopify (support/actions.cancelAndRefund);
@@ -28,6 +33,14 @@ import { checkOrder, createJob } from '../render/jobs.js'
 import { getCanonicalRaceName } from '../../scrapers/index.js'
 import { slackTo, slackText } from '../../lib/slack.js'
 import { shopifyAdminUrl } from '../../lib/links.js'
+import { storage } from '../../lib/storage.js'
+import { addVariantToOrder, PHOTO_ADDON_VARIANT_ID } from '../../services/shopifyOrderEdit.js'
+import { PHOTO_ADDON_PRICE } from '../../services/pricing.js'
+import { loadProductCatalog, getProductInfo } from '../../lib/productCatalog.js'
+
+const PHOTO_BUCKET = 'personalization-photos'
+// What photo-verify hands back: a sanitized JPEG, PNG or WEBP.
+const VERIFIED_PATH = /^\d{4}-\d{2}-\d{2}\/[0-9a-f-]{36}\.(jpg|png|webp)$/
 
 export const SUPPORT_EMAIL = process.env.PROOF_REPLY_TO_EMAIL || 'fast@trackstar.art'
 // Who the order comments and the Shopify notes name.
@@ -38,7 +51,7 @@ export class ManageError extends Error {
 }
 
 const ROW = {
-  id: true, orderNumber: true, lineItemIndex: true, status: true, designStatus: true, trackingNumber: true, trackstarOrderType: true,
+  id: true, orderNumber: true, lineItemIndex: true, source: true, status: true, designStatus: true, trackingNumber: true, trackstarOrderType: true,
   runnerName: true, runnerNameOverride: true, raceName: true, raceNameOverride: true, raceYear: true, yearOverride: true,
   productSize: true, frameType: true, hadNoTime: true, photoPath: true, photoLater: true, lookupOutcome: true,
   shopifyOrderData: true, arteloOrderData: true, createdAt: true,
@@ -83,25 +96,44 @@ function shipToOf(row) {
 const numberOf = row => String(row.shopifyOrderData?.name || '').replace(/^#/, '') || null
 const frameLabel = f => f ? String(f).replace(/([a-z])([A-Z])/g, '$1 $2') : null
 
-function printView(r) {
+function printView(r, extra = {}) {
   return {
     id: r.id,
-    race: [r.raceNameOverride ?? r.raceName, r.yearOverride ?? r.raceYear].filter(Boolean).join(' '),
+    raceName: r.raceNameOverride ?? r.raceName ?? '',
+    year: r.yearOverride ?? r.raceYear ?? null,
     runnerName: r.runnerNameOverride ?? r.runnerName ?? '',
     size: r.productSize || null,
     frame: frameLabel(r.frameType),
-    noTime: Boolean(r.hadNoTime),
-    // Only a standard race print has a time to hide and a design that re-renders.
+    // Only a standard race print has a design that re-renders, so only it takes a photo here.
     standard: r.trackstarOrderType === 'standard',
     photo: r.photoPath ? 'on_print' : r.photoLater ? 'after_race' : 'none',
     preorder: r.lookupOutcome === 'race_not_yet_run',
+    image: null,
+    photoUrl: null,
+    ...extra,
   }
+}
+
+/** A short-lived link to the customer's own photo, so the page can show it. */
+async function photoUrlOf(path) {
+  if (!path) return null
+  try {
+    const { data } = await storage().storage.from(PHOTO_BUCKET).createSignedUrl(String(path), 3600)
+    return data?.signedUrl || null
+  } catch { return null }
+}
+
+/** The product's own picture from the catalog, for the card. */
+function imageOf(row, catalog) {
+  if (!catalog) return null
+  try { return getProductInfo(row, catalog)?.heroImageUrl || null } catch { return null }
 }
 
 /** What the page shows. */
 export async function manageInfo(shopifyOrderId, signature) {
   const ctx = await load(shopifyOrderId, signature)
   const first = ctx.rows[0]
+  const catalog = await loadProductCatalog().catch(() => null)
   return {
     number: numberOf(first),
     placedAt: placedAt(first),
@@ -110,7 +142,8 @@ export async function manageInfo(shopifyOrderId, signature) {
     canChange: !ctx.reason,
     reason: ctx.reason,
     support: SUPPORT_EMAIL,
-    prints: ctx.rows.map(printView),
+    photoPrice: PHOTO_ADDON_PRICE,
+    prints: await Promise.all(ctx.rows.map(async r => printView(r, { image: imageOf(r, catalog), photoUrl: await photoUrlOf(r.photoPath) }))),
     shipTo: shipToOf(first),
   }
 }
@@ -156,18 +189,6 @@ export async function manageChange(shopifyOrderId, signature, body = {}) {
     return { ok: true, print: printView({ ...row, runnerNameOverride: name }) }
   }
 
-  if (action === 'time') {
-    open(ctx)
-    const row = printOf(ctx, body.printId)
-    if (row.trackstarOrderType !== 'standard') throw new ManageError('unavailable', 409)
-    const noTime = body.noTime === true
-    if (row.hadNoTime === noTime) return { ok: true, print: printView(row) }
-    await prisma.order.update({ where: { id: row.id }, data: { hadNoTime: noTime } })
-    await comment(row, noTime ? 'The customer chose to leave the time and pace off the print (Manage your order).' : 'The customer put the time and pace back on the print (Manage your order).')
-    await rerender(row, noTime ? 'The customer hid the time; a new design replaces it' : 'The customer put the time back; a new design replaces it')
-    return { ok: true, print: printView({ ...row, hadNoTime: noTime }) }
-  }
-
   if (action === 'frame') {
     open(ctx)
     const row = printOf(ctx, body.printId)
@@ -177,6 +198,32 @@ export async function manageChange(shopifyOrderId, signature, body = {}) {
     try { out = await changeItem({ orderRowId: row.id, frame, actor: CUSTOMER }) } catch (e) { throw new ManageError('unavailable', 409, friendly(e)) }
     // Shopify's invoice email carries the balance; the order waits for it the way any order edit does.
     return { ok: true, was: out.was, now: out.now, owed: out.owed, invoiced: out.invoiced, print: printView({ ...row, frameType: frame.replace(/\s+/g, '') }) }
+  }
+
+  if (action === 'photo') {
+    open(ctx)
+    const row = printOf(ctx, body.printId)
+    if (row.trackstarOrderType !== 'standard' || row.photoPath || row.photoLater) throw new ManageError('unavailable', 409, 'has_photo')
+    const path = String(body.path || '')
+    if (!VERIFIED_PATH.test(path)) throw new ManageError('photo_failed')
+    // Only a file that is actually in the bucket (photo-verify replaced or purged everything else).
+    const { error } = await storage().storage.from(PHOTO_BUCKET).createSignedUrl(path, 60)
+    if (error) throw new ManageError('photo_failed')
+    // Claim the print first, so a double tap cannot bill twice.
+    const { count } = await prisma.order.updateMany({ where: { id: row.id, photoPath: null }, data: { photoPath: path, photoAddedManually: true, photoFree: false, photoPlacedAt: null } })
+    if (!count) throw new ManageError('unavailable', 409, 'has_photo')
+    try {
+      await addVariantToOrder(ctx.id, PHOTO_ADDON_VARIANT_ID, 1, 'Photo Add-On added by the customer from Manage your order (TrackstarOS)')
+    } catch (e) {
+      // No charge, no photo: give the print back as it was.
+      await prisma.order.update({ where: { id: row.id }, data: { photoPath: null, photoAddedManually: false } })
+      console.error('[manage-order] photo add-on order edit failed', row.orderNumber, e.message)
+      throw new ManageError('photo_failed')
+    }
+    await comment(row, `The customer added a photo from Manage your order. A $${PHOTO_ADDON_PRICE} Photo Add-On is on the Shopify order and Shopify emailed them the invoice; the print renders with the photo once it is paid.`)
+    await rerender(row, 'The customer added a photo; a new design with it replaces this one')
+    await slackTo('alerts', `:frame_with_picture: Customer added a photo to *#${slackText(numberOf(row) || row.orderNumber)}* from Manage your order; $${PHOTO_ADDON_PRICE} invoice sent by Shopify.`).catch(() => {})
+    return { ok: true, invoiced: true, price: PHOTO_ADDON_PRICE, print: printView({ ...row, photoPath: path }, { photoUrl: await photoUrlOf(path) }) }
   }
 
   if (action === 'address') {
