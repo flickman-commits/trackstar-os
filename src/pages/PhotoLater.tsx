@@ -134,7 +134,7 @@ export default function PhotoLater() {
 
       {card(
         <>
-          <input ref={fileInput} type="file" accept="image/jpeg,image/png" hidden onChange={e => { setFile(e.target.files?.[0] || null); setErr(null) }} />
+          <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { setFile(e.target.files?.[0] || null); setErr(null) }} />
           {file ? (
             <>
               <PhotoCropper file={file} exportRef={cropExport} />

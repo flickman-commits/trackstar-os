@@ -23,6 +23,7 @@ import { checkRateLimitDurable } from '../../../server/lib/publicRateLimit.js'
 import { validateImageBytes } from '../../../server/lib/imageValidation.js'
 import { stripMetadata } from '../../../server/lib/photoSanitize.js'
 import { storage } from '../../../server/lib/storage.js'
+import { logPhotoReject } from '../../../server/lib/photoRejects.js'
 
 const BUCKET = 'personalization-photos'
 
@@ -92,6 +93,7 @@ export default async function handler(req, res) {
 
     if (!verdict.ok) {
       await purge(verdict.reason)
+      await logPhotoReject({ reason: verdict.reason, source: 'server', width: verdict.width, height: verdict.height, type: contentType })
       return res.status(400).json({
         error: verdict.reason,
         message: verdict.message,
@@ -124,12 +126,13 @@ export default async function handler(req, res) {
     //
     // What the byte floor was really proxying for is resolution, and that is
     // enforced properly a few lines up: validateImageBytes reads the actual
-    // dimensions out of the header and holds them to MIN_SHORT_EDGE. The
+    // dimensions out of the header and holds them to MIN_SHORT_EDGE (500px). The
     // remaining "is this a screenshot" hint lives in photo-upload-url, applied
     // to the size of the pre-crop original.
     const cleaned = await stripMetadata(original, contentType)
     if (!cleaned.ok) {
       await purge(cleaned.reason)
+      await logPhotoReject({ reason: cleaned.reason, source: 'server', bytes: original.length, type: contentType })
       return res.status(400).json({ error: cleaned.reason, message: cleaned.message })
     }
 

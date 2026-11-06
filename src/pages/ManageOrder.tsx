@@ -362,7 +362,7 @@ function PrintCard({ print: p, photoPrice, post, onChange }: { print: Print; pho
         >
           {editing === 'photo' && (
             <div className="mt-2 space-y-3">
-              <input ref={fileInput} type="file" accept="image/jpeg,image/png" hidden onChange={e => { setFile(e.target.files?.[0] || null); setConfirmPhoto(false); setErr('') }} />
+              <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { setFile(e.target.files?.[0] || null); setConfirmPhoto(false); setErr('') }} />
               {file ? (
                 <>
                   <PhotoCropper file={file} exportRef={cropExport} />

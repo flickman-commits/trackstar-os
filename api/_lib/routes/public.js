@@ -9,6 +9,7 @@ export default {
   'public/monopoly': () => import('../../_routes/public/monopoly.js'),
   'public/order-photo': () => import('../../_routes/public/order-photo.js'),
   'public/photo-later': () => import('../../_routes/public/photo-later.js'),
+  'public/photo-reject': () => import('../../_routes/public/photo-reject.js'),
   'public/photo-upload-url': () => import('../../_routes/public/photo-upload-url.js'),
   'public/photo-verify': () => import('../../_routes/public/photo-verify.js'),
   'public/race-status': () => import('../../_routes/public/race-status.js'),

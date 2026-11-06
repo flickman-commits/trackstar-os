@@ -125,7 +125,7 @@ export default function PhotoCropper({ file, exportRef, className = '' }: {
         Zoom
         <input type="range" min={1} max={MAX_ZOOM} step={0.01} value={zoom} onChange={e => changeZoom(Number(e.target.value))} className="flex-1 accent-[#4600D6]" />
       </label>
-      {natural && <p className="mt-1 text-[11px] text-off-black/50">Drag to move. The square is what prints{natural.w < 1200 || natural.h < 1200 ? '; this photo is small and may print soft' : ''}.</p>}
+      {natural && <p className="mt-1 text-[11px] text-off-black/50">Drag to move. The square is what prints{natural.w < 500 || natural.h < 500 ? '; this photo is too small to print clearly, so try the original' : ''}.</p>}
     </div>
   )
 }

@@ -24,12 +24,32 @@
 export const MAX_PIXELS = 100_000_000
 
 /**
- * Minimum on the SHORTER edge. The photo prints at 10% of the poster height,
- * so the largest size (24x36 -> 3.6in tall) needs only 1080px at 300 DPI.
- * 1200 gives 300 DPI everywhere with headroom for cropping, while still
- * rejecting avatars, small screenshots, and heavy social recompressions.
+ * Minimum on the SHORTER edge, and the only hard size rule.
+ *
+ * The photo prints in a square 10% of the poster's long side: 1in on an 8x10,
+ * 1.8in on a 12x18, 2.4in on a 16x24. Print labs call 300 DPI ideal and 150
+ * DPI acceptable, so even the 16x24 needs only 360-720px. The old floor of
+ * 1200px was stricter than 500 DPI and turned away photos customers had paid
+ * for (an official race-app photo, 2026-10-19). 500px is 200+ DPI at every
+ * size we sell; below it a photo is a thumbnail or a heavy social copy.
+ * Anything softer than ideal for a bigger size is a WARNING in the wizard
+ * (see photoDpiAt), never a refusal. Mirrored in both storefront wizards.
  */
-export const MIN_SHORT_EDGE = 1200
+export const MIN_SHORT_EDGE = 500
+
+/** The photo window is this share of the poster's long side. */
+export const PHOTO_WINDOW_SHARE = 0.1
+
+/**
+ * Effective DPI of a square photo `px` wide printed on a poster of `size`
+ * ("16x24", "8 x 10", '12"x18"'). Null when the size cannot be read.
+ */
+export function photoDpiAt(px, size) {
+  const m = String(size || '').match(/(\d+(?:\.\d+)?)\D+(\d+(?:\.\d+)?)/)
+  if (!m || !px) return null
+  const inches = Math.max(Number(m[1]), Number(m[2])) * PHOTO_WINDOW_SHARE
+  return inches > 0 ? Math.round(px / inches) : null
+}
 
 /*
  * There is deliberately NO file-size floor. Byte count is a poor proxy for
@@ -199,7 +219,7 @@ export function validateImageBytes(buf, declaredType) {
     return {
       ok: false,
       reason: 'too_small',
-      message: `That photo is a bit too small to print sharply (${width}x${height}). Please upload one at least ${MIN_SHORT_EDGE}px on its shorter side.`,
+      message: 'That photo is too small to print clearly. Try the original from your phone or the photo site, not a screenshot or a copy sent by text.',
       type, width, height,
     }
   }
