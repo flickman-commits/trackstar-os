@@ -21,6 +21,7 @@ import { shopifyGraphQL } from '../../services/shopifyAuth.js'
 import { getCanonicalRaceName } from '../../scrapers/index.js'
 import { nextNumber, dueDateFor, verifiedRaceDate, FRAME_OPTIONS, SIZE_OPTIONS } from './bulkOrders.js'
 import { defaultAssigneeFor } from '../orders/assignment.js'
+import { createRacePartnerOrder } from '../orders/racePartner.js'
 
 export class BulkError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; this.expose = true }
@@ -28,9 +29,13 @@ export class BulkError extends Error {
 
 export const EVENT_OPTIONS = ['Marathon', 'Half Marathon', '10 Miler', '10K', '8K', '5K']
 export const PRINT_KINDS = ['standard', 'cobranded']
+/** Who is buying: a race (for its runners, sometimes before we have its design), a charity team, or a company. */
+export const PARTNER_TYPES = ['race', 'charity', 'corporate']
 
 /** Our frame value -> the Frame option on the storefront products. */
 const SHOP_FRAME = { 'Unframed': 'Unframed', 'Natural Premium Oak': 'Natural Oak', 'Black Premium Oak': 'Black Oak' }
+/** Products name the frame either way ("Black Oak", "Black Premium Oak"); compare without "premium". */
+const frameKey = v => String(v || '').toLowerCase().replace(/\bpremium\s+/g, '').trim()
 
 const cleanAddress = a => {
   if (!a || typeof a !== 'object') return null
@@ -74,6 +79,7 @@ function termFields(input) {
     contactPhone: String(input?.contactPhone || '').trim() || null,
     billingAddress: cleanAddress(input?.billingAddress),
     printKind: PRINT_KINDS.includes(input?.printKind) ? input.printKind : 'standard',
+    partnerType: PARTNER_TYPES.includes(input?.partnerType) ? input.partnerType : null,
     discountKind: kind, discountPercent: pct, discountCents: cents,
     discountNote: String(input?.discountNote || '').trim() || null,
     shipping, shipToAddress,
@@ -102,12 +108,26 @@ function fulfillmentDate(raw, { required = false } = {}) {
 export async function createBulkOrder(input, actor) {
   const fields = termFields(input)
   const race = cleanRace(raceInput(input))
+  // A new race keeps the name as typed: matching it to a race we know could fold it into another one.
+  if (input?.newDesign) race.raceName = String(raceInput(input)?.raceName || '').trim()
   const due = fulfillmentDate(input?.fulfillmentDate, { required: true })
   const last = await prisma.bulkOrder.findFirst({ orderBy: { createdAt: 'desc' }, select: { number: true } })
   const raceDate = verifiedRaceDate(race.raceName, race.raceYear)
+  // A race partner we have no design for yet: the design is made in Partners
+  // (a new design order, or one already started), and the prints wait on its approval.
+  let partnerOrderId = null
+  if (fields.partnerType === 'race' && input?.newDesign) {
+    if (input.partnerOrderId) {
+      const d = await prisma.order.findFirst({ where: { id: String(input.partnerOrderId), trackstarOrderType: 'race_partner' }, select: { id: true } })
+      if (!d) throw new BulkError('That design order is gone. Choose another or start a new one')
+      partnerOrderId = d.id
+    } else {
+      partnerOrderId = (await createRacePartnerOrder({ partnerName: race.raceName, raceYear: race.raceYear, contactName: fields.contactName, contactEmail: fields.contactEmail })).id
+    }
+  }
   const order = await prisma.bulkOrder.create({
     data: {
-      ...fields, billingAddress: json(fields.billingAddress), shipToAddress: json(fields.shipToAddress),
+      ...fields, billingAddress: json(fields.billingAddress), shipToAddress: json(fields.shipToAddress), partnerOrderId,
       ...race, number: nextNumber(last?.number), raceDate, dueDate: due || dueDateFor(raceDate),
       assigneeId: await defaultAssigneeFor('bulk'), createdById: actor?.id || null,
     },
@@ -146,7 +166,7 @@ export async function updateBulkOrder(id, input) {
 const BILLING_SELECT = {
   id: true, number: true, partnerName: true, raceName: true, raceYear: true, events: true, quantity: true, productSize: true, frameType: true,
   dueDate: true, raceDate: true, status: true, notes: true,
-  contactName: true, contactEmail: true, contactPhone: true, billingAddress: true, printKind: true,
+  contactName: true, contactEmail: true, contactPhone: true, billingAddress: true, printKind: true, partnerType: true, partnerOrderId: true,
   discountKind: true, discountPercent: true, discountCents: true, currency: true, discountNote: true, shipping: true, shipToAddress: true,
   shopifyDraftId: true, shopifyDraftName: true, invoiceUrl: true, invoiceSentAt: true, shopifyOrderId: true, shopifyOrderName: true, paidAt: true,
   _count: { select: { runners: true } },
@@ -177,7 +197,7 @@ export async function pastDetails() {
     seen.add(k)
     out.push({
       partnerName: d.partnerName, contactName: d.contactName, contactEmail: d.contactEmail, contactPhone: d.contactPhone,
-      billingAddress: d.billingAddress, printKind: d.printKind, shipping: d.shipping, shipToAddress: d.shipToAddress,
+      billingAddress: d.billingAddress, printKind: d.printKind, shipping: d.shipping, shipToAddress: d.shipToAddress, partnerType: d.partnerType,
       discountKind: d.discountKind, discountPercent: d.discountPercent, discountCents: d.discountCents, discountNote: d.discountNote,
     })
   }
@@ -206,16 +226,42 @@ export async function variantFor(raceName, productSize, frameType) {
   const products = await prisma.shopifyProduct.findMany({ where: { raceCanonical: canonical, status: 'ACTIVE' }, select: { productId: true, title: true } })
   // The plain race print, not a World Majors or other edition sold beside it.
   const product = products.find(p => !/world majors|custom|bulk/i.test(p.title)) || products[0]
-  if (!product) return { missing: `No storefront product for ${canonical}` }
+  if (!product) return standardPrice(canonical, productSize, frameType)
   const d = await shopifyGraphQL(`query($id: ID!) { product(id: $id) { title variants(first: 50) { nodes { id price selectedOptions { name value } } } } }`, { id: `gid://shopify/Product/${product.productId}` })
   const p = (d.data || d).product
   const want = { size: productSize, frame: SHOP_FRAME[frameType] || frameType }
   const v = p?.variants?.nodes?.find(x => {
     const o = Object.fromEntries((x.selectedOptions || []).map(s => [s.name.toLowerCase(), s.value]))
-    return o.size === want.size && String(o.frame || '').toLowerCase() === want.frame.toLowerCase()
+    return o.size === want.size && frameKey(o.frame) === frameKey(want.frame)
   })
   if (!v) return { missing: `${p?.title || canonical} has no ${productSize} ${want.frame} variant` }
   return { productTitle: p.title, variantId: v.id, unitCents: Math.round(Number(v.price) * 100) }
+}
+
+/**
+ * A race with no storefront product yet (a new race partner, design still to
+ * make): priced like our standard print in that size and frame, the price most
+ * race products carry (they are the same across races; one on sale should not
+ * set it). The invoice gets a custom line in place of a product.
+ */
+async function standardPrice(raceName, productSize, frameType) {
+  const products = (await prisma.shopifyProduct.findMany({ where: { status: 'ACTIVE', raceCanonical: { not: null } }, orderBy: { syncedAt: 'desc' }, select: { productId: true, title: true }, take: 60 }))
+    .filter(p => !/world majors|custom|bulk/i.test(p.title)).slice(0, 7)
+  if (!products.length) return { missing: `No storefront product for ${raceName}, and no other print to price it from` }
+  const ids = products.map(p => `gid://shopify/Product/${p.productId}`)
+  const d = await shopifyGraphQL(`query($ids: [ID!]!) { nodes(ids: $ids) { ... on Product { variants(first: 50) { nodes { price selectedOptions { name value } } } } } }`, { ids })
+  const want = { size: productSize, frame: SHOP_FRAME[frameType] || frameType }
+  const counts = new Map()
+  for (const p of (d.data || d)?.nodes || []) {
+    const v = p?.variants?.nodes?.find(x => {
+      const o = Object.fromEntries((x.selectedOptions || []).map(s => [s.name.toLowerCase(), s.value]))
+      return o.size === want.size && frameKey(o.frame) === frameKey(want.frame)
+    })
+    if (v) { const c = Math.round(Number(v.price) * 100); counts.set(c, (counts.get(c) || 0) + 1) }
+  }
+  if (!counts.size) return { missing: `No ${productSize} ${want.frame} print to price ${raceName} from` }
+  const unitCents = [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0]
+  return { productTitle: `${raceName} Personalized Race Print`, customLine: true, unitCents, priceNote: `No product for ${raceName} yet, so priced like our standard ${productSize} ${want.frame} print` }
 }
 
 /** What the invoice will say: the print priced from Shopify, the discount, the total. */
@@ -252,7 +298,11 @@ export function draftInput(q) {
     note: [`Bulk order ${order.number} for ${order.partnerName}.`, order.notes].filter(Boolean).join(' '),
     tags: ['bulk', order.number],
     lineItems: lines.map(l => ({
-      variantId: l.variantId, quantity: l.quantity,
+      // A race with no product yet: a custom line at the standard price (standardPrice).
+      ...(l.customLine
+        ? { title: `${l.productTitle} (${l.productSize}, ${l.frameType})`, originalUnitPriceWithCurrency: { amount: (l.unitCents / 100).toFixed(2), currencyCode: 'USD' }, requiresShipping: true, taxable: true }
+        : { variantId: l.variantId }),
+      quantity: l.quantity,
       customAttributes: [
         { key: 'Event', value: `${l.raceName} ${l.raceYear}` },
         { key: 'Prints', value: kindLabel },

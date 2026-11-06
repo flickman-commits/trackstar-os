@@ -327,6 +327,7 @@ model BulkOrder {
   intakeNote        String?   // Shown to the partner on the intake page
   notes             String?
   partnerOrderId    String?   // The race_partner design order this belongs to, if any
+  partnerType       String?   // race | charity | corporate: who is buying. Null on orders made before it was asked
   // The event at the race ("Marathon", "Half Marathon", "8K") on older
   // orders; research searches that event for its runners.
   eventType         String?

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Upload, X, Copy, ExternalLink, Send, Receipt } from 'lucide-react'
+import { Loader2, Upload, X, Copy, ExternalLink, Send, Receipt, Flag, HeartHandshake, Building2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -22,13 +22,22 @@ type Line = { id?: string; raceName: string; raceYear: string; eventNote: string
 /** Race, year, event, quantity, size, frame, remove: the columns of a line, header and rows alike. */
 const LINE_GRID = 'grid grid-cols-[minmax(0,1fr)_76px_72px_96px_190px_minmax(0,0.8fr)_32px] gap-2'
 type CatalogPrint = PrintOption & { race: string }
+export type PartnerType = 'race' | 'charity' | 'corporate'
+type DesignOrder = { id: string; orderNumber: string; raceName: string; raceYear: number; designStatus: string }
+
+/** Who is buying, asked first: it sets the words on the form and, for a race, whether we have its design yet. */
+const PARTNER_TYPES: { key: PartnerType; label: string; line: string; icon: typeof Flag; org: string; orgPlaceholder: string }[] = [
+  { key: 'race', label: 'Race partner', line: 'A race buying prints for its runners, including a race we have no design for yet', icon: Flag, org: 'Race organization', orgPlaceholder: 'OKC Memorial Marathon' },
+  { key: 'charity', label: 'Charity partner', line: 'A charity team buying prints for its runners', icon: HeartHandshake, org: 'Charity', orgPlaceholder: 'American Heart Association, Philadelphia' },
+  { key: 'corporate', label: 'Corporate partner', line: 'A company buying prints for its employees or clients', icon: Building2, org: 'Company', orgPlaceholder: 'Acme Running Club' },
+]
 
 const blankLine = (prev?: Line): Line => ({ raceName: prev?.raceName || '', raceYear: prev?.raceYear || String(new Date().getFullYear()), eventNote: '', quantity: '', productSize: prev?.productSize || '8x10', frameType: prev?.frameType || 'Unframed' })
 
 export type Billing = {
   id: string; number: string; partnerName: string; contactName: string | null; contactEmail: string | null; contactPhone: string | null
   raceName: string; raceYear: number; events: string | null; quantity: number; productSize: string; frameType: string; dueDate: string | null
-  billingAddress: Address | null; printKind: 'standard' | 'cobranded'; discountKind: 'percent' | 'amount' | null; discountPercent: number | null; discountCents: number | null
+  billingAddress: Address | null; printKind: 'standard' | 'cobranded'; partnerType?: PartnerType | null; partnerOrderId?: string | null; discountKind: 'percent' | 'amount' | null; discountPercent: number | null; discountCents: number | null
   discountNote: string | null; shipping: 'runner' | 'organization'; shipToAddress: Address | null
   shopifyDraftId: string | null; shopifyDraftName: string | null; invoiceUrl: string | null; invoiceSentAt: string | null
   shopifyOrderName: string | null; paidAt: string | null; adminUrl?: string | null; notes: string | null
@@ -37,10 +46,10 @@ export type Billing = {
 }
 type PastDetails = {
   partnerName: string; contactName: string | null; contactEmail: string | null; contactPhone: string | null; billingAddress: Address | null
-  printKind: 'standard' | 'cobranded'; shipping: 'runner' | 'organization'; shipToAddress: Address | null
+  printKind: 'standard' | 'cobranded'; shipping: 'runner' | 'organization'; shipToAddress: Address | null; partnerType?: PartnerType | null
   discountKind?: 'percent' | 'amount' | null; discountPercent?: number | null; discountCents?: number | null; discountNote?: string | null
 }
-type Quote = { lines: { number: string; raceName: string; raceYear: number; quantity: number; productSize: string; frameType: string; unitCents?: number; subtotalCents?: number | null; missing?: string }[]; subtotalCents: number; discountCents: number; totalCents: number; missing: string[] }
+type Quote = { lines: { number: string; raceName: string; raceYear: number; quantity: number; productSize: string; frameType: string; unitCents?: number; subtotalCents?: number | null; missing?: string; priceNote?: string }[]; subtotalCents: number; discountCents: number; totalCents: number; missing: string[] }
 
 const money = (cents: number) => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -85,6 +94,14 @@ export function OrderModal({ order, onClose, onCreated }: { order?: Billing; onC
     ? [{ id: order.id, raceName: order.raceName, raceYear: String(order.raceYear), eventNote: order.events || '', quantity: String(order.quantity), productSize: order.productSize, frameType: order.frameType }]
     : [blankLine()])
   const [due, setDue] = useState(() => (order?.dueDate || '').slice(0, 10))
+  // Who is buying: asked first on a new order.
+  const [ptype, setPtype] = useState<PartnerType | null>(order?.partnerType || null)
+  const pt = PARTNER_TYPES.find(t => t.key === ptype)
+  // A race partner we have no design for: the race is typed in, and its design is made in Partners.
+  const [newRace, setNewRace] = useState(false)
+  const [designId, setDesignId] = useState('')
+  const [designs, setDesigns] = useState<DesignOrder[]>([])
+  useEffect(() => { if (!order && ptype === 'race') apiFetch(`${API_BASE}/api/bulk/billing?designs=1`).then(r => r.json()).then(d => setDesigns(d.designs || [])).catch(() => {}) }, [order, ptype])
   const locked = Boolean(order && (order.invoiceSentAt || order.paidAt))
   // Start from an earlier order's details (same organization ordering again).
   const [past, setPast] = useState<PastDetails[]>([])
@@ -108,12 +125,14 @@ export function OrderModal({ order, onClose, onCreated }: { order?: Billing; onC
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!locked && lines.some(l => !l.raceName)) { toast.error('Choose the race'); return }
+    if (!locked && lines.some(l => !l.raceName.trim())) { toast.error(newRace ? 'Type the race name' : 'Choose the race'); return }
     if (!due) { toast.error('Set the fulfillment date'); return }
     setBusy(true)
     try {
       const out = await billingApi<{ order: Billing }>({
         action: order ? 'update' : 'create', ...(order ? { id: order.id } : {}), ...f,
+        ...(ptype ? { partnerType: ptype } : {}),
+        ...(!order && ptype === 'race' && newRace ? { newDesign: true, printKind: 'standard', partnerOrderId: designId || undefined } : {}),
         discountKind: f.discountKind || null,
         billingAddress: { ...billing, company: billing.company || f.partnerName, name: f.contactName },
         shipToAddress: f.shipping === 'organization' ? { ...shipTo, company: f.partnerName, name: f.contactName } : null,
@@ -121,24 +140,54 @@ export function OrderModal({ order, onClose, onCreated }: { order?: Billing; onC
         fulfillmentDate: due,
       })
       if (order) { toast.success(order.shopifyDraftId && !locked ? 'Saved. Update the invoice so it matches.' : 'Saved'); onCreated(out.order); return }
-      toast.success(`${out.order.number} created`)
+      toast.success(!order && ptype === 'race' && newRace ? `${out.order.number} created. Its design is in Partners` : `${out.order.number} created`)
       onCreated(out.order)
     } catch (err) { toast.error((err as Error).message) } finally { setBusy(false) }
   }
 
   const label = (t: string) => <span className={fieldLabel}>{t}</span>
+  // First step of a new order: who is buying.
+  if (!order && !ptype) {
+    return (
+      <div className="fixed inset-0 z-50 bg-off-black/60 flex items-center justify-center p-4" onClick={onClose}>
+        <div onClick={e => e.stopPropagation()} className="bg-white rounded-lg shadow-xl w-full max-w-3xl p-6 space-y-4">
+          <div className="flex items-center justify-between"><h3 className="text-base font-semibold">New bulk order</h3><button type="button" onClick={onClose} className={btnGhost}><X className="w-4 h-4" /></button></div>
+          <p className="text-sm text-off-black/60">Who is it for?</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {PARTNER_TYPES.map(t => (
+              <button key={t.key} type="button" onClick={() => setPtype(t.key)} className="text-left rounded-md border border-border-gray hover:border-[#4600D6] hover:bg-[#4600D6]/[0.04] px-4 py-4 transition-colors">
+                <t.icon className="w-5 h-5 text-[#4600D6]" />
+                <div className="mt-2 text-sm font-semibold text-off-black">{t.label}</div>
+                <div className="mt-0.5 text-xs text-off-black/55">{t.line}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+  const pastShown = past.filter(p => !p.partnerType || p.partnerType === ptype)
   return (
     <div className="fixed inset-0 z-50 bg-off-black/60 flex items-center justify-center p-4" onClick={onClose}>
       <form onSubmit={submit} onClick={e => e.stopPropagation()} className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-full overflow-y-auto p-6 space-y-4">
-        <div className="flex items-center justify-between"><h3 className="text-base font-semibold">{order ? `Edit ${order.number}` : 'New bulk order'}</h3><button type="button" onClick={onClose} className={btnGhost}><X className="w-4 h-4" /></button></div>
+        <div className="flex items-center justify-between"><h3 className="text-base font-semibold">{order ? `Edit ${order.number}` : 'New bulk order'}{pt && <span className="font-normal text-off-black/55"> · {pt.label}</span>}{!order && <button type="button" onClick={() => { setPtype(null); setNewRace(false); setDesignId('') }} className="ml-2 text-xs font-normal text-[#4600D6] hover:underline">Change</button>}</h3><button type="button" onClick={onClose} className={btnGhost}><X className="w-4 h-4" /></button></div>
 
-        {!order && past.length > 0 && (
+        {!order && pastShown.length > 0 && (
           <label className="block">{label('Start from an earlier bulk order (optional)')}
-            <select defaultValue="" onChange={e => { const p = past[Number(e.target.value)]; if (p) applyPast(p) }} className={`${inputBase} w-full`}>
+            <select defaultValue="" onChange={e => { const p = pastShown[Number(e.target.value)]; if (p) applyPast(p) }} className={`${inputBase} w-full`}>
               <option value="">New organization</option>
-              {past.map((p, i) => <option key={i} value={i}>{p.partnerName}{p.contactName ? ` · ${p.contactName}` : ''}</option>)}
+              {pastShown.map((p, i) => <option key={i} value={i}>{p.partnerName}{p.contactName ? ` · ${p.contactName}` : ''}</option>)}
             </select>
           </label>
+        )}
+        {order && !locked && (
+          <div>{label('Who it is for')}
+            <div className="flex flex-wrap gap-1.5">
+              {PARTNER_TYPES.map(t => (
+                <button key={t.key} type="button" onClick={() => setPtype(t.key)} className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium ${ptype === t.key ? 'border-[#4600D6] text-[#4600D6] bg-[#4600D6]/[0.04]' : 'border-border-gray text-off-black/70'}`}><t.icon className="w-3.5 h-3.5" />{t.label}</button>
+              ))}
+            </div>
+          </div>
         )}
         {locked && <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">The invoice has gone out, so only the fulfillment date and the notes change here.</p>}
 
@@ -148,14 +197,27 @@ export function OrderModal({ order, onClose, onCreated }: { order?: Billing; onC
         {!locked && <>
         {/* Who */}
         <div className="grid grid-cols-2 gap-2">
-          <label className="col-span-2 block">{label('Organization')}<input required value={f.partnerName} onChange={set('partnerName')} placeholder="American Heart Association, Philadelphia" className={`${inputBase} w-full`} /></label>
+          <label className="col-span-2 block">{label(pt?.org || 'Organization')}<input required value={f.partnerName} onChange={set('partnerName')} placeholder={pt?.orgPlaceholder || 'American Heart Association, Philadelphia'} className={`${inputBase} w-full`} /></label>
           <label className="block">{label('Contact')}<input value={f.contactName} onChange={set('contactName')} placeholder="Miles McCaskey" className={`${inputBase} w-full`} /></label>
           <label className="block">{label('Contact email (invoice goes here)')}<input type="email" value={f.contactEmail} onChange={set('contactEmail')} className={`${inputBase} w-full`} /></label>
           <div className="col-span-2">{label('Billing address')}<AddressFields value={billing} onChange={setBilling} /></div>
         </div>
 
-        {/* What */}
-        <div>
+        {/* What. A race with no design yet: the designer makes it in Partners, so there is nothing to choose. */}
+        {newRace ? (
+          <div className="rounded-md border border-[#4600D6]/30 bg-[#4600D6]/[0.04] px-3 py-2.5 text-sm">
+            <div className="font-semibold">New design</div>
+            <div className="text-xs text-off-black/60 mt-0.5">We make their race design first. {designId ? 'This order joins the design already in Partners' : 'Creating the order opens a design order in Partners'}; prints wait until the design is approved. The invoice prices each print like our standard print in that size and frame.</div>
+            {designs.length > 0 && (
+              <label className="block mt-2 max-w-md">{label('Design')}
+                <select value={designId} onChange={e => setDesignId(e.target.value)} className={`${inputBase} w-full`}>
+                  <option value="">Start a new design order</option>
+                  {designs.map(d => <option key={d.id} value={d.id}>Already in Partners: {d.raceName} {d.raceYear}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
+        ) : <div>
           {label('Prints')}
           <div className="grid grid-cols-2 gap-2">
             {(['standard', 'cobranded'] as const).map(k => (
@@ -165,18 +227,26 @@ export function OrderModal({ order, onClose, onCreated }: { order?: Billing; onC
               </label>
             ))}
           </div>
-        </div>
+        </div>}
 
         <div>
-          <div className="flex items-center justify-between">{label(`Race · ${units} print${units === 1 ? '' : 's'}`)}</div>
+          <div className="flex items-center justify-between">{label(`Race · ${units} print${units === 1 ? '' : 's'}`)}
+            {!order && ptype === 'race' && (
+              <button type="button" onClick={() => { setNewRace(v => !v); setDesignId(''); setLines(ls => ls.map(l => ({ ...l, raceName: '' }))) }} className="text-[11px] text-[#4600D6] hover:underline">
+                {newRace ? 'Pick from our races instead' : 'New race, no design yet'}
+              </button>
+            )}
+          </div>
           <div className="space-y-1.5">
             <div className={`${LINE_GRID} text-[11px] font-semibold text-off-black/45 uppercase tracking-wider`}>
               <span>Race</span><span>Year</span><span>Qty</span><span>Size</span><span>Frame</span><span title="Internal: which events were sold. The lookup finds the race each runner ran.">Events (note)</span><span />
             </div>
             {lines.map((l, i) => (
               <div key={i} className={`${LINE_GRID} items-center`}>
-                <PrintPicker<CatalogPrint> value={catalog?.find(c => c.race === l.raceName)?.title || null} options={catalog} placeholder={l.raceName || 'Choose the race'}
-                  onChange={c => setLine(i, 'raceName', c.race)} />
+                {newRace
+                  ? <input required value={l.raceName} onChange={e => setLine(i, 'raceName', e.target.value.slice(0, 120))} placeholder="Race name, as the race writes it" className={inputBase} aria-label="Race name" autoFocus />
+                  : <PrintPicker<CatalogPrint> value={catalog?.find(c => c.race === l.raceName)?.title || null} options={catalog} placeholder={l.raceName || 'Choose the race'}
+                      onChange={c => setLine(i, 'raceName', c.race)} />}
                 <input required value={l.raceYear} onChange={e => setLine(i, 'raceYear', e.target.value.replace(/\D/g, '').slice(0, 4))} className={inputBase} aria-label="Year" />
                 <input required value={l.quantity} onChange={e => setLine(i, 'quantity', e.target.value.replace(/\D/g, ''))} placeholder="Qty" className={inputBase} aria-label="Quantity" />
                 <select value={l.productSize} onChange={e => setLine(i, 'productSize', e.target.value)} className={inputBase} aria-label="Size">{opts.sizes.map(o => <option key={o}>{o}</option>)}</select>
@@ -321,6 +391,7 @@ export function InvoiceCard({ order, onChanged }: { order: Billing; onChanged: (
             </>
           )}
           {quote && quote.missing.length > 0 && <p className="text-red-600">{quote.missing.join('; ')}</p>}
+          {quote?.lines.map(l => l.priceNote && <p key={l.number} className="text-off-black/55">{l.priceNote}.</p>)}
         </div>
       )}
       {isAdmin && !order.paidAt && quote && (

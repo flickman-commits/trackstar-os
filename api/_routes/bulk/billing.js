@@ -5,10 +5,11 @@
  *   GET ?options=1          events, sizes, frames, print kinds
  *   GET ?past=1             earlier orders' details, to start a new one from
  *   GET ?catalog=1          the store's prints for the race picker
+ *   GET ?designs=1          open partner design orders, for a race we have no design for yet
  *   GET ?id=                the order's terms and invoice
  *   GET ?id=&quote=1        the invoice as it would read: Shopify price, discount, total (admin)
  *   POST { action, ... }
- *     create        { partnerName, contact..., billingAddress, printKind, discount..., shipping, shipToAddress?, raceName, raceYear, quantity, productSize, frameType, eventNote?, fulfillmentDate }
+ *     create        { partnerType, partnerName, contact..., billingAddress, printKind, newDesign?, partnerOrderId?, discount..., shipping, shipToAddress?, raceName, raceYear, quantity, productSize, frameType, eventNote?, fulfillmentDate }
  *     update        { id, ...terms }
  *     template-upload / template-saved { id, fileName | path }   a co-branded order's production file
  *     invoice       { id }               admin: build or rebuild the Shopify draft order
@@ -17,6 +18,7 @@
 import { setCors, requireAdmin } from '../../_lib/auth.js'
 import { seesMoney, withoutBulkMoney } from '../../_lib/money.js'
 import { requireAdminRole, recordAudit } from '../../_lib/users.js'
+import { openRacePartnerOrders } from '../../../server/domain/orders/racePartner.js'
 import { publicPrintCatalog } from '../../../server/domain/catalog/printCatalog.js'
 import { sendPublicError } from '../../../server/lib/publicError.js'
 import { FRAME_OPTIONS, SIZE_OPTIONS } from '../../../server/domain/bulk/bulkOrders.js'
@@ -36,6 +38,7 @@ export default async function handler(req, res) {
       if (req.query?.past) return res.status(200).json({ past: (await pastDetails()).map(shown) })
       // The store's prints for the race picker: names and pictures, no prices.
       if (req.query?.catalog) return res.status(200).json({ products: await publicPrintCatalog() })
+      if (req.query?.designs) return res.status(200).json({ designs: await openRacePartnerOrders() })
       if (req.query?.options) return res.status(200).json({ events: EVENT_OPTIONS, sizes: SIZE_OPTIONS, frames: FRAME_OPTIONS, printKinds: PRINT_KINDS })
       if (req.query?.quote) {
         if (!money) return res.status(403).json({ error: 'Prices are for admins.' })

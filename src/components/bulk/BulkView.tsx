@@ -46,6 +46,8 @@ export interface BulkRunner {
   print?: { status: string; review: string; version: number } | null
 }
 
+const PARTNER_LABEL = { race: 'Race partner', charity: 'Charity partner', corporate: 'Corporate partner' } as const
+
 export interface BulkOrder {
   id: string
   number: string
@@ -73,6 +75,8 @@ export interface BulkOrder {
   partnerOrderId: string | null
   /** Standard (our race design) or co-branded (theirs), and the events sold (an internal note). */
   printKind?: 'standard' | 'cobranded'
+  /** Who is buying: a race, a charity team or a company. Null on older orders. */
+  partnerType?: 'race' | 'charity' | 'corporate' | null
   events?: string | null
   /** not_sent / sent / paid (billing.js paymentStatus). */
   paymentStatus?: 'not_sent' | 'sent' | 'paid'
@@ -220,7 +224,7 @@ export default function BulkView({ onOpenRunner, refreshRunners, onCount, toolba
                 return (
                   <tr key={b.id} onClick={() => onSelect(b.number)} className="border-t border-border-gray/70 hover:bg-subtle-gray cursor-pointer">
                     <td className="px-4 py-3 font-mono text-[12px] text-off-black/70">{b.number}</td>
-                    <td className="px-3 py-3 font-semibold text-off-black">{b.partnerName}</td>
+                    <td className="px-3 py-3"><div className="font-semibold text-off-black">{b.partnerName}</div>{b.partnerType && <div className="text-[11px] text-off-black/50">{PARTNER_LABEL[b.partnerType]}</div>}</td>
                     <td className="px-3 py-3 text-off-black/80">{b.raceName} <span className="text-off-black/45">{b.raceYear}</span>{b.eventType && b.eventType !== 'Marathon' && <span className="ml-1.5 text-xs font-medium text-off-black/60">{b.eventType}</span>}</td>
                     <td className="px-3 py-3">
                       {b.dueDate ? (
@@ -588,6 +592,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
             <span className="inline-flex items-center px-2 py-1 bg-white border border-border-gray rounded text-xs font-semibold text-off-black">{b.productSize}</span>
             <span className="inline-flex items-center px-2 py-1 bg-white border border-border-gray rounded text-xs font-semibold text-off-black">{b.frameType}</span>
             <span className="inline-flex items-center px-2 py-1 bg-white border border-border-gray rounded text-xs font-semibold text-off-black">{b.printKind === 'standard' ? 'Standard' : 'Co-branded'}</span>
+            {b.partnerType && <span className="inline-flex items-center px-2 py-1 bg-white border border-border-gray rounded text-xs font-semibold text-off-black">{PARTNER_LABEL[b.partnerType]}</span>}
           </div>
           {b.events && <div className="text-xs text-off-black/60 mt-2">Events: {b.events}</div>}
           <div className="mt-3 pt-2 border-t border-border-gray">
