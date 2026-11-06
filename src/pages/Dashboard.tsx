@@ -1367,13 +1367,6 @@ export default function Dashboard() {
               </h2>
               {isRefreshing && <Loader2 className="w-4 h-4 animate-spin text-off-black/30" />}
               {activeView === 'standard' && onTime && <OnTimeStat stat={onTime} lateActive={stageFilter === 'late'} onLate={() => setStageFilter(stageFilter === 'late' ? '' : 'late')} />}
-              {/* The Hours Tracker, one click from the queue (it is also under Tools in the rail). */}
-              {can('hours') && (
-                <button onClick={openHours} title="Log your time and run the timer"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border-gray text-xs font-medium text-off-black/70 hover:text-off-black hover:bg-subtle-gray whitespace-nowrap">
-                  <Clock className="w-3.5 h-3.5" />Hours
-                </button>
-              )}
             </div>
             {lastImportedAt && (
               <button
@@ -1394,7 +1387,14 @@ export default function Dashboard() {
                 is the right control when the options do not fit side by side. */}
             <div className="hidden md:block relative">
             {/* Floats above the switcher so the header keeps its height. */}
-            <div className="absolute bottom-full right-0 mb-2.5">
+            <div className="absolute bottom-full right-0 mb-2.5 flex items-end gap-2">
+              {/* The Hours Tracker, one click from the queue, left of the team (it is also under Tools in the rail). */}
+              {can('hours') && (
+                <button onClick={openHours} title="Log your time and run the timer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-border-gray bg-white text-sm font-medium text-off-black/70 hover:text-off-black hover:bg-subtle-gray whitespace-nowrap">
+                  <Clock className="w-4 h-4" />Hours
+                </button>
+              )}
               {activeView === 'standard' && sentToday
                 ? <TeamPanel team={team} sent={sentToday.byPerson} toApprove={toApprove} selected={person} onSelect={(id) => setPersonFilter(f => f === id ? '' : id)} />
                 : <QueuePill people={teamQueue} team={team} selected={person} onSelect={scoped ? (id) => setPersonFilter(f => f === id ? '' : id) : undefined} />}
