@@ -22,7 +22,7 @@ import { appBaseUrl, arteloOrderUrl } from '../../lib/links.js'
 import { setStatus } from './threads.js'
 import { UserError } from './errors.js'
 import { requireConnection } from '../../lib/connections.js'
-import { slackTo } from '../../lib/slack.js'
+import { slackTo, slackText, slackUserId, DESTINATIONS } from '../../lib/slack.js'
 
 function actorName(actor) {
   return [actor?.firstName, actor?.lastName].filter(Boolean).join(' ') || 'Someone'
@@ -465,6 +465,25 @@ export async function cancelAndRefund({ order: o, why, by, actor = null }) {
 // ---------------------------------------------------------------------------
 // Escalation
 // ---------------------------------------------------------------------------
+
+/**
+ * The Escalate button: the thread marked escalated and, when that is a change
+ * and someone other than Matt pressed it, a DM to Matt with the link. Slack
+ * failing never blocks the escalation; the event in the thread says whether
+ * he was pinged.
+ */
+export async function escalate(id, actor) {
+  const before = await prisma.supportThread.findUnique({ where: { id }, select: { status: true } })
+  const t = await setStatus(id, 'escalated', actor)
+  if (before?.status === 'escalated') return t
+  const mattId = DESTINATIONS.matt.user()
+  if (actor?.email && (await slackUserId(actor.email)) === mattId) return t
+  const who = t.customerName || t.customerEmail || 'a customer'
+  const msg = `:rotating_light: ${slackText(actorName(actor), 80)} escalated a support conversation to you\n*${slackText(who, 120)}*: ${slackText(t.subject || '(no subject)', 200)}\n<${threadUrl(id)}|Open the conversation>`
+  const sent = await slackTo('matt', msg).catch(() => false)
+  if (sent) await event(id, 'Matt was pinged in Slack', actor)
+  return t
+}
 
 /** A line to Matt in Slack with the thread link, and the thread marked escalated. */
 export async function slackMatt({ thread, text, actor }) {

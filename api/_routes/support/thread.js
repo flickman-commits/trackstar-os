@@ -3,7 +3,7 @@
  *
  *   GET  ?id=                                   the thread, its messages, notes and events, the customer's orders and other threads; marks it read for you
  *   POST { id, action: 'assign', assigneeId }
- *   POST { id, action: 'status', status }       open | waiting | escalated | closed
+ *   POST { id, action: 'status', status }       open | waiting | escalated | closed; escalated DMs Matt the link
  *   POST { id, action: 'snooze', until }        ISO time, or null to unsnooze
  *   POST { id, action: 'priority', priority }
  *   POST { id, action: 'tags', tags }
@@ -24,6 +24,7 @@ import { seesMoney } from '../../_lib/money.js'
 import { setCors } from '../../_lib/auth.js'
 import { requireCapability, recordAudit } from '../../_lib/users.js'
 import { getThread, assign, setStatus, snooze, setPriority, setTags, addNote, deleteNote, markRead, markUnread, noteRow, setProposal, linkOrder, unlinkOrder } from '../../../server/domain/support/threads.js'
+import { escalate } from '../../../server/domain/support/actions.js'
 import { draftThread } from '../../../server/domain/support/draft.js'
 import { listMockups } from '../../../server/domain/support/mockups.js'
 import { mergeThreads } from '../../../server/domain/support/merge.js'
@@ -61,7 +62,9 @@ export default async function handler(req, res) {
         return res.status(200).json(t)
       }
       case 'status': {
-        const t = await setStatus(id, String(body.status || ''), user)
+        const status = String(body.status || '')
+        // Escalating DMs Matt the link (unless he pressed it himself).
+        const t = status === 'escalated' ? await escalate(id, user) : await setStatus(id, status, user)
         await audit(`Marked "${t.subject}" ${t.status}`, { status: t.status })
         return res.status(200).json(t)
       }
