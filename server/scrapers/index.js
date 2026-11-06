@@ -321,11 +321,25 @@ function wrapWithFallback(primary, fallback, tag) {
 /**
  * Try to match a race name to a config using keyword-based fuzzy matching
  */
+/**
+ * A keyword counts only as whole words: "charlotte" is in "Charlotte Marathon"
+ * but not in "Charlottesville Marathon", which is a different race.
+ */
+function hasWholeWord(name, kw) {
+  const at = name.indexOf(kw)
+  if (at < 0) return false
+  const edge = c => !c || !/[a-z0-9]/.test(c)
+  for (let i = at; i >= 0; i = name.indexOf(kw, i + 1)) {
+    if (edge(name[i - 1]) && edge(name[i + kw.length])) return true
+  }
+  return false
+}
+
 function findConfigByKeywords(normalizedName) {
   for (const config of ALL_CONFIGS) {
     if (!config.keywords) continue
 
-    const hasKeyword = config.keywords.some(kw => normalizedName.includes(kw))
+    const hasKeyword = config.keywords.some(kw => hasWholeWord(normalizedName, kw))
     if (!hasKeyword) continue
 
     // Some races require "marathon" in the name to avoid false positives
