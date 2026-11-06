@@ -2,8 +2,7 @@
  * Bulk runners go to Artelo through the tool, one Artelo order per runner,
  * the way a reprint from Support does (support/arteloOrder.js). No more
  * spreadsheet: a runner is queued the moment they have an address and a
- * print, waits a short hold like every other send (so a wrong click can be
- * held), then the sender creates their Artelo order with the design on it,
+ * print, then the sender (every 2 minutes) creates their Artelo order with the design on it,
  * sends it to production, and completes them here. The Artelo order lands
  * in arteloOrderData, so the runner's row gets an Artelo link like any order.
  *
@@ -26,7 +25,9 @@ import { arteloOrderUrl } from '../../lib/links.js'
 import { addressComplete } from './bulkOrders.js'
 
 const MIN = 60_000
-const holdMinutes = () => Math.max(0, Number(process.env.ARTELO_SEND_HOLD_MINUTES ?? 5) || 0)
+// No hold for a bulk runner: there is no customer to write in and ask for a
+// change (the partner gave the list), so an approved print goes straight to
+// production on the sender's next run (Matt, 2026-11-06).
 
 export class BulkSendError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; this.expose = true }
@@ -82,7 +83,7 @@ export async function queueRunnerSend(orderId, { force = false } = {}) {
   if (!order || order.trackstarOrderType !== 'bulk' || order.status === 'completed' || order.bulkSentAt) return null
   if (!force && order.bulkSendError) return order
   if (await notReadyReason(order, order.bulkOrder)) return order
-  return prisma.order.update({ where: { id: orderId }, data: { bulkSendAfter: new Date(Date.now() + (force ? 0 : holdMinutes() * MIN)), bulkSendError: null } })
+  return prisma.order.update({ where: { id: orderId }, data: { bulkSendAfter: new Date(), bulkSendError: null } })
 }
 
 /** Everyone on a bulk order who is ready and not queued: after the invoice is paid, or a list was fixed. */

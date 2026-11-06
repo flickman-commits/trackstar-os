@@ -427,7 +427,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
     <div className="bg-white border border-border-gray rounded-md p-4">
       <div className="text-[11px] font-semibold text-off-black/50 uppercase tracking-wider">{b.printKind === 'cobranded' ? 'Co-branded prints' : 'Standard prints'}</div>
       <div className="text-lg font-bold text-off-black leading-tight mt-0.5">{b.raceName} {b.raceYear}{b.eventType && b.eventType !== 'Marathon' ? ` · ${b.eventType}` : ''}</div>
-      <p className="text-xs text-off-black/60 mt-1">Each runner's print renders from {b.printKind === 'cobranded' ? 'the uploaded co-branded file' : 'the race design'} once they are researched. Open a runner to approve their design; approved prints attach to the Artelo sheet on their own ({b.progress.files} of {runners.length} so far).</p>
+      <p className="text-xs text-off-black/60 mt-1">Each runner's print renders from {b.printKind === 'cobranded' ? 'the uploaded co-branded file' : 'the race design'} once they are researched. Open a runner to approve their design; an approved print goes straight to Artelo production, no hold.</p>
       <div className="flex flex-wrap items-center gap-1.5 mt-2">
         <span className="inline-flex items-center px-2 py-1 bg-white border border-border-gray rounded text-xs font-semibold text-off-black">{b.productSize}</span>
         <span className="inline-flex items-center px-2 py-1 bg-white border border-border-gray rounded text-xs font-semibold text-off-black">{b.frameType}</span>
@@ -544,7 +544,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
     <div className="bg-white border border-border-gray rounded-md p-4 space-y-3">
       <div>
         <h3 className="text-sm font-semibold uppercase tracking-tight">Production, through the tool</h3>
-        <p className="text-xs text-off-black/60 mt-0.5">Each runner goes to Artelo as their own order once they have an address and an approved print, after the usual short hold. One sheet for the whole run is no longer needed. Their Artelo order shows on their row.</p>
+        <p className="text-xs text-off-black/60 mt-0.5">Each runner goes to Artelo as their own order once they have an address and an approved print, with no hold (there is no customer to ask for a change). One sheet for the whole run is no longer needed. Their Artelo order shows on their row.</p>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         <div className="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2"><p className="text-[11px] text-emerald-800">Sent to Artelo</p><p className="text-lg font-bold tabular-nums text-emerald-900">{pg.sent}</p></div>
