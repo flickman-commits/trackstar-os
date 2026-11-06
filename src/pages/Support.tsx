@@ -203,19 +203,52 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
     catch (e) { toast.error((e as Error).message) }
     finally { setBusy(false) }
   }
-  const assign = (assigneeId: string | null) => thread && run(async () => { patchRow(await supportApi.assign(thread.id, assigneeId)); await refreshThread(thread.id) })
+  // Undo (⌘Z, or the toast's Undo): each change that can be put back leaves
+  // how to put it back here. Closing, status, snooze, assignee and priority;
+  // a sent reply cannot be unsent, but reply-and-close reopens.
+  const undoStack = useRef<{ label: string; undo: () => Promise<void> }[]>([])
+  const remember = (label: string, undo: () => Promise<void>, message?: string) => {
+    undoStack.current = [...undoStack.current.slice(-19), { label, undo }]
+    toast.success(message || label, { action: { label: 'Undo', onClick: () => { void undoLast() } }, description: 'Undo with ⌘Z' })
+  }
+  // How a conversation stood, to put it back: snoozed comes back snoozed, escalated without a second ping.
+  const restoreState = async (prev: ThreadRow | ThreadDetail) => {
+    patchRow(await supportApi.setStatus(prev.id, prev.status, true))
+    if (prev.snoozedUntil && new Date(prev.snoozedUntil) > new Date()) patchRow(await supportApi.snooze(prev.id, prev.snoozedUntil))
+  }
+  const undoLast = async () => {
+    const last = undoStack.current.pop()
+    if (!last) { toast('Nothing to undo'); return }
+    setBusy(true)
+    try { await last.undo(); toast.success(`Undid: ${last.label}`); loadInbox(true) }
+    catch (e) { toast.error(`Could not undo: ${(e as Error).message}`) }
+    finally { setBusy(false) }
+  }
+  const assign = (assigneeId: string | null) => thread && run(async () => {
+    const prev = thread
+    patchRow(await supportApi.assign(thread.id, assigneeId)); await refreshThread(thread.id)
+    if ((prev.assignee?.id || null) !== assigneeId) remember('Assignee changed', async () => { patchRow(await supportApi.assign(prev.id, prev.assignee?.id || null)); if (selectedRef.current === prev.id) await refreshThread(prev.id) })
+  })
   // Closing takes the conversation off your plate: the pane goes back to empty.
   const putDown = () => { setSelectedId(null); setThread(null) }
   const setStatusOf = (s: ThreadStatus) => thread && run(async () => {
+    const prev = thread
     patchRow(await supportApi.setStatus(thread.id, s))
-    if (s === 'closed') { toast.success('Closed'); putDown(); loadInbox(true) } else await refreshThread(thread.id)
+    if (s === 'closed') { putDown(); loadInbox(true) } else await refreshThread(thread.id)
+    if (prev.status !== s) remember(s === 'closed' ? 'Closed' : `Marked ${VIEW_TITLE[s] || s}`, async () => { await restoreState(prev); await openThread(prev.id) })
   })
   const snooze = (until: string | null) => thread && run(async () => {
+    const prev = thread
     patchRow(await supportApi.snooze(thread.id, until))
-    toast.success(until ? `Snoozed until ${new Date(until).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}` : 'Unsnoozed')
+    const label = until ? `Snoozed until ${new Date(until).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}` : 'Unsnoozed'
     await refreshThread(thread.id)
+    remember(until ? 'Snoozed' : 'Unsnoozed', async () => { await restoreState(prev); await openThread(prev.id) }, label)
   })
-  const setPriority = (p: boolean) => thread && run(async () => { patchRow(await supportApi.setPriority(thread.id, p)); await refreshThread(thread.id) })
+  const setPriority = (p: boolean) => thread && run(async () => {
+    const id = thread.id
+    patchRow(await supportApi.setPriority(id, p)); await refreshThread(id)
+    remember(p ? 'Starred' : 'Unstarred', async () => { patchRow(await supportApi.setPriority(id, !p)); if (selectedRef.current === id) await refreshThread(id) })
+  })
   const setTags = (tags: string[]) => thread && run(async () => { patchRow(await supportApi.setTags(thread.id, tags)) })
   const markUnread = () => thread && run(async () => {
     await supportApi.markUnread(thread.id)
@@ -226,9 +259,12 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
     if (!thread) return false
     try {
       const fresh = await supportApi.reply(thread.id, text, close, attachments)
+      const prev = thread
       if (close) putDown(); else setThread(fresh)
       const to = fresh.channel === 'instagram' ? `@${fresh.igUsername || 'them'} on Instagram` : fresh.customerEmail
-      toast.success(close ? `Sent to ${to} and closed` : `Sent to ${to}`)
+      // The reply is sent for good; undo reopens the conversation.
+      if (close) remember('Closed after reply', async () => { await restoreState(prev); await openThread(prev.id) }, `Sent to ${to} and closed`)
+      else toast.success(`Sent to ${to}`)
       loadInbox(true)
       return true
     } catch (e) {
@@ -298,6 +334,8 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
       const el = e.target as HTMLElement | null
       const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
       if (typing) { if (e.key === 'Escape') (el as HTMLElement).blur(); return }
+      // ⌘Z away from a text box undoes the last change (closing, status, snooze, assignee, star).
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); void undoLast(); return }
       // ⌘↵ away from the composer closes the conversation that is open.
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         const open = threadRef.current

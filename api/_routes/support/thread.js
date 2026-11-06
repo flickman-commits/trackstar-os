@@ -64,7 +64,8 @@ export default async function handler(req, res) {
       case 'status': {
         const status = String(body.status || '')
         // Escalating DMs Matt the link (unless he pressed it himself).
-        const t = status === 'escalated' ? await escalate(id, user) : await setStatus(id, status, user)
+        // restore: an undo putting it back as it was, so no second ping.
+        const t = status === 'escalated' && !body.restore ? await escalate(id, user) : await setStatus(id, status, user)
         await audit(`Marked "${t.subject}" ${t.status}`, { status: t.status })
         return res.status(200).json(t)
       }

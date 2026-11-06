@@ -68,7 +68,7 @@ export const supportApi = {
   inbox: (view: InboxView, sort: InboxSort, q = '') => request<InboxPayload>(`/api/support/threads?view=${encodeURIComponent(view)}&sort=${sort}&q=${encodeURIComponent(q)}`),
   thread: (id: string) => request<ThreadDetail>(`/api/support/thread?id=${encodeURIComponent(id)}`),
   assign: (id: string, assigneeId: string | null) => act<ThreadRow>(id, 'assign', { assigneeId }),
-  setStatus: (id: string, status: ThreadStatus) => act<ThreadRow>(id, 'status', { status }),
+  setStatus: (id: string, status: ThreadStatus, restore = false) => act<ThreadRow>(id, 'status', { status, ...(restore ? { restore: true } : {}) }),
   snooze: (id: string, until: string | null) => act<ThreadRow>(id, 'snooze', { until }),
   setPriority: (id: string, priority: boolean) => act<ThreadRow>(id, 'priority', { priority }),
   setTags: (id: string, tags: string[]) => act<ThreadRow>(id, 'tags', { tags }),
