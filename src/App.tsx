@@ -300,8 +300,8 @@ export default function App() {
                 <Route path="/products" element={<Navigate to="/settings/products" replace />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/settings/:panel" element={<Settings />} />
-                <Route path="/briefs" element={<RequireAdmin><BriefsAdmin /></RequireAdmin>} />
-                <Route path="/briefs/:briefId" element={<RequireAdmin><BriefsAdmin /></RequireAdmin>} />
+                <Route path="/briefs" element={<RequireCap cap="creators"><BriefsAdmin /></RequireCap>} />
+                <Route path="/briefs/:briefId" element={<RequireCap cap="creators"><BriefsAdmin /></RequireCap>} />
                 {/* Sales is for reps: anyone signed in whose email is on the Attio
                     workspace, or an admin. The API decides; the page shows why not. */}
                 {/* Rendered by SalesKeepAlive below, so it survives leaving the page.
