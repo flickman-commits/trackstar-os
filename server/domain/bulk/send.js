@@ -162,7 +162,11 @@ async function sendRunner(order) {
     await call('orders/send-to-production', { method: 'POST', body: { orderId: arteloId } })
   } catch (e) {
     if (e.status === 409 && /process/i.test(e.arteloMessage || '')) throw Object.assign(new Error('Artelo is still processing the image'), { retryIn: 1 })
-    throw new BulkSendError(`Artelo would not send it: ${e.arteloMessage || e.message}`)
+    // Artelo may take the order straight into production when it is created
+    // ("Order can't be sent to production while it is Received"): that is
+    // sent, not a failure. Only an order still waiting on us is one.
+    const live = await call('orders/get-by-id', { query: { orderId: arteloId } }).catch(() => null)
+    if (!live || live.status === 'PendingFulfillmentAction') throw new BulkSendError(`Artelo would not send it: ${e.arteloMessage || e.message}`)
   }
   const now = new Date()
   await prisma.order.update({ where: { id: order.id }, data: { bulkSentAt: now, bulkSendAfter: null, bulkSendError: null } })

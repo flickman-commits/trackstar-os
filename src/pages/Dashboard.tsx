@@ -1031,6 +1031,14 @@ export default function Dashboard() {
   const lastQueuePos = useRef<{ id: string; index: number } | null>(null)
   const navigableOrders = useMemo(() => {
     if (!selectedOrder) return filteredOrders
+    // A bulk runner: the runners of the same bulk order, in the order of its
+    // runners table (by line), so S and D match what the bulk page shows.
+    if (selectedOrder.trackstarOrderType === 'bulk') {
+      const seen = new Set<string>()
+      return [...orders, ...completedPage, selectedOrder]
+        .filter(o => o.trackstarOrderType === 'bulk' && o.parentOrderNumber === selectedOrder.parentOrderNumber && !seen.has(o.id) && seen.add(o.id))
+        .sort((a, b) => (a.lineItemIndex ?? 0) - (b.lineItemIndex ?? 0))
+    }
     // Completed order open → cycle through the completed list.
     if (filteredCompletedOrders.some(o => o.id === selectedOrder.id) && !(lastQueuePos.current?.id === selectedOrder.id)) {
       return filteredCompletedOrders
@@ -1043,7 +1051,7 @@ export default function Dashboard() {
       : result.length
     result.splice(at, 0, selectedOrder)
     return result
-  }, [filteredOrders, filteredCompletedOrders, selectedOrder])
+  }, [filteredOrders, filteredCompletedOrders, selectedOrder, orders, completedPage])
   useEffect(() => {
     if (!selectedOrder) return
     const i = filteredOrders.findIndex(o => o.id === selectedOrder.id)

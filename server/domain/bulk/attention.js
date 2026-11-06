@@ -29,7 +29,7 @@ export async function bulkNeedingAttention(now = new Date()) {
   if (!runs.length) return []
   const runners = await prisma.order.findMany({
     where: { bulkOrderId: { in: runs.map(r => r.id) } },
-    select: { bulkOrderId: true, shippingAddress: true, researchedAt: true, productionFileUrl: true, status: true, bulkSentAt: true, runnerResearch: { select: { researchStatus: true }, take: 1, orderBy: { createdAt: 'desc' } } },
+    select: { bulkOrderId: true, shippingAddress: true, researchedAt: true, productionFileUrl: true, status: true, bulkSentAt: true, renderJobs: { where: { review: 'approved' }, select: { id: true }, take: 1 }, runnerResearch: { select: { researchStatus: true }, take: 1, orderBy: { createdAt: 'desc' } } },
   })
   const designs = await prisma.order.findMany({ where: { id: { in: runs.map(r => r.partnerOrderId).filter(Boolean) } }, select: { id: true, designStatus: true } })
   const templates = await prisma.printTemplate.findMany({ where: { key: { in: runs.map(r => templateKey(r.raceName, r.number)) } }, select: { key: true, lastCheckOk: true } })
@@ -41,7 +41,8 @@ export async function bulkNeedingAttention(now = new Date()) {
     const namesOnly = Boolean(await orgShipTo(run))
     const researched = rs.filter(r => r.researchedAt).length
     const found = rs.filter(r => r.runnerResearch[0]?.researchStatus === 'found').length
-    const files = rs.filter(r => r.productionFileUrl).length
+    // A print is made when its render is approved, or a file was uploaded for it by hand.
+    const files = rs.filter(r => r.productionFileUrl || r.renderJobs?.length || r.bulkSentAt || r.status === 'completed').length
     const blockers = []
     if (!run.paidAt) blockers.push('not paid')
     if (rs.length < run.quantity) blockers.push(`${rs.length} of ${run.quantity} runners entered`)
@@ -59,7 +60,7 @@ export async function bulkNeedingAttention(now = new Date()) {
     if (raced) {
       if (researched < rs.length) blockers.push(`${rs.length - researched} not researched yet`)
       if (researched - found > 0) blockers.push(`${researched - found} not found`)
-      if (found && files < rs.length) blockers.push(`${files} of ${rs.length} prints made`)
+      if (found && files < rs.length) blockers.push(`${files} of ${rs.length} prints approved`)
     }
     out.push({
       id: run.id, number: run.number, partnerName: run.partnerName, race: `${run.raceName} ${run.raceYear}`,
