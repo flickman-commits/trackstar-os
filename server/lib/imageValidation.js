@@ -32,24 +32,9 @@ export const MAX_PIXELS = 100_000_000
  * 1200px was stricter than 500 DPI and turned away photos customers had paid
  * for (an official race-app photo, 2026-10-19). 500px is 200+ DPI at every
  * size we sell; below it a photo is a thumbnail or a heavy social copy.
- * Anything softer than ideal for a bigger size is a WARNING in the wizard
- * (see photoDpiAt), never a refusal. Mirrored in both storefront wizards.
+ * Mirrored in both storefront wizards.
  */
 export const MIN_SHORT_EDGE = 500
-
-/** The photo window is this share of the poster's long side. */
-export const PHOTO_WINDOW_SHARE = 0.1
-
-/**
- * Effective DPI of a square photo `px` wide printed on a poster of `size`
- * ("16x24", "8 x 10", '12"x18"'). Null when the size cannot be read.
- */
-export function photoDpiAt(px, size) {
-  const m = String(size || '').match(/(\d+(?:\.\d+)?)\D+(\d+(?:\.\d+)?)/)
-  if (!m || !px) return null
-  const inches = Math.max(Number(m[1]), Number(m[2])) * PHOTO_WINDOW_SHARE
-  return inches > 0 ? Math.round(px / inches) : null
-}
 
 /*
  * There is deliberately NO file-size floor. Byte count is a poor proxy for

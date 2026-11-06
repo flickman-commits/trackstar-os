@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { validateImageBytes, photoDpiAt, MIN_SHORT_EDGE } from './imageValidation.js'
+import { validateImageBytes, MIN_SHORT_EDGE } from './imageValidation.js'
 import { photoRejectDetail } from './photoRejects.js'
 
 /** The leading bytes of a PNG of the given size: enough for the header read. */
@@ -21,13 +21,6 @@ test('the floor is 500px on the short side', () => {
   assert.equal(small.ok, false)
   assert.equal(small.reason, 'too_small')
   assert.doesNotMatch(small.message, /px|—|–/)
-})
-
-test('photoDpiAt reads the poster size and uses 10% of the long side', () => {
-  assert.equal(photoDpiAt(500, '16x24'), 208)
-  assert.equal(photoDpiAt(500, '8 x 10'), 500)
-  assert.equal(photoDpiAt(720, '24" x 36"'), 200)
-  assert.equal(photoDpiAt(500, 'Large'), null)
 })
 
 test('reject records keep only known fields and values', () => {
