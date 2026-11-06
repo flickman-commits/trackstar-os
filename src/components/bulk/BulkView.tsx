@@ -448,9 +448,10 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
         </div>
         <div className="flex flex-wrap gap-2">
           {!submitted && <button onClick={() => setIntakeOpen(o => !o)} className={btnSecondary}><Plus className="w-3.5 h-3.5" /> Add runners</button>}
-          {fulfilling && (
+          {/* Also while names are still coming in: whoever is on the list can be researched once the race is run. */}
+          {!submitted && r.paid && (
             <button onClick={researchAll} disabled={!canResearch || researching || allResearched} className={btnPrimary} title={!r.paid ? 'Mark paid first' : !r.scraper.ok ? 'Scraper is not ready' : allResearched ? 'Everyone is researched' : 'Research every runner without results'}>
-              {researching ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />} Research all
+              {researching ? <Loader2 className="w-4 h-4 animate-spin" /> : <FlaskConical className="w-4 h-4" />} {researching ? 'Researching…' : `Research ${runners.filter(x => !x.researched).length || 'all'}`}
             </button>
           )}
         </div>

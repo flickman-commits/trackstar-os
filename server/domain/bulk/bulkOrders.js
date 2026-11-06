@@ -261,3 +261,24 @@ export async function checkUrl(url) {
 }
 
 /** The Artelo sheet rows, in the template's column order. */
+
+/**
+ * Every 10 minutes (orders/auto-import): research a few runners of paid runs
+ * whose race is over, so names added while a run is still collecting are not
+ * left for the morning pass (bulk/attention.js), which only gets through a
+ * handful. Half a day after the start, so the timer has posted results.
+ */
+export async function researchRacedRunners({ limit = 10, now = new Date() } = {}) {
+  const runs = await prisma.bulkOrder.findMany({
+    where: { status: { not: 'submitted' }, paidAt: { not: null }, raceDate: { not: null, lte: new Date(now.getTime() - 12 * 3600e3) }, runners: { some: { researchedAt: null } } },
+    orderBy: { dueDate: 'asc' },
+  })
+  const out = { researched: 0, runs: [] }
+  for (const run of runs) {
+    if (out.researched >= limit) break
+    const r = await researchPending(run, { limit: limit - out.researched })
+    out.researched += r.done.length
+    if (r.done.length) out.runs.push(`${run.number}: ${r.done.length} (${r.remaining} left)`)
+  }
+  return out
+}

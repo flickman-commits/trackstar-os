@@ -16,6 +16,7 @@ import { applyCustomerResults, fillCustomerPace } from '../../../server/domain/r
 import { autoResearchNew, autoResearchAfterRace } from '../../../server/domain/research/autoResearch.js'
 import { watchOfficialResults } from '../../../server/domain/research/resultsWatch.js'
 import { autoQueueRenders } from '../../../server/domain/render/jobs.js'
+import { researchRacedRunners } from '../../../server/domain/bulk/bulkOrders.js'
 import { deliverPending } from '../../../server/domain/render/deliver.js'
 import { uploadPending } from '../../../server/domain/render/artelo.js'
 import { refreshUnpaidPhotoOrders } from '../../../server/domain/orders/photoRefresh.js'
@@ -61,6 +62,9 @@ export default async function handler(req, res) {
       if (sent && (sent.delivered || sent.failed)) console.log(`[orders.auto-import] prints saved to Drive: ${sent.delivered}, failed: ${sent.failed}`)
       const lib = await uploadPending().catch(err => { console.error('[orders.auto-import] Artelo uploads failed:', err.message); return null })
       if (lib && (lib.uploaded || lib.failed)) console.log(`[orders.auto-import] prints in the Artelo library: ${lib.uploaded}, failed: ${lib.failed}`)
+      // Bulk runners whose race is over and who are not researched yet, a few each run.
+      const bulkResearch = await researchRacedRunners({ limit: 10 }).catch(err => { console.error('[orders.auto-import] bulk research failed:', err.message); return null })
+      if (bulkResearch?.researched) console.log(`[orders.auto-import] bulk research: ${bulkResearch.runs.join(', ')}`)
       // Bulk runs paid through Shopify: link or create their runs, mark paid.
       const bulk = await syncShopifyBulkOrders().catch(err => { console.error('[orders.auto-import] bulk sync failed:', err.message); return null })
       if (bulk && (bulk.created || bulk.linked || bulk.paid)) console.log(`[orders.auto-import] bulk: ${bulk.created} created, ${bulk.linked} linked, ${bulk.paid} paid`)
