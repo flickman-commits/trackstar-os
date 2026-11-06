@@ -13,7 +13,8 @@ import { printHolds } from './holdsPrint.js'
 import { alignTracking } from '../../lib/tracking.js'
 import prisma from '../../db.js'
 import { shopifyGraphQL } from '../../services/shopifyAuth.js'
-import { approvalUrl, shopifyAdminUrl, arteloOrderUrl } from '../../lib/links.js'
+import { approvalUrl, shopifyAdminUrl, arteloOrderUrl, appBaseUrl } from '../../lib/links.js'
+import { slackDm, slackTo, slackText } from '../../lib/slack.js'
 import { getProductInfo, loadProductCatalog } from '../../lib/productCatalog.js'
 import { listMockups } from './mockups.js'
 import { stripQuoted } from './mailbox.js'
@@ -334,12 +335,30 @@ export async function addNote(id, { body, mentions = [] }, actor) {
   const text = String(body || '').trim()
   if (!text) throw new UserError('Write something first')
   const ids = [...new Set(mentions.map(String))]
-  const valid = ids.length ? await prisma.user.findMany({ where: { id: { in: ids }, isActive: true }, select: { id: true } }) : []
+  const valid = ids.length ? await prisma.user.findMany({ where: { id: { in: ids }, isActive: true }, select: { id: true, firstName: true, email: true } }) : []
   const n = await prisma.supportNote.create({
     data: { threadId: id, kind: 'note', body: text, authorId: actor?.id || null, authorName: actorName(actor), mentions: valid.map(u => u.id) },
     include: { author: { select: TEAM_SELECT } },
   })
+  await pingMentioned(id, valid.filter(u => u.id !== actor?.id), text, actor)
   return noteRow(n)
+}
+
+/**
+ * A Slack DM to each teammate @'d in a note, with the note and a link to the
+ * conversation. Never throws: the note is saved either way. Matt's DM falls
+ * back to his own destination (alerts DM) when Slack cannot find him by email.
+ */
+async function pingMentioned(threadId, people, text, actor) {
+  if (!people.length) return
+  const t = await prisma.supportThread.findUnique({ where: { id: threadId }, select: { subject: true, customerName: true, customerEmail: true } }).catch(() => null)
+  const who = t?.customerName || t?.customerEmail || 'a customer'
+  const url = `${appBaseUrl()}/support?thread=${encodeURIComponent(threadId)}`
+  const msg = `:speech_balloon: ${slackText(actorName(actor), 80)} mentioned you on a support conversation\n*${slackText(who, 120)}*: ${slackText(t?.subject || '(no subject)', 200)}\n>${slackText(text, 600).replace(/\n/g, '\n>')}\n<${url}|Open the conversation>`
+  await Promise.all(people.map(async p => {
+    const sent = await slackDm(p, msg).catch(() => false)
+    if (!sent && p.firstName === 'Matt') await slackTo('matt', msg).catch(() => false)
+  }))
 }
 
 export async function deleteNote(noteId, actor) {
