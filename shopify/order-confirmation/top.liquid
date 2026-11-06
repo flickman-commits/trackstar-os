@@ -63,7 +63,9 @@
     }
     body, .body { background-color: #FFFFFF !important; color: #1A1A1A !important; }
     .body > tbody > tr > td { background-color: #FFFFFF !important; }
-    .container { width: 560px !important; max-width: 560px !important; }
+    .container { width: 560px; max-width: 100%; }
+    /* Shopify inlines this sheet and sets border-collapse: collapse on every table, which squares off bordered cells in Apple Mail. */
+    .ts-round { border-collapse: separate !important; }
     a, a:hover, a:active, a:visited { color: #4600D6 !important; }
 
     /* Shopify's own blocks, restyled. */
@@ -104,12 +106,29 @@
     @media (prefers-reduced-motion: reduce) { .ts-step, .ts-line { animation: none !important; } }
 
     @media only screen and (max-width: 600px) {
-      .container { width: 100% !important; }
+      .container { width: 100% !important; max-width: 100% !important; }
+      /* Bigger type on phones. A lot of buyers are reading this on a small screen. */
+      .ts-f12 { font-size: 14px !important; }
+      .ts-f13, .ts-f14 { font-size: 16px !important; }
+      .ts-f15, .ts-f16 { font-size: 18px !important; line-height: 1.4 !important; }
+      .ts-f22 { font-size: 26px !important; }
+      .ts-h1 { font-size: 32px !important; line-height: 1.1 !important; }
+      .ts-mock { width: 72px !important; }
+      .ts-photo-cell { width: 72px !important; }
+      .ts-mock-img { width: 72px !important; }
+      .ts-btn-a { font-size: 18px !important; padding: 18px 32px !important; }
+      .order-list__item-title { font-size: 18px !important; }
+      .order-list__item-variant, .order-list__item-discount-allocation, .order-list__item-original-price { font-size: 16px !important; }
+      .order-list__item-price { font-size: 18px !important; }
+      .subtotal-line__title p, .subtotal-line__title span, .subtotal-line__value strong { font-size: 17px !important; }
+      .subtotal-table--total .subtotal-line__title span, .subtotal-table--total .subtotal-line__value strong { font-size: 20px !important; }
+      .customer-info__item p, .customer-info__item-content { font-size: 17px !important; }
+      h3 { font-size: 24px !important; }
+      h4 { font-size: 16px !important; }
       .ts-pad { padding-left: 20px !important; padding-right: 20px !important; }
-      .ts-h1 { font-size: 28px !important; }
       .ts-btn { display: block !important; width: 100% !important; }
       .ts-btn a { display: block !important; text-align: center !important; }
-      .ts-photo { width: 96px !important; height: 96px !important; }
+      .ts-photo { width: 72px !important; height: 72px !important; }
     }
   </style>
 </head>
@@ -123,13 +142,13 @@
             <tr><td class="ts-pad" style="padding: 36px 0 18px; border-bottom: 1px solid #E0E0E0;">
               <table width="100%" cellpadding="0" cellspacing="0"><tr>
                 <td style="vertical-align: middle;"><a href="{{ shop.url }}"><img src="https://www.trackstar.art/cdn/shop/files/Trackstar_Logo_Cropped.png" alt="Trackstar" width="140" style="display: block; width: 140px; height: auto; border: 0;"></a></td>
-                <td style="vertical-align: middle; text-align: right; font-size: 15px; font-weight: 500; color: #666666;">Order {{ order_name }}</td>
+                <td class="ts-f15" style="vertical-align: middle; text-align: right; font-size: 15px; font-weight: 500; color: #666666;">Order {{ order_name }}</td>
               </tr></table>
             </td></tr>
 
             <tr><td class="ts-pad" style="padding: 28px 0 8px;">
-              <h1 class="ts-h1" style="margin: 0 0 12px; font-size: 32px; font-weight: 700; line-height: 1.05; color: #1A1A1A;">{{ email_title | strip }}{% if customer.first_name %}, {{ customer.first_name }}{% endif %}.</h1>
-              <p style="margin: 0 0 8px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">
+              <h1 class="ts-f32 ts-h1" style="margin: 0 0 12px; font-size: 32px; font-weight: 700; line-height: 1.05; color: #1A1A1A;">{{ email_title | strip }}{% if customer.first_name %}, {{ customer.first_name }}{% endif %}.</h1>
+              <p class="ts-f16" style="margin: 0 0 8px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">
                 {% if has_pending_payment %}
                   {% if buyer_action_required %}
                     You'll get a confirmation email once your payment goes through.
@@ -164,7 +183,7 @@
                 <tr class="ts-step ts-step-{{ forloop.index }}">
                   <td style="width: 28px; padding: 0; vertical-align: top;">
                     <table cellpadding="0" cellspacing="0" style="border-collapse: collapse;"><tr>
-                      <td style="width: 28px; height: 28px; border-radius: 999px; background-color: #4600D6; color: #FFFFFF; font-size: 14px; font-weight: 700; text-align: center; vertical-align: middle; line-height: 28px;">{{ forloop.index }}</td>
+                      <td class="ts-f14" style="width: 28px; height: 28px; border-radius: 999px; background-color: #4600D6; color: #FFFFFF; font-size: 14px; font-weight: 700; text-align: center; vertical-align: middle; line-height: 28px;">{{ forloop.index }}</td>
                     </tr>
                     {% unless forloop.last %}
                     <tr><td style="padding: 3px 0 3px 13px;"><div class="ts-line ts-line-{{ forloop.index }}" style="width: 2px; height: 16px; background-color: #E0E0E0;"></div></td></tr>
@@ -173,8 +192,8 @@
                   </td>
                   {% assign parts = step | split: '~' %}
                   <td style="padding: 0 0 0 14px; vertical-align: top;">
-                    <span style="display: inline-block; margin: 5px 0 3px; padding: 1px 8px; border-radius: 999px; background-color: #F6F5F2; font-size: 12px; font-weight: 700; line-height: 1.4; color: #4600D6;">{{ parts[0] }}</span>
-                    <div style="padding: 0 0 6px; font-size: 16px; line-height: 1.3; color: #1A1A1A;{% if forloop.first %} font-weight: 700;{% endif %}">{{ parts[1] }}</div>
+                    <span class="ts-f12" style="display: inline-block; margin: 5px 0 3px; padding: 1px 8px; border-radius: 999px; background-color: #F6F5F2; font-size: 12px; font-weight: 700; line-height: 1.4; color: #4600D6;">{{ parts[0] }}</span>
+                    <div class="ts-f16" style="padding: 0 0 6px; font-size: 16px; line-height: 1.3; color: #1A1A1A;{% if forloop.first %} font-weight: 700;{% endif %}">{{ parts[1] }}</div>
                   </td>
                 </tr>
                 {% endfor %}
@@ -194,19 +213,19 @@
               {% assign race_title = line.title | remove: 'Personalized Race Print' | remove: 'Personalized Race Poster' | strip %}
               {% assign v = line.variant.title | split: ' / ' %}
               <tr><td class="ts-pad" style="padding: 16px 0 0;">
-                <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 12px;">
+                <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate; background-color: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 12px;">
                   <tr>
-                    <td style="padding: 16px 0 16px 16px; vertical-align: top; width: 96px;">
-                      {% if line.image %}<img src="{{ line | img_url: 'medium' }}" alt="{{ race_title | escape }}" width="96" style="display: block; width: 96px; height: auto; border-radius: 4px; border: 0;">{% endif %}
+                    <td class="ts-mock" style="padding: 16px 0 16px 16px; vertical-align: top; width: 96px;">
+                      {% if line.image %}<img src="{{ line | img_url: 'medium' }}" class="ts-mock-img" alt="{{ race_title | escape }}" width="96" style="display: block; width: 96px; height: auto; border-radius: 4px; border: 0;">{% endif %}
                     </td>
                     <td style="padding: 16px 16px 16px 16px; vertical-align: top;">
-                      <p style="margin: 0 0 6px; font-size: 13px; font-weight: 500; color: #666666;">Order details</p>
-                      <p style="margin: 0 0 10px; font-size: 22px; font-weight: 700; line-height: 1.1; color: #1A1A1A;">{{ race_title }}</p>
-                      <table cellpadding="0" cellspacing="0" style="border-collapse: separate; border-spacing: 0 6px;"><tr>
-                        {% if line.properties['Race Year'] != blank %}<td style="padding: 0 6px 0 0;"><span style="display: inline-block; padding: 6px 12px; border: 1px solid #E0E0E0; border-radius: 8px; white-space: nowrap; font-size: 15px; font-weight: 700; color: #1A1A1A;">{{ line.properties['Race Year'] }}</span></td>{% endif %}
-                        {% if v[0] != blank and line.variant.title != 'Default Title' %}<td style="padding: 0 6px 0 0;"><span style="display: inline-block; padding: 6px 12px; border: 1px solid #E0E0E0; border-radius: 8px; white-space: nowrap; font-size: 15px; font-weight: 700; color: #1A1A1A;">{{ v[0] }}</span></td>{% endif %}
-                        {% if v[1] != blank %}<td><span style="display: inline-block; padding: 6px 12px; border: 1px solid #1A1A1A; border-radius: 8px; background-color: #1A1A1A; white-space: nowrap; font-size: 15px; font-weight: 700; color: #FFFFFF;">{{ v[1] }}</span></td>{% endif %}
-                      </tr></table>
+                      <p class="ts-f13" style="margin: 0 0 6px; font-size: 13px; font-weight: 500; color: #666666;">Order details</p>
+                      <p class="ts-f22" style="margin: 0 0 10px; font-size: 22px; font-weight: 700; line-height: 1.1; color: #1A1A1A;">{{ race_title }}</p>
+                      <div style="line-height: 44px;">
+                        {% if line.properties['Race Year'] != blank %}<span class="ts-f15" style="display: inline-block; margin: 0 4px 0 0; padding: 6px 12px; line-height: 1.3; border: 1px solid #E0E0E0; border-radius: 8px; white-space: nowrap; font-size: 15px; font-weight: 700; color: #1A1A1A;">{{ line.properties['Race Year'] }}</span>{% endif %}
+                        {% if v[0] != blank and line.variant.title != 'Default Title' %}<span class="ts-f15" style="display: inline-block; margin: 0 4px 0 0; padding: 6px 12px; line-height: 1.3; border: 1px solid #E0E0E0; border-radius: 8px; white-space: nowrap; font-size: 15px; font-weight: 700; color: #1A1A1A;">{{ v[0] }}</span>{% endif %}
+                        {% if v[1] != blank %}<span class="ts-f15" style="display: inline-block; margin: 0 4px 0 0; padding: 6px 12px; line-height: 1.3; border: 1px solid #1A1A1A; border-radius: 8px; background-color: #1A1A1A; white-space: nowrap; font-size: 15px; font-weight: 700; color: #FFFFFF;">{{ v[1] }}</span>{% endif %}
+                      </div>
                     </td>
                   </tr>
                   <tr><td colspan="2" style="padding: 0 16px;"><div style="height: 1px; background-color: #E0E0E0;"></div></td></tr>
@@ -214,7 +233,7 @@
                     <td colspan="2" style="padding: 14px 16px 16px;">
                       <table width="100%" cellpadding="0" cellspacing="0"><tr>
                         <td style="vertical-align: top;">
-                          <table cellpadding="0" cellspacing="0" style="font-size: 15px; line-height: 1.5; color: #1A1A1A;">
+                          <table class="ts-f15" cellpadding="0" cellspacing="0" style="font-size: 15px; line-height: 1.5; color: #1A1A1A;">
                             <tr><td style="padding: 0 20px 0 0; color: #666666;">Runner</td><td style="font-weight: 700;">{{ runner }}</td></tr>
                             {% if line.properties['Event'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Event</td><td>{{ line.properties['Event'] }}</td></tr>{% endif %}
                             {% if line.properties['Bib #'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Bib</td><td>{{ line.properties['Bib #'] }}</td></tr>{% endif %}
@@ -222,20 +241,20 @@
                             {% if line.properties['Pace'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Pace</td><td>{{ line.properties['Pace'] }}</td></tr>{% endif %}
                           </table>
                           {% if outcome == 'race_not_yet_run' %}
-                            <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">We'll add the official time, pace and bib after race day.</p>
+                            <p class="ts-f14" style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">We'll add the official time, pace and bib after race day.</p>
                           {% elsif line.properties['No Time'] != blank %}
-                            <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">Printed without the time and pace, as you asked.</p>
+                            <p class="ts-f14" style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">Printed without the time and pace, as you asked.</p>
                           {% elsif line.properties['Time'] == blank %}
-                            <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">We'll track down the official time, pace and bib for the print.</p>
+                            <p class="ts-f14" style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">We'll track down the official time, pace and bib for the print.</p>
                           {% endif %}
                           {% if photo_later != blank %}
-                            <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">Your photo: we'll email you a link to upload it the day after race day.</p>
+                            <p class="ts-f14" style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">Your photo: we'll email you a link to upload it the day after race day.</p>
                           {% endif %}
                         </td>
                         {% if print_photo != blank %}
-                        <td style="padding: 0 0 0 16px; vertical-align: top; text-align: right; width: 96px;">
+                        <td class="ts-photo-cell" style="padding: 0 0 0 12px; vertical-align: top; text-align: right; width: 96px;">
                           <img class="ts-photo" src="https://fast.trackstar.art/api/public/order-photo?order={{ ship_order_id }}&amp;sig={{ ship_sig }}&amp;line={{ forloop.index0 }}" alt="Your photo for the print" width="96" height="96" style="display: inline-block; width: 96px; height: 96px; border-radius: 4px; border: 1px solid #E0E0E0; object-fit: cover;">
-                          <p style="margin: 6px 0 0; font-size: 13px; color: #666666;">Your photo</p>
+                          <p class="ts-f13" style="margin: 6px 0 0; font-size: 13px; color: #666666;">Your photo</p>
                         </td>
                         {% endif %}
                       </tr></table>
@@ -248,15 +267,15 @@
 
             {% if can_manage %}
             <tr><td class="ts-pad" style="padding: 28px 0 0;">
-              <p style="margin: 0 0 12px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">Need to fix a name, change the frame or update your address? You can {% if has_preorder %}any time before race day{% else %}for 48 hours after ordering{% endif %}.</p>
-              <table class="ts-btn" cellpadding="0" cellspacing="0"><tr><td style="border: 1.5px solid #4600D6; border-radius: 5px;">
-                <a href="https://fast.trackstar.art/order/{{ ship_order_id }}/{{ ship_sig }}" style="display: inline-block; padding: 16px 32px; font-size: 16px; font-weight: 700; color: #4600D6; text-decoration: none;">Manage your order</a>
+              <p class="ts-f16" style="margin: 0 0 12px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">Need to fix a name, change the frame or update your address? You can {% if has_preorder %}any time before race day{% else %}for 48 hours after ordering{% endif %}.</p>
+              <table class="ts-btn ts-round" cellpadding="0" cellspacing="0"><tr><td>
+                <a class="ts-f16 ts-btn-a" href="https://fast.trackstar.art/order/{{ ship_order_id }}/{{ ship_sig }}" style="display: inline-block; padding: 16px 32px; border: 1.5px solid #4600D6; border-radius: 5px; font-size: 16px; font-weight: 700; color: #4600D6; text-decoration: none;">Manage your order</a>
               </td></tr></table>
             </td></tr>
             {% endif %}
 
             {% if delivery_instructions != blank %}
-            <tr><td class="ts-pad" style="padding: 16px 0 0; font-size: 15px; color: #1A1A1A;"><b>Delivery information:</b> {{ delivery_instructions }}</td></tr>
+            <tr><td class="ts-f15 ts-pad" style="padding: 16px 0 0; font-size: 15px; color: #1A1A1A;"><b>Delivery information:</b> {{ delivery_instructions }}</td></tr>
             {% endif %}
 
             {% assign transaction_count = transactions | size %}
@@ -264,7 +283,7 @@
               {% for transaction in transactions %}
                 {% if transaction.show_buyer_pending_payment_instructions? %}
                   <tr><td class="ts-pad" style="padding: 16px 0 0;">
-                  <p style="font-size: 15px;">{{ transaction.buyer_pending_payment_notice }}</p>
+                  <p class="ts-f15" style="font-size: 15px;">{{ transaction.buyer_pending_payment_notice }}</p>
                   <table class="row">
                     <tr>
                       {% for instruction in transaction.buyer_pending_payment_instructions %}<td>{{ instruction.header }}</td>{% endfor %}
@@ -282,10 +301,10 @@
 
             {% assign gift_card_line_items = line_items | where: "gift_card" %}
             {% if gift_card_line_items.first %}
-            <tr><td class="ts-pad" style="padding: 16px 0 0; font-size: 15px; color: #1A1A1A;">You'll receive separate emails for any gift cards.</td></tr>
+            <tr><td class="ts-f15 ts-pad" style="padding: 16px 0 0; font-size: 15px; color: #1A1A1A;">You'll receive separate emails for any gift cards.</td></tr>
             {% endif %}
 
-            <tr><td class="ts-pad" style="padding: 20px 0 8px; font-size: 15px; color: #666666;">
+            <tr><td class="ts-f15 ts-pad" style="padding: 20px 0 8px; font-size: 15px; color: #666666;">
               {% if order_status_url %}<a href="{{ order_status_url }}" style="color: #4600D6; font-weight: 700; text-decoration: underline; text-underline-offset: 4px;">View your order</a>{% if shop.url %} &nbsp;&middot;&nbsp; {% endif %}{% endif %}
               {% if shop.url %}<a href="{{ shop.url }}" style="color: #4600D6; font-weight: 700; text-decoration: underline; text-underline-offset: 4px;">Visit our store</a>{% endif %}
             </td></tr>
