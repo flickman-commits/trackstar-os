@@ -3,8 +3,8 @@
  * default; given to anyone paid by the hour in Settings > Roles).
  *
  * GET  /api/finance/hours?week=YYYY-MM-DD   the week (a Monday; default this week), recent weeks, the running timer
- * POST /api/finance/hours { action: 'add', day, minutes, note }
- *                        { action: 'update', id, minutes?, note? }
+ * POST /api/finance/hours { action: 'add', day, minutes, note }   admin only (Manually add hours)
+ *                        { action: 'update', id, minutes?, note? }   minutes: admin only
  *                        { action: 'delete', id }
  *                        { action: 'start', note? } | { action: 'stop' }
  *                        { action: 'submit', weekStart }
@@ -33,8 +33,13 @@ export default async function handler(req, res) {
     const b = body(req)
     let weekStart = b.weekStart || mondayOf(todayET())
     switch (b.action) {
-      case 'add': { const out = await hours.addEntry(user.id, { day: b.day, minutes: b.minutes, note: b.note }); weekStart = out.weekStart; break }
-      case 'update': { const e = await hours.updateEntry(user.id, String(b.id || ''), { minutes: b.minutes, note: b.note }); weekStart = mondayOf(e.day); break }
+      // Time goes in by the timer. Adding hours by hand, or changing how long an
+      // entry was, is an admin's (Manually add hours); anyone can fix a note.
+      case 'add': {
+        if (user.role !== 'admin') return res.status(403).json({ error: 'Hours are added with the timer. Ask Matt to add time by hand.' })
+        const out = await hours.addEntry(user.id, { day: b.day, minutes: b.minutes, note: b.note }); weekStart = out.weekStart; break
+      }
+      case 'update': { const e = await hours.updateEntry(user.id, String(b.id || ''), { minutes: user.role === 'admin' ? b.minutes : undefined, note: b.note }); weekStart = mondayOf(e.day); break }
       case 'delete': { await hours.deleteEntry(user.id, String(b.id || '')); break }
       case 'start': { const out = await hours.startTimer(user.id, { note: b.note }); weekStart = out.weekStart; break }
       case 'stop': { const e = await hours.stopTimer(user.id); weekStart = mondayOf(e.day); break }

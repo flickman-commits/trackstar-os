@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ChevronLeft, ChevronRight, Clock, Play, Send, Square, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Clock, Play, Plus, Send, Square, Trash2 } from 'lucide-react'
+import { useAuth } from '@/lib/auth'
 import ActionModal from '@/components/ActionModal'
-import { btnPrimary, btnSecondary, btnGhost, inputBase, modalPrimary, modalCancel } from '@/lib/ui'
+import { btnPrimary, btnGhost, inputBase, modalPrimary, modalCancel } from '@/lib/ui'
 import { financeApi, dayLabel, mondayOf, addDays, todayET } from '@/lib/financeApi'
 import type { HoursPayload, TimeEntry } from '@/types/finance'
 import { StatusChip } from '@/components/finance/bits'
@@ -51,6 +52,22 @@ function parseHours(text: string): number | null {
   return null
 }
 
+/**
+ * A task's own tint, the same wherever it shows up: entries with the same note
+ * share a color across days, so a week reads at a glance. Subtle on purpose.
+ */
+const TINTS = [
+  'bg-violet-50 border-l-violet-300', 'bg-sky-50 border-l-sky-300', 'bg-emerald-50 border-l-emerald-300',
+  'bg-amber-50 border-l-amber-300', 'bg-rose-50 border-l-rose-300', 'bg-teal-50 border-l-teal-300', 'bg-indigo-50 border-l-indigo-300',
+]
+function tintFor(note: string | null | undefined): string {
+  const k = String(note || '').trim().toLowerCase()
+  if (!k) return 'bg-subtle-gray border-l-border-gray'
+  let h = 0
+  for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) >>> 0
+  return TINTS[h % TINTS.length]
+}
+
 export default function HoursModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   if (!open) return null
   return <HoursBody onClose={onClose} />
@@ -65,6 +82,13 @@ function HoursBody({ onClose }: { onClose: () => void }) {
   const { pathname } = useLocation()
   const [timerNote, setTimerNote] = useState(() => panelName(pathname))
   const [tick, setTick] = useState(0)
+  const { user, isAdmin } = useAuth()
+  const me = [user?.firstName, user?.lastName].filter(Boolean).join(' ')
+  // Manually add hours (admins): a day, how long, and what for, instead of a box under every day.
+  const [manual, setManual] = useState(false)
+  const [mDay, setMDay] = useState(todayET())
+  const [mHrs, setMHrs] = useState('')
+  const [mNote, setMNote] = useState('')
 
   const load = useCallback(async (w: string) => {
     try { setData(await financeApi.hours(w)); setError(null) } catch (e) { setError((e as Error).message) }
@@ -87,12 +111,13 @@ function HoursBody({ onClose }: { onClose: () => void }) {
   void tick
 
   return (
-    <ActionModal icon={Clock} title="Hours Tracker" sub={ts ? `week of ${dayLabel(ts.weekStart)}` : undefined} onClose={onClose} size="xl" bare draggable
+    <ActionModal icon={Clock} title={<>Hours Tracker{me && <span className="ml-2 font-semibold text-[#4600D6]">{me}</span>}</>} sub={ts ? <>week of {dayLabel(ts.weekStart)}<span className="ml-3 inline-flex items-center px-2 py-0.5 rounded-md bg-off-black/[0.06] text-off-black text-base font-semibold tabular-nums align-middle" title="Total for this week">{minutesText(ts.totalMinutes)}</span></> : undefined} onClose={onClose} size="xl" bare draggable
       actions={<div className="flex items-center gap-1 mr-2">
         <button onClick={() => setWeek(w => addDays(w, -7))} className={btnGhost} aria-label="Previous week"><ChevronLeft className="w-4 h-4" /></button>
         <button onClick={() => setWeek(w => addDays(w, 7))} disabled={week >= thisMonday} className={btnGhost} aria-label="Next week"><ChevronRight className="w-4 h-4" /></button>
       </div>}
       footer={ts && <>
+        {isAdmin && !locked && <button onClick={() => { setManual(true); setMDay(days.includes(today) ? today : days[0]) }} className="text-sm text-off-black/55 hover:text-off-black inline-flex items-center gap-1 mr-3"><Plus className="w-3.5 h-3.5" />Manually add hours</button>}
         <span className="text-sm text-off-black/60 mr-auto">{minutesText(ts.totalMinutes)} this week{ts.hourlyRateCents != null && ts.status === 'approved' ? ` · approved at $${(ts.hourlyRateCents / 100).toFixed(2)}/h` : ''}</span>
         {!locked && <button onClick={() => setConfirm(true)} disabled={busy || !ts.totalMinutes || Boolean(running)} className={modalPrimary}><Send className="w-3.5 h-3.5" /> Submit week</button>}
         {locked && <StatusChip status={ts.status} />}
@@ -136,7 +161,7 @@ function HoursBody({ onClose }: { onClose: () => void }) {
             )}
             <div className="grid grid-cols-1 md:grid-cols-7 gap-2">
               {days.map((d, i) => (
-                <DayColumn key={d} day={d} label={DAYS[i]} entries={ts.entries.filter(e => e.day === d)} total={ts.byDay[d] || 0} future={d > today} locked={locked} busy={busy} onAdd={(minutes, note) => act({ action: 'add', day: d, minutes, note })} onDelete={id => act({ action: 'delete', id })} onUpdate={(id, minutes, note) => act({ action: 'update', id, minutes, note })} />
+                <DayColumn key={d} day={d} label={DAYS[i]} entries={ts.entries.filter(e => e.day === d)} total={ts.byDay[d] || 0} future={d > today} locked={locked} busy={busy} canEditTime={isAdmin} onDelete={id => act({ action: 'delete', id })} onUpdate={(id, minutes, note) => act({ action: 'update', id, minutes, note })} />
               ))}
             </div>
             {data && data.weeks.length > 0 && (
@@ -156,6 +181,26 @@ function HoursBody({ onClose }: { onClose: () => void }) {
           </>
         )}
       </div>
+      {manual && (
+        <ActionModal icon={Plus} title="Manually add hours" description="For time the timer missed. It goes on this week's sheet like any other entry." onClose={() => setManual(false)} busy={busy} size="sm"
+          footer={<><button onClick={() => setManual(false)} className={modalCancel} disabled={busy}>Cancel</button><button disabled={busy || !mHrs.trim()} className={modalPrimary} onClick={async () => {
+            const minutes = parseHours(mHrs)
+            if (!minutes) { toast.error('Hours like 1.5, 1:30 or 90m'); return }
+            await act({ action: 'add', day: mDay, minutes, note: mNote }, 'Hours added'); setManual(false); setMHrs(''); setMNote('')
+          }}>Add hours</button></>}>
+          <div className="space-y-3">
+            <label className="block"><span className="block text-xs font-medium text-off-black/60 mb-1">Day</span>
+              <select value={mDay} onChange={e => setMDay(e.target.value)} className={`${inputBase} w-full`}>
+                {days.filter(d => d <= today).map((d, i) => <option key={d} value={d}>{DAYS[i]} {dayLabel(d).replace(/^\w+ /, '')}</option>)}
+              </select>
+            </label>
+            <label className="block"><span className="block text-xs font-medium text-off-black/60 mb-1">How long</span>
+              <input value={mHrs} onChange={e => setMHrs(e.target.value)} placeholder="1.5, 1:30 or 90m" inputMode="decimal" className={`${inputBase} w-full`} /></label>
+            <label className="block"><span className="block text-xs font-medium text-off-black/60 mb-1">What for</span>
+              <input value={mNote} onChange={e => setMNote(e.target.value)} placeholder="Customer Support" className={`${inputBase} w-full`} /></label>
+          </div>
+        </ActionModal>
+      )}
       {confirm && ts && (
         <ActionModal icon={Send} title="Submit this week?" description={`${minutesText(ts.totalMinutes)} for the week of ${dayLabel(ts.weekStart)}. It locks until Matt reviews it.`} onClose={() => setConfirm(false)} busy={busy} size="sm"
           footer={<><button onClick={() => setConfirm(false)} className={modalCancel} disabled={busy}>Not yet</button><button onClick={async () => { await act({ action: 'submit', weekStart: ts.weekStart }, 'Week submitted'); setConfirm(false) }} disabled={busy} className={modalPrimary}>Submit</button></>} />
@@ -164,20 +209,15 @@ function HoursBody({ onClose }: { onClose: () => void }) {
   )
 }
 
-function DayColumn({ day, label, entries, total, future, locked, busy, onAdd, onDelete, onUpdate }: {
+function DayColumn({ day, label, entries, total, future, locked, busy, canEditTime, onDelete, onUpdate }: {
   day: string; label: string; entries: TimeEntry[]; total: number; future: boolean; locked: boolean; busy: boolean
-  onAdd: (minutes: number, note: string) => void; onDelete: (id: string) => void; onUpdate: (id: string, minutes: number, note: string) => void
+  /** Changing how long an entry was is an admin's; anyone can fix its note. */
+  canEditTime: boolean
+  onDelete: (id: string) => void; onUpdate: (id: string, minutes: number, note: string) => void
 }) {
-  const [hrs, setHrs] = useState('')
-  const [note, setNote] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   const [eh, setEh] = useState('')
   const [en, setEn] = useState('')
-  const add = () => {
-    const minutes = parseHours(hrs)
-    if (!minutes) { toast.error('Hours like 1.5, 1:30 or 90m'); return }
-    onAdd(minutes, note); setHrs(''); setNote('')
-  }
   const isToday = day === todayET()
   return (
     <div className={`rounded-md border ${isToday ? 'border-off-black/40' : 'border-border-gray'} ${future ? 'bg-subtle-gray/60' : 'bg-white'} p-2 flex flex-col min-h-[120px]`}>
@@ -188,12 +228,12 @@ function DayColumn({ day, label, entries, total, future, locked, busy, onAdd, on
       <div className="space-y-1 flex-1">
         {entries.map(e => editing === e.id ? (
           <div key={e.id} className="rounded bg-subtle-gray p-1.5 space-y-1">
-            <input value={eh} onChange={ev => setEh(ev.target.value)} className={`${inputBase} w-full py-1 text-xs`} placeholder="1.5" />
-            <input value={en} onChange={ev => setEn(ev.target.value)} className={`${inputBase} w-full py-1 text-xs`} placeholder="note" />
-            <div className="flex gap-1"><button onClick={() => { const m = parseHours(eh); if (!m) { toast.error('Hours like 1.5, 1:30 or 90m'); return } onUpdate(e.id, m, en); setEditing(null) }} disabled={busy} className={`${btnPrimary} py-1 px-2`}>Save</button><button onClick={() => setEditing(null)} className={`${btnGhost} py-1 px-2`}>Cancel</button></div>
+            {canEditTime && <input value={eh} onChange={ev => setEh(ev.target.value)} className={`${inputBase} w-full py-1 text-xs`} placeholder="1.5" aria-label="How long" />}
+            <input value={en} onChange={ev => setEn(ev.target.value)} className={`${inputBase} w-full py-1 text-xs`} placeholder="What for" aria-label="What for" />
+            <div className="flex gap-1"><button onClick={() => { const m = canEditTime ? parseHours(eh) : e.minutes; if (!m) { toast.error('Hours like 1.5, 1:30 or 90m'); return } onUpdate(e.id, m, en); setEditing(null) }} disabled={busy} className={`${btnPrimary} py-1 px-2`}>Save</button><button onClick={() => setEditing(null)} className={`${btnGhost} py-1 px-2`}>Cancel</button></div>
           </div>
         ) : (
-          <div key={e.id} className="group rounded bg-subtle-gray px-1.5 py-1 text-xs flex items-start gap-1">
+          <div key={e.id} className={`group rounded border-l-2 ${tintFor(e.note)} px-1.5 py-1 text-xs flex items-start gap-1`}>
             <button disabled={locked || Boolean(e.startedAt && !e.endedAt)} onClick={() => { setEditing(e.id); setEh((e.minutes / 60).toString()); setEn(e.note || '') }} className="flex-1 text-left min-w-0 disabled:cursor-default">
               <span className="font-semibold tabular-nums">{e.startedAt && !e.endedAt ? 'running' : minutesText(e.minutes)}</span>
               {e.note && <span className="block text-off-black/60 truncate">{e.note}</span>}
@@ -202,13 +242,6 @@ function DayColumn({ day, label, entries, total, future, locked, busy, onAdd, on
           </div>
         ))}
       </div>
-      {!locked && !future && (
-        <div className="mt-1.5 space-y-1">
-          <input value={hrs} onChange={e => setHrs(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add() }} placeholder="1.5" inputMode="decimal" className={`${inputBase} w-full py-1 text-xs`} aria-label={`Hours on ${label}`} />
-          <input value={note} onChange={e => setNote(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') add() }} placeholder="what" className={`${inputBase} w-full py-1 text-xs`} aria-label={`Note for ${label}`} />
-          {hrs && <button onClick={add} disabled={busy} className={`${btnSecondary} w-full py-1`}>Add</button>}
-        </div>
-      )}
     </div>
   )
 }
