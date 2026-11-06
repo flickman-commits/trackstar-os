@@ -156,7 +156,7 @@ async function checkChanged(templates, files) {
   await runIllustrator(CHECK_SCRIPT, CHECK_TIMEOUT_MS)
   const results = JSON.parse(fs.readFileSync(path.join(HERE, 'illustrator', 'check-result.json'), 'utf8'))
   for (const t of due) {
-    const verdict = evaluateCheck(results.find(r => r.key === t.key))
+    const verdict = evaluateCheck(results.find(r => r.key === t.key), { sizes: Array.isArray(t.rules?.sizes) && t.rules.sizes.length ? t.rules.sizes : undefined })
     await api('check', { key: t.key, mtime: files[t.key].mtime, ok: verdict.ok, report: verdict })
     t.lastCheckMtime = files[t.key].mtime; t.lastCheckOk = verdict.ok
     log(`  ${verdict.ok ? 'ok  ' : 'FAIL'} ${t.key}${verdict.problems.length ? ': ' + verdict.problems.join('; ') : ''}`)

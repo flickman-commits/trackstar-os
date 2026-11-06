@@ -36,8 +36,11 @@ export async function listTemplates() {
  */
 export async function templatesForWorker() {
   const rows = await prisma.printTemplate.findMany({ where: { enabled: true }, orderBy: { key: 'asc' } })
+  // A co-branded bulk file only has to cover its run's size (the worker's check reads rules.sizes).
+  const runs = rows.filter(t => /^BULK-/.test(t.edition || ''))
+  const sizeOf = new Map(runs.length ? (await prisma.bulkOrder.findMany({ where: { number: { in: runs.map(t => t.edition) } }, select: { number: true, productSize: true } })).map(b => [b.number, b.productSize]) : [])
   return Promise.all(rows.map(async t => ({
-    key: t.key, file: t.file, rules: t.rules || {}, lastCheckMtime: t.lastCheckMtime, lastCheckOk: t.lastCheckOk,
+    key: t.key, file: t.file, rules: { ...(t.rules || {}), ...(sizeOf.get(t.edition) ? { sizes: [String(sizeOf.get(t.edition)).replace(/^x/, '')] } : {}) }, lastCheckMtime: t.lastCheckMtime, lastCheckOk: t.lastCheckOk,
     ...(t.storagePath ? { url: await templateDownloadUrl(t.storagePath), version: t.fileVersion } : {}),
   })))
 }

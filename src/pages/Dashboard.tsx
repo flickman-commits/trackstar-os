@@ -277,7 +277,8 @@ export default function Dashboard() {
   // threaded through this already-oversized page.
 
   // The open order's automated print (standard orders only). See DesignPanel.
-  const design = useDesign(selectedOrder?.trackstarOrderType === 'standard' ? selectedOrder.id : null, can('orders.render'))
+  // Bulk runners render like shop orders (their run's co-branded file, when it is one), so they get the same design panel.
+  const design = useDesign(selectedOrder?.trackstarOrderType === 'standard' || selectedOrder?.trackstarOrderType === 'bulk' ? selectedOrder.id : null, can('orders.render'))
   // The design's "waiting on" list comes from the server. When what it depends on
   // changes (weather confirmed, a bib or time entered, a date fixed), ask again,
   // so Create Design works without reloading the page.
@@ -1070,6 +1071,8 @@ export default function Dashboard() {
       if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.repeat && (e.key === 'f' || e.key === 'F')) {
         if (selectedOrder.status === 'completed' || selectedOrder.status === 'flagged') return
         if (selectedOrder.trackstarOrderType === 'standard' && !standardDesignApprovedRef.current) return
+        // A bulk runner is completed by its send to Artelo, never by hand.
+        if (selectedOrder.trackstarOrderType === 'bulk') return
         e.preventDefault()
         markAsCompletedRef.current(selectedOrder.orderNumber)
         return

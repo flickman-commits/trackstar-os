@@ -158,6 +158,8 @@ export interface Order {
   shopifyAdminUrl?: string | null
   etsyOrderUrl?: string | null
   arteloUrl?: string | null
+  /** A bulk runner's send to Artelo: sent, queued (sendAfter), or stopped with a reason. */
+  bulkSend?: { sentAt: string | null; sendAfter: string | null; error: string | null } | null
   commentCount?: number
   assigneeId?: string | null
   assigneeName?: string | null

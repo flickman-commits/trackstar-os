@@ -6,13 +6,18 @@
  */
 export const SIZES = ['8x10', '12x18', '16x24']
 
-export function evaluateCheck(r) {
+/**
+ * `sizes` is what the file has to cover: every size for a race template, and
+ * only the run's own size for a co-branded bulk file (templates.js sends it
+ * as rules.sizes), since a partner's run is one size.
+ */
+export function evaluateCheck(r, { sizes: need = SIZES } = {}) {
   const problems = [], warnings = [], sizes = {}
   if (!r || r.error) return { ok: false, problems: [r?.error || 'no report'], warnings, sizes }
   if (r.strayImages) warnings.push(`${r.strayImages} image${r.strayImages > 1 ? 's' : ''} outside the locked artwork (a past order's photo; removed at render time)`)
   if (!r.layers?.['GUIDES']) warnings.push('no GUIDES layer: long names cannot grow to a margin, only shrink')
   const chosen = (r.artboards || []).filter(a => a.chosen && a.size)
-  for (const size of SIZES) {
+  for (const size of need) {
     const boards = chosen.filter(a => a.size === size && !a.photoVariant)
     const photoBoards = chosen.filter(a => a.size === size && a.photoVariant)
     if (!boards.length) { problems.push(`${size}: no artboard`); continue }

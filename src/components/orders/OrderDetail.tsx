@@ -2963,7 +2963,7 @@ Thank you!`
                     </button>
                     <div className="flex-1 min-w-0">
                       {(design.job?.status === 'done' && (design.job.review === 'pending' || design.job.review === 'approved')) ? (
-                        <DesignReview compact d={design} arteloOrderUrl={selectedOrder.status !== 'completed' ? selectedOrder.arteloUrl : null} onComplete={selectedOrder.status !== 'completed' ? () => markAsCompleted(selectedOrder.orderNumber) : undefined} />
+                        <DesignReview compact d={design} arteloOrderUrl={selectedOrder.status !== 'completed' && selectedOrder.trackstarOrderType !== 'bulk' ? selectedOrder.arteloUrl : null} onComplete={selectedOrder.status !== 'completed' ? () => markAsCompleted(selectedOrder.orderNumber) : undefined} />
                       ) : (
                         <div className="h-full flex items-center justify-center text-[13px] text-off-black/55 text-center px-1">
                           {selectedOrder.pipeline?.reason || getStatusDisplay(selectedOrder).label}
@@ -3030,7 +3030,7 @@ Thank you!`
               {/* Reviewing the automated print is the main action here, so it is big.
                   Once approved, the same spot sends you to Artelo to attach the file. */}
               <div className="space-y-2">
-                <div className="hidden md:block"><DesignReview d={design} arteloOrderUrl={selectedOrder.status !== 'completed' ? selectedOrder.arteloUrl : null} onComplete={selectedOrder.status !== 'completed' ? () => markAsCompleted(selectedOrder.orderNumber) : undefined} /></div>
+                <div className="hidden md:block"><DesignReview d={design} arteloOrderUrl={selectedOrder.status !== 'completed' && selectedOrder.trackstarOrderType !== 'bulk' ? selectedOrder.arteloUrl : null} onComplete={selectedOrder.status !== 'completed' ? () => markAsCompleted(selectedOrder.orderNumber) : undefined} /></div>
               </div>
 
               </div>
@@ -3045,8 +3045,11 @@ Thank you!`
                     so the button needs to be reachable even when status is
                     still 'pending' or 'missing_year'. When Research Runner
                     also shows, both share the row 50/50. */}
+                {/* A bulk runner goes to Artelo on its own once its print is approved (bulk/send.js): where that stands, and the Artelo order once it exists. */}
+                {selectedOrder.trackstarOrderType === 'bulk' && <BulkSendLine order={selectedOrder} />}
                 {selectedOrder.status !== 'completed' &&
                  selectedOrder.status !== 'flagged' &&
+                 selectedOrder.trackstarOrderType !== 'bulk' &&
                  // An approved design has its own Mark as complete beside Attach in Artelo.
                  !((selectedOrder.pipeline?.stage === 'attach' || (design.job?.status === 'done' && design.job.review === 'approved')) && selectedOrder.arteloUrl) &&
                  // A standard print completes once its design is approved. With no design
@@ -3193,5 +3196,26 @@ Thank you!`
         </div>
       )}
     </>
+  )
+}
+
+/** Where a bulk runner's print stands with Artelo: sent (with the link), queued, stopped with a reason, or waiting on its approval. */
+function BulkSendLine({ order }: { order: Order }) {
+  const b = order.bulkSend
+  const when = (d: string) => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  const sent = Boolean(b?.sentAt) || order.status === 'completed'
+  const text = sent ? `Sent to Artelo${b?.sentAt ? ` ${when(b.sentAt)}` : ''}`
+    : b?.sendAfter ? `Going to Artelo ${new Date(b.sendAfter).getTime() <= Date.now() ? 'now' : `at ${when(b.sendAfter)}`}`
+    : b?.error ? b.error
+    : 'Goes to Artelo on its own once the print is approved (and the invoice is paid)'
+  return (
+    <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-2 px-4 py-3 rounded-md border border-border-gray bg-white">
+      <span className={`flex-1 text-sm ${sent ? 'text-green-700 font-medium' : b?.error ? 'text-red-600' : 'text-off-black/60'}`}>{text}</span>
+      {sent && order.arteloUrl && (
+        <a href={order.arteloUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border border-border-gray bg-white text-sm font-medium text-off-black hover:border-off-black/30 transition-colors" title="Open this runner's order in Artelo">
+          <img src="/artelo-icon.png" alt="" className="w-4 h-4 rounded-[3px]" /> Artelo <ArrowUpRight className="w-3.5 h-3.5 flex-shrink-0 opacity-40" />
+        </a>
+      )}
+    </div>
   )
 }

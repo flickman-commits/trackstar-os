@@ -378,6 +378,10 @@ export default async function handler(req, res) {
         shopifyAdminUrl: ['standard', 'custom'].includes(order.trackstarOrderType) ? shopifyAdminUrl(order.shopifyOrderData?.id) : null,
         etsyOrderUrl: order.source === 'etsy' ? etsyOrderUrl(order.parentOrderNumber) : null,
         arteloUrl: arteloOrderUrl(order.arteloOrderData?.id),
+        // A bulk runner's own trip to Artelo (server/domain/bulk/send.js): sent, queued, or waiting on a person.
+        bulkSend: order.trackstarOrderType === 'bulk'
+          ? { sentAt: order.bulkSentAt || null, sendAfter: order.bulkSendAfter || null, error: order.bulkSendError || null }
+          : null,
         // Race-partner virtual fields (aliases for existing columns — no schema change)
         partnerName: order.trackstarOrderType === 'race_partner' ? order.raceName : null,
         partnerContactName: order.trackstarOrderType === 'race_partner' ? order.customerName : null,
