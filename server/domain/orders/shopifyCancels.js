@@ -17,6 +17,17 @@ import { shopifyGraphQL } from '../../services/shopifyAuth.js'
 import { requireConnection } from '../../lib/connections.js'
 import { slackTo, slackText } from '../../lib/slack.js'
 import { arteloOrderUrl } from '../../lib/links.js'
+import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js'
+
+/** Artelo's live status for an order; our stored copy goes stale (6810 read Received after Artelo cancelled it). Null when Artelo does not answer. */
+async function arteloStatus(id) {
+  try {
+    const res = await fetchWithTimeout(`https://www.artelo.com/api/open/orders/get-by-id?orderId=${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${process.env.ARTELO_API_KEY}` } })
+    if (!res.ok) return null
+    const o = await res.json()
+    return String(o?.status || o?.productionStatus || '')
+  } catch { return null }
+}
 
 const CANCELLED = `
   query cancelled($ids: [ID!]!) {
@@ -66,7 +77,7 @@ export async function closeShopifyCancels() {
       data: rows.map(r => ({ orderId: r.id, text: `Cancelled in Shopify on ${when}${reason}, so marked complete here.`, authorName: 'TrackstarOS' })),
     })
     const artelo = rows.map(r => r.arteloOrderData).find(a => a?.id)
-    if (artelo && !/cancel/i.test(String(artelo.status || ''))) toCancelInArtelo.push({ name: n.name, url: arteloOrderUrl(artelo.id) })
+    if (artelo && !/cancel/i.test((await arteloStatus(artelo.id)) ?? String(artelo.status || ''))) toCancelInArtelo.push({ name: n.name, url: arteloOrderUrl(artelo.id) })
   }
 
   if (toCancelInArtelo.length) {
