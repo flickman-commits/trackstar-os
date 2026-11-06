@@ -179,6 +179,8 @@ export default async function handler(req, res) {
       delete whereClause.trackstarOrderType
       whereClause.OR = [
         { parentOrderNumber: number },
+        // A bulk runner's address is its own number (/orders/BULK-0001-17).
+        ...(/^BULK-\d+-\d+$/i.test(number) ? [{ orderNumber: number.toUpperCase() }] : []),
         { shopifyOrderData: { path: ['name'], equals: number } },
         { shopifyOrderData: { path: ['name'], equals: `#${number}` } },
       ]

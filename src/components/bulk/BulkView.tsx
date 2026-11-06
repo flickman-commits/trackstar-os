@@ -148,10 +148,11 @@ function Chip({ tone, children, onClick, title }: { tone: 'green' | 'amber' | 'r
   return <span className={base} title={title}>{children}</span>
 }
 
-export default function BulkView({ onOpenRunner, refreshRunners, onCount, toolbar, search = '', creating = false, onCreatingChange, team = [], meId, openId, onOpened }: {
-  /** Open this run straight away (from the Standard view's Bulk orders panel). */
-  openId?: string | null
-  onOpened?: () => void
+export default function BulkView({ onOpenRunner, refreshRunners, onCount, toolbar, search = '', creating = false, onCreatingChange, team = [], meId, openNumber, onSelect }: {
+  /** The open bulk order's number, from the address (/bulk/BULK-0001); null shows the list. */
+  openNumber?: string | null
+  /** Open a bulk order (or go back to the list with null); the dashboard puts it in the address. */
+  onSelect: (number: string | null) => void
   /** The team, for the Assignee column and picker. */
   team?: Teammate[]
   meId?: string | null
@@ -162,16 +163,14 @@ export default function BulkView({ onOpenRunner, refreshRunners, onCount, toolba
   creating?: boolean
   onCreatingChange?: (open: boolean) => void
   /** Open a runner in the ordinary order modal. */
-  /** Open a runner's order; bulkId is the bulk order it was opened from, to come back to. */
-  onOpenRunner: (orderNumber: string, bulkId?: string) => void
+  /** Open a runner's order. */
+  onOpenRunner: (orderNumber: string) => void
   /** Ask the dashboard to reload its bulk-runner orders so the modal has fresh data. */
   refreshRunners: () => void
   /** How many bulk orders exist, for the header badge. */
   onCount?: (n: number) => void
 }) {
   const [list, setList] = useState<BulkOrder[] | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  useEffect(() => { if (openId) { setSelectedId(openId); onOpened?.() } }, [openId, onOpened])
   const setCreating = (v: boolean) => onCreatingChange?.(v)
   const q = search.trim().toLowerCase()
   const shown = useMemo(() => !list || !q ? list : list.filter(b => [b.number, b.partnerName, b.raceName, b.eventType, String(b.raceYear)].some(v => String(v || '').toLowerCase().includes(q))), [list, q])
@@ -186,8 +185,11 @@ export default function BulkView({ onOpenRunner, refreshRunners, onCount, toolba
   }, [onCount])
   useEffect(() => { load() }, [load])
 
-  if (selectedId) {
-    return <BulkDetail key={selectedId} id={selectedId} onBack={() => { setSelectedId(null); load() }} onOpenRun={setSelectedId} onOpenRunner={n => onOpenRunner(n, selectedId)} refreshRunners={refreshRunners} team={team} meId={meId} />
+  if (openNumber) {
+    const selectedId = list?.find(b => b.number.toLowerCase() === openNumber.toLowerCase())?.id
+    if (!list) return <div className="flex items-center justify-center py-16 text-off-black/40"><Loader2 className="w-5 h-5 animate-spin" /></div>
+    if (!selectedId) return <div className="bg-white border border-border-gray rounded-md text-center py-16 text-sm text-off-black/50">Bulk order {openNumber} was not found. <button onClick={() => onSelect(null)} className="text-[#4600D6] hover:underline">Back to bulk orders</button></div>
+    return <BulkDetail key={selectedId} id={selectedId} onBack={() => { onSelect(null); load() }} onOpenRunner={onOpenRunner} refreshRunners={refreshRunners} team={team} meId={meId} />
   }
 
   return (
@@ -216,7 +218,7 @@ export default function BulkView({ onOpenRunner, refreshRunners, onCount, toolba
                 const d = daysUntil(b.dueDate)
                 const st = STATUS_STYLE[b.status] || STATUS_STYLE.collecting
                 return (
-                  <tr key={b.id} onClick={() => setSelectedId(b.id)} className="border-t border-border-gray/70 hover:bg-subtle-gray cursor-pointer">
+                  <tr key={b.id} onClick={() => onSelect(b.number)} className="border-t border-border-gray/70 hover:bg-subtle-gray cursor-pointer">
                     <td className="px-4 py-3 font-mono text-[12px] text-off-black/70">{b.number}</td>
                     <td className="px-3 py-3 font-semibold text-off-black">{b.partnerName}</td>
                     <td className="px-3 py-3 text-off-black/80">{b.raceName} <span className="text-off-black/45">{b.raceYear}</span>{b.eventType && b.eventType !== 'Marathon' && <span className="ml-1.5 text-xs font-medium text-off-black/60">{b.eventType}</span>}</td>
@@ -247,14 +249,14 @@ export default function BulkView({ onOpenRunner, refreshRunners, onCount, toolba
           </table>
         )}
       </div>
-      {creating && <OrderModal onClose={() => setCreating(false)} onCreated={order => { setCreating(false); load(); setSelectedId(order.id) }} />}
+      {creating && <OrderModal onClose={() => setCreating(false)} onCreated={order => { setCreating(false); load().then(() => onSelect(order.number)) }} />}
     </div>
   )
 }
 
 // ─── Detail ────────────────────────────────────────────────────────────────
 
-function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { id: string; onBack: () => void; onOpenRun: (runId: string) => void; onOpenRunner: (n: string) => void; refreshRunners: () => void; team: Teammate[]; meId?: string | null }) {
+function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { id: string; onBack: () => void; onOpenRunner: (n: string) => void; refreshRunners: () => void; team: Teammate[]; meId?: string | null }) {
   const [b, setB] = useState<BulkOrder | null>(null)
   const [intakeText, setIntakeText] = useState('')
   const [intakeOpen, setIntakeOpen] = useState(false)

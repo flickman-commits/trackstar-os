@@ -266,10 +266,6 @@ export default function Dashboard() {
   const [isImporting, setIsImporting] = useState(false)
   const [lastImportedAt, setLastImportedAt] = useState<string | null>(null)
   const [bulkCreating, setBulkCreating] = useState(false)
-  // A run opened from the Standard view's Bulk orders panel.
-  const [bulkOpenId, setBulkOpenId] = useState<string | null>(null)
-  // The bulk order a runner was opened from: going back from the runner returns to it, not to the list.
-  const bulkReturnId = useRef<string | null>(null)
 
   // Old links with ?settings=1 go to the Settings page.
   const goToSettings = useNavigate()
@@ -299,8 +295,15 @@ export default function Dashboard() {
   const VIEW_PARAM: Record<ActiveView, string> = { standard: '', custom: 'custom', race_partner: 'partners', bulk: 'bulk' }
   const activeView: ActiveView = (Object.keys(VIEW_PARAM) as ActiveView[]).find(v => VIEW_PARAM[v] === (searchParams.get('view') || '')) || 'standard'
   const setActiveView = useCallback((v: ActiveView) => {
+    // Leaving Bulk from an open bulk order (/bulk/BULK-0001) leaves its address too.
+    if (v !== 'bulk' && window.location.pathname.startsWith('/bulk/')) {
+      const next = new URLSearchParams(window.location.search); if (VIEW_PARAM[v]) next.set('view', VIEW_PARAM[v]); else next.delete('view'); next.delete('race')
+      const qs = next.toString()
+      goToSettings(`/${qs ? `?${qs}` : ''}`, { replace: true })
+      return
+    }
     setSearchParams(prev => { const next = new URLSearchParams(prev); if (VIEW_PARAM[v]) next.set('view', VIEW_PARAM[v]); else next.delete('view'); next.delete('race'); return next }, { replace: true })
-  }, [setSearchParams]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [setSearchParams, goToSettings]) // eslint-disable-line react-hooks/exhaustive-deps
   // Uploading to Artelo sends the print to production, so done is just Completed.
   const doneLabel = 'Completed'
   const doneHeading = 'Completed Orders'
@@ -316,13 +319,6 @@ export default function Dashboard() {
   const [completedCount, setCompletedCount] = useState<number | null>(null)
   // The view the orders in state belong to, so the cache below files them under it.
   const ordersViewRef = useRef<ActiveView | null>(null)
-  // Closing a bulk runner reopens the bulk order it came from.
-  useEffect(() => {
-    if (selectedOrder || !bulkReturnId.current) return
-    // Only when still on Bulk: switching to another view while in the runner just goes there.
-    if (activeView === 'bulk') setBulkOpenId(bulkReturnId.current)
-    bulkReturnId.current = null
-  }, [selectedOrder, activeView])
   const activeViewRef = useRef(activeView)
   activeViewRef.current = activeView
   useEffect(() => {
@@ -630,10 +626,14 @@ export default function Dashboard() {
   // The open order lives in the address bar as /orders/5038 (or /orders/5038-2
   // for the second line item), so a reload, the back button and a shared link
   // all land on the order. Clicking in adds a history entry; J/K replaces it.
-  const { orderRef: urlOrderRef = null } = useParams<{ orderRef: string }>()
+  // An open bulk order is /bulk/BULK-0001 the same way; its runners are
+  // /orders/BULK-0001-17, and closing one goes back to /bulk/BULK-0001.
+  const { orderRef: urlOrderRef = null, bulkRef = null } = useParams<{ orderRef: string; bulkRef: string }>()
   const navigate = useNavigate()
   const { search: urlSearch } = useLocation()  // the filters ride along when an order opens or closes
   const selectedRef = selectedOrder ? orderRefOf(selectedOrder) : null
+  const selectedBulkParent = selectedOrder?.trackstarOrderType === 'bulk' ? selectedOrder.parentOrderNumber || null : null
+  const lastBulkParent = useRef<string | null>(selectedBulkParent)
   const lastSelectedRef = useRef<string | null>(selectedRef)
   const lastUrlRef = useRef<string | null>(urlOrderRef)
   const replaceNextUrl = useRef(false)
@@ -657,7 +657,7 @@ export default function Dashboard() {
       if (hit) { open(hit); return }
       if (lookedUpRef.current === ref) return
       lookedUpRef.current = ref
-      const [number] = ref.split('-')
+      const number = /^BULK-/i.test(ref) ? ref : ref.split('-')[0]
       apiFetch(`/api/orders?number=${encodeURIComponent(number)}`).then(r => r.ok ? r.json() : null).then(d => {
         const found = pick(((d?.orders || []) as Record<string, unknown>[]).map(mapOrder), ref)
         if (!found) { setToast({ message: `Order ${ref} was not found`, type: 'error' }); navigate(`/${urlSearch}`, { replace: true }); return }
@@ -668,9 +668,11 @@ export default function Dashboard() {
     if (selectedRef !== lastSelectedRef.current) {
       // The order changed here (a click, J/K, closing): the address follows.
       lastSelectedRef.current = selectedRef
+      const closedBulk = !selectedRef ? lastBulkParent.current : null
+      lastBulkParent.current = selectedBulkParent
       if (selectedRef !== urlOrderRef) {
         lastUrlRef.current = selectedRef
-        navigate(`${selectedRef ? `/orders/${selectedRef}` : '/'}${urlSearch}`, { replace: replaceNextUrl.current })
+        navigate(`${selectedRef ? `/orders/${selectedRef}` : closedBulk ? `/bulk/${closedBulk}` : '/'}${urlSearch}`, { replace: replaceNextUrl.current })
       }
       replaceNextUrl.current = false
       return
@@ -684,7 +686,13 @@ export default function Dashboard() {
     }
     // First load with an order in the address: open it once the list is here.
     if (urlOrderRef && selectedRef !== urlOrderRef) resolve(urlOrderRef)
-  }, [selectedRef, urlOrderRef, orders, activeView, setActiveView, navigate, urlSearch])
+  }, [selectedRef, selectedBulkParent, urlOrderRef, orders, activeView, setActiveView, navigate, urlSearch])
+  // A link to a bulk order lands on the Bulk view.
+  useEffect(() => { if (bulkRef && activeView !== 'bulk') setActiveView('bulk') }, [bulkRef, activeView, setActiveView])
+  const openBulk = useCallback((number: string | null) => {
+    const p = new URLSearchParams(urlSearch); p.set('view', 'bulk'); p.delete('race')
+    navigate(`${number ? `/bulk/${number}` : '/'}?${p}`)
+  }, [navigate, urlSearch])
   useEffect(() => {
     document.title = selectedOrder ? `Order ${orderRefOf(selectedOrder)} · TrackstarOS` : 'TrackstarOS'
     return () => { document.title = 'TrackstarOS' }
@@ -1441,7 +1449,7 @@ export default function Dashboard() {
               runner rows are still orders, so the modal below opens them. */}
           {inlineDetail ? null : activeView === 'bulk' ? (
             <BulkView
-              onOpenRunner={(orderNumber, bulkId) => { bulkReturnId.current = bulkId || null; const o = orders.find(x => x.orderNumber === orderNumber); if (o) setSelectedOrder(o); else fetchOrders().then(() => { const oo = orders.find(x => x.orderNumber === orderNumber); if (oo) setSelectedOrder(oo) }) }}
+              onOpenRunner={(orderNumber) => { const o = orders.find(x => x.orderNumber === orderNumber); if (o) setSelectedOrder(o); else fetchOrders().then(() => { const oo = orders.find(x => x.orderNumber === orderNumber); if (oo) setSelectedOrder(oo) }) }}
               refreshRunners={() => { fetchOrders() }}
               onCount={setBulkCount}
               toolbar={toolbar}
@@ -1450,8 +1458,8 @@ export default function Dashboard() {
               onCreatingChange={setBulkCreating}
               team={team}
               meId={myId}
-              openId={bulkOpenId}
-              onOpened={() => setBulkOpenId(null)}
+              openNumber={bulkRef}
+              onSelect={openBulk}
             />
           ) : (
           <div className="bg-white border border-border-gray rounded-lg shadow-sm overflow-hidden flex-1 flex flex-col min-h-0">
@@ -1708,7 +1716,7 @@ export default function Dashboard() {
                     </thead>
                     <tbody className="divide-y divide-border-gray">
                       {/* Bulk runs near or past their race, first, in the same columns. */}
-                      {activeView === 'standard' && <BulkAttentionRows onOpen={id => { setBulkOpenId(id); setActiveView('bulk') }} />}
+                      {activeView === 'standard' && <BulkAttentionRows onOpen={openBulk} />}
                       {filteredOrders.map((order, index) => {
                         const statusDisplay = getStatusDisplay(order)
                         const itemCount = getOrderItemCount(order.parentOrderNumber)

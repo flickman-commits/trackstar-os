@@ -20,7 +20,7 @@ const day = (d: string) => new Date(d).toLocaleDateString('en-US', { weekday: 's
  * who has it (server/domain/bulk/attention.js). What is in the way shows on
  * hover; the run itself has the detail.
  */
-export default function BulkAttentionRows({ onOpen }: { onOpen: (id: string) => void }) {
+export default function BulkAttentionRows({ onOpen }: { onOpen: (number: string) => void }) {
   const [runs, setRuns] = useState<Run[]>([])
   useEffect(() => {
     apiFetch(`${API_BASE}/api/bulk?attention=1`).then(r => (r.ok ? r.json() : { runs: [] })).then(d => setRuns(d.runs || [])).catch(() => setRuns([]))
@@ -33,7 +33,7 @@ export default function BulkAttentionRows({ onOpen }: { onOpen: (id: string) => 
         const pct = total ? Math.min(100, Math.round((r.sent / total) * 100)) : 0
         const due = r.raced ? (r.dueDate ? `Due ${day(r.dueDate)}` : 'No due date') : `Race ${day(r.raceDate)}`
         return (
-          <tr key={r.id} onClick={() => onOpen(r.id)} title={r.blockers.length ? `In the way: ${r.blockers.join(', ')}` : 'Ready to send to Artelo'}
+          <tr key={r.id} onClick={() => onOpen(r.number)} title={r.blockers.length ? `In the way: ${r.blockers.join(', ')}` : 'Ready to send to Artelo'}
             className="bg-[#F6F5F2] hover:bg-[#EFEDE8] cursor-pointer transition-colors">
             <td className="pl-6 pr-2 py-4 text-center">
               <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-white border border-border-gray" aria-label="Bulk order">

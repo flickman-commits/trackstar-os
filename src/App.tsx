@@ -288,6 +288,7 @@ export default function App() {
                 <Route path="/" element={<Dashboard />} />
                 {/* An open order has its own address, so a reload or a shared link lands on it. */}
                 <Route path="/orders/:orderRef" element={<Dashboard />} />
+                <Route path="/bulk/:bulkRef" element={<Dashboard />} />
                 <Route path="/surveys" element={<DesignSurveys />} />
                 <Route path="/samples" element={<RequireCap cap="tools.samples"><Samples /></RequireCap>} />
                 {/* Admin view: the creator programme, the bulk product editor

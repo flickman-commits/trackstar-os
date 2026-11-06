@@ -243,6 +243,8 @@ export function selectableDesignStatuses(orderType?: string | null, current?: st
 /** The address of an order: its display number, plus -2, -3 for later line items (the file-name convention). */
 export function orderRefOf(o: Order): string {
   const n = String(o.displayOrderNumber || o.parentOrderNumber || '').replace(/^#/, '')
+  // A bulk runner already carries its line in its number (BULK-0001-17).
+  if (o.trackstarOrderType === 'bulk') return n
   return o.lineItemIndex ? `${n}-${o.lineItemIndex + 1}` : n
 }
 
