@@ -327,7 +327,15 @@ export async function createReorder({ thread, shopifyOrderId, orderIds, changes,
     } } : {}),
     ...(test ? { isTestOrder: true } : {}),
   }
-  const created = await artelo('orders/create', { method: 'POST', body })
+  // Artelo's reason is about the order (a bad address, a product it will not
+  // make), so the rep sees it instead of a generic failure.
+  let created
+  try { created = await artelo('orders/create', { method: 'POST', body }) }
+  catch (err) {
+    console.error(`[support.artelo] orders/create ${orderId}:`, err.message, JSON.stringify(body.items.map(i => i.productInfo)).slice(0, 600))
+    if (err instanceof UserError) throw err
+    throw new UserError(`${String(err.message || 'Artelo did not answer').slice(0, 300)}${err.status ? '. Nothing was created in Artelo.' : '. Check Artelo before trying again.'}`, { status: 502 })
+  }
   const url = arteloOrderUrl(created?.id) || null
   const by = actorName(actor)
   const what = `${test ? 'Test ' : ''}Artelo order ${orderId}: ${picked.map(i => `${i.label} (${i.productLabel})`).join('; ')} to ${a.name}, ${a.city} ${a.province}`
