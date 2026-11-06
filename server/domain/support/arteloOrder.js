@@ -147,7 +147,7 @@ export async function checkDesignFits(design, size, label) {
   const shapes = [want[0] / want[1], (want[0] + 0.5) / (want[1] + 0.5)]
   if (shapes.some(r => Math.abs(ratio - r) / r < 0.02)) return
   const fileIn = `${Math.round((up.width / 300 - 0.5) * 2) / 2}x${Math.round((up.height / 300 - 0.5) * 2) / 2}`
-  throw new UserError(`${label}: the design file is ${fileIn} (${up.width}x${up.height} px) and the replacement is ${sizeLabel(size)}, so it would print stretched. Make ${/^8/.test(sizeLabel(size)) ? 'an' : 'a'} ${sizeLabel(size)} file first, or keep the original size.`)
+  throw new UserError(`${label}: the design file is ${fileIn} (${up.width}x${up.height} px) and the replacement is ${sizeLabel(size)}, so it would print stretched. Open the order in Fulfillment and use Render another size (${sizeLabel(size)}), approve it, then make this order. Or upload ${/^8/.test(sizeLabel(size)) ? 'an' : 'a'} ${sizeLabel(size)} file, or keep the original size.`)
 }
 
 /** "x12x18" -> "12x18". */
@@ -201,7 +201,7 @@ async function itemsFor(shopifyOrderId) {
     where: { source: 'shopify', parentOrderNumber: String(shopifyOrderId) },
     orderBy: { lineItemIndex: 'asc' },
     select: { id: true, lineItemIndex: true, runnerName: true, raceName: true, raceYear: true, arteloOrderData: true, shopifyOrderData: true,
-      renderJobs: { where: { status: 'done', review: 'approved', arteloUploadId: { not: null } }, orderBy: { version: 'desc' }, take: 1, select: { arteloUploadId: true, version: true, previewPath: true } } },
+      renderJobs: { where: { status: 'done', review: 'approved', arteloUploadId: { not: null } }, orderBy: { version: 'desc' }, take: 20, select: { arteloUploadId: true, version: true, previewPath: true, spec: true } } },
   })
   if (!rows.length) throw new UserError('That order is not in TrackstarOS, so there is nothing to copy. Build it in Artelo.')
   const stored = rows[0].arteloOrderData
@@ -214,7 +214,10 @@ async function itemsFor(shopifyOrderId) {
     const liveItem = live?.orderItems?.find(i => i.orderItemId === storedItem?.orderItemId) || null
     const product = liveItem?.product || storedItem?.product || null
     const fromArtelo = designsFromArtelo(liveItem)
-    const job = r.renderJobs[0]
+    // The print as it went out; renders at another size (render/jobs.js) are kept apart by size.
+    const job = r.renderJobs.find(j => !j.spec?.altSize) || null
+    const otherSizes = {}
+    for (const j of r.renderJobs) if (j.spec?.altSize && j.spec?.size && !otherSizes[j.spec.size]) otherSizes[j.spec.size] = j
     const designs = fromArtelo.length ? fromArtelo : job ? [{ imageId: job.arteloUploadId }] : []
     return {
       row: r,
@@ -226,6 +229,7 @@ async function itemsFor(shopifyOrderId) {
       designFrom: fromArtelo.length ? 'the Artelo order' : job ? `the approved design (v${job.version})` : null,
       artelo: fromArtelo[0]?.sourceImage?.url || null,
       job,
+      otherSizes,
     }
   })
   const number = String(rows[0].shopifyOrderData?.name || shopifyOrderId).replace(/^#/, '')
@@ -248,7 +252,7 @@ export async function reorderPrep({ shopifyOrderId }) {
   return {
     number,
     nextOrderId: await nextOrderId(number, rows.map(r => r.id)),
-    items: await Promise.all(items.map(async i => ({ orderId: i.orderId, label: i.label, productLabel: i.productLabel, designFrom: i.designFrom, copyable: copyable(i), size: i.product?.size || null, frame: i.product?.frameColor || null, ...(await designPreview(i)) }))),
+    items: await Promise.all(items.map(async i => ({ orderId: i.orderId, label: i.label, productLabel: i.productLabel, designFrom: i.designFrom, copyable: copyable(i), size: i.product?.size || null, frame: i.product?.frameColor || null, renderedSizes: Object.keys(i.otherSizes), ...(await designPreview(i)) }))),
     sizes: REPLACEMENT_SIZES.map(v => ({ value: v, label: sizeLabel(v) })),
     frames: REPLACEMENT_FRAMES.map(v => ({ value: v, label: v === 'Unframed' ? 'Unframed' : v.replace(/([a-z])([A-Z])/g, '$1 $2') })),
   }
@@ -316,6 +320,16 @@ export async function createReorder({ thread, shopifyOrderId, orderIds, changes,
     catch (err) { throw new UserError(`Artelo did not take ${up.filename}: ${String(err.message).slice(0, 160)}`) }
     i.driveFile = null
     i.designFrom = `the new file ${up.filename}`
+  }
+  // A different size: the approved render at that size, when one was made
+  // from the order (Render another size), unless the rep uploaded a file.
+  for (const i of picked) {
+    if (i.frameOnly || files?.[i.orderId]) continue
+    const want = changes?.[i.orderId]?.size
+    if (!want || sizeLabel(want) === sizeLabel(i.product?.size)) continue
+    const alt = i.otherSizes[sizeLabel(want)]
+    // Without one, the original file is used if it is the same shape (12x18 and 16x24 are); checkDesignFits says if not.
+    if (alt) { i.designs = [{ imageId: alt.arteloUploadId }]; i.driveFile = null; i.designFrom = `the approved ${sizeLabel(want)} render (v${alt.version})` }
   }
   const blocked = picked.find(i => !i.frameOnly && !copyable(i))
   if (blocked) throw new UserError(`${blocked.label} has no design to copy: no approved render and no PDF named for it in the Drive Orders folder. Build that one in Artelo.`)

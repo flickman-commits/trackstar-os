@@ -5,7 +5,7 @@ import { apiFetch } from '@/lib/api'
 
 export type Job = {
   id: string; version: number; status: 'queued' | 'rendering' | 'done' | 'failed'; requestedBy: 'admin' | 'system' | 'customer'
-  spec: { file: string; name: string; bib: string; time: string | null; pace: string | null; date: string; condition: string; temp: string; size: string; noTime: boolean; photoPath: string | null; dateSource?: string | null; dateSourceUrl?: string | null; template?: string | null }
+  spec: { file: string; name: string; bib: string; time: string | null; pace: string | null; date: string; condition: string; temp: string; size: string; noTime: boolean; photoPath: string | null; dateSource?: string | null; dateSourceUrl?: string | null; template?: string | null; altSize?: boolean }
   notes: string | null; error: string | null; createdAt: string; finishedAt: string | null
   review: 'pending' | 'approved' | 'rejected' | 'closed'; reviewNote: string | null; reviewer: string | null; reviewedAt: string | null
   deliveredAt: string | null; deliveredPath: string | null; deliveryError: string | null
@@ -99,6 +99,6 @@ export function useDesign(orderId: string | null, canManage: boolean) {
   const visible = Boolean(orderId && state && (canManage || job?.review === 'approved'))
   // Room is held for the design from the moment the order opens, so the layout does not jump when it loads.
   const reserved = Boolean(orderId && (canManage || job?.review === 'approved'))
-  return { state, job, busy, creating, err, create, review, sendAction, autoSend: state?.autoSend !== false, reload: load, uploading, canManage, visible, reserved, offline: !state || state.workersOnline.length === 0 }
+  return { state, job, busy, creating, err, create, review, sendAction, autoSend: state?.autoSend !== false && !job?.spec?.altSize, reload: load, uploading, canManage, visible, reserved, offline: !state || state.workersOnline.length === 0 }
 }
 

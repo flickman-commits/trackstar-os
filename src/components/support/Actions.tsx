@@ -423,7 +423,7 @@ function ArteloTicketForm({ o, thread, onDone, onCancel }: FormProps) {
 
 type ReorderPrep = {
   number: string; nextOrderId: string; sizes: Choice[]; frames: Choice[]
-  items: { orderId: string; label: string; productLabel: string; designFrom: string | null; copyable: boolean; size: string | null; frame: string | null; previewUrl?: string | null; designUrl?: string | null }[]
+  items: { orderId: string; label: string; productLabel: string; designFrom: string | null; copyable: boolean; size: string | null; frame: string | null; previewUrl?: string | null; designUrl?: string | null; renderedSizes?: string[] }[]
 }
 
 /**
@@ -594,7 +594,9 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
                           </select>
                         </Field>
                       </div>
-                      {changed && <div className="text-xs text-amber-700">Changed from the original. A different shape (8x10 vs 12x18 or 16x24) needs a design file in that size; the order stops if the file does not fit.</div>}
+                      {changed && c.size !== i.size && !files[i.orderId] && (i.renderedSizes || []).includes(c.size.replace(/^x/, ''))
+                        ? <div className="text-xs text-green-700">Uses the approved {c.size.replace(/^x/, '')} render of this print.</div>
+                        : changed && <div className="text-xs text-amber-700">Changed from the original. A different shape (8x10 vs 12x18 or 16x24) needs a design in that size: open the order in Fulfillment and use Render another size, or upload a file. The order stops if the file does not fit.</div>}
                     </div>
                   )}
                 </div>

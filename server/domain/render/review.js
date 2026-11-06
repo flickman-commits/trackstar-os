@@ -39,6 +39,9 @@ export async function deliverEverywhere(job) {
  */
 export async function reviewRender({ jobId, decision, note, user, designNeed = false, send = true }) {
   let job = await reviewJob({ jobId, decision, note, reviewerId: user?.id || null })
+  // Another size of a print that already went out (jobs.js createJob): it is
+  // for Support's New Artelo order, never sent on its own.
+  if (job.spec?.altSize) send = false
   if (job.review === 'rejected' && designNeed) {
     const order = await prisma.order.findUnique({ where: { id: job.orderId }, select: { id: true, orderNumber: true, parentOrderNumber: true, lineItemIndex: true, shopifyOrderData: true } })
     await needFromRejection({ job, order: order ? { ...order, name: order.shopifyOrderData?.name || null } : null, note: job.reviewNote || note, actor: user })
@@ -50,7 +53,7 @@ export async function reviewRender({ jobId, decision, note, user, designNeed = f
     delivery = deliverEverywhere(job)
     // A bulk runner goes to Artelo as their own order once approved (bulk/send.js).
     if (send) await queueRunnerSend(job.orderId).catch(e => console.error('[render/review] bulk queue', job.id, e.message))
-    await prisma.renderJob.updateMany({ where: { orderId: job.orderId, review: 'pending', id: { not: job.id } }, data: { review: 'closed', reviewNote: 'Another version was approved', reviewedAt: new Date() } })
+    if (!job.spec?.altSize) await prisma.renderJob.updateMany({ where: { orderId: job.orderId, review: 'pending', id: { not: job.id } }, data: { review: 'closed', reviewNote: 'Another version was approved', reviewedAt: new Date() } })
   }
   // Named by the order, not the template file, so the Activity Log finds it by order number.
   const order = await prisma.order.findUnique({ where: { id: job.orderId }, select: { orderNumber: true, parentOrderNumber: true, runnerName: true, raceName: true, raceYear: true } }).catch(() => null)

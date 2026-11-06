@@ -7,7 +7,7 @@
  * offer "Create Design" at all.
  */
 import prisma from '../../db.js'
-import { buildSpec, SPEC_SELECT } from './spec.js'
+import { buildSpec, SPEC_SELECT, SIZES } from './spec.js'
 import { availableTemplateKeys, noTimeGaps, onlineWorkers as onlineWorkersList } from './templates.js'
 import { getCanonicalRaceName } from '../../scrapers/index.js'
 import { storage as sharedStorage, storedSince } from '../../lib/storage.js'
@@ -73,9 +73,27 @@ async function raceRowLookup(name, year) {
     || (canonical !== name ? prisma.race.findUnique({ where: { raceName_year: { raceName: canonical, year } } }) : null)
 }
 
-export async function createJob({ orderId, requestedBy = 'admin', requestedById = null }) {
-  const { ok, reasons, spec } = await checkOrder(orderId)
+/**
+ * `size` renders the same print at another size (8x10, 12x18, 16x24), for a
+ * customer who wants a second size after theirs went out. Only on a completed
+ * order, so it never stands in for the print in the pipeline: the job is
+ * marked altSize, approving it never sends it to production (review.js), and
+ * Support's New Artelo order uses it when the rep picks that size
+ * (support/arteloOrder.js).
+ */
+export async function createJob({ orderId, requestedBy = 'admin', requestedById = null, size = null }) {
+  let ctx = {}
+  if (size) {
+    if (!SIZES.includes(size)) throw new Error(`No artboard for size "${size}"`)
+    const order = await prisma.order.findUnique({ where: { id: String(orderId) }, select: SPEC_SELECT })
+    if (!order) throw new Error('Order not found')
+    if (order.status !== 'completed') throw new Error('Another size is for an order that already went out. Before that, change the size on the order itself.')
+    if (order.productSize === size) throw new Error(`This order is already ${size}. Use Re-render for the same size.`)
+    ctx = { order: { ...order, productSize: size } }
+  }
+  const { ok, reasons, spec: built } = await checkOrder(orderId, ctx)
   if (!ok) throw new Error(reasons.join('. '))
+  const spec = size ? { ...built, altSize: true } : built
   const open = await prisma.renderJob.findFirst({ where: { orderId: String(orderId), status: { in: ['queued', 'rendering'] } } })
   if (open) return open
   const last = await prisma.renderJob.findFirst({ where: { orderId: String(orderId) }, orderBy: { version: 'desc' }, select: { version: true } })
@@ -272,7 +290,7 @@ export async function rerenderChanged({ limit = 10 } = {}) {
     const last = o.renderJobs[0]
     // Failed, rejected, or closed because the weather changed under it (closed by
     // hand-completion never gets here: that order is completed).
-    if (!last || !(last.status === 'failed' || (last.status === 'done' && (last.review === 'rejected' || last.review === 'closed')))) continue
+    if (!last || last.spec?.altSize || !(last.status === 'failed' || (last.status === 'done' && (last.review === 'rejected' || last.review === 'closed')))) continue
     const { ok, spec } = await checkOrder(o.id).catch(() => ({ ok: false }))
     if (!ok || !printedDiffers(spec, last.spec)) continue
     await createJob({ orderId: o.id, requestedBy: 'system' })

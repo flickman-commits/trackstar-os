@@ -45,8 +45,9 @@ export default async function handler(req, res) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {})
 
     if (body.action === 'create') {
-      const job = await createJob({ orderId: String(body.orderId || ''), requestedBy: 'admin', requestedById: user.id })
-      await recordAudit({ action: 'render.create', summary: `Queued a render of ${job.spec?.file || job.orderId} (v${job.version})`, detail: { jobId: job.id, orderId: job.orderId }, actor: user })
+      const size = body.size ? String(body.size) : null
+      const job = await createJob({ orderId: String(body.orderId || ''), requestedBy: 'admin', requestedById: user.id, size })
+      await recordAudit({ action: 'render.create', summary: `Queued a ${size ? `${size} ` : ''}render of ${job.spec?.file || job.orderId} (v${job.version})${size ? ', another size for a new Artelo order' : ''}`, detail: { jobId: job.id, orderId: job.orderId }, actor: user })
       return res.status(200).json({ job: present(job, { pdfUrl: null, previewUrl: null }) })
     }
 

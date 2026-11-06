@@ -3,7 +3,7 @@ import DesignStatusPicker from '@/components/orders/DesignStatusPicker'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff } from 'lucide-react'
+import { Plus, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff, Ruler } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { shrinkImage } from '@/lib/shrinkImage'
@@ -264,6 +264,8 @@ export default function OrderDetail({
   const [cropFile, setCropFile] = useState<File | null>(null)
   const [cropBusy, setCropBusy] = useState(false)
   const [converting, setConverting] = useState(false)
+  // Render another size: the size picker is open.
+  const [altSizeOpen, setAltSizeOpen] = useState(false)
   const cropExport = useRef<(() => Promise<File>) | null>(null)
   useEffect(() => { setCropFile(null) }, [selectedOrder?.id])
   const openCrop = async () => {
@@ -2172,6 +2174,34 @@ Thank you!`
                         title={selectedOrder.hadNoTime ? 'Render the print with the finish time and pace again' : 'The customer wants the print without their time: render it with NO TIME'}>
                         <TimerOff className="w-3.5 h-3.5" /> {selectedOrder.hadNoTime ? 'Put the time back' : 'Convert to NO TIME'}
                       </button>
+                    )}
+                    {/* The print already went out and the customer wants it in another size too:
+                        render it at that size here, approve it, then Support's New Artelo order
+                        uses it. Approving it never sends it on its own (render/jobs.js). */}
+                    {design.canManage && selectedOrder.status === 'completed' && !isEditing && (
+                      altSizeOpen ? (
+                        <div className="self-start flex flex-wrap items-center gap-1.5 text-xs">
+                          <span className="text-off-black/60">Render at</span>
+                          {['8x10', '12x18', '16x24'].filter(s => s !== String(selectedOrder.productSize || '').replace(/^x/, '')).map(size => (
+                            <button key={size} onClick={async () => {
+                                try {
+                                  const res = await apiFetch('/api/render/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', orderId: selectedOrder.id, size }) })
+                                  const data = await res.json().catch(() => ({}))
+                                  if (!res.ok) throw new Error(data.error || 'Could not queue the render')
+                                  setAltSizeOpen(false)
+                                  await design.reload()
+                                  setToast({ message: `Rendering a ${size}. Approve it, then make the order in Support with New Artelo order at ${size}.`, type: 'success' })
+                                } catch (e) { setToast({ message: e instanceof Error ? e.message : 'Could not queue the render', type: 'error' }) }
+                              }}
+                              className="px-2 py-0.5 rounded border border-border-gray bg-white font-medium hover:border-[#4600D6] hover:text-[#4600D6]">{size}</button>
+                          ))}
+                          <button onClick={() => setAltSizeOpen(false)} className="text-off-black/45 hover:text-off-black">Cancel</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setAltSizeOpen(true)} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2" title="The print went out and the customer wants another size: render it at that size for a new Artelo order">
+                          <Ruler className="w-3.5 h-3.5" /> Render another size
+                        </button>
+                      )
                     )}
                     {/* A runner who ran a race we do not carry: design it as a custom print instead of refunding. */}
                     {design.canManage && selectedOrder.status !== 'completed' && !isEditing && (
