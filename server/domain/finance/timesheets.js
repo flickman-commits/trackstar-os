@@ -20,7 +20,9 @@ export const MAX_MINUTES_PER_ENTRY = 24 * 60
 export const LONG_DAY_MINUTES = 12 * 60
 
 const name = u => [u?.firstName, u?.lastName].filter(Boolean).join(' ') || 'Someone'
-const hours = m => `${(m / 60).toFixed(m % 60 ? 2 : 0)}h`
+/** Hours and minutes, never a fraction: "3h 2m", "45m", "8h". */
+export const hoursText = minutes => { const m = Math.max(0, Math.round(minutes)); const h = Math.floor(m / 60), r = m % 60; return h && r ? `${h}h ${r}m` : h ? `${h}h` : `${r}m` }
+const hours = hoursText
 
 /** DM a person through the Slack bot (their own DM webhook if the bot cannot). Never throws. */
 const dm = (user, text) => slackDm(user, text).catch(() => false)
@@ -174,8 +176,9 @@ export async function review(id, action, { note = '', reviewer }) {
 }
 
 /** The admin list: every week in a status (or all), newest first. */
-export async function listTimesheets({ status = null, userId = null, limit = 200 } = {}) {
+export async function listTimesheets({ status = null, userId = null, weekStart = null, limit = 200 } = {}) {
   const where = {}
+  if (weekStart) where.weekStart = weekStart
   if (status && status !== 'all') where.status = status
   if (userId) where.userId = userId
   const rows = await prisma.timesheet.findMany({ where, include: { user: { select: { id: true, firstName: true, lastName: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true, hourlyRateCents: true } }, entries: { select: ENTRY_SELECT, orderBy: [{ day: 'asc' }, { createdAt: 'asc' }] } }, orderBy: [{ weekStart: 'desc' }, { createdAt: 'asc' }], take: Math.min(500, Math.max(1, limit)) })

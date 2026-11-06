@@ -40,7 +40,7 @@ export default async function handler(req, res) {
       case 'stop': { const e = await hours.stopTimer(user.id); weekStart = mondayOf(e.day); break }
       case 'submit': {
         const ts = await hours.submitWeek(user.id, String(b.weekStart || ''))
-        await recordAudit({ action: 'hours.submit', summary: `Submitted ${(ts.totalMinutes / 60).toFixed(2)}h for the week of ${dayLabel(ts.weekStart)}`, detail: { timesheetId: ts.id, weekStart: ts.weekStart, minutes: ts.totalMinutes }, actor: user })
+        await recordAudit({ action: 'hours.submit', summary: `Submitted ${hours.hoursText(ts.totalMinutes)} for the week of ${dayLabel(ts.weekStart)}`, detail: { timesheetId: ts.id, weekStart: ts.weekStart, minutes: ts.totalMinutes }, actor: user })
         weekStart = ts.weekStart
         break
       }

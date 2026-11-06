@@ -76,10 +76,12 @@ export function Spark({ values, color = '#121212' }: { values: (number | null)[]
 }
 
 export function StatusChip({ status }: { status: string }) {
+  // Three states everywhere: In progress (still being filled in, or sent back to fix), Submitted (waiting on Matt), Approved.
   const tone: Record<string, string> = {
-    draft: 'bg-white border-border-gray text-off-black/60', submitted: 'bg-amber-100 border-amber-300 text-amber-800', approved: 'bg-emerald-100 border-emerald-300 text-emerald-800',
-    rejected: 'bg-rose-100 border-rose-300 text-rose-800', paid: 'bg-emerald-100 border-emerald-300 text-emerald-800', empty: 'bg-white border-border-gray text-off-black/40',
+    draft: 'bg-white border-border-gray text-off-black/60', in_progress: 'bg-white border-border-gray text-off-black/60', rejected: 'bg-white border-rose-300 text-rose-800',
+    submitted: 'bg-amber-100 border-amber-300 text-amber-800', approved: 'bg-emerald-100 border-emerald-300 text-emerald-800',
+    paid: 'bg-emerald-100 border-emerald-300 text-emerald-800', empty: 'bg-white border-border-gray text-off-black/40',
   }
-  const label: Record<string, string> = { draft: 'Draft', submitted: 'Submitted', approved: 'Approved', rejected: 'Sent back', paid: 'Paid', empty: 'No hours' }
+  const label: Record<string, string> = { draft: 'In progress', in_progress: 'In progress', rejected: 'In progress', submitted: 'Submitted', approved: 'Approved', paid: 'Paid', empty: 'No hours' }
   return <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold ${tone[status] || tone.draft}`}>{label[status] || status}</span>
 }

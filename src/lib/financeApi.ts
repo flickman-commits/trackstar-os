@@ -1,6 +1,6 @@
 /** Typed client for /api/finance/*, and the money and time spellings the pages share. */
 import { apiFetch } from '@/lib/api'
-import type { DailyPayload, DayInput, HoursPayload, OverviewPayload, PayoutsPayload, PayRun, Person, RacePayout, RacePayoutsPayload, Rate, SyncInfo, Timesheet } from '@/types/finance'
+import type { MonthPayouts, DailyPayload, DayInput, HoursPayload, OverviewPayload, PayRun, Person, RacePayout, RacePayoutsPayload, Rate, SyncInfo, Timesheet } from '@/types/finance'
 
 export class FinanceApiError extends Error {}
 
@@ -20,13 +20,15 @@ export const financeApi = {
   override: (day: string, field: string, value: number | null) => post<{ day: string; inputs: DayInput[] }>('/api/finance/daily', { action: 'override', day, field, value }),
   hours: (week?: string) => request<HoursPayload>(`/api/finance/hours${week ? `?week=${week}` : ''}`),
   hoursAction: (body: Record<string, unknown>) => post<HoursPayload>('/api/finance/hours', body),
+  timesheetsWeek: (week: string) => request<{ timesheets: Timesheet[]; people: Person[]; weekStart: string; thisWeek: string }>(`/api/finance/timesheets?week=${week}`),
   timesheets: (status = 'all', user = '') => request<{ timesheets: Timesheet[]; people: Person[] }>(`/api/finance/timesheets?status=${status}${user ? `&user=${user}` : ''}`),
   review: (id: string, action: 'approve' | 'reject' | 'withdraw', note = '') => post<{ timesheet: Timesheet }>('/api/finance/timesheets', { action, id, note }),
-  payouts: () => request<PayoutsPayload>('/api/finance/payouts'),
   payoutAction: <T = PayRun,>(body: Record<string, unknown>) => post<T>('/api/finance/payouts', body),
   racePayouts: () => request<RacePayoutsPayload>('/api/finance/race-payouts'),
   racePayoutAction: (body: Record<string, unknown>) => post<{ race: RacePayout }>('/api/finance/race-payouts', body),
   racePayoutsDue: () => post<{ computed: number; failed: { name: string; error: string }[] }>('/api/finance/race-payouts', { action: 'compute_due' }),
+  payoutsMonth: (month: string) => request<MonthPayouts>(`/api/finance/payouts?month=${month}`),
+  payoutRates: () => request<{ rates: Rate[] }>('/api/finance/payouts?rates=1'),
   setHourlyRate: (userId: string, cents: number | null) => post<{ rates: Rate[] }>('/api/finance/payouts', { action: 'set_hourly_rate', userId, cents }),
 }
 
@@ -49,7 +51,8 @@ export const pctText = (v: number | null | undefined, digits = 1) => (v == null 
 export const xText = (v: number | null | undefined) => (v == null ? '–' : `${v.toFixed(2)}x`)
 export const intText = (v: number | null | undefined) => (v == null ? '–' : v.toLocaleString('en-US'))
 
-export const hoursText = (minutes: number) => { const h = minutes / 60; return `${Number.isInteger(h) ? h : h.toFixed(2).replace(/0$/, '')}h` }
+/** Hours and minutes, never a fraction: "3h 2m", "45m", "8h". */
+export const hoursText = (minutes: number) => { const m = Math.max(0, Math.round(minutes)); const h = Math.floor(m / 60), r = m % 60; return h && r ? `${h}h ${r}m` : h ? `${h}h` : `${r}m` }
 export const hhmm = (minutes: number) => `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`
 
 const parseDay = (d: string) => { const [y, m, dd] = d.split('-').map(Number); return new Date(Date.UTC(y, m - 1, dd)) }

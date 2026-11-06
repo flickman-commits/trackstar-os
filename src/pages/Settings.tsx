@@ -297,7 +297,7 @@ export default function Settings() {
               {settingsPanel === 'pricing' && isAdmin && <PricingCalculator />}
               {(settingsPanel === 'stats' || settingsPanel === 'support_closes') && isAdmin && <StatsHub initial={settingsPanel === 'support_closes' ? 'tickets' : 'overview'} />}
               {/* The Custom Counter lives in Finance > Payouts now; old links still land there. */}
-              {settingsPanel === 'counter' && <Navigate to="/finance/payouts?tab=customs" replace />}
+              {settingsPanel === 'counter' && <Navigate to="/finance/payouts" replace />}
               {settingsPanel === 'design_needs' && can('settings.design_needs') && <DesignNeedsPanel />}
               {settingsPanel === 'features' && <FeatureRequestsPanel />}
               {settingsPanel === 'account' && <AccountPanel />}

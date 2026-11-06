@@ -31,7 +31,7 @@ const day = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 
  * Each designer's pay per custom, new and repeat. Blank goes back to the
  * level default from the rate card (senior $50 / $25, junior $40 / $20).
  */
-function RatesEditor({ onSaved }: { onSaved: () => void }) {
+export function RatesEditor({ onSaved }: { onSaved: () => void }) {
   const [rates, setRates] = useState<Rate[] | null>(null)
   const [draft, setDraft] = useState<Record<string, { n: string; r: string }>>({})
   const [saving, setSaving] = useState<string | null>(null)
@@ -72,9 +72,15 @@ function RatesEditor({ onSaved }: { onSaved: () => void }) {
   )
 }
 
-export default function CustomCounter() {
+/**
+ * With `month`, the counter shows that month only, embedded in Finance >
+ * Payouts: no month arrows and no rates editor (rates are on the Rates tab);
+ * `onChanged` fires after a repeat is flipped, so the month's total follows.
+ */
+export default function CustomCounter({ month: fixedMonth, onChanged }: { month?: string; onChanged?: () => void } = {}) {
   const [reloadKey, setReloadKey] = useState(0)
-  const [month, setMonth] = useState(thisMonth)
+  const [ownMonth, setMonth] = useState(thisMonth)
+  const month = fixedMonth || ownMonth
   const [data, setData] = useState<Data | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -98,21 +104,22 @@ export default function CustomCounter() {
     if (!res.ok) return
     const fresh = await apiFetch(`/api/admin/custom-counter?month=${month}`).then(r => (r.ok ? r.json() : null))
     if (fresh) setData(fresh)
+    onChanged?.()
   }
 
   return (
     <div>
       <div>
-        <div className="flex items-center justify-between gap-3 mb-4">
+        {!fixedMonth && <div className="flex items-center justify-between gap-3 mb-4">
           <p className="text-sm text-off-black/55">Customs each designer sent to production, by month.</p>
           <div className="flex items-center gap-2">
             <button onClick={() => setMonth(m => shift(m, -1))} className={btnSecondary} aria-label="Previous month"><ChevronLeft className="w-4 h-4" /></button>
             <span className="min-w-[140px] text-center font-semibold text-off-black">{label(month)}</span>
             <button onClick={() => setMonth(m => shift(m, 1))} disabled={atNow} className={btnSecondary} aria-label="Next month"><ChevronRight className="w-4 h-4" /></button>
           </div>
-        </div>
+        </div>}
 
-        <RatesEditor onSaved={() => setReloadKey(k => k + 1)} />
+        {!fixedMonth && <RatesEditor onSaved={() => setReloadKey(k => k + 1)} />}
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!data && !error && <div className="py-16 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-off-black/40" /></div>}
 

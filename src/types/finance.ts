@@ -61,3 +61,15 @@ export type RacePayout = {
   report: RaceReport | null; attio?: string | null
 }
 export type RacePayoutsPayload = { races: RacePayout[]; rules: { daysBefore: number; daysAfter: number; dueDays: number; defaultPct: number } }
+
+/** One month of payouts (Finance > Payouts): every line in three states, and the totals. */
+export type PayoutState = 'in_progress' | 'submitted' | 'approved'
+export type MonthLine = {
+  key: string; kind: 'customs' | 'designer_fee' | 'hours' | 'race'; name: string; detail: string; amountCents: number | null; status: PayoutState
+  paid?: boolean; sentBack?: boolean; userId?: string; timesheetId?: string; dealId?: string
+}
+export type MonthPayouts = {
+  month: string; label: string; closed: boolean; current: boolean; previous: string; next: string | null; lines: MonthLine[]
+  totals: { totalCents: number; inProgressCents: number; submittedCents: number; approvedCents: number; customsCents: number; designerFeeCents: number; hoursCents: number; racesCents: number; unpriced: number }
+  racesError: string | null
+}
