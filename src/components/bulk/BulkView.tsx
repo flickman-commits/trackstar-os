@@ -42,6 +42,8 @@ export interface BulkRunner {
   completed: boolean
   /** Where the runner's own Artelo order stands (server/domain/bulk/send.js). */
   send: { state: 'sent' | 'queued' | 'held' | 'error' | 'not_ready' | 'ready'; at?: string | null; url?: string | null; reason?: string | null } | null
+  /** The newest render of their print (queued | rendering | done | failed; review pending | approved | rejected). */
+  print?: { status: string; review: string; version: number } | null
 }
 
 export interface BulkOrder {
@@ -474,6 +476,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
                 <th className="text-left px-3 py-2 font-semibold">#</th>
                 <th className="text-left px-3 py-2 font-semibold">Runner</th>
                 <th className="text-left px-3 py-2 font-semibold">Address</th>
+                <th className="text-left px-3 py-2 font-semibold">Print</th>
                 {!collecting && <>
                   <th className="text-left px-3 py-2 font-semibold">Bib</th>
                   <th className="text-left px-3 py-2 font-semibold">Time</th>
@@ -655,6 +658,19 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   )
 }
 
+/** Where a runner's print is: the newest render and its review, or sent. */
+function printBadge(r: BulkRunner) {
+  const p = r.print
+  const b = r.completed || r.send?.state === 'sent' ? { t: 'Sent', c: 'bg-green-100 text-green-700' }
+    : !p ? { t: r.researched ? 'Not rendered' : 'Waiting on results', c: 'bg-subtle-gray text-off-black/50' }
+    : p.status === 'queued' || p.status === 'rendering' ? { t: 'Rendering', c: 'bg-[#4600D6]/10 text-[#4600D6]' }
+    : p.status === 'failed' ? { t: 'Render failed', c: 'bg-red-100 text-red-700' }
+    : p.review === 'approved' ? { t: 'Approved', c: 'bg-green-100 text-green-700' }
+    : p.review === 'rejected' ? { t: 'Rejected', c: 'bg-red-100 text-red-700' }
+    : { t: 'To review', c: 'bg-amber-100 text-amber-700' }
+  return <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap ${b.c}`}>{b.t}{p && p.version > 1 && b.t !== 'Sent' ? ` v${p.version}` : ''}</span>
+}
+
 function RunnerRow({ r, compact, reach, editing, removeArmed, onEdit, onSave, onRemove, onOpen, onUpload, onDetach, onHold, onSendNow }: {
   r: BulkRunner; compact?: boolean; reach?: boolean; editing: boolean; removeArmed?: boolean
   onHold: () => void; onSendNow: () => void
@@ -676,6 +692,7 @@ function RunnerRow({ r, compact, reach, editing, removeArmed, onEdit, onSave, on
         <td className="px-3 py-2 font-mono text-[11px] text-off-black/45">{r.lineItemIndex}</td>
         <td className="px-3 py-2 font-medium"><button onClick={onOpen} className="hover:underline text-left">{r.runnerName}</button></td>
         <td className="px-3 py-2 text-xs text-off-black/70 max-w-[260px] truncate">{r.addressComplete ? `${r.address!.line1}, ${r.address!.city} ${r.address!.state} ${r.address!.zip}` : <span className="text-amber-700 font-semibold">Missing</span>}</td>
+        <td className="px-3 py-2"><button onClick={onOpen} title="Open the runner to see the print">{printBadge(r)}</button></td>
         {!compact && <>
         <td className="px-3 py-2 tabular-nums">{r.bib || <span className="text-off-black/30">·</span>}</td>
         <td className="px-3 py-2 tabular-nums">{r.time || <span className="text-off-black/30">·</span>}</td>
@@ -706,7 +723,7 @@ function RunnerRow({ r, compact, reach, editing, removeArmed, onEdit, onSave, on
       </tr>
       {editing && (
         <tr className="bg-subtle-gray/60">
-          <td colSpan={compact ? 4 : 9} className="px-3 py-3">
+          <td colSpan={compact ? 5 : 10} className="px-3 py-3">
             <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
               <input value={name} onChange={e => setName(e.target.value)} placeholder="Runner name" className={`${inputBase} col-span-2`} />
               <input value={a.line1} onChange={e => setA({ ...a, line1: e.target.value })} placeholder="Address" className={`${inputBase} col-span-2`} />

@@ -39,6 +39,8 @@ const RUNNER_SELECT = {
   shippingAddress: true, productionFileUrl: true, researchedAt: true, status: true, dueDate: true,
   bulkSendAfter: true, bulkSentAt: true, bulkSendError: true, arteloOrderData: true,
   runnerResearch: { select: { bibNumber: true, officialTime: true, officialPace: true, researchStatus: true, eventType: true }, take: 1, orderBy: { createdAt: 'desc' } },
+  // The runner's newest render, for the Print column.
+  renderJobs: { select: { status: true, review: true, version: true }, take: 1, orderBy: { version: 'desc' } },
 }
 
 function shapeRunner(r) {
@@ -60,6 +62,7 @@ function shapeRunner(r) {
     eventType: rr?.eventType || null,
     completed: r.status === 'completed',
     send: r.send || null,
+    print: r.renderJobs?.[0] ? { status: r.renderJobs[0].status, review: r.renderJobs[0].review, version: r.renderJobs[0].version } : null,
   }
 }
 
