@@ -756,8 +756,20 @@ export default function Dashboard() {
   const sortView: 'standard' | 'custom' = activeView === 'custom' ? 'custom' : 'standard'
   const sortChanged = (['newestFirst', 'expeditedTop', 'bigSpenderTop'] as const).some(k => sortPrefs[sortView][k] !== DEFAULT_SORT[sortView][k])
   const myId = currentUser?.id || null
-  // Admins start on everyone; everyone else starts on their own orders.
-  useEffect(() => { if (personFilter === null && myId) setPersonFilter(isAdmin ? '' : myId) }, [personFilter, myId, isAdmin])
+  // The last pick sticks, per person on this browser: Dani picks Everyone and
+  // the tool opens on Everyone next time. Without one, admins start on
+  // everyone and everyone else on their own orders.
+  const personKey = myId ? `orders.person.${myId}` : null
+  useEffect(() => {
+    if (personFilter !== null || !myId) return
+    let saved: string | null = null
+    try { saved = personKey ? localStorage.getItem(personKey) : null } catch { /* storage blocked */ }
+    setPersonFilter(saved !== null ? saved : isAdmin ? '' : myId)
+  }, [personFilter, myId, isAdmin, personKey])
+  useEffect(() => {
+    if (personFilter === null || !personKey) return
+    try { localStorage.setItem(personKey, personFilter) } catch { /* storage blocked */ }
+  }, [personFilter, personKey])
   const person = personFilter || ''
   // One rule for every list on the page (open, completed, search results), so
   // picking a person can never show someone else's orders.
