@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Plus, Loader2, Check, X, Upload, Link2, Copy, ExternalLink, RefreshCw, FlaskConical,
-  CheckCircle2, ChevronLeft, ChevronDown, ChevronUp, Trash2, FileText, Pencil,
+  Plus, Loader2, Upload, Link2, Copy, ExternalLink, RefreshCw, FlaskConical,
+  CheckCircle2, ChevronLeft, ChevronDown, ChevronUp, Trash2, Pencil,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
@@ -113,10 +113,6 @@ const STAGES: { key: string; label: string }[] = [
   { key: 'submitted', label: 'All sent to Artelo' },
 ]
 
-/** "4:56 PM" for a send that is minutes away. */
-function fmtTime(s?: string | null) {
-  return s ? new Date(s).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
-}
 function fmtDate(s?: string | null) {
   return s ? new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
 }
@@ -267,7 +263,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null)
   const [unmatched, setUnmatched] = useState<{ filename: string; candidates: { orderNumber: string; runnerName: string }[] }[]>([])
   const [checking, setChecking] = useState(false)
-  const [reach, setReach] = useState<Record<string, boolean>>({})
+  const [, setReach] = useState<Record<string, boolean>>({})
   const [editing, setEditing] = useState<string | null>(null)
   const [intakeLinkOpen, setIntakeLinkOpen] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -475,31 +471,22 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
           <table className="w-full text-sm">
             <thead className="bg-subtle-gray text-[11px] uppercase tracking-wider text-off-black/50">
               <tr>
-                <th className="text-left px-3 py-2 font-semibold">#</th>
-                <th className="text-left px-3 py-2 font-semibold">Runner</th>
-                <th className="text-left px-3 py-2 font-semibold">Address</th>
-                <th className="text-left px-3 py-2 font-semibold">Print</th>
-                {!collecting && <>
-                  <th className="text-left px-3 py-2 font-semibold">Bib</th>
-                  <th className="text-left px-3 py-2 font-semibold">Time</th>
-                  <th className="text-left px-3 py-2 font-semibold">Research</th>
-                  <th className="text-left px-3 py-2 font-semibold">File</th>
-                  <th className="text-left px-3 py-2 font-semibold">Artelo</th>
-                </>}
+                <th className="text-left pl-4 pr-3 py-2.5 font-semibold">Runner</th>
+                <th className="text-left px-3 py-2.5 font-semibold">Address</th>
+                {!collecting && <th className="text-left px-3 py-2.5 font-semibold">Research</th>}
+                <th className="text-left px-3 py-2.5 font-semibold">Production</th>
                 <th className="px-2 py-2"></th>
               </tr>
             </thead>
             <tbody>
               {runners.map(x => (
-                <RunnerRow key={x.id} r={x} compact={collecting} reach={reach[x.orderNumber]}
+                <RunnerRow key={x.id} r={x} compact={collecting}
                   onHold={() => act({ action: 'hold-runner', orderNumber: x.orderNumber }, `${x.runnerName} held`)}
                   onSendNow={() => act({ action: 'send-runner', orderNumber: x.orderNumber }, `${x.runnerName} queued to send now`)} editing={editing === x.orderNumber} removeArmed={isArmed(`remove:${x.orderNumber}`)}
                   onEdit={() => setEditing(editing === x.orderNumber ? null : x.orderNumber)}
                   onSave={async (fields) => { await act({ action: 'update-runner', orderNumber: x.orderNumber, ...fields }, 'Saved'); setEditing(null); refreshRunners() }}
                   onRemove={async () => { if (arm(`remove:${x.orderNumber}`)) { await act({ action: 'remove-runner', orderNumber: x.orderNumber }, 'Removed'); refreshRunners() } }}
                   onOpen={() => onOpenRunner(x.orderNumber)}
-                  onUpload={(f) => uploadFiles([f], x.orderNumber)}
-                  onDetach={async () => { await apiFetch(`${API_BASE}/api/bulk/files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action: 'detach', orderNumber: x.orderNumber }) }); load() }}
                 />
               ))}
             </tbody>
@@ -673,11 +660,16 @@ function printBadge(r: BulkRunner) {
   return <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap ${b.c}`}>{b.t}{p && p.version > 1 && b.t !== 'Sent' ? ` v${p.version}` : ''}</span>
 }
 
-function RunnerRow({ r, compact, reach, editing, removeArmed, onEdit, onSave, onRemove, onOpen, onUpload, onDetach, onHold, onSendNow }: {
-  r: BulkRunner; compact?: boolean; reach?: boolean; editing: boolean; removeArmed?: boolean
+/**
+ * One runner, in the shape of a Standard orders row: name, address, research
+ * and where the print is in production. The whole row opens the runner, which
+ * is where the render, the bib and time, and the Artelo link live; Edit and
+ * Remove stay at the end for fixing the list itself.
+ */
+function RunnerRow({ r, compact, editing, removeArmed, onEdit, onSave, onRemove, onOpen, onHold, onSendNow }: {
+  r: BulkRunner; compact?: boolean; editing: boolean; removeArmed?: boolean
   onHold: () => void; onSendNow: () => void
   onEdit: () => void; onSave: (fields: { runnerName?: string; address?: BulkRunner['address'] }) => Promise<void>; onRemove: () => void; onOpen: () => void
-  onUpload: (f: File) => void; onDetach: () => void
 }) {
   const [name, setName] = useState(r.runnerName)
   const [a, setA] = useState(r.address || { line1: '', line2: '', city: '', state: '', zip: '', country: 'United States' })
@@ -688,44 +680,32 @@ function RunnerRow({ r, compact, reach, editing, removeArmed, onEdit, onSave, on
     : status === 'not_found' ? { t: 'Not found', c: 'bg-amber-100 text-amber-700' }
     : status === 'ambiguous' ? { t: 'Ambiguous', c: 'bg-amber-100 text-amber-700' }
     : { t: (status || 'error').replace(/_/g, ' '), c: 'bg-red-100 text-red-700' }
+  const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn() }
+  const pillCls = 'px-1.5 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap'
+  const send = r.send
+  const production = send?.state === 'sent' || r.completed
+    ? (send?.url
+      ? <a href={send.url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} title="Open in Artelo" className={`${pillCls} bg-green-100 text-green-700 inline-flex items-center gap-1 hover:underline`}>Sent <ExternalLink className="w-3 h-3" /></a>
+      : <span className={`${pillCls} bg-green-100 text-green-700`}>Sent</span>)
+    : send?.state === 'queued' ? <span className="inline-flex items-center gap-2"><span className={`${pillCls} bg-[#4600D6]/10 text-[#4600D6]`}>Sending</span><button onClick={stop(onHold)} className="text-[11px] text-off-black/45 hover:text-off-black">Hold</button></span>
+    : send?.state === 'held' ? <span className="inline-flex items-center gap-2"><span className={`${pillCls} bg-subtle-gray text-off-black/60`}>Held</span><button onClick={stop(onSendNow)} className="text-[11px] font-semibold text-[#4600D6] hover:underline">Send now</button></span>
+    : send?.state === 'error' ? <span className="inline-flex items-center gap-2" title={send.reason || ''}><span className={`${pillCls} bg-red-100 text-red-700`}>Send failed</span><button onClick={stop(onSendNow)} className="text-[11px] font-semibold text-[#4600D6] hover:underline">Retry</button></span>
+    : printBadge(r)
   return (
     <>
-      <tr className="border-t border-border-gray/70 hover:bg-subtle-gray/60">
-        <td className="px-3 py-2 font-mono text-[11px] text-off-black/45">{r.lineItemIndex}</td>
-        <td className="px-3 py-2 font-medium"><button onClick={onOpen} className="hover:underline text-left">{r.runnerName}</button></td>
-        <td className="px-3 py-2 text-xs text-off-black/70 max-w-[260px] truncate">{r.addressComplete ? `${r.address!.line1}, ${r.address!.city} ${r.address!.state} ${r.address!.zip}` : <span className="text-amber-700 font-semibold">Missing</span>}</td>
-        <td className="px-3 py-2"><button onClick={onOpen} title="Open the runner to see the print">{printBadge(r)}</button></td>
-        {!compact && <>
-        <td className="px-3 py-2 tabular-nums">{r.bib || <span className="text-off-black/30">·</span>}</td>
-        <td className="px-3 py-2 tabular-nums">{r.time || <span className="text-off-black/30">·</span>}</td>
-        <td className="px-3 py-2"><span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold ${badge.c}`}>{badge.t}</span></td>
-        <td className="px-3 py-2">
-          {r.fileUrl ? (
-            <span className="inline-flex items-center gap-1">
-              <a href={r.fileUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-green-700 font-semibold inline-flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> File{reach === false ? <span className="text-red-600"> · unreachable</span> : reach === true ? <span className="text-green-700"> · ok</span> : ''}</a>
-              <button onClick={onDetach} className="text-off-black/30 hover:text-red-600" title="Detach"><X className="w-3 h-3" /></button>
-            </span>
-          ) : (
-            <label className="text-[11px] text-off-black/50 hover:text-off-black cursor-pointer inline-flex items-center gap-1"><Upload className="w-3 h-3" /> Add<input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" onChange={e => { if (e.target.files?.[0]) onUpload(e.target.files[0]); e.target.value = '' }} /></label>
-          )}
-        </td>
-        <td className="px-3 py-2 whitespace-nowrap text-[11px]">
-          {r.send?.state === 'sent' ? (r.send.url ? <a href={r.send.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-green-700 hover:underline"><Check className="w-3.5 h-3.5" /> Sent <ExternalLink className="w-3 h-3" /></a> : <span className="inline-flex items-center gap-1 font-semibold text-green-700"><Check className="w-3.5 h-3.5" /> Sent</span>)
-          : r.send?.state === 'queued' ? <span className="inline-flex items-center gap-1.5 text-[#4600D6] font-semibold">Sending{r.send.at ? ` ${fmtTime(r.send.at)}` : ''}<button onClick={onHold} className="text-off-black/45 hover:text-off-black font-medium" title="Keep it from going">Hold</button></span>
-          : r.send?.state === 'held' ? <span className="inline-flex items-center gap-1.5 text-off-black/60">Held<button onClick={onSendNow} className="text-[#4600D6] hover:underline font-semibold">Send now</button></span>
-          : r.send?.state === 'error' ? <span className="inline-flex items-center gap-1.5 text-red-700" title={r.send.reason || ''}><span className="max-w-[180px] truncate">{r.send.reason}</span><button onClick={onSendNow} className="text-[#4600D6] hover:underline font-semibold shrink-0">Send now</button></span>
-          : r.send?.state === 'ready' ? <span className="inline-flex items-center gap-1.5 text-off-black/60">Ready<button onClick={onSendNow} className="text-[#4600D6] hover:underline font-semibold">Send</button></span>
-          : <span className="text-off-black/40" title={r.send?.reason || ''}>{r.send?.reason || '·'}</span>}
-        </td>
-        </>}
-        <td className="px-2 py-2 text-right whitespace-nowrap">
-          <button onClick={onEdit} className={btnGhost}>{editing ? 'Close' : 'Edit'}</button>
-          <button onClick={onRemove} className={`${btnGhost}${removeArmed ? ' text-red-600' : ''}`} title="Remove"><Trash2 className="w-3.5 h-3.5" />{removeArmed && ' Click again to remove'}</button>
+      <tr onClick={onOpen} className="border-t border-border-gray/70 hover:bg-subtle-gray/60 cursor-pointer">
+        <td className="pl-4 pr-3 py-3 font-medium text-off-black">{r.runnerName}</td>
+        <td className="px-3 py-3 text-xs text-off-black/70 max-w-[300px] truncate">{r.addressComplete ? `${r.address!.line1}, ${r.address!.city} ${r.address!.state} ${r.address!.zip}` : <span className="text-amber-700 font-semibold">Missing</span>}</td>
+        {!compact && <td className="px-3 py-3"><span className={`${pillCls} ${badge.c}`}>{badge.t}</span></td>}
+        <td className="px-3 py-3">{production}</td>
+        <td className="px-2 py-3 text-right whitespace-nowrap">
+          <button onClick={stop(onEdit)} className={btnGhost}>{editing ? 'Close' : 'Edit'}</button>
+          <button onClick={stop(onRemove)} className={`${btnGhost}${removeArmed ? ' text-red-600' : ''}`} title="Remove"><Trash2 className="w-3.5 h-3.5" />{removeArmed && ' Click again to remove'}</button>
         </td>
       </tr>
       {editing && (
         <tr className="bg-subtle-gray/60">
-          <td colSpan={compact ? 5 : 10} className="px-3 py-3">
+          <td colSpan={compact ? 4 : 5} className="px-3 py-3">
             <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
               <input value={name} onChange={e => setName(e.target.value)} placeholder="Runner name" className={`${inputBase} col-span-2`} />
               <input value={a.line1} onChange={e => setA({ ...a, line1: e.target.value })} placeholder="Address" className={`${inputBase} col-span-2`} />
