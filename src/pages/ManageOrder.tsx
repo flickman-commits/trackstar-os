@@ -55,6 +55,10 @@ const ERR: Record<string, string> = {
   photo_failed: "We couldn't add the photo. Please try again, or reply to your order email.",
   has_photo: 'This print already has a photo.',
 }
+/** The new address costs more sales tax: the server saved nothing and says how much. */
+class TaxDue extends Error {
+  constructor(public amount: number) { super('tax_due') }
+}
 const money = (n: number) => `$${Math.abs(n).toFixed(n % 1 ? 2 : 0)}`
 
 /** "1 day 4 hr", "45 min", or a date when it is further out than a week. */
@@ -109,6 +113,7 @@ export default function ManageOrder() {
       setInfo(i => i ? { ...i, canChange: false, reason } : i)
       throw new Error(CLOSED[reason] || CLOSED.window)
     }
+    if (d.error === 'tax_due') throw new TaxDue(Number(d.detail) || 0)
     throw new Error(d.error === 'bad_address' && d.detail ? `That address didn't work: ${d.detail}` : ERR[d.detail] || ERR[d.error] || 'Something went wrong. Try again in a moment.')
   }
   const setPrint = (p: Print) => setInfo(i => i ? { ...i, prints: i.prints.map(x => x.id === p.id ? { ...x, ...p, image: p.image || x.image } : x) } : i)
@@ -404,13 +409,26 @@ function AddressCard({ shipTo, post, onSaved }: { shipTo: Address | null; post: 
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [saved, setSaved] = useState(false)
+  const [taxDue, setTaxDue] = useState<number | null>(null)
+  const [invoiced, setInvoiced] = useState<number | null>(null)
   const set = (k: keyof Address) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
   const lines = (a: Address) => [a.name, a.address1, a.address2, [a.city, a.province, a.zip].filter(Boolean).join(' '), a.country].filter(Boolean)
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault(); setBusy(true); setErr(''); setSaved(false)
-    try { const d = await post({ action: 'address', address: form }); if (d.shipTo) { onSaved(d.shipTo); setForm({ ...EMPTY, ...d.shipTo }) } setEditing(false); setSaved(true) }
-    catch (x) { setErr(x instanceof Error ? x.message : 'Something went wrong.') } finally { setBusy(false) }
+  // First try without accepting tax. If the new address costs more, the server
+  // saves nothing and the form asks; "Accept and save" sends it again.
+  const send = async (acceptTax: boolean) => {
+    setBusy(true); setErr(''); setSaved(false)
+    try {
+      const d = await post({ action: 'address', address: form, acceptTax })
+      if (d.shipTo) { onSaved(d.shipTo); setForm({ ...EMPTY, ...d.shipTo }) }
+      setInvoiced(d.invoiced && Number(d.taxOwed) > 0 ? Number(d.taxOwed) : null)
+      setTaxDue(null); setEditing(false); setSaved(true)
+    } catch (x) {
+      if (x instanceof TaxDue) setTaxDue(x.amount)
+      else setErr(x instanceof Error ? x.message : 'Something went wrong.')
+    } finally { setBusy(false) }
   }
+  const save = (e: React.FormEvent) => { e.preventDefault(); send(false) }
+  const edit = <K extends keyof Address>(k: K) => (e: React.ChangeEvent<HTMLInputElement>) => { setTaxDue(null); set(k)(e) }
   return (
     <div className={card}>
       <div className="flex items-start justify-between gap-3">
@@ -422,27 +440,41 @@ function AddressCard({ shipTo, post, onSaved }: { shipTo: Address | null; post: 
       </div>
       {editing && (
         <form onSubmit={save} className="mt-3 space-y-3">
-          <div><label className={label}>Full name</label><input className={input} value={form.name} onChange={set('name')} autoComplete="shipping name" required /></div>
-          <div><label className={label}>Street address</label><input className={input} value={form.address1} onChange={set('address1')} autoComplete="shipping address-line1" required /></div>
-          <div><label className={label}>Apartment, suite, etc. (optional)</label><input className={input} value={form.address2} onChange={set('address2')} autoComplete="shipping address-line2" /></div>
+          <div><label className={label}>Full name</label><input className={input} value={form.name} onChange={edit('name')} autoComplete="shipping name" required /></div>
+          <div><label className={label}>Street address</label><input className={input} value={form.address1} onChange={edit('address1')} autoComplete="shipping address-line1" required /></div>
+          <div><label className={label}>Apartment, suite, etc. (optional)</label><input className={input} value={form.address2} onChange={edit('address2')} autoComplete="shipping address-line2" /></div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className={label}>City</label><input className={input} value={form.city} onChange={set('city')} autoComplete="shipping address-level2" required /></div>
-            <div><label className={label}>State</label><input className={input} value={form.province} onChange={set('province')} autoComplete="shipping address-level1" placeholder="NY" /></div>
+            <div><label className={label}>City</label><input className={input} value={form.city} onChange={edit('city')} autoComplete="shipping address-level2" required /></div>
+            <div><label className={label}>State</label><input className={input} value={form.province} onChange={edit('province')} autoComplete="shipping address-level1" placeholder="NY" /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className={label}>Zip</label><input className={input} value={form.zip} onChange={set('zip')} autoComplete="shipping postal-code" required /></div>
-            <div><label className={label}>Country</label><input className={input} value={form.country} onChange={set('country')} autoComplete="shipping country" placeholder="US" required /></div>
+            <div><label className={label}>Zip</label><input className={input} value={form.zip} onChange={edit('zip')} autoComplete="shipping postal-code" required /></div>
+            <div><label className={label}>Country</label><input className={input} value={form.country} onChange={edit('country')} autoComplete="shipping country" placeholder="US" required /></div>
           </div>
-          <div><label className={label}>Phone (optional)</label><input className={input} value={form.phone} onChange={set('phone')} autoComplete="shipping tel" inputMode="tel" /></div>
+          <div><label className={label}>Phone (optional)</label><input className={input} value={form.phone} onChange={edit('phone')} autoComplete="shipping tel" inputMode="tel" /></div>
           {err && <p className="text-[15px] text-[#B42318]">{err}</p>}
-          <div className="flex gap-2">
-            <button type="submit" className={`${primary} flex-1`} disabled={busy}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}Update address</button>
-            <button type="button" className={secondary} onClick={() => { setEditing(false); setForm({ ...EMPTY, ...(shipTo || {}) }) }} disabled={busy}>Cancel</button>
-          </div>
+          {taxDue !== null ? (
+            <div className="rounded-[8px] border border-[#E0E0E0] bg-[#F6F5F2] p-4">
+              <p className="text-[19px] font-bold leading-tight">This address adds {money(taxDue)} in sales tax</p>
+              <p className="text-[17px] text-[#666666] mt-1.5 leading-snug">We collect sales tax in this state. If you save it, we'll email you a separate invoice for {money(taxDue)} to cover the tax.</p>
+              <div className="flex gap-2 mt-4">
+                <button type="button" className={`${primary} flex-1`} onClick={() => send(true)} disabled={busy}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}Accept and save</button>
+                <button type="button" className={secondary} onClick={() => setTaxDue(null)} disabled={busy}>Back</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="text-[15px] text-[#666666] leading-snug">If the new address is in a state where we collect sales tax, we'll tell you the amount before saving and email you an invoice for it.</p>
+              <div className="flex gap-2">
+                <button type="submit" className={`${primary} flex-1`} disabled={busy}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}Update address</button>
+                <button type="button" className={secondary} onClick={() => { setEditing(false); setTaxDue(null); setForm({ ...EMPTY, ...(shipTo || {}) }) }} disabled={busy}>Cancel</button>
+              </div>
+            </>
+          )}
         </form>
       )}
       {!editing && err && <p className="text-[15px] text-[#B42318] mt-2">{err}</p>}
-      {saved && !editing && <p className="flex items-center gap-1.5 text-[16px] text-[#2E7D5B] mt-3"><CheckCircle2 className="w-5 h-5" />Address updated.</p>}
+      {saved && !editing && <p className="flex items-center gap-1.5 text-[16px] text-[#2E7D5B] mt-3"><CheckCircle2 className="w-5 h-5 shrink-0" />{invoiced ? `Address updated. Check your email for the ${money(invoiced)} sales tax invoice.` : 'Address updated.'}</p>}
     </div>
   )
 }

@@ -243,13 +243,15 @@ export async function manageChange(shopifyOrderId, signature, body = {}) {
     open(ctx)
     let out
     try {
-      out = await shippingAddress({ thread: null, shopifyOrderId: ctx.id, address: body.address, actor: null, source: 'customer' })
+      out = await shippingAddress({ thread: null, shopifyOrderId: ctx.id, address: body.address, actor: null, source: 'customer', acceptTax: body.acceptTax === true })
     } catch (e) {
+      // More sales tax at the new address: nothing saved yet, the page asks first.
+      if (e?.taxDueCents > 0) throw new ManageError('tax_due', 409, (e.taxDueCents / 100).toFixed(2))
       if (e?.expose || e?.name === 'UserError') throw new ManageError('bad_address', 400, String(e.message || '').replace(/^Shopify would not take that address: /, ''))
       throw e
     }
     await slackTo('alerts', `:round_pushpin: Customer changed the ship-to on *#${slackText(out.number)}* from Manage your order: ${slackText(out.pasted.replace(/\n/g, ', '), 300)}${out.taxNote ? `\n${slackText(out.taxNote, 300)}` : ''}`).catch(() => {})
-    return { ok: true, shipTo: out.address }
+    return { ok: true, shipTo: out.address, invoiced: Boolean(out.invoiced), taxOwed: out.owedCents > 0 ? out.owedCents / 100 : 0 }
   }
 
   if (action === 'cancel') {

@@ -172,16 +172,65 @@ export async function fixPersonalization({ thread, orderId, runnerName, year, ac
  * when its ship-to changes (a new state can mean a new rate), so a paid order
  * can come out owing a little or owed a little. The balance is read before
  * and after, and any change is told to the rep and written on the thread.
- * Nothing moves money here: settling it is the rep's call, through Refund or
- * a note to the customer.
+ * From support nothing moves money here: settling it is the rep's call,
+ * through Refund or a note to the customer.
+ *
+ * A customer changing it themselves (Manage your order) is quoted first: if
+ * the new address costs more tax, nothing is saved until they agree
+ * (acceptTax), and once saved Shopify emails them the invoice for the
+ * difference. Less tax is still the rep's to refund.
  */
 const ORDER_BALANCE = `query($id: ID!) { order(id: $id) { name displayFulfillmentStatus totalOutstandingSet { shopMoney { amount } } totalTaxSet { shopMoney { amount } } } }`
 const ADDRESS_VERSION = '2026-10'
 const ADDRESS_FIELDS = ['name', 'address1', 'address2', 'city', 'province', 'zip', 'country', 'phone']
+const ORDER_FOR_QUOTE = `query($id: ID!) { order(id: $id) { currencyCode taxExempt
+  shippingAddress { address1 address2 city provinceCode zip countryCodeV2 }
+  lineItems(first: 50) { nodes { title currentQuantity taxable requiresShipping variant { id } discountedUnitPriceAfterAllDiscountsSet { shopMoney { amount } } } }
+  shippingLines(first: 5) { nodes { title discountedPriceSet { shopMoney { amount } } } } } }`
+const TAX_QUOTE = `mutation($input: DraftOrderInput!) { draftOrderCalculate(input: $input) { calculatedDraftOrder { totalTaxSet { shopMoney { amount } } } userErrors { field message } } }`
+
+/**
+ * How much the order's tax goes up (positive) or down in cents if it ships to
+ * `a` instead of where it ships now. Shopify works out both with
+ * draftOrderCalculate, which creates nothing, from what the customer actually
+ * paid per item and for shipping. Null when Shopify cannot say.
+ */
+export async function taxChangeCents(gid, a) {
+  try {
+    const o = (await shopifyGraphQL(ORDER_FOR_QUOTE, { id: gid }, { version: ADDRESS_VERSION }))?.order
+    if (!o) return null
+    if (o.taxExempt) return 0
+    const price = amount => ({ amount: String(Number(amount || 0).toFixed(2)), currencyCode: o.currencyCode || 'USD' })
+    const lineItems = (o.lineItems?.nodes || []).filter(l => l.currentQuantity > 0 && l.taxable).map(l => {
+      const unit = price(l.discountedUnitPriceAfterAllDiscountsSet?.shopMoney?.amount)
+      return l.variant?.id
+        ? { variantId: l.variant.id, quantity: l.currentQuantity, priceOverride: unit }
+        : { title: l.title, quantity: l.currentQuantity, originalUnitPriceWithCurrency: unit, taxable: true, requiresShipping: l.requiresShipping }
+    })
+    if (!lineItems.length) return 0
+    const ships = o.shippingLines?.nodes || []
+    const shippingLine = ships.length ? { title: ships[0].title || 'Shipping', priceWithCurrency: price(ships.reduce((n, s) => n + Number(s.discountedPriceSet?.shopMoney?.amount || 0), 0)) } : null
+    const taxAt = async address => {
+      const r = (await shopifyGraphQL(TAX_QUOTE, { input: { lineItems, shippingLine, shippingAddress: address } }, { version: ADDRESS_VERSION }))?.draftOrderCalculate
+      if (r?.userErrors?.length || !r?.calculatedDraftOrder) throw new Error(r?.userErrors?.map(e => e.message).join('; ') || 'no quote')
+      return toCents(r.calculatedDraftOrder.totalTaxSet.shopMoney.amount)
+    }
+    const s = o.shippingAddress
+    const [was, now] = await Promise.all([
+      s ? taxAt({ address1: s.address1, address2: s.address2, city: s.city, provinceCode: s.provinceCode, zip: s.zip, countryCode: s.countryCodeV2 }) : 0,
+      taxAt({ address1: a.address1, address2: a.address2 || null, city: a.city, provinceCode: a.province || null, zip: a.zip, countryCode: a.country }),
+    ])
+    return now - was
+  } catch (e) {
+    console.error('[shippingAddress] tax quote failed', e.message)
+    return null
+  }
+}
+
 export function formatAddress(a) {
   return [a.name, a.address1, a.address2, [a.city, a.province, a.zip].filter(Boolean).join(' '), a.country].filter(Boolean).join('\n')
 }
-export async function shippingAddress({ thread, shopifyOrderId, address, actor, source = 'support' }) {
+export async function shippingAddress({ thread, shopifyOrderId, address, actor, source = 'support', acceptTax = false }) {
   const a = {}
   for (const k of ADDRESS_FIELDS) a[k] = String(address?.[k] || '').trim()
   a.country = a.country.toUpperCase()
@@ -197,6 +246,9 @@ export async function shippingAddress({ thread, shopifyOrderId, address, actor, 
   const before = (await shopifyGraphQL(ORDER_BALANCE, { id: gid }, { version: ADDRESS_VERSION }))?.order
   if (!before) throw new UserError('Shopify has no such order')
   if (before.displayFulfillmentStatus === 'FULFILLED') throw new UserError('Shopify says that order is fulfilled already. Ask Matt; it is a reship now.')
+  // The customer hears about any extra sales tax before anything changes.
+  const quoted = source === 'customer' ? await taxChangeCents(gid, a) : null
+  if (quoted > 0 && !acceptTax) throw new UserError(`Shipping there adds ${money(quoted)} in sales tax. Save it again to accept, and we'll email you an invoice for it.`, { status: 409, taxDueCents: quoted })
   const [first, ...last] = a.name.split(/\s+/)
   const updated = await shopifyGraphQL(`mutation($input: OrderInput!) { orderUpdate(input: $input) { order { id } userErrors { field message } } }`, { input: { id: gid, shippingAddress: {
     firstName: first, lastName: last.join(' '), address1: a.address1, address2: a.address2 || null, city: a.city,
@@ -208,7 +260,23 @@ export async function shippingAddress({ thread, shopifyOrderId, address, actor, 
   const after = (await shopifyGraphQL(ORDER_BALANCE, { id: gid }, { version: ADDRESS_VERSION }).catch(() => null))?.order
   // Positive: the customer owes us; negative: we owe them.
   const owedCents = after ? toCents(after.totalOutstandingSet.shopMoney.amount) - toCents(before.totalOutstandingSet.shopMoney.amount) : 0
+  // A customer who agreed to the extra tax gets Shopify's invoice for it now.
+  let invoiced = false
+  let invoiceFailed = false
+  if (owedCents > 0 && source === 'customer' && quoted > 0) {
+    try {
+      const sent = await shopifyGraphQL(`mutation($id: ID!) { orderInvoiceSend(id: $id) { order { id } userErrors { field message } } }`, { id: gid }, { version: ADDRESS_VERSION })
+      const errs = sent?.orderInvoiceSend?.userErrors || []
+      if (errs.length) throw new Error(errs.map(e => e.message).join('; '))
+      invoiced = true
+    } catch (e) {
+      console.error('[shippingAddress] tax invoice failed', e.message)
+      invoiceFailed = true
+    }
+  }
   const taxNote = !owedCents ? null
+    : invoiced ? `Shopify recalculated tax for the new address: the customer owes ${money(owedCents)} more, agreed to it, and Shopify emailed them the invoice.`
+    : invoiceFailed ? `Shopify recalculated tax for the new address: the customer owes ${money(owedCents)} more and agreed to it, but sending Shopify's invoice failed. Send it from the Shopify order.`
     : owedCents > 0 ? `Shopify recalculated tax for the new address: the customer now owes ${money(owedCents)}. Decide whether to let it go or ask for it.`
     : `Shopify recalculated tax for the new address: the customer is owed ${money(-owedCents)}. Refund it from Refund below.`
 
@@ -223,7 +291,7 @@ export async function shippingAddress({ thread, shopifyOrderId, address, actor, 
     await prisma.orderComment.createMany({ data: rows.map(r => ({ orderId: r.id, text: comment, authorId: actor?.id || null, authorName: source === 'customer' ? 'Customer' : actorName(actor) })) })
   }
   if (thread) await event(thread.id, `${actorName(actor)} changed #${number}'s ship-to in Shopify to ${pasted.replace(/\n/g, ', ')}. Artelo still needs it.${taxNote ? ` ${taxNote}` : ''}`, actor)
-  return { number, address: a, pasted, taxNote, arteloUrl: arteloOrderUrl(rows[0]?.arteloOrderData?.id) || null }
+  return { number, address: a, pasted, taxNote, owedCents, invoiced, arteloUrl: arteloOrderUrl(rows[0]?.arteloOrderData?.id) || null }
 }
 
 // ---------------------------------------------------------------------------
