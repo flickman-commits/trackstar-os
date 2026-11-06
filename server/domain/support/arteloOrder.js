@@ -100,6 +100,22 @@ export function standardProduct(size, frame) {
   }
 }
 
+/**
+ * An empty frame, no print: Artelo's PictureFrame product, as the team has
+ * sent one by hand (order 7414027911451: 12x18 Black Premium Oak, no paper,
+ * hanging pins, no framing service). Premium oak only, black or natural.
+ */
+export const FRAME_ONLY_FRAMES = ['BlackPremiumOak', 'NaturalPremiumOak']
+export function frameOnlyProduct(size, frame) {
+  if (!REPLACEMENT_SIZES.includes(size)) throw new UserError(`${sizeLabel(size)} is not a size a frame can be sent in`)
+  if (!FRAME_ONLY_FRAMES.includes(frame)) throw new UserError('A frame on its own is Black Premium Oak or Natural Premium Oak')
+  return {
+    catalogProductId: 'PictureFrame', size, frameColor: frame, frameStyle: 'PremiumOak',
+    paperType: null, paperStyle: null, orientation: null,
+    includeMats: false, includeHangingPins: true, includeFramingService: false,
+  }
+}
+
 /** The product a replacement is made as: the original, or the size and frame the customer asked for. */
 function productWithChange(original, change) {
   const size = change?.size || original?.size
@@ -278,8 +294,20 @@ export async function createReorder({ thread, shopifyOrderId, orderIds, changes,
   const { rows, items, stored, number } = await itemsFor(id)
   const picked = items.filter(i => (orderIds || []).includes(i.orderId))
   if (!picked.length) throw new UserError('Pick at least one item to send')
+  // A frame on its own needs no design: it is settled here and skips every design step below.
+  for (const i of picked) {
+    const c = changes?.[i.orderId]
+    if (!c?.frameOnly) continue
+    const frame = c.frame || (FRAME_ONLY_FRAMES.includes(i.product?.frameColor) ? i.product.frameColor : 'BlackPremiumOak')
+    i.frameOnly = true
+    i.product = frameOnlyProduct(c.size || i.product?.size, frame)
+    i.productLabel = `Frame only · ${describe(i.product)}`
+    i.designs = []
+    i.driveFile = null
+  }
   // A new design file a rep uploaded for an item (the old one had a mistake) replaces its design.
   for (const i of picked) {
+    if (i.frameOnly) continue
     const ref = String(files?.[i.orderId] || '')
     if (!ref) continue
     if (!ref.startsWith('upload:')) throw new UserError('That design file was not uploaded here')
@@ -289,10 +317,11 @@ export async function createReorder({ thread, shopifyOrderId, orderIds, changes,
     i.driveFile = null
     i.designFrom = `the new file ${up.filename}`
   }
-  const blocked = picked.find(i => !copyable(i))
+  const blocked = picked.find(i => !i.frameOnly && !copyable(i))
   if (blocked) throw new UserError(`${blocked.label} has no design to copy: no approved render and no PDF named for it in the Drive Orders folder. Build that one in Artelo.`)
   // The size and frame the customer asked for, else the original's.
   for (const i of picked) {
+    if (i.frameOnly) continue
     i.product = productWithChange(i.product, changes?.[i.orderId])
     i.productLabel = describe(i.product)
   }
@@ -303,7 +332,7 @@ export async function createReorder({ thread, shopifyOrderId, orderIds, changes,
     catch (err) { throw new UserError(`Could not copy ${i.driveFile.name} from Drive into Artelo: ${String(err.message).slice(0, 160)}`) }
   }
   // Nothing goes to production on a file the wrong shape for its size.
-  for (const i of picked) for (const d of i.designs) await checkDesignFits(d, i.product?.size, i.label)
+  for (const i of picked) for (const d of (i.frameOnly ? [] : i.designs)) await checkDesignFits(d, i.product?.size, i.label)
 
   const orderId = await nextOrderId(number, rows.map(r => r.id))
   const body = {
