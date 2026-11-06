@@ -20,8 +20,10 @@ the middle alone:
 
 Subject line: `Your Trackstar Order {{ order_name }} is Confirmed`
 
-The link signature on `ship_sig` uses the store's SELF_SERVE_LINK_SECRET
-(changeWindow.js); keep the value that is already in the template.
+Paste the link-signing secret (the value the old template had on its
+`hmac_sha256` line, the same as SELF_SERVE_LINK_SECRET in changeWindow.js)
+into `link_secret` near the top of top.liquid. Until it is pasted, the Manage
+your order button is hidden rather than sending a link that cannot work.
 
 ## What the template reads
 

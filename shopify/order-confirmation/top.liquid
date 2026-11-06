@@ -32,9 +32,11 @@
 {% endif %}
 
 {% assign ship_order_id = order.id | append: '' %}
-{% assign ship_sig = ship_order_id | hmac_sha256: 'KEEP_THE_EXISTING_SECRET' %}
+{% comment %} PASTE THE SECRET between the quotes on the next line (the value your old template had on its hmac_sha256 line). Until it is pasted, the Manage your order button stays hidden rather than sending a link that cannot work. {% endcomment %}
+{% assign link_secret = 'KEEP_THE_EXISTING_SECRET' %}
+{% assign ship_sig = ship_order_id | hmac_sha256: link_secret %}
 {% assign can_manage = false %}
-{% if requires_shipping and has_pending_payment != true and delivery_method != 'pick-up' %}
+{% if requires_shipping and has_pending_payment != true and delivery_method != 'pick-up' and link_secret != 'KEEP_THE_EXISTING_SECRET' %}
   {% assign can_manage = true %}
 {% endif %}
 {% assign two_weeks_seconds = 1209600 %}
@@ -230,7 +232,8 @@
               {% assign print_photo = p_photo %}
               {% assign photo_later = p_photo_later %}
               {% assign outcome = p_outcome %}
-              {% assign race_title = line.title | remove: 'Personalized Race Print' | remove: 'Personalized Race Poster' | strip %}
+              {% comment %} In order emails line.title carries the variant ("... - 12x18 / Natural Oak"); the product's own title does not. {% endcomment %}
+              {% assign race_title = line.product.title | default: line.title | split: ' - ' | first | remove: 'Personalized Race Print' | remove: 'Personalized Race Poster' | strip %}
               {% assign v = line.variant.title | split: ' / ' %}
               <tr><td class="ts-pad" style="padding: 16px 0 0;">
                 <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate; background-color: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 12px;">
