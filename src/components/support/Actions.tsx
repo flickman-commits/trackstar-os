@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Ban, BadgePercent, Palette, Repeat, Check, Copy, Image as ImageIcon, Link2, Loader2, MapPin, MessageSquareWarning, Pencil, Plus, Receipt, RefreshCw, Ruler, Search, Star, Truck, X } from 'lucide-react'
 import { reviewAsk, reviewLinkFor } from '@/lib/reviewLinks'
 import { toast } from 'sonner'
@@ -10,6 +10,8 @@ import { parseAddress } from '@/lib/parseAddress'
 import { fieldLabel, modalCancel, modalChip, modalDanger, modalInput, modalPrimary } from '@/lib/ui'
 import type { Address, CodeLookup, CustomerOrder, Mockup, ThreadDetail } from '@/types/support'
 import { putUpload } from '../../lib/putUpload'
+// Only loaded when a new design PDF is picked, so pdf.js stays out of the support page's first load.
+const PdfViewer = lazy(() => import('@/components/PdfViewer'))
 
 /**
  * The Actions list, in the dashboard's own style: purple text links with an
@@ -434,7 +436,8 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
   // Size and frame per print, starting as the original; a customer may want something new on the replacement.
   const [changes, setChanges] = useState<Record<string, { size: string; frame: string }>>({})
   // A new design file per print, for when the old one had a mistake.
-  const [files, setFiles] = useState<Record<string, { ref: string; name: string }>>({})
+  // localUrl is the file read in this browser, for the thumbnail before it is sent.
+  const [files, setFiles] = useState<Record<string, { ref: string; name: string; localUrl: string; isPdf: boolean }>>({})
   const [uploadingFor, setUploadingFor] = useState<string | null>(null)
   const uploadFor = async (orderId: string, f: File | undefined) => {
     if (!f) return
@@ -444,7 +447,10 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
       const slot = await supportApi.uploadSlot(f.name, f.type, f.size)
       const put = await putUpload(slot.uploadUrl, { headers: { 'Content-Type': f.type, 'x-upsert': 'false' }, body: f })
       if (!put.ok) throw new Error(`${f.name} did not upload`)
-      setFiles(prev => ({ ...prev, [orderId]: { ref: slot.ref, name: slot.filename } }))
+      setFiles(prev => {
+        if (prev[orderId]) URL.revokeObjectURL(prev[orderId].localUrl)
+        return { ...prev, [orderId]: { ref: slot.ref, name: slot.filename, localUrl: URL.createObjectURL(f), isPdf: f.type === 'application/pdf' } }
+      })
       setPicked(p => p.includes(orderId) ? p : [...p, orderId])
     } catch (e) { toast.error((e as Error).message) }
     finally { setUploadingFor(null) }
@@ -512,6 +518,20 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
                     </span>
                   </label>
                   {/* Look before it is made again: the design that will be copied. */}
+                  {/* The new file, as it will print: check it is the right one before it goes. */}
+                  {files[i.orderId] && (
+                    <div className="pl-6">
+                      {files[i.orderId].isPdf
+                        ? <div className="w-56 rounded-md border border-border-gray bg-subtle-gray overflow-hidden">
+                            <Suspense fallback={<div className="h-40 flex items-center justify-center"><Loader2 className="w-4 h-4 animate-spin text-off-black/40" /></div>}>
+                              <PdfViewer url={files[i.orderId].localUrl} maxHeight={300} />
+                            </Suspense>
+                          </div>
+                        : <a href={files[i.orderId].localUrl} target="_blank" rel="noopener noreferrer" className="inline-block" title="Open full size">
+                            <img src={files[i.orderId].localUrl} alt={`New design for ${i.label}`} className="max-h-56 rounded-md border border-border-gray bg-subtle-gray" />
+                          </a>}
+                    </div>
+                  )}
                   {!files[i.orderId] && i.copyable && (i.previewUrl || i.designUrl) && (
                     <div className="pl-6">
                       {i.previewUrl
