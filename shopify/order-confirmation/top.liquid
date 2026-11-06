@@ -1,0 +1,272 @@
+{% comment %}
+  Trackstar order confirmation, the top of the email. Everything from the
+  first line of the template down to (not including) Shopify's
+  <table class="row section"> that starts the Order summary. Shopify's own
+  order summary and customer information blocks stay as they are; the
+  <style> below restyles them. See README.md for where this goes.
+
+  KEEP_THE_EXISTING_SECRET: the hmac_sha256 argument below is the store's
+  link-signing secret. It is not in this repo; paste in the value the live
+  template already has on its hmac_sha256 line.
+{% endcomment %}
+{% assign is_custom_order = false %}
+{% assign has_preorder = false %}
+{% assign preorder_note = '' %}
+{% for line_item in line_items %}
+  {% if line_item.product_id == 10068385759515 %}
+    {% assign is_custom_order = true %}
+  {% endif %}
+  {% if line_item.properties['Pre-order'] != blank %}
+    {% assign has_preorder = true %}
+    {% assign preorder_note = line_item.properties['Pre-order'] %}
+  {% endif %}
+{% endfor %}
+
+{% assign delivery_method_types = delivery_agreements | map: 'delivery_method_type' | uniq %}
+{% if delivery_method_types.size > 1 %}
+  {% assign has_split_cart = true %}
+{% else %}
+  {% assign has_split_cart = false %}
+{% endif %}
+
+{% assign ship_order_id = order.id | append: '' %}
+{% assign ship_sig = ship_order_id | hmac_sha256: 'KEEP_THE_EXISTING_SECRET' %}
+{% assign can_manage = false %}
+{% if requires_shipping and has_pending_payment != true and delivery_method != 'pick-up' %}
+  {% assign can_manage = true %}
+{% endif %}
+{% assign two_weeks_seconds = 1209600 %}
+{% assign mockup_date = created_at | date: "%s" | plus: two_weeks_seconds | date: "%B %d, %Y" %}
+
+{% capture email_title %}
+  {% if has_pending_payment %}
+    Thank you for your order
+  {% else %}
+    Your order is in
+  {% endif %}
+{% endcapture %}
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+  <title>{{ email_title | strip }}</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width">
+  <link rel="stylesheet" type="text/css" href="/assets/notifications/styles.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+
+    /* Trackstar: Inter (Helvetica behind it), -0.04em tracking, ink on white. */
+    body, .body, table, td, p, h1, h2, h3, h4, a, span, dt, dd, .button__text {
+      font-family: Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+      letter-spacing: -0.04em !important;
+    }
+    body, .body { background-color: #FFFFFF !important; color: #1A1A1A !important; }
+    .body > tbody > tr > td { background-color: #FFFFFF !important; }
+    .container { width: 560px !important; max-width: 560px !important; }
+    a, a:hover, a:active, a:visited { color: #4600D6 !important; }
+
+    /* Shopify's own blocks, restyled. */
+    .header__cell, .content__cell, .section__cell, .footer__cell { padding: 0 !important; background: #FFFFFF !important; border: 0 !important; }
+    .row.section { border-top: 0 !important; }
+    h3 { font-size: 20px !important; font-weight: 700 !important; color: #1A1A1A !important; margin: 36px 0 12px !important; line-height: 1.15 !important; }
+    h4 { font-size: 14px !important; font-weight: 500 !important; color: #666666 !important; margin: 0 0 4px !important; }
+    .order-list__item { border-bottom: 1px solid #E0E0E0 !important; }
+    .order-list__item-title { font-size: 16px !important; font-weight: 700 !important; color: #1A1A1A !important; }
+    .order-list__item-variant, .order-list__item-discount-allocation { font-size: 14px !important; color: #666666 !important; }
+    .order-list__item-price { font-size: 16px !important; font-weight: 700 !important; color: #1A1A1A !important; }
+    .order-list__item-original-price { font-size: 14px !important; color: #666666 !important; }
+    .order-list__product-image { border-radius: 4px !important; border: 1px solid #E0E0E0 !important; }
+    .subtotal-line__title p, .subtotal-line__title span { font-size: 15px !important; color: #666666 !important; }
+    .subtotal-line__value strong { font-size: 15px !important; font-weight: 500 !important; color: #1A1A1A !important; }
+    .subtotal-table--total .subtotal-line__title span { color: #1A1A1A !important; font-weight: 700 !important; font-size: 18px !important; }
+    .subtotal-table--total .subtotal-line__value strong { font-weight: 700 !important; font-size: 18px !important; }
+    .total-discount { color: #2E7D5B !important; font-size: 14px !important; }
+    .customer-info__item { padding: 12px 0 !important; }
+    .customer-info__item p, .customer-info__item-content { font-size: 15px !important; color: #1A1A1A !important; line-height: 1.4 !important; }
+    .disclaimer__subtext { display: none !important; }
+
+    /* The timeline draws in one step at a time where the client runs CSS
+       animation (Apple Mail, iPhone Mail). Everywhere else it is simply shown. */
+    @keyframes ts-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes ts-line { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+    .ts-step { animation: ts-in 0.55s ease both; }
+    .ts-step-1 { animation-delay: 0.25s; }
+    .ts-step-2 { animation-delay: 0.7s; }
+    .ts-step-3 { animation-delay: 1.15s; }
+    .ts-step-4 { animation-delay: 1.6s; }
+    .ts-step-5 { animation-delay: 2.05s; }
+    .ts-line { transform-origin: top; animation: ts-line 0.45s ease both; }
+    .ts-line-1 { animation-delay: 0.5s; }
+    .ts-line-2 { animation-delay: 0.95s; }
+    .ts-line-3 { animation-delay: 1.4s; }
+    .ts-line-4 { animation-delay: 1.85s; }
+    @media (prefers-reduced-motion: reduce) { .ts-step, .ts-line { animation: none !important; } }
+
+    @media only screen and (max-width: 600px) {
+      .container { width: 100% !important; }
+      .ts-pad { padding-left: 20px !important; padding-right: 20px !important; }
+      .ts-h1 { font-size: 28px !important; }
+      .ts-btn { display: block !important; width: 100% !important; }
+      .ts-btn a { display: block !important; text-align: center !important; }
+      .ts-photo { width: 96px !important; height: 96px !important; }
+    }
+  </style>
+</head>
+
+  <body>
+    <table class="body">
+      <tr>
+        <td>
+          <center>
+          <table class="container" cellpadding="0" cellspacing="0">
+            <tr><td class="ts-pad" style="padding: 36px 0 28px;">
+              <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                <td style="vertical-align: middle;"><a href="{{ shop.url }}"><img src="https://www.trackstar.art/cdn/shop/files/Trackstar_Logo_Cropped.png" alt="Trackstar" width="140" style="display: block; width: 140px; height: auto; border: 0;"></a></td>
+                <td style="vertical-align: middle; text-align: right; font-size: 15px; font-weight: 500; color: #666666;">Order {{ order_name }}</td>
+              </tr></table>
+            </td></tr>
+
+            <tr><td class="ts-pad" style="padding: 0 0 8px;">
+              <h1 class="ts-h1" style="margin: 0 0 12px; font-size: 32px; font-weight: 700; line-height: 1.05; color: #1A1A1A;">{{ email_title | strip }}{% if customer.first_name %}, {{ customer.first_name }}{% endif %}.</h1>
+              <p style="margin: 0 0 8px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">
+                {% if has_pending_payment %}
+                  {% if buyer_action_required %}
+                    You'll get a confirmation email once your payment goes through.
+                  {% else %}
+                    Your payment is being processed, and you'll get an email when your order is confirmed.
+                  {% endif %}
+                {% elsif is_custom_order %}
+                  We're excited to draw your custom print. Our team reviews the race details you sent and starts on the design, and you'll see a mockup to approve before anything prints.
+                {% elsif has_preorder %}
+                  The race hasn't happened yet, so your print waits for race day. Once the official results are posted we add the finish time, pace and bib, then print it.
+                {% else %}
+                  We've got everything we need. Here's what happens from here.
+                {% endif %}
+              </p>
+            </td></tr>
+
+            {% unless has_pending_payment %}
+            {% comment %} What happens next. Purple numbers on white, the only purple fill on the page. {% endcomment %}
+            <tr><td class="ts-pad" style="padding: 16px 0 8px;">
+              <table cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
+                {% if is_custom_order %}
+                  {% assign steps = 'Order confirmed|We review your race details and start the design|Your mockup arrives by ' | append: mockup_date | append: '|You approve it, then it goes to print|At your door 7 to 10 days after approval' | split: '|' %}
+                {% elsif has_preorder %}
+                  {% assign race_day = preorder_note | remove: 'Ships after race day, ' | strip %}
+                  {% assign steps = 'Order confirmed|After race day on ' | append: race_day | append: ', we add the official results|Printed and framed in Kentucky|At your door 10 to 12 days after race day' | split: '|' %}
+                {% else %}
+                  {% assign steps = 'Order confirmed|We find the official results and build your design|Printed and framed in Kentucky|At your door in 10 to 12 days' | split: '|' %}
+                {% endif %}
+                {% for step in steps %}
+                <tr class="ts-step ts-step-{{ forloop.index }}">
+                  <td style="width: 28px; padding: 0; vertical-align: top;">
+                    <table cellpadding="0" cellspacing="0" style="border-collapse: collapse;"><tr>
+                      <td style="width: 28px; height: 28px; border-radius: 999px; background-color: #4600D6; color: #FFFFFF; font-size: 14px; font-weight: 700; text-align: center; vertical-align: middle; line-height: 28px;">{{ forloop.index }}</td>
+                    </tr>
+                    {% unless forloop.last %}
+                    <tr><td style="padding: 4px 0 4px 13px;"><div class="ts-line ts-line-{{ forloop.index }}" style="width: 2px; height: 26px; background-color: #E0E0E0;"></div></td></tr>
+                    {% endunless %}
+                    </table>
+                  </td>
+                  <td style="padding: 3px 0 0 14px; vertical-align: top; font-size: 16px; line-height: 1.35; color: #1A1A1A;{% if forloop.first %} font-weight: 700;{% endif %}">{{ step }}</td>
+                </tr>
+                {% endfor %}
+              </table>
+            </td></tr>
+            {% endunless %}
+
+            {% comment %} The prints: the details that will be on them, from the order's line item properties. {% endcomment %}
+            {% for line in line_items %}
+              {% assign is_addon = false %}
+              {% if line.properties['_addon_for'] != blank or line.title contains 'Photo Add-On' or line.gift_card %}{% assign is_addon = true %}{% endif %}
+              {% assign runner = line.properties['Runner Name (First & Last)'] %}
+              {% if is_addon == false and runner != blank %}
+              {% assign print_photo = line.properties['_photo_path'] %}
+              {% assign photo_later = line.properties['_photo_later'] %}
+              {% assign outcome = line.properties['_lookup_outcome'] %}
+              <tr><td class="ts-pad" style="padding: 20px 0 0;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #F6F5F2; border-radius: 8px;">
+                  <tr>
+                    <td style="padding: 20px 20px 18px; vertical-align: top;">
+                      <p style="margin: 0 0 2px; font-size: 14px; color: #666666;">{{ line.title | remove: 'Personalized Race Print' | remove: 'Personalized Race Poster' | strip }}{% if line.variant.title != 'Default Title' %} &middot; {{ line.variant.title | replace: ' / ', ' &middot; ' }}{% endif %}</p>
+                      <p style="margin: 0 0 12px; font-size: 22px; font-weight: 700; line-height: 1.1; color: #1A1A1A;">{{ runner }}</p>
+                      <table cellpadding="0" cellspacing="0" style="font-size: 15px; line-height: 1.5; color: #1A1A1A;">
+                        {% if line.properties['Race Year'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Year</td><td>{{ line.properties['Race Year'] }}</td></tr>{% endif %}
+                        {% if line.properties['Event'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Event</td><td>{{ line.properties['Event'] }}</td></tr>{% endif %}
+                        {% if line.properties['Bib #'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Bib</td><td>{{ line.properties['Bib #'] }}</td></tr>{% endif %}
+                        {% if line.properties['Time'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Time</td><td>{{ line.properties['Time'] }}</td></tr>{% endif %}
+                        {% if line.properties['Pace'] != blank %}<tr><td style="padding: 0 20px 0 0; color: #666666;">Pace</td><td>{{ line.properties['Pace'] }}</td></tr>{% endif %}
+                      </table>
+                      {% if outcome == 'race_not_yet_run' %}
+                        <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">We'll add the official time, pace and bib after race day.</p>
+                      {% elsif line.properties['No Time'] != blank %}
+                        <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">Printed without the time and pace, as you asked.</p>
+                      {% elsif line.properties['Time'] == blank %}
+                        <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">We'll track down the official time, pace and bib for the print.</p>
+                      {% endif %}
+                      {% if photo_later != blank %}
+                        <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">Your photo: we'll email you a link to upload it the day after race day.</p>
+                      {% endif %}
+                      {% if line.properties['Gift'] != blank %}
+                        <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.4; color: #666666;">Marked as a gift.</p>
+                      {% endif %}
+                    </td>
+                    {% if print_photo != blank %}
+                    <td style="padding: 20px 20px 18px 0; vertical-align: top; text-align: right; width: 120px;">
+                      <img class="ts-photo" src="https://fast.trackstar.art/api/public/order-photo?order={{ ship_order_id }}&amp;sig={{ ship_sig }}&amp;line={{ forloop.index0 }}" alt="Your photo for the print" width="120" height="120" style="display: inline-block; width: 120px; height: 120px; border-radius: 4px; border: 1px solid #E0E0E0; object-fit: cover;">
+                      <p style="margin: 6px 0 0; font-size: 13px; color: #666666;">Your photo</p>
+                    </td>
+                    {% endif %}
+                  </tr>
+                </table>
+              </td></tr>
+              {% endif %}
+            {% endfor %}
+
+            {% if can_manage %}
+            <tr><td class="ts-pad" style="padding: 28px 0 0;">
+              <p style="margin: 0 0 12px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">Need to fix a name, change the frame or update your address? You can for 48 hours after ordering.</p>
+              <table class="ts-btn" cellpadding="0" cellspacing="0"><tr><td style="border: 1.5px solid #4600D6; border-radius: 5px;">
+                <a href="https://fast.trackstar.art/order/{{ ship_order_id }}/{{ ship_sig }}" style="display: inline-block; padding: 16px 32px; font-size: 16px; font-weight: 700; color: #4600D6; text-decoration: none;">Manage your order</a>
+              </td></tr></table>
+            </td></tr>
+            {% endif %}
+
+            {% if delivery_instructions != blank %}
+            <tr><td class="ts-pad" style="padding: 16px 0 0; font-size: 15px; color: #1A1A1A;"><b>Delivery information:</b> {{ delivery_instructions }}</td></tr>
+            {% endif %}
+
+            {% assign transaction_count = transactions | size %}
+            {% if transaction_count > 0 %}
+              {% for transaction in transactions %}
+                {% if transaction.show_buyer_pending_payment_instructions? %}
+                  <tr><td class="ts-pad" style="padding: 16px 0 0;">
+                  <p style="font-size: 15px;">{{ transaction.buyer_pending_payment_notice }}</p>
+                  <table class="row">
+                    <tr>
+                      {% for instruction in transaction.buyer_pending_payment_instructions %}<td>{{ instruction.header }}</td>{% endfor %}
+                      <td>Amount</td>
+                    </tr>
+                    <tr>
+                      {% for instruction in transaction.buyer_pending_payment_instructions %}<td>{{ instruction.value }}</td>{% endfor %}
+                      <td>{{ transaction.amount | money }}</td>
+                    </tr>
+                  </table>
+                  </td></tr>
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+
+            {% assign gift_card_line_items = line_items | where: "gift_card" %}
+            {% if gift_card_line_items.first %}
+            <tr><td class="ts-pad" style="padding: 16px 0 0; font-size: 15px; color: #1A1A1A;">You'll receive separate emails for any gift cards.</td></tr>
+            {% endif %}
+
+            <tr><td class="ts-pad" style="padding: 20px 0 8px; font-size: 15px; color: #666666;">
+              {% if order_status_url %}<a href="{{ order_status_url }}" style="color: #4600D6; font-weight: 700; text-decoration: underline; text-underline-offset: 4px;">View your order</a>{% if shop.url %} &nbsp;&middot;&nbsp; {% endif %}{% endif %}
+              {% if shop.url %}<a href="{{ shop.url }}" style="color: #4600D6; font-weight: 700; text-decoration: underline; text-underline-offset: 4px;">Visit our store</a>{% endif %}
+            </td></tr>
+          </table>
+          </center>
+
