@@ -982,22 +982,37 @@ async function handleDailyDesignUpdate(res) {
       return o.parentOrderNumber || o.orderNumber || '?'
     }
 
-    const overdue = []
+    // The custom section is a summary plus a short list of what is urgent:
+    // with 50 to 75 customs in the pipeline a line per order buried the
+    // message. Urgent means past the customer's due date (shipping late) or
+    // past the design due date, most overdue first, capped at URGENT_SHOWN;
+    // the rest are a click away in the Custom tab.
+    const URGENT_SHOWN = 5
+    const late = []          // past the customer's due date
+    const overdue = []       // past the design due date (customer date still ahead)
     const dueNext7Days = []
+    let later = 0
+    let noDate = 0
     for (const o of customOrders) {
-      if (!o.dueDate) continue
+      if (!o.dueDate) { noDate++; continue }
       // Designers work to the design due date, two days before the customer's (designDue.js).
       const due = designDueDate(o.dueDate)
-      if (due < now) overdue.push({ ...o, due })
+      const customerDue = new Date(o.dueDate)
+      if (customerDue < now) late.push({ ...o, due, customerDue })
+      else if (due < now) overdue.push({ ...o, due, customerDue })
       else if (due <= endOfWeek) dueNext7Days.push({ ...o, due })
+      else later++
     }
-    overdue.sort((a, b) => a.due - b.due)
-    dueNext7Days.sort((a, b) => a.due - b.due)
+    const urgent = [...late, ...overdue].sort((a, b) => a.due - b.due)
+    const notStarted = customOrders.filter(o => o.designStatus === 'not_started').length
 
     const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })
-    const orderLine = (o) => `• #${displayNum(o)} - ${o.runnerName || 'Unknown'} (${o.raceName || 'Custom'}) - design due ${fmt(o.due)}`
+    const urgentLine = (o) => o.customerDue < now
+      ? `• #${displayNum(o)} - ${o.runnerName || 'Unknown'} - customer due ${fmt(o.customerDue)}, late`
+      : `• #${displayNum(o)} - ${o.runnerName || 'Unknown'} - design due ${fmt(o.due)}`
 
     const appUrl = process.env.APP_BASE_URL || ''
+    const customLink = appUrl ? `<${appUrl}/?type=custom|Custom tab>` : 'the Custom tab'
     const dashboardFooter = appUrl
       ? `\n\nDashboard → <${appUrl}/|Standard>  ·  <${appUrl}/?type=custom|Custom>`
       : ''
@@ -1008,11 +1023,21 @@ async function handleDailyDesignUpdate(res) {
       `*${standardCount}* to fulfill`,
     ].join('\n')
 
+    const breakdown = [
+      late.length ? `*${late.length} late*` : '',
+      overdue.length ? `*${overdue.length} past design due*` : '',
+      dueNext7Days.length ? `${dueNext7Days.length} due this week` : '',
+      later ? `${later} later` : '',
+      noDate ? `${noDate} with no due date` : '',
+    ].filter(Boolean).join(' · ')
+
     const customSection = [
       `*🎨 CUSTOM ORDERS*`,
-      `*${customOrders.length}* in the queue${overdue.length > 0 ? ` · *${overdue.length} past design due*` : ''}${dueNext7Days.length > 0 ? ` · ${dueNext7Days.length} design due in the next 7 days` : ''}`,
-      overdue.length > 0 ? `\n:rotating_light: *Past design due (${overdue.length}):*\n${overdue.map(orderLine).join('\n')}` : '',
-      dueNext7Days.length > 0 ? `\n:date: *Design due in the next 7 days (${dueNext7Days.length}):*\n${dueNext7Days.map(orderLine).join('\n')}` : '',
+      `*${customOrders.length}* in the queue (${notStarted} not started)`,
+      breakdown,
+      urgent.length
+        ? `\n:rotating_light: *Most urgent:*\n${urgent.slice(0, URGENT_SHOWN).map(urgentLine).join('\n')}${urgent.length > URGENT_SHOWN ? `\n_+${urgent.length - URGENT_SHOWN} more past due in ${customLink}_` : ''}`
+        : '\n:white_check_mark: Nothing past due.',
     ].filter(Boolean).join('\n')
 
     const message = {
@@ -1039,11 +1064,12 @@ async function handleDailyDesignUpdate(res) {
 
     if (!(await slackTo('design', message, { or: 'team' }))) throw new Error('Slack post failed')
 
-    console.log(`[actions/daily-design-update] Posted standup: ${customOrders.length} custom (${overdue.length} overdue, ${dueNext7Days.length} due next 7 days), ${standardCount} standard`)
+    console.log(`[actions/daily-design-update] Posted standup: ${customOrders.length} custom (${late.length} late, ${overdue.length} overdue, ${dueNext7Days.length} due next 7 days), ${standardCount} standard`)
     return res.status(200).json({
       success: true,
       customTotal: customOrders.length,
       standardTotal: standardCount,
+      late: late.length,
       overdue: overdue.length,
       dueNext7Days: dueNext7Days.length,
     })
