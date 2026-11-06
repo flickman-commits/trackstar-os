@@ -1,6 +1,6 @@
 /**
  * How a result reads on the print: the one place for the date, temperature,
- * time and pace formats. The order list (api/orders/index.js) and the render
+ * time and pace formats. The order list (api/_routes/orders/index.js) and the render
  * spec (server/domain/render/spec.js) both use these, so what a designer sees
  * in the panel and what the worker puts on the print cannot drift apart.
  */

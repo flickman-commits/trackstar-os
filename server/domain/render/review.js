@@ -1,6 +1,6 @@
 /**
  * A person's yes or no on a finished render, and what an approval sets off.
- * Used by api/render/jobs.js and the MCP design tools, so both do the same thing.
+ * Used by api/_routes/render/jobs.js and the MCP design tools, so both do the same thing.
  */
 import prisma from '../../db.js'
 import { recordAudit } from '../../../api/_lib/users.js'

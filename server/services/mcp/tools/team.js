@@ -84,7 +84,7 @@ export const teamTools = [
       const rows = await findOrdersByNumber(orderNumber)
       if (!rows.length) throw new ToolError(`No order matching "${orderNumber}".`)
       // Design jobs are handed out by whoever runs design (Head of Design, or an
-      // admin), the same rule as api/orders/assign.js.
+      // admin), the same rule as api/_routes/orders/assign.js.
       if (rows.some(r => DESIGN_TYPES.has(r.trackstarOrderType)) && !(principal.role === 'admin' || await can(principal, 'orders.assign_custom'))) {
         throw new ToolError('Only the Head of Design or an admin can assign custom and partner orders.')
       }

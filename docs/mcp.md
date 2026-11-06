@@ -26,7 +26,7 @@ The same connector is then available in the Claude apps on your phone.
 | write | assign, comment, design status, research, race checks, Support drafts, run an import | a person |
 | admin | help shifts, the order list, production files, samples | an admin |
 | repair | the nightly routine's scraper tools | an admin, or a service key |
-| worker | the render worker (the Illustrator Mac), through `api/render/worker.js` | a service key, or a person |
+| worker | the render worker (the Illustrator Mac), through `api/_routes/render/worker.js` | a service key, or a person |
 
 A **service key** has no person behind it and can only read, repair or run the
 render worker: anything that changes an order is done as someone, and shows in

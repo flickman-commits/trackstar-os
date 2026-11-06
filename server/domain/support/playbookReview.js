@@ -1,7 +1,7 @@
 /**
  * The weekly playbook review: learn from what the team actually sent.
  *
- * Every Monday (api/cron/support-playbook.js) this reads the past week's
+ * Every Monday (api/_routes/cron/support-playbook.js) this reads the past week's
  * email replies from fast@ next to the draft Claude wrote for each, the
  * customer's message before it and the team's notes, and has Claude revise
  * the playbook (playbook.js) where the reps keep changing the drafts the

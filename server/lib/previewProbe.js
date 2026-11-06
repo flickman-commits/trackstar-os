@@ -168,7 +168,7 @@ export async function probePreview({ ref, races, years = null }) {
     return { ok: false, deployment: info, error: `No fixtures exist for ${untestable.join(', ')}, so there is no known finisher to test the fix against. Capture one first.` }
   }
 
-  // Matches MAX_TARGETS in api/admin/preview-probe.js. Refused rather than
+  // Matches MAX_TARGETS in api/_routes/admin/preview-probe.js. Refused rather than
   // truncated: a verdict on part of the list would read as a pass on all of it.
   if (targets.length > PREVIEW_MAX_TARGETS) {
     return { ok: false, deployment: info, error: `That is ${targets.length} race-years; one call probes at most ${PREVIEW_MAX_TARGETS}. Probe one race at a time, or pass years.` }
@@ -202,7 +202,7 @@ export async function probePreview({ ref, races, years = null }) {
   let parsed
   try { parsed = JSON.parse(text) } catch {
     console.error('[previewProbe] preview probe answered with something other than JSON:', text.slice(0, 500))
-    return { ok: false, deployment: info, error: 'The preview answered with something other than a probe result. Check the branch builds api/admin/preview-probe.js.' }
+    return { ok: false, deployment: info, error: 'The preview answered with something other than a probe result. Check the branch builds api/_routes/admin/preview-probe.js.' }
   }
   const { rows = [], sha = null } = parsed
   const failing = rows.filter(r => r.status !== 'live')

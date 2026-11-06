@@ -2,7 +2,7 @@
  * Tools > Samples, overseas: make the print instead of uploading one. Pick the
  * race, year and runner; the scrapers find the result and a render worker
  * makes the 12x18 PDF, which becomes the Gelato sample's file. Server:
- * api/samples.js (design-*), server/domain/samples/sampleDesign.js.
+ * api/_routes/samples.js (design-*), server/domain/samples/sampleDesign.js.
  */
 import { useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, RefreshCw, Search, Wand2 } from 'lucide-react'

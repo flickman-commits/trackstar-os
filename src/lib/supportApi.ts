@@ -49,7 +49,7 @@ export const supportApi = {
   // TrackstarOS's "Email customer": a new conversation about one order.
   orderConversations: (orderId: string) => request<{ threads: OrderConversation[]; mockups?: Mockup[]; shipTo?: Address | null }>(`/api/support/compose?orderId=${encodeURIComponent(orderId)}`),
   // A place to PUT one attachment from the rep's computer; the reply names it by ref.
-  // The newest mockups for these order rows (after a re-render): api/support/thread.js, action mockups.
+  // The newest mockups for these order rows (after a re-render): api/_routes/support/thread.js, action mockups.
   mockups: (threadId: string, orderIds: string[]) => post<{ mockups: Mockup[] }>('/api/support/thread', { id: threadId, action: 'mockups', orderIds }),
   uploadSlot: (filename: string, contentType: string, size: number) => post<{ ref: string; uploadUrl: string; filename: string }>('/api/support/upload', { filename, contentType, size }),
   emailCustomer: (orderId: string, subject: string, text: string, mockupRef?: string | null) => post<{ threadId: string; to: string; subject: string; held?: boolean }>('/api/support/compose', { orderId, subject, text, mockupRef: mockupRef || undefined }),

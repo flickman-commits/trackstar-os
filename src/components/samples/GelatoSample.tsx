@@ -2,7 +2,7 @@
  * Tools > Samples, overseas: a finished PDF printed and shipped by Gelato near
  * the recipient. Make the print from the race results (SampleDesigner) or
  * upload a PDF, fill in who it goes to, get Gelato's price and shipping, send.
- * Server: api/samples.js (gelato-*, design-*), server/domain/samples/gelato.js.
+ * Server: api/_routes/samples.js (gelato-*, design-*), server/domain/samples/gelato.js.
  */
 import { useState } from 'react'
 import { ExternalLink, FileText, Loader2, Plus, Send, Upload } from 'lucide-react'

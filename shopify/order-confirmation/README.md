@@ -28,7 +28,7 @@ The link signature on `ship_sig` uses the store's SELF_SERVE_LINK_SECRET
 Line item properties the storefront wizard writes: `Runner Name (First &
 Last)`, `Race Year`, `Event`, `Bib #`, `Time`, `Pace`, `No Time`, `Gift`,
 `Pre-order`, and the hidden `_photo_path`, `_photo_later`, `_lookup_outcome`,
-`_addon_for`. The photo is served by `api/public/order-photo.js` from the
+`_addon_for`. The photo is served by `api/_routes/public/order-photo.js` from the
 order id, the signature and the line item's index.
 
 ## Testing

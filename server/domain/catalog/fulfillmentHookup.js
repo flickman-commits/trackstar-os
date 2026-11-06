@@ -1,6 +1,6 @@
 /**
  * Is every print still hooked up to Artelo? Run every hour
- * (api/cron/fulfillment-check.js); pings Slack when a variant comes unhooked,
+ * (api/_routes/cron/fulfillment-check.js); pings Slack when a variant comes unhooked,
  * once, and again when it is back.
  *
  * Why: three times (2026-09-16, 10-12, 10-20) something switched a print

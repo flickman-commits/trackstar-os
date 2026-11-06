@@ -1,7 +1,7 @@
 /**
  * The creator's side of the program: applying, the portal, onboarding.
  *
- * Everything here is reached without a login (api/public/creator.js). The
+ * Everything here is reached without a login (api/_routes/public/creator.js). The
  * invite token is the credential, so nothing returns more than that creator's
  * own row, and every field a stranger can write is coerced and length-capped
  * before it reaches the database or Slack.

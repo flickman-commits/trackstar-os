@@ -71,7 +71,7 @@ function AddressFields({ value, onChange, withCompany = false }: { value: Addres
  * invoice is out only the fulfillment date and the notes still change.
  */
 export function OrderModal({ order, onClose, onCreated }: { order?: Billing; onClose: () => void; onCreated: (order: Billing) => void }) {
-  // The discount is money: admins set it (api/bulk/deals.js ignores it from anyone else).
+  // The discount is money: admins set it (api/_routes/bulk/deals.js ignores it from anyone else).
   const { isAdmin } = useAuth()
   const [opts, setOpts] = useState<{ events: string[]; sizes: string[]; frames: string[] }>({ events: ['Marathon', 'Half Marathon', '10 Miler', '10K', '8K', '5K'], sizes: ['8x10', '12x18', '16x24'], frames: ['Unframed', 'Natural Premium Oak', 'Black Premium Oak'] })
   const [f, setF] = useState(() => order ? {

@@ -4,7 +4,7 @@
  * calculated weather. Each confirm answers with the value it confirmed and
  * where that value came from, so the caller saw what they put their name to.
  * Any signed-in person may confirm, the same as the order view
- * (api/races/confirm-weather.js).
+ * (api/_routes/races/confirm-weather.js).
  */
 import { z } from 'zod'
 import prisma from '../../../../api/_lib/prisma.js'

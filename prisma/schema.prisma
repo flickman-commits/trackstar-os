@@ -202,7 +202,7 @@ model Order {
   @@index([isRushOrder])
   @@index([designStatus])
   @@index([assigneeId])
-  // The order list: open orders of a type, newest first (api/orders/index.js).
+  // The order list: open orders of a type, newest first (api/_routes/orders/index.js).
   @@index([status, trackstarOrderType, createdAt])
 }
 
@@ -954,7 +954,7 @@ model SalesSend {
 }
 
 // "Send later": an email a rep finished and set to go at a time, sent by the
-// every-5-minutes cron (api/sales/send-due.js) through that rep's Gmail. Queue
+// every-5-minutes cron (api/_routes/sales/send-due.js) through that rep's Gmail. Queue
 // machinery only: the deal and person are Attio ids. Status runs
 // scheduled -> sending -> sent, or held (with why) when the deal moved or
 // the send failed, or cancelled.

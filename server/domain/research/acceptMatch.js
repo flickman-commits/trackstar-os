@@ -1,6 +1,6 @@
 /**
  * A person picked one of the finishers research found for an order: save it
- * as the order's result. Moved here from api/orders/actions.js (accept-match)
+ * as the order's result. Moved here from api/_routes/orders/actions.js (accept-match)
  * unchanged, so the MCP tool does the same thing.
  */
 import prisma from '../../db.js'

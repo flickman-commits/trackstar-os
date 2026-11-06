@@ -22,7 +22,7 @@
  * Every note is an order comment from "Research agent", so a person sees it
  * where they work, and the agent does not try the same order again for a
  * week unless asked to by number. Runs from the daily cron
- * (api/cron/research-agent.js), the MCP tool run_research_agent, and
+ * (api/_routes/cron/research-agent.js), the MCP tool run_research_agent, and
  * scripts/research-agent.js.
  */
 import prisma from '../../db.js'
@@ -269,7 +269,7 @@ export async function submitFinding(orderNumber, claim, { dryRun = false, by = '
   return { order: item.display, runner: item.runner, race: `${item.race} ${item.year}`, outcome: res.outcome, detail: res.detail || res.text }
 }
 
-/** The race row for an order's race and year, the way hand entry finds it (api/orders/update.js). */
+/** The race row for an order's race and year, the way hand entry finds it (api/_routes/orders/update.js). */
 async function raceRowFor(name, year) {
   const canonical = getCanonicalRaceName(name) || name
   return await prisma.race.findUnique({ where: { raceName_year: { raceName: name, year } } })

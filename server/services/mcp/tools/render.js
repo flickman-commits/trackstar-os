@@ -2,8 +2,8 @@
  * Automated designs for standard orders: what waits for review, a yes or no
  * on one, a fresh render, and the production files they are made from.
  * Reviewing and rendering need the orders.render capability, the same as the
- * order panel (api/render/jobs.js); production files are admin only, the
- * same as Settings > Designs (api/render/templates.js).
+ * order panel (api/_routes/render/jobs.js); production files are admin only, the
+ * same as Settings > Designs (api/_routes/render/templates.js).
  */
 import { z } from 'zod'
 import prisma from '../../../../api/_lib/prisma.js'

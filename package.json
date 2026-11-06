@@ -6,9 +6,10 @@
   "scripts": {
     "worker": "node worker/render-worker.mjs",
     "dev": "concurrently -n api,vite -c blue,green \"npm run dev:api\" \"npm run dev:vite\"",
+    "routes": "node scripts/gen-routes.js",
     "dev:api": "node --env-file=.env.local server/dev.js",
     "dev:vite": "vite",
-    "build": "node scripts/check-vercel-config.js && node scripts/check-auth-await.js && node scripts/lint-scrapers.js && prisma generate && npm test && tsc && vite build",
+    "build": "node scripts/check-vercel-config.js && node scripts/gen-routes.js --check && node scripts/check-auth-await.js && node scripts/lint-scrapers.js && prisma generate && npm test && tsc && vite build",
     "postinstall": "prisma generate",
     "preview": "vite preview",
     "lint": "eslint src --report-unused-disable-directives --max-warnings 5",

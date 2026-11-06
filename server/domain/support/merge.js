@@ -11,7 +11,7 @@
  * the merged conversation (mailbox.js follows the pointer). They appear in
  * no view and no list. Email only, same customer only; there is no unmerge.
  * The drafts that come over each answered one email alone, so the merge
- * (api/support/thread.js) has Claude draft again for the whole conversation.
+ * (api/_routes/support/thread.js) has Claude draft again for the whole conversation.
  */
 import prisma from '../../db.js'
 import { refreshThread, mailboxEmail } from './mailbox.js'

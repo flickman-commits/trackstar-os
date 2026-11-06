@@ -1,7 +1,7 @@
 /**
  * Everything pipelineFor (./pipeline.js) needs to know about the world, and
  * the pipeline for a set of standard orders by id. The orders list
- * (api/orders/index.js) loads the context once per request; the MCP tools
+ * (api/_routes/orders/index.js) loads the context once per request; the MCP tools
  * use pipelinesFor for a page of orders or the whole open backlog.
  */
 import prisma from '../../db.js'

@@ -72,128 +72,26 @@
     }
   ],
   "functions": {
-    "api/cron/bulk-runs.js": {
+    "api/app.js": {
       "maxDuration": 300
     },
-    "api/cron/support-*.js": {
+    "api/admin.js": {
       "maxDuration": 300
     },
-    "api/cron/artelo-completed-check.js": {
+    "api/cron.js": {
       "maxDuration": 300
     },
-    "api/cron/research-agent.js": {
+    "api/mcp.js": {
       "maxDuration": 300
     },
-    "api/cron/{fulfillment-check,artelo-send}.js": {
-      "maxDuration": 120
-    },
-    "api/admin/**/*.js": {
+    "api/public.js": {
       "maxDuration": 300
     },
-    "api/mcp/**/*.js": {
+    "api/sales.js": {
       "maxDuration": 300
     },
-    "api/bulk/**/*.js": {
+    "api/support.js": {
       "maxDuration": 300
-    },
-    "api/sales/**/*.js": {
-      "maxDuration": 300
-    },
-    "api/support/{sync,backfill,instagram,playbook-review}.js": {
-      "maxDuration": 300
-    },
-    "api/support/*.js": {
-      "maxDuration": 60
-    },
-    "api/orders/actions.js": {
-      "maxDuration": 300
-    },
-    "api/orders/auto-import.js": {
-      "maxDuration": 300
-    },
-    "api/orders/import.js": {
-      "maxDuration": 300
-    },
-    "api/orders/research-runner.js": {
-      "maxDuration": 300
-    },
-    "api/orders/refresh-shopify-data.js": {
-      "maxDuration": 300
-    },
-    "api/orders/refresh-etsy-data.js": {
-      "maxDuration": 300
-    },
-    "api/public/results-lookup.js": {
-      "maxDuration": 300
-    },
-    "api/public/*.js": {
-      "maxDuration": 60
-    },
-    "api/auth/**/*.js": {
-      "maxDuration": 60
-    },
-    "api/creators/**/*.js": {
-      "maxDuration": 60
-    },
-    "api/etsy/**/*.js": {
-      "maxDuration": 60
-    },
-    "api/products/**/*.js": {
-      "maxDuration": 60
-    },
-    "api/proofs/**/*.js": {
-      "maxDuration": 60
-    },
-    "api/render/**/*.js": {
-      "maxDuration": 60
-    },
-    "api/surveys/**/*.js": {
-      "maxDuration": 60
-    },
-    "api/orders/assign.js": {
-      "maxDuration": 60
-    },
-    "api/orders/excluded-products.js": {
-      "maxDuration": 60
-    },
-    "api/orders/cancel-creator-sample.js": {
-      "maxDuration": 60
-    },
-    "api/orders/comments.js": {
-      "maxDuration": 60
-    },
-    "api/orders/final-pdf.js": {
-      "maxDuration": 60
-    },
-    "api/orders/artelo-send.js": {
-      "maxDuration": 60
-    },
-    "api/orders/change-frame.js": {
-      "maxDuration": 60
-    },
-    "api/orders/gift-stats.js": {
-      "maxDuration": 60
-    },
-    "api/orders/index.js": {
-      "maxDuration": 60
-    },
-    "api/orders/photo.js": {
-      "maxDuration": 60
-    },
-    "api/orders/refresh-weather.js": {
-      "maxDuration": 60
-    },
-    "api/orders/rush.js": {
-      "maxDuration": 60
-    },
-    "api/orders/update.js": {
-      "maxDuration": 60
-    },
-    "api/races/**/*.js": {
-      "maxDuration": 60
-    },
-    "api/cron/**/*.js": {
-      "maxDuration": 60
     }
   },
   "headers": [
@@ -238,20 +136,52 @@
   ],
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
       "source": "/approve/:token",
-      "destination": "/api/public/approval-preview?token=:token"
+      "destination": "/api/public?__route=public/approval-preview&token=:token"
     },
     {
       "source": "/vote/:token",
-      "destination": "/api/public/survey-preview?token=:token"
+      "destination": "/api/public?__route=public/survey-preview&token=:token"
     },
     {
       "source": "/apply",
-      "destination": "/api/public/creator-preview"
+      "destination": "/api/public?__route=public/creator-preview"
+    },
+    {
+      "source": "/api/cron/(.*)",
+      "destination": "/api/cron?__route=cron/$1"
+    },
+    {
+      "source": "/api/public/(.*)",
+      "destination": "/api/public?__route=public/$1"
+    },
+    {
+      "source": "/api/support/(.*)",
+      "destination": "/api/support?__route=support/$1"
+    },
+    {
+      "source": "/api/sales/(.*)",
+      "destination": "/api/sales?__route=sales/$1"
+    },
+    {
+      "source": "/api/admin/(.*)",
+      "destination": "/api/admin?__route=admin/$1"
+    },
+    {
+      "source": "/api/auth/(.*)",
+      "destination": "/api/admin?__route=auth/$1"
+    },
+    {
+      "source": "/api/finance/(.*)",
+      "destination": "/api/admin?__route=finance/$1"
+    },
+    {
+      "source": "/api/mcp",
+      "destination": "/api/mcp?__route=mcp"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/app?__route=$1"
     },
     {
       "source": "/((?!api/).*)",

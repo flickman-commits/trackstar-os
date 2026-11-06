@@ -5,7 +5,7 @@
  * Each comes with what is still in the way (runners missing, the design not
  * approved, no co-branded file, research not done or not found), shown at
  * the top of the Standard orders view and posted to Slack each morning
- * (api/cron/bulk-runs.js), which also researches the runners once the race
+ * (api/_routes/cron/bulk-runs.js), which also researches the runners once the race
  * has been run.
  */
 import prisma from '../../db.js'

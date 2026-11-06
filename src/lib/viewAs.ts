@@ -1,4 +1,4 @@
-/** Settings > People > View as: start, switch or stop viewing TrackstarOS as someone (api/admin/view-as.js). */
+/** Settings > People > View as: start, switch or stop viewing TrackstarOS as someone (api/_routes/admin/view-as.js). */
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
 export type ViewAsPerson = { id: string; name: string; roleLabel: string }

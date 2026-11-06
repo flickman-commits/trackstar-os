@@ -1,7 +1,7 @@
 /**
  * Runner research for one order: look the runner up again, and accept one
  * of the finishers it suggested. Any signed-in person may, the same as the
- * order view (api/orders/research-runner.js, accept-match).
+ * order view (api/_routes/orders/research-runner.js, accept-match).
  */
 import { z } from 'zod'
 import prisma from '../../../../api/_lib/prisma.js'

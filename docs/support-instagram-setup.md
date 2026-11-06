@@ -1,6 +1,6 @@
 # Support: connecting Instagram DMs
 
-What Matt has to create in Meta for Developers so DMs to @trackstar_art land in the Support inbox, and where each value goes. Written 2026-10-16 with the channel code (`server/domain/support/instagram.js`, `api/support/instagram*.js`). The code is on main; nothing works until these steps are done.
+What Matt has to create in Meta for Developers so DMs to @trackstar_art land in the Support inbox, and where each value goes. Written 2026-10-16 with the channel code (`server/domain/support/instagram.js`, `api/_routes/support/instagram*.js`). The code is on main; nothing works until these steps are done.
 
 ## How it works, in one paragraph
 

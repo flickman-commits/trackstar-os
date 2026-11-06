@@ -2,7 +2,7 @@
  * Shared auth + CORS helpers for API endpoints.
  *
  * Auth: Merchant endpoints require either a valid `ts_session` cookie (set by
- *   the browser login flow in api/auth/login.js) or the `x-admin-secret` header
+ *   the browser login flow in api/_routes/auth/login.js) or the `x-admin-secret` header
  *   (server-to-server callers: Vercel crons, internal tooling). The session
  *   token is a stateless HMAC-signed value — no DB lookup, no client-readable
  *   secret in the bundle.
@@ -142,7 +142,7 @@ export async function bumpSessionVersion(userId) {
  * what the admin sees is what the person sees. It is read-only: anything but
  * a read is refused, so nothing is ever done in someone else's name. It
  * lapses after VIEW_AS_MAX_AGE_MS, and only counts for the admin who set it
- * while they are still an admin. api/admin/view-as.js starts and stops it.
+ * while they are still an admin. api/_routes/admin/view-as.js starts and stops it.
  */
 export const VIEW_AS_COOKIE = 'ts_view_as'
 const VIEW_AS_MAX_AGE_MS = 4 * 60 * 60 * 1000

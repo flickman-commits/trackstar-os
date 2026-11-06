@@ -195,7 +195,7 @@ async function send(rows, mail, event) {
 }
 
 // ---------------------------------------------------------------------------
-// The scheduler (api/orders/auto-import.js, every 10 minutes)
+// The scheduler (api/_routes/orders/auto-import.js, every 10 minutes)
 // ---------------------------------------------------------------------------
 
 async function raceDays(rows) {
@@ -268,7 +268,7 @@ export async function runPhotoLater({ now = Date.now(), log = () => {} } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// The upload page (api/public/photo-later.js)
+// The upload page (api/_routes/public/photo-later.js)
 // ---------------------------------------------------------------------------
 
 export class PhotoLaterError extends Error {

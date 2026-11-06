@@ -36,7 +36,7 @@ const TITLE_SUFFIXES = ['Personalized Race Print', 'Race Print', 'Personalized P
  * Parse a race name out of a Shopify/Etsy product title.
  *
  * Shared by order ingestion (server/processOrders.js,
- * api/orders/refresh-shopify-data.js) AND the public results-lookup widget,
+ * api/_routes/orders/refresh-shopify-data.js) AND the public results-lookup widget,
  * so a product title resolves to the same canonical race name everywhere.
  *
  * Handles two title formats:

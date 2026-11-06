@@ -1,7 +1,7 @@
 /**
  * Approve sends the print to production. An approved standard render, or a
  * custom order's final PDF, waits a few minutes (sendAfter) so a wrong click
- * can be held, then the sender (api/cron/artelo-send.js, every two minutes) does
+ * can be held, then the sender (api/_routes/cron/artelo-send.js, every two minutes) does
  * what a person used to do in Artelo:
  *
  *   1. the PDF is in the Artelo library (artelo.js uploads it on approve)

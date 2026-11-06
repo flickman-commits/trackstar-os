@@ -4,7 +4,7 @@
  *
  * A tool is { name, title, description, scope, readOnly, input, handler }:
  *   scope     read | write | admin | repair (never worker: that scope is the
- *             render worker's, api/render/worker.js, and has no MCP tools)
+ *             render worker's, api/_routes/render/worker.js, and has no MCP tools)
  *   cap       optional: a role capability from api/_lib/roles.js
  *   adminOnly optional: only for a key whose person is an admin, whatever its scopes
  *   input     a zod raw shape; the SDK validates before the handler runs

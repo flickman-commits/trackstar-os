@@ -2,7 +2,7 @@
  * Order value helpers — works across Shopify and Etsy raw order data.
  *
  * Used in:
- *   - api/orders/index.js      (expose to frontend for the big-spender badge)
+ *   - api/_routes/orders/index.js      (expose to frontend for the big-spender badge)
  *   - server/processOrders.js  (Slack alert when a big-spender order is imported)
  */
 

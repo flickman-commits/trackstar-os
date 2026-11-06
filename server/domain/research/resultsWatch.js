@@ -12,7 +12,7 @@
  * says when the backlog is done.
  *
  * Instant Lookup needs nothing: a "not posted yet" answer is never cached
- * (api/public/results-lookup.js), so the first search after posting finds it.
+ * (api/_routes/public/results-lookup.js), so the first search after posting finds it.
  */
 import prisma from '../../db.js'
 import { researchService } from '../../services/ResearchService.js'

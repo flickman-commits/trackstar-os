@@ -1,5 +1,5 @@
 /**
- * Log tables that only ever grew. Run daily by api/cron/retention.js.
+ * Log tables that only ever grew. Run daily by api/_routes/cron/retention.js.
  *
  * Not here on purpose: the Activity Log (AuditEvent), which is the record of
  * who did what, and ScraperHealth, which is one row per race and year

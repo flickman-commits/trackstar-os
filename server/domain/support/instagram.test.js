@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import crypto from 'node:crypto'
 import { parseWebhook, bodyTextFor, replyWindow, splitForInstagram, MAX_MESSAGE_BYTES } from './instagram.js'
-import { signatureOk } from '../../../api/support/instagram-webhook.js'
+import { signatureOk } from '../../../api/_routes/support/instagram-webhook.js'
 
 /** Meta's shape for one delivery, with the ids the docs use for a professional account and an Instagram-scoped user. */
 function delivery(messaging, accountId = '17841400000000001') {

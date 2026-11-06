@@ -1,6 +1,6 @@
 /**
  * Custom designs made per designer in a month (Eastern time), for payouts.
- * See api/admin/custom-counter.js.
+ * See api/_routes/admin/custom-counter.js.
  *
  * A design counts in the month its first proof went to the customer, credited
  * to the designer assigned to the order. That is how the designers keep their

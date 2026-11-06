@@ -23,7 +23,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 /**
  * The number the customer knows: Shopify's order name ("4985"). Our row's
  * orderNumber is Shopify's internal id plus the line, which means nothing to
- * them. Same rule as the order list (api/orders/index.js).
+ * them. Same rule as the order list (api/_routes/orders/index.js).
  */
 export function customerOrderNumber(order) {
   const name = order?.shopifyOrderData?.name

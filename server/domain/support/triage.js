@@ -12,7 +12,7 @@
  * It only adds stars: a star a person set or removed is theirs, and a thread
  * is read again only after the customer writes something new. Each star
  * leaves its reason as a note from Claude in the timeline, and the
- * run's list goes to Slack. api/cron/support-triage.js runs it.
+ * run's list goes to Slack. api/_routes/cron/support-triage.js runs it.
  */
 import { SUPPORT_OPEN } from './holdsPrint.js'
 import prisma from '../../db.js'

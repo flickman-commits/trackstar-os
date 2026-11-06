@@ -234,7 +234,7 @@ export function matchFileToRunner(filename, runners) {
 }
 
 /**
- * Where a production file may live: our own storage (where api/bulk/files.js
+ * Where a production file may live: our own storage (where api/_routes/bulk/files.js
  * puts uploads) or a Google Drive link. The URL is what Artelo prints and what
  * checkUrl fetches, so an arbitrary one is both a wrong print and a way to
  * make the server fetch any address.

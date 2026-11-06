@@ -1,7 +1,7 @@
 /**
  * Tools > Samples: send prints to people as real Shopify orders, free or at
  * cost, one or several prints at once. Shopify sends its usual order emails
- * and Artelo picks the order up like any other. Server: api/samples.js.
+ * and Artelo picks the order up like any other. Server: api/_routes/samples.js.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { ExternalLink, Gift, Loader2, Plus, Receipt, Trash2, X } from 'lucide-react'

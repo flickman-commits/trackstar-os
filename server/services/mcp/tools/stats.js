@@ -1,7 +1,7 @@
 /**
  * Handling time: how long orders sit with the team, from when they can be
  * worked to when a person marks them complete. Same numbers as Settings >
- * Stats (api/admin/stats.js), behind the same settings.stats capability.
+ * Stats (api/_routes/admin/stats.js), behind the same settings.stats capability.
  */
 import { z } from 'zod'
 import { computeFulfillmentTime } from '../../../domain/orders/fulfillmentTime.js'

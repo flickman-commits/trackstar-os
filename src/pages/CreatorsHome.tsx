@@ -1138,7 +1138,7 @@ function RacePicker({ value, onChange, catalog }: { value: string; onChange: (v:
 /**
  * Send a creator a sample: the first one or another (a second race, a
  * reshoot, a replacement). Goes into the Standard queue as CREATOR-XXXXXX
- * (then -2, -3...), to the address on file. Server: api/creators/sample.js.
+ * (then -2, -3...), to the address on file. Server: api/_routes/creators/sample.js.
  */
 function SendSample({ creator, catalog, hasSample, onDone }: { creator: Creator; catalog: CatalogRace[] | null; hasSample: boolean; onDone: () => void | Promise<void> }) {
   const [open, setOpen] = useState(false)

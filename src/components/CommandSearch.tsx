@@ -11,7 +11,7 @@ import type { Capability } from '@/lib/roles'
  * partner order, open or done, and opens it in the right view (the order
  * view routes by /orders/<ref> and switches to the order's type on its own).
  * For people whose role has Support it finds conversations too, opened at
- * /support?thread=<id>; the server decides that (api/search.js). Typing a
+ * /support?thread=<id>; the server decides that (api/_routes/search.js). Typing a
  * page name ("support", "sales") jumps there.
  */
 type Hit = { ref: string; number: string; type: string; done: boolean; runner: string | null; customer: string | null; email: string | null; race: string | null; createdAt?: string }

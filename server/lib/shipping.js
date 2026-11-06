@@ -3,7 +3,7 @@
  *
  * Used in:
  *   - server/processOrders.js  (import-time Slack notification)
- *   - api/orders/index.js      (expose to frontend)
+ *   - api/_routes/orders/index.js      (expose to frontend)
  */
 
 /**
