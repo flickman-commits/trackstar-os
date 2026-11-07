@@ -10,6 +10,17 @@
  * Date is variable (early-to-mid November Saturday; 2023 ran Oct 28) — the
  * heuristic below is approximate, results come from the per-year eventIds.
  * Verified finisher: Paxton Smith, bib 36, 2:23:26 (2025 Marathon).
+ *
+ * 2026 MOVED TO CHRONOTRACK. The race's own 2026 results page
+ * (monumentalmarathon.com/results/monumental-marathon-results/2026-2/) links
+ * sites.chronotrack.com/event/93660/results?raceId=248702, and Athlinks has no
+ * 2026 edition under master 20222. `yearOverrides[2026]` swaps platform for that
+ * year only; 2022-2025 stay on Athlinks. Race ids for event 93660, read off
+ * each race's `race.name` in the entry-result API:
+ *   248702 Marathon      -> marathon  (plannedStartTime Sat 2026-11-07 07:55 EST)
+ *   248703 Half Marathon -> half      (same start)
+ *   excluded: 248704 5K
+ * Ids are per year; look them up again for 2027.
  */
 export default {
   platform: 'athlinks',
@@ -57,5 +68,16 @@ export default {
     2023: 1068355,
     2024: 1093873,
     2025: 1127034,
-  }
+  },
+  // 2026 only: ChronoTrack (see header). Shallow-merged over this config for
+  // 2026 by createScraper; pace = chip time / distances[matched key].
+  yearOverrides: {
+    2026: {
+      platform: 'chronotrack',
+      eventIds: { 2026: 93660 },
+      courseIds: {
+        2026: { marathon: [248702], half: [248703] },
+      },
+    },
+  },
 }
