@@ -20,7 +20,7 @@ import AddPhotoPanel from '@/components/AddPhotoPanel'
 import { DesignCard, DesignReview, DesignDetailsTags, DesignFileLinks } from '@/components/DesignPanel'
 import SourceLinks from '@/components/SourceLinks'
 import AssigneePicker from '@/components/AssigneePicker'
-import OrderConversations from '@/components/support/OrderConversations'
+import ConversationPanel from '@/components/support/ConversationPanel'
 import { SiblingsBadge, OtherPrints } from '@/components/orders/OrderSiblings'
 import { useSiblings } from '@/components/orders/useSiblings'
 import SameRunnerAlert from '@/components/orders/SameRunnerAlert'
@@ -1703,7 +1703,7 @@ Thank you!`
 
                   {/* The customer's open Support conversations, at the top like on a
                       standard order: on a custom they are usually a change to the design. */}
-                  <OrderConversations variant="alert" orderId={selectedOrder.id} enabled={!!selectedOrder.customerEmail && can('support')} />
+                  <ConversationPanel orderId={selectedOrder.id} enabled={!!selectedOrder.customerEmail && can('support')} />
 
                   {/* ═══ STAGE-SPECIFIC PRIMARY ACTION — always at the top ═══ */}
 
@@ -2543,7 +2543,7 @@ Thank you!`
                   </div>
                 )}
                 {/* The customer's open Support conversations, above the design: many are a request to change it. */}
-                <OrderConversations variant="alert" orderId={selectedOrder.id} enabled={!!selectedOrder.customerEmail && can('support')} />
+                <ConversationPanel orderId={selectedOrder.id} enabled={!!selectedOrder.customerEmail && can('support')} />
                 {/* The same runner's print ordered twice, as separate orders: check before both go out. */}
                 <SameRunnerAlert order={selectedOrder} canEmail={can('support')} onNotify={others => notifySameRunner(selectedOrder, others)} />
                 {/* Missing year. The tag says it, this says what to do. */}

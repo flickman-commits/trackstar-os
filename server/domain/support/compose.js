@@ -115,18 +115,22 @@ export async function waitingOnCustomers(emails) {
  * not closed), for the order view in TrackstarOS. Matched on the
  * order's email; filtered and merged-away threads never show.
  */
-export async function conversationsForOrder(orderId) {
+export async function conversationsForOrder(orderId, { all = false } = {}) {
   const order = await prisma.order.findUnique({ where: { id: String(orderId || '') }, select: { customerEmail: true } })
   const email = String(order?.customerEmail || '').trim()
   if (!email) return []
+  // all: closed ones too, for the order's Conversation panel ("Show closed").
   const rows = await prisma.supportThread.findMany({
-    where: { customerEmail: { equals: email, mode: 'insensitive' }, mergedIntoId: null, filtered: false, status: { not: 'closed' } },
+    where: { customerEmail: { equals: email, mode: 'insensitive' }, mergedIntoId: null, filtered: false, ...(all ? {} : { status: { not: 'closed' } }) },
     orderBy: { lastMessageAt: 'desc' },
-    take: 5,
-    select: { id: true, subject: true, status: true, snippet: true, lastMessageAt: true, snoozedUntil: true, channel: true, assignee: { select: { firstName: true } } },
+    take: all ? 25 : 5,
+    select: { id: true, subject: true, status: true, snippet: true, lastMessageAt: true, lastInboundAt: true, lastOutboundAt: true, messageCount: true, snoozedUntil: true, channel: true, assignee: { select: { firstName: true } } },
   })
   return rows.map(t => ({
     id: t.id, subject: t.subject || '(no subject)', status: t.status, snippet: t.snippet || '', lastMessageAt: t.lastMessageAt,
     snoozed: Boolean(t.snoozedUntil && t.snoozedUntil > new Date()), channel: t.channel, assignee: t.assignee?.firstName || null,
+    messageCount: t.messageCount,
+    // Who spoke last: the customer (an answer is owed) or us (we are waiting on them).
+    last: !t.lastInboundAt && !t.lastOutboundAt ? null : (t.lastOutboundAt || 0) > (t.lastInboundAt || 0) ? 'us' : 'customer',
   }))
 }

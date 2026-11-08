@@ -1,7 +1,7 @@
 /**
  * /api/support/compose - Support, seen from an order in TrackstarOS.
  *
- *   GET  ?orderId=                    the customer's conversations that are not closed, the order's mockups and where it ships
+ *   GET  ?orderId=&all=1              the customer's conversations (not closed; all=1 adds closed ones), the order's mockups and where it ships
  *   POST { orderId, subject, text, mockupRef? }   "Email customer": sends from fast@; returns { threadId, to, subject, held }
  *        With mockupRef (render:, proof: or upload: from /api/support/upload), the mockup goes attached for the customer
  *        to approve and the print is held from production.
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const orderId = String(req.query?.orderId || '')
-      const [threads, mockups, shipTo] = await Promise.all([conversationsForOrder(orderId), orderId ? listMockups([orderId]).catch(() => []) : [], shipToForOrder(orderId).catch(() => null)])
+      const [threads, mockups, shipTo] = await Promise.all([conversationsForOrder(orderId, { all: req.query?.all === '1' }), orderId ? listMockups([orderId]).catch(() => []) : [], shipToForOrder(orderId).catch(() => null)])
       return res.status(200).json({ threads, mockups, shipTo })
     } catch (error) {
       console.error('[API /support/compose GET]', error)

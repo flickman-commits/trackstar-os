@@ -36,7 +36,7 @@ export function newIdempotencyKey(): string {
 }
 
 /** A Support conversation with an order's customer, as the order view lists it. */
-export interface OrderConversation { id: string; subject: string; status: ThreadStatus; snippet: string; lastMessageAt: string; snoozed: boolean; channel: string; assignee: string | null }
+export interface OrderConversation { id: string; subject: string; status: ThreadStatus; snippet: string; lastMessageAt: string; snoozed: boolean; channel: string; assignee: string | null; messageCount?: number; last?: 'us' | 'customer' | null }
 
 /** A saved playbook version: an edit, a taught lesson, a reset, a restore, or the weekly review. */
 export type PlaybookVersion = { id: string; source: 'edit' | 'lesson' | 'reset' | 'weekly' | 'restore'; summary: string | null; createdAt: string }
@@ -49,7 +49,7 @@ export type TeachRule = { line: string; text: string; author: string | null; dat
 export const supportApi = {
   status: () => request<MailboxStatus>('/api/support/gmail?action=status'),
   // TrackstarOS's "Email customer": a new conversation about one order.
-  orderConversations: (orderId: string) => request<{ threads: OrderConversation[]; mockups?: Mockup[]; shipTo?: Address | null }>(`/api/support/compose?orderId=${encodeURIComponent(orderId)}`),
+  orderConversations: (orderId: string, all = false) => request<{ threads: OrderConversation[]; mockups?: Mockup[]; shipTo?: Address | null }>(`/api/support/compose?orderId=${encodeURIComponent(orderId)}${all ? '&all=1' : ''}`),
   // A place to PUT one attachment from the rep's computer; the reply names it by ref.
   // The newest mockups for these order rows (after a re-render): api/_routes/support/thread.js, action mockups.
   mockups: (threadId: string, orderIds: string[]) => post<{ mockups: Mockup[] }>('/api/support/thread', { id: threadId, action: 'mockups', orderIds }),
