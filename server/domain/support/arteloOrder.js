@@ -30,6 +30,7 @@ import { uploadPdfToLibrary } from '../render/artelo.js'
 import { storage } from '../../lib/storage.js'
 import { BUCKET } from '../render/jobs.js'
 import { readUpload } from './uploads.js'
+import { accountSetup } from '../../services/arteloPriceCheck.js'
 
 const BASE = 'https://www.artelo.com/api/open/'
 
@@ -287,6 +288,43 @@ async function nextOrderId(number, rowIds) {
 }
 
 const US_STATES = /^[A-Z]{2}$/
+
+/**
+ * What Artelo would charge for a reorder as the form stands, before it is
+ * made: orders/price-check, which creates nothing. lines are what is ticked,
+ * each { kind: 'print' | 'frame', size, frame }. A print is priced with any
+ * image already in our uploads (the cost does not depend on the design), and
+ * with our usual branding. Without a full address, shipping is priced to New
+ * York. Answers in cents.
+ */
+export async function quoteReorder({ lines, address }) {
+  const list = (Array.isArray(lines) ? lines : []).slice(0, 10)
+  if (!list.length) return { lines: [], productionCents: 0, shippingCents: 0, brandingCents: 0, otherCents: 0, totalCents: 0, addressUsed: false }
+  const { imageId, branding } = await accountSetup()
+  const items = list.map((l, n) => {
+    const size = String(l?.size || ''), frame = String(l?.frame || 'Unframed')
+    const product = l?.kind === 'frame' ? frameOnlyProduct(size, frame) : productWithChange(null, { size, frame })
+    return { orderItemId: `q-${n}`, productInfo: productInfo(product, l?.kind === 'frame' ? [] : [{ imageId }]), quantity: 1, unitPrice: 0 }
+  })
+  const full = address?.address1 && address?.city && address?.zip && address?.province
+  const country = String(address?.country || 'US').toUpperCase()
+  const customerAddress = full
+    ? { name: String(address.name || 'Recipient'), street1: String(address.address1), ...(address.address2 ? { street2: String(address.address2) } : {}), city: String(address.city), state: country === 'US' ? String(address.province).toUpperCase() : String(address.province), zipcode: String(address.zip), country }
+    : { name: 'Trackstar', street1: '350 5th Ave', city: 'New York', state: 'NY', zipcode: '10118', country: 'US' }
+  const d = await artelo('orders/price-check', { method: 'POST', body: { orderId: `QUOTE-${Date.now()}`, currency: 'USD', customerAddress, items, ...(branding ? { branding } : {}) } })
+  const c = n => Math.round(Number(n || 0) * 100)
+  const o = d?.orderCosts || {}
+  const byId = new Map((d?.orderItemCosts || []).map(x => [x.orderItemId, c(x.productionCost)]))
+  const productionCents = c(o.productionCost), shippingCents = c(o.arteloShipping), brandingCents = c(o.branding), totalCents = c(o.total)
+  return {
+    lines: items.map(i => byId.get(i.orderItemId) ?? null),
+    productionCents, shippingCents, brandingCents,
+    // Holiday fees, packaging, sales tax: whatever else is in Artelo's total.
+    otherCents: Math.max(0, totalCents - productionCents - shippingCents - brandingCents),
+    totalCents,
+    addressUsed: Boolean(full),
+  }
+}
 
 export async function createReorder({ thread, shopifyOrderId, orderIds, changes, files, frames, address, email, instructions, test, actor }) {
   const id = String(shopifyOrderId || '').trim()

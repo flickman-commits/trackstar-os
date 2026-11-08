@@ -10,6 +10,7 @@ import { parseAddress } from '@/lib/parseAddress'
 import { fieldLabel, modalCancel, modalChip, modalDanger, modalInput, modalPrimary } from '@/lib/ui'
 import type { Address, CodeLookup, CustomerOrder, Mockup, ThreadDetail } from '@/types/support'
 import { putUpload } from '../../lib/putUpload'
+import { usd } from '@/lib/financeApi'
 // Only loaded when a new design PDF is picked, so pdf.js stays out of the support page's first load.
 const PdfViewer = lazy(() => import('@/components/PdfViewer'))
 // What a frame on its own can be (server/domain/support/arteloOrder.js FRAME_ONLY_FRAMES).
@@ -468,6 +469,40 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
   const [pressKey, setPressKey] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState<{ orderId: string; url: string | null; test: boolean } | null>(null)
+  // What Artelo charges for what is ticked, from its price check (nothing is created).
+  type Quote = { lines: (number | null)[]; productionCents: number; shippingCents: number; brandingCents: number; otherCents: number; totalCents: number; addressUsed: boolean }
+  const [quote, setQuote] = useState<{ keys: string[]; q: Quote } | null>(null)
+  const [quoting, setQuoting] = useState(false)
+  const [quoteErr, setQuoteErr] = useState<string | null>(null)
+  const quoteLines = (prep?.items || []).filter(i => picked.includes(i.orderId)).map(i => {
+    const c = changes[i.orderId] || { size: i.size || '', frame: i.frame || 'Unframed' }
+    return { key: i.orderId, kind: 'print', size: c.size, frame: c.printOnly ? 'Unframed' : c.frame }
+  }).concat(frameOn ? [{ key: 'frame', kind: 'frame', size: looseFrame.size, frame: looseFrame.frame }] : [])
+  const quoteSig = JSON.stringify([quoteLines, a.address1, a.city, a.province, a.zip, a.country])
+  useEffect(() => {
+    if (!prep) return
+    if (!quoteLines.length) { setQuote(null); setQuoteErr(null); return }
+    let stale = false
+    const t = window.setTimeout(() => {
+      setQuoting(true)
+      supportApi.arteloOrder<Quote>({ action: 'quote', id: thread.id, shopifyOrderId: o.shopifyOrderId, lines: quoteLines.map(({ key: _k, ...l }) => l), address: a })
+        .then(q => { if (!stale) { setQuote({ keys: quoteLines.map(l => l.key), q }); setQuoteErr(null) } })
+        .catch(e => { if (!stale) { setQuote(null); setQuoteErr((e as Error).message) } })
+        .finally(() => { if (!stale) setQuoting(false) })
+    }, 400)
+    return () => { stale = true; window.clearTimeout(t) }
+  }, [quoteSig, prep]) // eslint-disable-line react-hooks/exhaustive-deps
+  const costOf = (key: string) => {
+    const n = quote?.keys.indexOf(key) ?? -1
+    const c = n >= 0 ? quote?.q.lines[n] : null
+    return c == null ? null : c
+  }
+  const cost = (k: string) => {
+    const c = costOf(k)
+    return c == null
+      ? (quoting ? <Loader2 className="w-3.5 h-3.5 animate-spin text-off-black/30 shrink-0" /> : null)
+      : <span className={`shrink-0 text-sm tabular-nums font-medium ${quoting ? 'text-off-black/35' : 'text-off-black'}`}>{usd(c)}</span>
+  }
   useEffect(() => {
     supportApi.arteloOrder<ReorderPrep>({ action: 'prep', id: thread.id, shopifyOrderId: o.shopifyOrderId })
       .then(r => { setPrep(r); setLooseFrame(f => ({ ...f, size: r.items.find(i => i.size)?.size || r.sizes[0]?.value || '' })); setPicked(r.items.filter(i => i.copyable).map(i => i.orderId)); setChanges(Object.fromEntries(r.items.map(i => [i.orderId, { size: i.size || '', frame: i.frame || 'Unframed' }]))) })
@@ -496,7 +531,7 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
   }
   return (
     <ActionModal icon={Repeat} title="New Artelo order" sub={`#${o.number}`} onClose={onCancel} busy={busy} size="lg"
-      hint={confirming ? <span className={`${bad} font-medium`}>{test ? 'Create a test order in Artelo?' : `Send ${[picked.length && `${picked.length} print${picked.length === 1 ? '' : 's'}`, frameOn && 'an empty frame'].filter(Boolean).join(' and ')} to production? Artelo charges for it.`}</span> : 'A reprint or replacement, $0 to the customer.'}
+      hint={confirming ? <span className={`${bad} font-medium`}>{test ? 'Create a test order in Artelo?' : `Send ${[picked.length && `${picked.length} print${picked.length === 1 ? '' : 's'}`, frameOn && 'an empty frame'].filter(Boolean).join(' and ')} to production? Artelo charges ${quote ? usd(quote.q.totalCents) : 'for it'}.`}</span> : 'A reprint or replacement, $0 to the customer.'}
       footer={<>
         <button onClick={() => (confirming ? setConfirming(false) : onCancel())} disabled={busy} className={modalCancel}>{confirming ? 'Back' : 'Cancel'}</button>
         <button onClick={create} disabled={busy || !prep || (!picked.length && !frameOn)} className={modalPrimary}>{busy && <Spin />}{confirming ? (test ? 'Yes, create test order' : 'Yes, create it') : 'Create Artelo order'}</button>
@@ -507,13 +542,16 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
           <div className="text-off-black/70">New order <b>{prep.nextOrderId}</b> in Artelo, $0: a print again, an empty frame, or both.</div>
           {/* An empty frame on its own, not tied to a print: a cracked frame is replaced without reprinting. */}
           <div className="rounded-xl border border-border-gray p-3 space-y-2.5">
-            <label className="flex items-start gap-2.5 cursor-pointer text-off-black">
-              <input type="checkbox" checked={frameOn} onChange={e => setFrameOn(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#4600D6]" />
-              <span className="min-w-0">
-                <span className="font-medium">Send a frame</span>
-                <span className="block text-xs text-off-black/45">An empty frame with hanging pins, no print</span>
-              </span>
-            </label>
+            <div className="flex items-start gap-3">
+              <label className="flex-1 flex items-start gap-2.5 cursor-pointer text-off-black">
+                <input type="checkbox" checked={frameOn} onChange={e => setFrameOn(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#4600D6]" />
+                <span className="min-w-0">
+                  <span className="font-medium">Send a frame</span>
+                  <span className="block text-xs text-off-black/45">An empty frame with hanging pins, no print</span>
+                </span>
+              </label>
+              {frameOn && cost('frame')}
+            </div>
             {frameOn && (
               <div className="pl-6 grid grid-cols-2 gap-3">
                 <Field label="Size">
@@ -542,7 +580,8 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
               const canPick = i.copyable || Boolean(files[i.orderId])
               return (
                 <div key={i.orderId} className="rounded-xl border border-border-gray p-3 space-y-2.5">
-                  <label className={`flex items-start gap-2.5 ${canPick ? 'cursor-pointer text-off-black' : 'text-off-black/40'}`} title={i.copyable ? `Design from ${i.designFrom}` : 'No approved render and no PDF named for this print in the Drive Orders folder. Upload a new file, or build this one in Artelo.'}>
+                  <div className="flex items-start gap-3">
+                  <label className={`flex-1 flex items-start gap-2.5 ${canPick ? 'cursor-pointer text-off-black' : 'text-off-black/40'}`} title={i.copyable ? `Design from ${i.designFrom}` : 'No approved render and no PDF named for this print in the Drive Orders folder. Upload a new file, or build this one in Artelo.'}>
                     <input type="checkbox" disabled={!canPick} checked={on} onChange={e => setPicked(p => e.target.checked ? [...p, i.orderId] : p.filter(x => x !== i.orderId))} className="mt-0.5 w-4 h-4 accent-[#4600D6]" />
                     <span className="min-w-0">
                       <span className="font-medium">{i.label}</span> <span className="text-off-black/45">· {i.productLabel}{canPick ? '' : ' · no design to copy'}</span>
@@ -551,6 +590,8 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
                         : i.copyable && i.designFrom && <span className="block text-xs text-off-black/45">Design: {i.designFrom}</span>}
                     </span>
                   </label>
+                  {on && cost(i.orderId)}
+                  </div>
                   {/* Look before it is made again: the design that will be copied. */}
                   {/* The new file, as it will print: check it is the right one before it goes. */}
                   {/* What to send: the print with its frame again, or the print alone. Only asked when the original came framed. */}
@@ -624,6 +665,21 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
               )
             })}
           </div>
+          {(quote || quoteErr) && quoteLines.length > 0 && (
+            <div className="rounded-xl bg-subtle-gray px-3 py-2.5 text-sm">
+              {quoteErr
+                ? <div className="text-off-black/55">Could not get the cost from Artelo: {quoteErr}</div>
+                : quote && (
+                  <div className={`space-y-1 tabular-nums ${quoting ? 'opacity-50' : ''}`}>
+                    {([['Prints and frames', quote.q.productionCents], ['Shipping', quote.q.shippingCents], ['Branding', quote.q.brandingCents], ['Fees', quote.q.otherCents]] as const)
+                      .filter(([, c]) => c > 0 || c === quote.q.productionCents)
+                      .map(([label, c]) => <div key={label} className="flex justify-between text-off-black/65"><span>{label}</span><span>{usd(c)}</span></div>)}
+                    <div className="flex justify-between font-semibold text-off-black pt-1 border-t border-border-gray"><span>Artelo charges</span><span>{usd(quote.q.totalCents)}</span></div>
+                    {!quote.q.addressUsed && <div className="text-xs text-off-black/45">Shipping priced to New York until the address below is complete.</div>}
+                  </div>
+                )}
+            </div>
+          )}
           <div className="pt-1 text-sm font-semibold text-off-black">Ship to</div>
           <AddressFields a={a} setA={setA} email={email} setEmail={setEmail} phoneLabel="Phone (needed outside the US)" />
           <Field label="Note for Artelo (optional)"><input className={modalInput} value={instructions} onChange={e => setInstructions(e.target.value)} placeholder="e.g. Replacement, frame arrived cracked" /></Field>

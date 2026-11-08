@@ -21,7 +21,8 @@ const FRAME = { black: 'BlackPremiumOak', natural: 'NaturalPremiumOak' }
 const DEFAULT_ADDRESS = { name: 'Trackstar', street1: '350 5th Ave', city: 'New York', state: 'NY', zipcode: '10118', country: 'US' }
 
 let setup = null
-async function accountSetup() {
+/** An image already in our Artelo uploads (Artelo wants a design to price a print) and our usual branding. */
+export async function accountSetup() {
   if (setup && Date.now() - setup.at < 60 * 60 * 1000) return setup
   const [job, order] = await Promise.all([
     prisma.renderJob.findFirst({ where: { NOT: { arteloUploadId: null } }, orderBy: { createdAt: 'desc' }, select: { arteloUploadId: true } }),

@@ -2,6 +2,7 @@
  * /api/support/artelo - a new Artelo order for a customer (a reprint or replacement).
  *
  *   POST { action: 'prep', id, shopifyOrderId }      the items, whether each can be copied, the next order id
+ *   POST { action: 'quote', id, shopifyOrderId, lines: [{ kind: 'print'|'frame', size, frame }], address }  what Artelo would charge, in cents (price-check, creates nothing)
  *   POST { action: 'create', id, shopifyOrderId, orderIds, changes?, files?: { [orderId]: 'upload:<path>' }, address, email, instructions, test }
  *   POST { action: 'claimPrep', id, shopifyOrderId, tracking? }  the ticket kinds with a draft each, and the customer's photos here
  *   POST { action: 'claim', id, shopifyOrderId, kind, subject, body, photos?: [{ messageId, index }], uploads?: ['upload:<path>'] }
@@ -15,7 +16,7 @@
 import { setCors } from '../../_lib/auth.js'
 import { requireCapability, recordAudit } from '../../_lib/users.js'
 import prisma from '../../_lib/prisma.js'
-import { reorderPrep, createReorder } from '../../../server/domain/support/arteloOrder.js'
+import { reorderPrep, createReorder, quoteReorder } from '../../../server/domain/support/arteloOrder.js'
 import { claimPrep, sendArteloClaim } from '../../../server/domain/support/damageClaim.js'
 import { assertOrderInThread } from '../../../server/domain/support/threads.js'
 import { claimOnce } from '../../../server/domain/support/idempotency.js'
@@ -33,6 +34,7 @@ export default async function handler(req, res) {
     if (!body.shopifyOrderId) return res.status(400).json({ error: 'Which order?' })
     await assertOrderInThread(thread, { shopifyOrderId: body.shopifyOrderId })
     if (body.action === 'prep') return res.status(200).json(await reorderPrep({ shopifyOrderId: body.shopifyOrderId }))
+    if (body.action === 'quote') return res.status(200).json(await quoteReorder({ lines: body.lines, address: body.address }))
     if (body.action === 'create') {
       // A test order is never produced, but it is still an order in our
       // Artelo account; trying the flow is an admin's job.
