@@ -2143,7 +2143,8 @@ Thank you!`
               )}
 
               {/* Smaller things you can do to an order. More will land here. */}
-              {selectedOrder.trackstarOrderType === 'standard' && (
+              {/* A bulk runner gets the ones that fit a runner on a partner's list: a comment, research, NO TIME. */}
+              {(selectedOrder.trackstarOrderType === 'standard' || selectedOrder.trackstarOrderType === 'bulk') && (
                 <div>
                   <h4 className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1.5">Actions</h4>
                   <div className="flex flex-col items-stretch gap-1.5">
@@ -2202,7 +2203,7 @@ Thank you!`
                     {/* The print already went out and the customer wants it in another size too:
                         render it at that size here, approve it, then Support's New Artelo order
                         uses it. Approving it never sends it on its own (render/jobs.js). */}
-                    {design.canManage && !isEditing && (
+                    {design.canManage && !isEditing && selectedOrder.trackstarOrderType !== 'bulk' && (
                       altSizeOpen ? (
                         <div className="self-start flex flex-wrap items-center gap-1.5 text-xs">
                           <span className="text-off-black/60">Render at</span>
@@ -2228,12 +2229,12 @@ Thank you!`
                       )
                     )}
                     {/* A runner who ran a race we do not carry: design it as a custom print instead of refunding. */}
-                    {design.canManage && selectedOrder.status !== 'completed' && !isEditing && (
+                    {design.canManage && selectedOrder.status !== 'completed' && !isEditing && selectedOrder.trackstarOrderType !== 'bulk' && (
                       <button onClick={() => setConverting(true)} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2" title="The runner ran a race we do not carry: make this print a custom design. Shopify is not changed.">
                         <Shuffle className="w-3.5 h-3.5" /> Convert to custom order
                       </button>
                     )}
-                    {selectedOrder.customerEmail && can('support') && !isEditing && (
+                    {selectedOrder.customerEmail && can('support') && !isEditing && selectedOrder.trackstarOrderType !== 'bulk' && (
                       <button onClick={() => setEmailingOrder(selectedOrder)} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2" title={`Email ${selectedOrder.customerEmail} from fast@ (opens a Support conversation)`}>
                         <Mail className="w-3.5 h-3.5" /> Email customer
                       </button>
@@ -2242,7 +2243,7 @@ Thank you!`
                         same people as Remove photo); adding one can bill the Photo
                         Add-On, so it has its own permission (orders.add_photo, on for
                         Fulfillment). The server checks the same two. */}
-                    {(selectedOrder.photoPath ? !(isAdmin || can('orders.render')) : !(isAdmin || can('orders.add_photo'))) ? null : selectedOrder.photoPath ? (
+                    {(selectedOrder.trackstarOrderType === 'bulk' || (selectedOrder.photoPath ? !(isAdmin || can('orders.render')) : !(isAdmin || can('orders.add_photo')))) ? null : selectedOrder.photoPath ? (
                       <AddPhotoPanel
                         replace
                         key={`replace-${selectedOrder.id}`}
