@@ -5,12 +5,12 @@ import type { Order } from '@/components/orders/orderModel'
 import { getStatusDisplay } from '@/components/orders/orderFormat'
 import StatusPill from '@/components/orders/StatusPill'
 
-/** The small "print 2 of 3" next to the order number in the header. */
+/** "Item 2 of 3" next to the order number in the header, the same chip the order table shows. */
 export function SiblingsBadge({ count, position }: { count: number; position: number }) {
   if (count < 2) return null
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#4600D6]/[0.08] text-[#4600D6] text-[11px] font-semibold whitespace-nowrap" title={`This order has ${count} prints. This is print ${position}.`}>
-      <Layers className="w-3 h-3" />print {position} of {count}
+    <span className="px-2 py-0.5 bg-off-black/5 text-off-black/60 text-xs font-medium rounded whitespace-nowrap" title={`This order has ${count} prints. This is print ${position}.`}>
+      Item {position} of {count}
     </span>
   )
 }

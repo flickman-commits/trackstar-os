@@ -1344,7 +1344,7 @@ Thank you!`
                     {selectedOrder.trackstarOrderType === 'race_partner'
                       ? (selectedOrder.partnerName || selectedOrder.raceName || 'Partner')
                       : `Order ${selectedOrder.displayOrderNumber}`}
-                    {selectedOrder.trackstarOrderType !== 'race_partner' && <span className="ml-2 align-middle"><SiblingsBadge count={siblings.count} position={siblings.position} /></span>}
+                    {selectedOrder.trackstarOrderType !== 'race_partner' && <span className="ml-2 align-middle"><SiblingsBadge {...(selectedOrder.trackstarOrderType === 'bulk' ? { count: 0, position: 0 } : siblings.count ? { count: siblings.count, position: siblings.position } : { count: getOrderItemCount(selectedOrder.parentOrderNumber), position: getOrderItemPosition(selectedOrder) })} /></span>}
                   </h3>
                   {/* When it was ordered, pinned with the number on a phone. */}
                   {selectedOrder.trackstarOrderType === 'standard' && (() => { const age = orderAge(selectedOrder); return <div className={`md:hidden text-[11px] leading-tight ${age.cls}`}>{age.label}</div> })()}
