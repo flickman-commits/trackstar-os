@@ -3,7 +3,8 @@
  *
  * The ⌘K search, one box over what the person's role lets them see:
  *   orders   standard, custom and partner orders, open or completed, so an
- *            order number or a customer's email finds the order whatever view
+ *            order number, a Shopify confirmation number (2CKE6ZD2F) or a
+ *            customer's email finds the order whatever view
  *            it lives in. Bulk runners are left out; they live in their bulk
  *            order. Each hit carries the ref the order view opens at
  *            (/orders/5038, or 5038-2 for a later line item). Every signed-in
@@ -39,6 +40,11 @@ export default async function handler(req, res) {
       { runnerNameOverride: text },
       { bibNumberCustomer: { equals: q, mode: 'insensitive' } },
     ]
+    // Shopify's confirmation number (2CKE6ZD2F): what a customer reads off
+    // their receipt. Shopify's own search takes it; ours matches it whole.
+    if (/^[A-Za-z0-9]{6,12}$/.test(q) && /[A-Za-z]/.test(q) && /\d/.test(q)) {
+      or.push({ shopifyOrderData: { path: ['confirmation_number'], equals: q.toUpperCase() } })
+    }
     if (/^\d+$/.test(q)) {
       or.push(
         { parentOrderNumber: { startsWith: q } },
