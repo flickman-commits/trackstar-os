@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Plus, Loader2, Upload, Link2, Copy, ExternalLink, RefreshCw, FlaskConical,
+  Plus, Loader2, Copy, ExternalLink, RefreshCw, FlaskConical,
   CheckCircle2, ChevronLeft, ChevronDown, ChevronUp, Trash2, Pencil,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -266,13 +266,8 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   const [intakeOpen, setIntakeOpen] = useState(false)
   const [intakeProblems, setIntakeProblems] = useState<string[]>([])
   const [researching, setResearching] = useState(false)
-  const [uploading, setUploading] = useState<{ done: number; total: number } | null>(null)
-  const [unmatched, setUnmatched] = useState<{ filename: string; candidates: { orderNumber: string; runnerName: string }[] }[]>([])
-  const [checking, setChecking] = useState(false)
-  const [, setReach] = useState<Record<string, boolean>>({})
   const [editing, setEditing] = useState<string | null>(null)
   const [intakeLinkOpen, setIntakeLinkOpen] = useState(false)
-  const fileInput = useRef<HTMLInputElement>(null)
   // The order's billing record: customer, terms, invoice, and a co-branded file's check.
   const [billing, setBilling] = useState<Billing | null>(null)
   const [editingOrder, setEditingOrder] = useState(false)
@@ -334,45 +329,6 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
       toast.success(`Researched ${total} runner${total === 1 ? '' : 's'}`)
       refreshRunners()
     } catch (err) { toast.error((err as Error).message) } finally { setResearching(false) }
-  }
-
-  const uploadFiles = async (files: FileList | File[], orderNumber?: string) => {
-    const arr = Array.from(files)
-    if (!arr.length) return
-    setUploading({ done: 0, total: arr.length })
-    const misses: typeof unmatched = []
-    let matched = 0
-    for (let i = 0; i < arr.length; i++) {
-      const fd = new FormData()
-      fd.append('id', id)
-      fd.append('file', arr[i])
-      if (orderNumber) fd.append('orderNumber', orderNumber)
-      try {
-        const res = await apiFetch(`${API_BASE}/api/bulk/files`, { method: 'POST', body: fd })
-        const data = await res.json()
-        if (!res.ok) { toast.error(`${arr[i].name}: ${data.error}`) }
-        else if (data.matched) { matched++; if (data.reachable === false) toast.warning(`${arr[i].name} uploaded but is not reachable from outside`) }
-        else misses.push({ filename: data.filename, candidates: data.candidates || [] })
-      } catch { toast.error(`${arr[i].name}: upload failed`) }
-      setUploading({ done: i + 1, total: arr.length })
-    }
-    setUploading(null)
-    if (matched) toast.success(`${matched} file${matched === 1 ? '' : 's'} attached`)
-    if (misses.length) setUnmatched(prev => [...prev, ...misses])
-    await load()
-  }
-
-  const checkUrls = async () => {
-    setChecking(true)
-    try {
-      const res = await apiFetch(`${API_BASE}/api/bulk/files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action: 'check' }) })
-      const data = await res.json()
-      const map: Record<string, boolean> = {}
-      for (const r of data.results || []) map[r.orderNumber] = r.ok
-      setReach(map)
-      if (data.unreachable) toast.error(`${data.unreachable} file${data.unreachable === 1 ? ' is' : 's are'} not reachable. Artelo will reject those rows.`)
-      else toast.success(`All ${data.checked} files reachable from outside`)
-    } catch { toast.error('Check failed') } finally { setChecking(false) }
   }
 
   const intakeLink = useMemo(() => (b ? `${window.location.origin}/intake/${b.intakeToken}` : ''), [b])
@@ -502,43 +458,12 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
     </div>
   )
 
-  const filesCard = (
-    <div className="bg-white border border-border-gray rounded-md p-4 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-semibold uppercase tracking-tight">Print files</h3>
-          <p className="text-xs text-off-black/60 mt-0.5">Drop the finished PDFs. They match by filename ({b.number}-17_… or last name) and get a public link Artelo can fetch.</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={checkUrls} disabled={checking || b.progress.files === 0} className={btnSecondary}>{checking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />} Check links</button>
-          <button onClick={() => fileInput.current?.click()} disabled={Boolean(uploading)} className={btnPrimary}>{uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> {uploading.done} of {uploading.total}</> : <><Upload className="w-4 h-4" /> Add files</>}</button>
-          <input ref={fileInput} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff" className="hidden" onChange={e => { if (e.target.files) uploadFiles(e.target.files); e.target.value = '' }} />
-        </div>
-      </div>
-      <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); uploadFiles(e.dataTransfer.files) }} className="border-2 border-dashed border-border-gray rounded-md py-5 text-center text-xs text-off-black/45">
-        Drag files here · {b.progress.files} of {runners.length} attached
-      </div>
-      {unmatched.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-3 space-y-2">
-          <p className="text-xs font-semibold text-amber-800">These files did not match a runner. Drop them on the right row, or rename them.</p>
-          <ul className="text-xs text-amber-900 space-y-0.5">
-            {unmatched.map((u, i) => <li key={i}><span className="font-mono">{u.filename}</span>{u.candidates.length ? ` could be ${u.candidates.map(c => c.runnerName).join(' or ')}` : ' matched nobody'}</li>)}
-          </ul>
-          <button onClick={() => setUnmatched([])} className={btnGhost}>Clear</button>
-        </div>
-      )}
-    </div>
-  )
-
   const pg = b.progress
   const notReady = runners.length - pg.sent - pg.queued - pg.stuck - pg.held
   const toCome = Math.max(0, (b.quantity || 0) - runners.length)
   const arteloCard = (
     <div className="bg-white border border-border-gray rounded-md p-4 space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold uppercase tracking-tight">Production, through the tool</h3>
-        <p className="text-xs text-off-black/60 mt-0.5">Each runner goes to Artelo as their own order once they have an address and an approved print, with no hold (there is no customer to ask for a change). One sheet for the whole run is no longer needed. Their Artelo order shows on their row.</p>
-      </div>
+      <h3 className="text-sm font-semibold uppercase tracking-tight">Production status</h3>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         <div className="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2"><p className="text-[11px] text-emerald-800">Sent to Artelo</p><p className="text-lg font-bold tabular-nums text-emerald-900">{pg.sent}</p></div>
         <div className="rounded-md bg-[#4600D6]/[0.05] border border-[#4600D6]/20 px-3 py-2"><p className="text-[11px] text-[#4600D6]">Sending</p><p className="text-lg font-bold tabular-nums text-off-black">{pg.queued}</p></div>
@@ -643,8 +568,8 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
           </div>
         )}
         {/* Paid and still collecting names: send whoever is ready in batches meanwhile. */}
-        {collecting && <>{intakeCard}{r.paid && runners.length > 0 && arteloCard}{runnersCard}</>}
-        {fulfilling && <>{productionCard}{runnersCard}{filesCard}{arteloCard}{intakeCard}</>}
+        {collecting && <>{r.paid && runners.length > 0 && arteloCard}{intakeCard}{runnersCard}</>}
+        {fulfilling && <>{arteloCard}{productionCard}{runnersCard}{intakeCard}</>}
         {submitted && <>{arteloCard}{productionCard}{runnersCard}</>}
       </div>
       </div>
