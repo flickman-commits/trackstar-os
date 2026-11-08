@@ -7,7 +7,7 @@
  *            back reopens it, and it is closed again later, so it counts as
  *            a ticket both ways), dated by when they sent it, not when the
  *            mirror saw it. Closed: conversations closed, whoever closed
- *            them, once a day however often. Filtered senders (vendors,
+ *            them, once a day however often, with a day by day breakdown. Filtered senders (vendors,
  *            alerts) and conversations folded into another are left out.
  *   rate     the share of orders whose customer wrote in: orders placed in
  *            the window (one per Shopify or Etsy order, however many
@@ -29,20 +29,22 @@ const cents = r => r.billedCents ?? r.quotedCents ?? 0
 
 /** @param {{ since: Date, until: Date }} w */
 export async function supportStats({ since, until }) {
-  const [[received], [closed], closers, rate, first, reps] = await Promise.all([
+  const [received, closed, closers, rate, first, reps] = await Promise.all([
     prisma.$queryRaw`
-      SELECT count(*)::int AS n
+      SELECT to_char(m."sentAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York', 'YYYY-MM-DD') AS day, count(*)::int AS n
       FROM "SupportMessage" m JOIN "SupportThread" t ON t.id = m."threadId"
       LEFT JOIN LATERAL (SELECT max(p."sentAt") AS at FROM "SupportMessage" p WHERE p."threadId" = m."threadId" AND p.direction = 'in' AND p."sentAt" < m."sentAt") prev ON true
       LEFT JOIN LATERAL (SELECT max(c."createdAt") AS at FROM "SupportNote" c WHERE c."threadId" = m."threadId" AND c.kind = 'event' AND c.body LIKE ${CLOSED} AND c."createdAt" < m."sentAt") shut ON true
       WHERE m.direction = 'in' AND m."sentAt" >= ${since} AND m."sentAt" < ${until}
         AND t.channel = 'email' AND t.filtered = false AND t."mergedIntoId" IS NULL
-        AND (prev.at IS NULL OR (shut.at IS NOT NULL AND shut.at > prev.at))`,
+        AND (prev.at IS NULL OR (shut.at IS NOT NULL AND shut.at > prev.at))
+      GROUP BY 1`,
     prisma.$queryRaw`
-      SELECT count(DISTINCT (nt."threadId", to_char(nt."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York', 'YYYY-MM-DD')))::int AS n
+      SELECT to_char(nt."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York', 'YYYY-MM-DD') AS day, count(DISTINCT nt."threadId")::int AS n
       FROM "SupportNote" nt JOIN "SupportThread" t ON t.id = nt."threadId"
       WHERE nt.kind = 'event' AND nt.body LIKE ${CLOSED} AND nt."createdAt" >= ${since} AND nt."createdAt" < ${until}
-        AND t.channel = 'email' AND t.filtered = false AND t."mergedIntoId" IS NULL`,
+        AND t.channel = 'email' AND t.filtered = false AND t."mergedIntoId" IS NULL
+      GROUP BY 1`,
     prisma.$queryRaw`
       SELECT nt."authorId" AS id, count(DISTINCT (nt."threadId", to_char(nt."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York', 'YYYY-MM-DD')))::int AS n
       FROM "SupportNote" nt
@@ -73,9 +75,17 @@ export async function supportStats({ since, until }) {
   const days = Math.max(1, (until.getTime() - since.getTime()) / 86_400_000)
   const trackedFrom = first[0]?.at ? new Date(first[0].at) : null
   const r = rate[0] || { orders: 0, withTicket: 0 }
+  // Every day in the window, newest first, so a quiet day still shows as a zero.
+  const inBy = new Map(received.map(x => [x.day, x.n])), outBy = new Map(closed.map(x => [x.day, x.n]))
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
+  const byDay = []
+  for (let t = until.getTime() - 1; t >= since.getTime() && byDay.length < 120; t -= 86_400_000) {
+    const day = fmt.format(new Date(t))
+    if (!byDay.some(d => d.day === day)) byDay.push({ day, received: inBy.get(day) || 0, closed: outBy.get(day) || 0 })
+  }
   return {
     days: Math.round(days * 10) / 10,
-    email: { received: received.n, closed: closed.n },
+    email: { received: received.reduce((n, x) => n + x.n, 0), closed: closed.reduce((n, x) => n + x.n, 0), byDay },
     rate: {
       windowDays: WINDOW_DAYS,
       orders: r.orders,

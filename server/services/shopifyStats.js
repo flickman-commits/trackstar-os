@@ -51,19 +51,22 @@ export const RANGES = {
   '90d': { label: 'Past 90 days', days: 90 },
 }
 
-/** Midnight in the business timezone, N days ago, as a Date. */
+/**
+ * Midnight in the business timezone, N days ago, as a Date. Worked out from
+ * the timezone's own offset on that date, so it is right whatever timezone
+ * the server runs in (Vercel is UTC, a laptop is Eastern) and across a DST
+ * change. It used to read the server's offset too, which put "today" at 7pm
+ * the evening before on Vercel and 10am on an Eastern laptop.
+ */
 function businessMidnight(daysAgo = 0) {
-  const now = new Date()
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: BUSINESS_TZ, year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(now)
-  const get = t => parts.find(p => p.type === t).value
-  const local = new Date(`${get('year')}-${get('month')}-${get('day')}T00:00:00`)
-  local.setDate(local.getDate() - daysAgo)
-  // Re-express that wall-clock midnight as a real instant by asking what the
-  // offset is on that date, so this stays correct across a DST boundary.
-  const offsetMins = -new Date(local.toLocaleString('en-US', { timeZone: BUSINESS_TZ })).getTimezoneOffset()
-  return new Date(local.getTime() - offsetMins * 60000 + local.getTimezoneOffset() * 60000)
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: BUSINESS_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
+  const get = t => Number(parts.find(p => p.type === t).value)
+  // That date's midnight read as if it were UTC, then moved by the zone's offset at that moment.
+  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day') - daysAgo)
+  const wall = new Intl.DateTimeFormat('en-US', { timeZone: BUSINESS_TZ, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' }).formatToParts(new Date(asUtc))
+  const w = t => Number(wall.find(p => p.type === t).value)
+  const offset = Date.UTC(w('year'), w('month') - 1, w('day'), w('hour'), w('minute')) - asUtc
+  return new Date(asUtc - offset)
 }
 
 export function rangeWindow(key) {

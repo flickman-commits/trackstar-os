@@ -34,7 +34,7 @@ type Fulfillment = { standard: TimeSummary; customPromise?: CustomPromise; openS
 type Shop = { fulfillment?: Fulfillment | null; rangeLabel: string; orderCount: number; metrics: Metric[] }
 type Support = {
   days: number
-  email: { received: number; closed: number }
+  email: { received: number; closed: number; byDay: { day: string; received: number; closed: number }[] }
   rate: { windowDays: number; orders: number; withTicket: number; pct: number | null; stillCounting: boolean; partial: boolean }
   closers: { id: string; name: string; closed: number }[]
   replacements: { count: number; cents: number }
@@ -56,7 +56,7 @@ const GOOD = 'text-[#2E7D5B]', OK = 'text-amber-600', BAD = 'text-red-600'
 const pctTone = (p: number | null) => p === null ? '' : p >= 90 ? GOOD : p >= 75 ? OK : BAD
 const meanTone = (h: number | null, goal: number) => h === null ? '' : h <= goal ? GOOD : h <= goal + 12 ? OK : BAD
 
-type Card = { key: string; line: string; tag: Tag; value: string | null; unit?: string; tone?: string; facts: { k: string; v: string }[]; title?: string; note?: string | null }
+type Card = { key: string; wide?: boolean; byDay?: Support['email']['byDay']; line: string; tag: Tag; value: string | null; unit?: string; tone?: string; facts: { k: string; v: string }[]; title?: string; note?: string | null }
 
 /** The period's cards, in reading order: speed, support, money, then the Shopify numbers. */
 function cardsFor(p: Period, label: string): Card[] {
@@ -100,6 +100,10 @@ function cardsFor(p: Period, label: string): Card[] {
       title: 'Conversations closed, by anyone, once a day each.',
     })
     out.push({
+      key: 'tickets-by-day', wide: true, line: 'Email tickets by day', tag: 'Support', value: null, byDay: sp.email.byDay, facts: [],
+      title: "In: a customer's first email, or their first after it was closed. Closed: conversations closed that day, by anyone.",
+    })
+    out.push({
       key: 'ticket-rate', line: 'Orders with a support ticket', tag: 'Support',
       value: sp.rate.pct === null ? null : String(sp.rate.pct), unit: '%',
       facts: [{ k: 'Wrote in', v: `${sp.rate.withTicket} of ${sp.rate.orders}` }, { k: 'Counted for', v: `${sp.rate.windowDays} days` }],
@@ -126,7 +130,42 @@ function cardsFor(p: Period, label: string): Card[] {
   return out
 }
 
+const dayLabel = (iso: string) => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) }
+
+/** The day by day breakdown: a wide card, one row a day, newest first, a bar each for in and closed. */
+function DayCard({ c, style, className }: { c: Card; style?: React.CSSProperties; className: string }) {
+  const days = c.byDay || []
+  const max = Math.max(1, ...days.map(d => Math.max(d.received, d.closed)))
+  return (
+    <div title={c.title} style={style} className={`${className} md:col-span-2 flex flex-col p-5 bg-white rounded-lg`}>
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-[15px] font-medium leading-tight text-off-black">{c.line}</span>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap ${TAGS[c.tag]}`}>{c.tag}</span>
+      </div>
+      <div className="mt-4 max-h-[400px] overflow-y-auto pr-1 grid grid-cols-[minmax(92px,auto)_44px_52px_1fr] content-start items-center gap-x-3 gap-y-1.5 text-sm">
+        <span className="text-[13px] text-off-black/50">Day</span>
+        <span className="text-[13px] text-right text-[#4600D6]">In</span>
+        <span className="text-[13px] text-right text-off-black/50">Closed</span>
+        <span />
+        {days.map(d => (
+          <div key={d.day} className="contents">
+            <span className="whitespace-nowrap text-off-black/75">{dayLabel(d.day)}</span>
+            <span className="text-right font-bold tabular-nums">{d.received}</span>
+            <span className={`text-right font-bold tabular-nums ${d.closed >= d.received ? 'text-[#2E7D5B]' : 'text-amber-600'}`}>{d.closed}</span>
+            <span className="space-y-0.5 min-w-0">
+              <span className="block h-1.5 rounded-full bg-[#4600D6]/70" style={{ width: `${(d.received / max) * 100}%` }} />
+              <span className="block h-1.5 rounded-full bg-off-black/20" style={{ width: `${(d.closed / max) * 100}%` }} />
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-xs text-off-black/45">Closed is green on a day we closed at least as many as came in.</p>
+    </div>
+  )
+}
+
 function StatCard({ c, i, enter }: { c: Card; i: number; enter: boolean }) {
+  if (c.byDay) return <DayCard c={c} className={enter ? 'animate-fade-in-up' : ''} style={enter ? { animationDelay: `${Math.min(i, 12) * 35}ms`, animationFillMode: 'both', animationDuration: '450ms' } : undefined} />
   return (
     <div title={c.title} style={enter ? { animationDelay: `${Math.min(i, 12) * 35}ms`, animationFillMode: 'both', animationDuration: '450ms' } : undefined}
       className={`${enter ? 'animate-fade-in-up ' : ''}flex flex-col p-5 bg-white rounded-lg min-h-[196px] transition-shadow hover:shadow-[0_0_0_1.5px_#4600D6]`}>
