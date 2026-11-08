@@ -47,3 +47,52 @@ export async function sendOrderEmail({ order, to, subject, html, text, actor, ev
   ])
   return { threadId: stored.threadId, to: addr, from: 'fast' }
 }
+
+/**
+ * What the customer did in the approval portal (answered the designer's
+ * question, asked for changes, approved the design), written into the
+ * Support conversation that asked them, so the order's Conversation panel
+ * and Support show the whole exchange, not only our half. The portal does
+ * not email us, so without this the customer's side was only in the portal.
+ *
+ * Goes on the customer's newest conversation about this order. A reply or a
+ * change request reopens it (an open conversation also holds the print from
+ * production until the designer acts). An approval closes it: the ball is
+ * back with us, and leaving it open would hold the approved print. Nothing
+ * happens when the customer has no conversation (the email went out through
+ * the Resend fallback); Slack still carries the ping.
+ */
+export async function mirrorPortalReply({ orderId, kind, text }) {
+  try {
+    const order = await prisma.order.findUnique({ where: { id: String(orderId || '') }, select: { customerEmail: true, customerName: true, shopifyOrderData: true, parentOrderNumber: true } })
+    const email = String(order?.customerEmail || '').trim()
+    if (!email) return null
+    const threads = await prisma.supportThread.findMany({
+      where: { customerEmail: { equals: email, mode: 'insensitive' }, mergedIntoId: null, filtered: false, channel: 'email' },
+      orderBy: { lastMessageAt: 'desc' }, take: 10, select: { id: true, status: true },
+    })
+    // The one still going, else the newest.
+    const thread = threads.find(t => t.status !== 'closed') || threads[0]
+    if (!thread) return null
+    const number = String(order.shopifyOrderData?.name || order.parentOrderNumber || '').replace(/^#/, '')
+    const said = String(text || '').trim()
+    const line = kind === 'approve' ? `Approved the design for #${number} in the portal${said ? `: "${said}"` : '.'}`
+      : kind === 'revision' ? `Asked for changes to #${number} in the portal${said ? `: "${said}"` : '.'}`
+      : `Replied in the portal about #${number}: "${said}"`
+    const now = new Date()
+    await prisma.$transaction([
+      prisma.supportNote.create({ data: { threadId: thread.id, kind: 'note', body: line.slice(0, 2000), authorId: null, authorName: order.customerName || 'Customer' } }),
+      prisma.supportThread.update({
+        where: { id: thread.id },
+        data: {
+          status: kind === 'approve' ? 'closed' : 'open', snoozedUntil: null,
+          snippet: line.slice(0, 160), lastMessageAt: now, lastInboundAt: now,
+        },
+      }),
+    ])
+    return thread.id
+  } catch (err) {
+    console.warn('[customerMail] portal reply not mirrored:', err.message)
+    return null
+  }
+}

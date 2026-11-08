@@ -29,7 +29,7 @@ import fs from 'fs'
 import { sendPublicError } from '../../../server/lib/publicError.js'
 import { storage } from '../../../server/lib/storage.js'
 import { sendEmail } from '../../../server/lib/email.js'
-import { sendOrderEmail, customerMailReady } from '../../../server/domain/support/customerMail.js'
+import { sendOrderEmail, customerMailReady, mirrorPortalReply } from '../../../server/domain/support/customerMail.js'
 import { renderCustomerEmail } from '../../../server/lib/customerEmail.js'
 // sharp loaded dynamically in processImage() — top-level import crashes Vercel cold start
 
@@ -419,6 +419,9 @@ export default async function handler(req, res) {
         await slackTo(approval === 'approve' ? 'proofs' : 'alerts',
           `${emoji} <@U04KBDJH5C3> *${slackText(customerName)}* ${action_text} for order *${slackText(displayNum)}*${suffix}${feedback ? `\n> _"${slackText(feedback)}"_` : ''}`)
 
+        // The customer's answer, in the Support conversation that sent the proofs.
+        await mirrorPortalReply({ orderId: approvalToken.orderId, kind: approval === 'approve' ? 'approve' : 'revision', text: feedback })
+
         return res.status(200).json({ success: true, proof: updatedProof })
       }
 
@@ -462,6 +465,9 @@ export default async function handler(req, res) {
       const customerName = approvalToken.order.customerName || 'Customer'
       await slackTo('alerts',
         `💬 <@U04KBDJH5C3> *${slackText(customerName)}* replied to your question on order *${slackText(displayNum)}*:\n> _"${slackText(text)}"_`)
+
+      // Their answer, in the Support conversation that asked the question.
+      await mirrorPortalReply({ orderId: approvalToken.orderId, kind: 'reply', text })
 
       return res.status(200).json({ success: true, message })
     }
