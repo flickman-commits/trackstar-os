@@ -42,7 +42,7 @@ import { getCustomersServedInfo, syncCustomersServedToShopify, setCustomersServe
 import { shopifyFetch, shopifyGraphQL } from '../../../server/services/shopifyAuth.js'
 import { getRaceShorthands } from '../../../server/scrapers/index.js'
 import WeatherService from '../../../server/services/WeatherService.js'
-import { slackTo, slackApi } from '../../../server/lib/slack.js'
+import { slackTo, slackApi, slackText } from '../../../server/lib/slack.js'
 import { sendPublicError } from '../../../server/lib/publicError.js'
 import { sendEmail } from '../../../server/lib/email.js'
 import { sendOrderEmail, customerMailReady } from '../../../server/domain/support/customerMail.js'
@@ -629,7 +629,8 @@ async function handleMessageCustomer({ orderId, body }, res, actor) {
   // Note: we intentionally do NOT change designStatus here. A question is
   // orthogonal to design progress — the order stays in Dan's queue until he
   // actually sends proofs.
-  slackTo('alerts', `💬 Question sent to *${existing.customerName || 'customer'}* for order *${displayNum}* - emailed ${existing.customerEmail}. I'll ping you here when they reply.`)
+  const sender = [actor?.firstName, actor?.lastName].filter(Boolean).join(' ') || 'A designer'
+  slackTo('alerts', `💬 *${slackText(sender)}* sent a question to *${slackText(existing.customerName || 'the customer')}* on custom order *${slackText(displayNum)}* - emailed ${existing.customerEmail}. I'll ping you here when they reply.`)
 
   console.log(`[actions/message-customer] Order ${existing.orderNumber}: question sent to ${existing.customerEmail}`)
   return res.status(200).json({ success: true, message, portalUrl })
