@@ -256,7 +256,6 @@ function CancelForm({ o, thread, onDone, onCancel }: FormProps) {
       <ActionModal icon={Ban} title="Cancelled" sub={`#${o.number}`} onClose={onCancel}
         footer={<>{done.arteloUrl && <OpenInArtelo href={done.arteloUrl} />}<button onClick={onCancel} className={modalPrimary}>Done</button></>}>
         <Done title={`Cancelled, ${done.display} refunded`}>It is off the fulfillment queue.</Done>
-        <div className={warn}>Now cancel it in Artelo too, or it stays there.</div>
       </ActionModal>
     )
   }

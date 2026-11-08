@@ -443,8 +443,8 @@ export async function cancellable(shopifyOrderId) {
  * its own checks) and the customer's own Manage your order page
  * (orders/selfServeOrder.js). No Shopify email; the caller says it. Shopify
  * runs the cancel as a job; this waits a few seconds for it so the caller
- * hears the truth, not just "accepted". Artelo has no cancel API: the note
- * says it still needs cancelling there.
+ * hears the truth, not just "accepted". The Shopify cancel carries over to
+ * Artelo on its own.
  */
 export async function cancelAndRefund({ order: o, why, by, actor = null }) {
   const data = await shopifyGraphQL(ORDER_CANCEL, { orderId: o.gid, staffNote: String(by || why).slice(0, 255) })
@@ -454,7 +454,7 @@ export async function cancelAndRefund({ order: o, why, by, actor = null }) {
   if (!cancelled) throw new UserError(`Shopify accepted the cancel for #${o.name} but has not finished it yet. Check the order in Shopify in a minute before trying again.`)
 
   const rows = o.rows || []
-  const note = `Cancelled and refunded ${money(o.availableCents)} ${actor ? 'by support' : 'by the customer from Manage your order'}: ${why}. Cancel it in Artelo too.`
+  const note = `Cancelled and refunded ${money(o.availableCents)} ${actor ? 'by support' : 'by the customer from Manage your order'}: ${why}.`
   if (rows.length) {
     await prisma.order.updateMany({ where: { id: { in: rows.map(r => r.id) } }, data: { status: 'completed' } })
     await prisma.orderComment.createMany({ data: rows.map(r => ({ orderId: r.id, text: note, authorId: actor?.id || null, authorName: actor ? actorName(actor) : 'Customer' })) })

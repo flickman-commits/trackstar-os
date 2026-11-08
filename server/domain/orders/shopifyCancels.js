@@ -9,25 +9,12 @@
  * Cancelled only, not refunded: a full refund without a cancel is sometimes a
  * goodwill refund on a print that still ships.
  *
- * Artelo has no cancel API. When the order already reached Artelo and is not
- * cancelled there, one alert lists it for a person to cancel by hand.
+ * The Shopify cancel carries over to Artelo on its own, so nothing is asked
+ * of a person there.
  */
 import prisma from '../../db.js'
 import { shopifyGraphQL } from '../../services/shopifyAuth.js'
 import { requireConnection } from '../../lib/connections.js'
-import { slackTo, slackText } from '../../lib/slack.js'
-import { arteloOrderUrl } from '../../lib/links.js'
-import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js'
-
-/** Artelo's live status for an order; our stored copy goes stale (6810 read Received after Artelo cancelled it). Null when Artelo does not answer. */
-async function arteloStatus(id) {
-  try {
-    const res = await fetchWithTimeout(`https://www.artelo.com/api/open/orders/get-by-id?orderId=${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${process.env.ARTELO_API_KEY}` } })
-    if (!res.ok) return null
-    const o = await res.json()
-    return String(o?.status || o?.productionStatus || '')
-  } catch { return null }
-}
 
 const CANCELLED = `
   query cancelled($ids: [ID!]!) {
@@ -60,7 +47,6 @@ export async function closeShopifyCancels() {
     }
   }
 
-  const toCancelInArtelo = []
   for (const n of cancelled) {
     const sid = n.id.split('/').pop()
     const rows = byShopify.get(sid) || []
@@ -76,13 +62,7 @@ export async function closeShopifyCancels() {
     await prisma.orderComment.createMany({
       data: rows.map(r => ({ orderId: r.id, text: `Cancelled in Shopify on ${when}${reason}, so marked complete here.`, authorName: 'TrackstarOS' })),
     })
-    const artelo = rows.map(r => r.arteloOrderData).find(a => a?.id)
-    if (artelo && !/cancel/i.test((await arteloStatus(artelo.id)) ?? String(artelo.status || ''))) toCancelInArtelo.push({ name: n.name, url: arteloOrderUrl(artelo.id) })
   }
 
-  if (toCancelInArtelo.length) {
-    const lines = toCancelInArtelo.map(x => `• ${slackText(x.name)}${x.url ? `: ${x.url}` : ''}`).join('\n')
-    await slackTo('alerts', `:x: Cancelled in Shopify and closed here, but already in Artelo. *Cancel ${toCancelInArtelo.length === 1 ? 'it' : 'them'} in Artelo too:*\n${lines}`, { or: 'matt' }).catch(() => {})
-  }
-  return { checked: ids.length, closed: cancelled.length, arteloToCancel: toCancelInArtelo.length }
+  return { checked: ids.length, closed: cancelled.length }
 }

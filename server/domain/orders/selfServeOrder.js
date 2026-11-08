@@ -18,7 +18,7 @@
  * and for the order:
  *   address   the ship-to (support/actions.shippingAddress)
  *   cancel    cancel and refund in Shopify (support/actions.cancelAndRefund);
- *             Artelo has no cancel API, so Slack asks a person to cancel it there
+ *             the Shopify cancel carries over to Artelo on its own
  *
  * Every change leaves a comment on the order, closes a design waiting for
  * review (it was made with the old details) and renders again when the print
@@ -259,8 +259,8 @@ export async function manageChange(shopifyOrderId, signature, body = {}) {
     let o
     try { o = await cancellable(ctx.id) } catch (e) { throw new ManageError('unavailable', 409, friendly(e)) }
     const out = await cancelAndRefund({ order: o, why: 'the customer cancelled from Manage your order', by: 'Cancelled by the customer from Manage your order' })
-    // Artelo has the order too and only a person can cancel it there.
-    await slackTo('alerts', `:x: Customer cancelled *#${slackText(out.number)}* from Manage your order; ${slackText(out.display)} refunded in Shopify. *Cancel it in Artelo too*${out.arteloUrl ? `: ${out.arteloUrl}` : ''}${shopifyAdminUrl(ctx.id) ? ` (Shopify: ${shopifyAdminUrl(ctx.id)})` : ''}`, { or: 'matt' }).catch(() => {})
+    // The Shopify cancel carries over to Artelo on its own; this is for the record.
+    await slackTo('alerts', `:x: Customer cancelled *#${slackText(out.number)}* from Manage your order; ${slackText(out.display)} refunded in Shopify${shopifyAdminUrl(ctx.id) ? ` (${shopifyAdminUrl(ctx.id)})` : ''}`, { or: 'matt' }).catch(() => {})
     return { ok: true, refunded: out.display }
   }
 
