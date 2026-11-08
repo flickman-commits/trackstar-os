@@ -5,7 +5,7 @@ import { Bar, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, 
 import { btnGhost, btnPrimary, btnSecondary, inputBase, segment, segmentGroup } from '@/lib/ui'
 import { financeApi, usd, usdShort, intText, dayLabel, SERIES } from '@/lib/financeApi'
 import type { Bank, FixedCost, ForecastDriver, ForecastPayload, ForecastScenario, ForecastWeek } from '@/types/finance'
-import { card, ErrorCard, Spinner, tableHead, num } from './bits'
+import { card, ErrorCard, Spinner, Stat, tableHead, num } from './bits'
 
 /**
  * The next 13 weeks: orders, revenue and contribution margin from the race
@@ -67,16 +67,6 @@ export default function Forecast() {
           <Cash data={data} busy={busy} save={save} />
         </>
       )}
-    </div>
-  )
-}
-
-function Stat({ label, value, sub, warn = false }: { label: string; value: string; sub?: string; warn?: boolean }) {
-  return (
-    <div className={`${card} p-4`}>
-      <p className="text-xs text-off-black/50">{label}</p>
-      <p className={`text-2xl font-semibold tabular-nums mt-0.5 ${warn ? 'text-red-600' : 'text-off-black'}`}>{value}</p>
-      {sub && <p className="text-[11px] text-off-black/50 mt-0.5">{sub}</p>}
     </div>
   )
 }

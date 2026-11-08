@@ -3,13 +3,14 @@
  *
  * GET  /api/finance/race-payouts                       every won race deal, soonest due first
  * POST /api/finance/race-payouts { action: 'compute', dealId }     pull the race's sales from Shopify
+ *                               { action: 'refresh_live' }         re-pull every race still selling whose numbers are over 30 minutes old
  *                               { action: 'compute_due' }          every race due and not yet sent
  *                               { action: 'sent' | 'paid' | 'reopen', dealId, paidRef?, note? }
  *                               { action: 'set_terms', dealId, structure: 'percent' | 'per_order', pct?, perOrder? }   written to the Attio deal
  */
 import { setCors } from '../../_lib/auth.js'
 import { requireAdminOnly, recordAudit } from '../../_lib/users.js'
-import { listRacePayouts, computeRacePayout, computeDue, setRacePayoutStatus, setRaceTerms, reportFor, DAYS_BEFORE, DAYS_AFTER, DUE_DAYS, DEFAULT_PCT } from '../../../server/domain/finance/racePayouts.js'
+import { listRacePayouts, computeRacePayout, refreshLive, computeDue, setRacePayoutStatus, setRaceTerms, reportFor, DAYS_BEFORE, DAYS_AFTER, DUE_DAYS, DEFAULT_PCT } from '../../../server/domain/finance/racePayouts.js'
 import { answerError, body } from '../../_lib/finance.js'
 
 const withReport = r => ({ ...r, report: reportFor(r) })
@@ -22,7 +23,11 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const races = (await listRacePayouts()).map(withReport)
-      return res.status(200).json({ races, rules: { daysBefore: DAYS_BEFORE, daysAfter: DAYS_AFTER, dueDays: DUE_DAYS, defaultPct: DEFAULT_PCT } })
+      // What we owe races right now: every payout not yet paid, split by whether the race is still selling.
+      const open = races.filter(r => r.status !== 'paid' && r.payoutCents != null)
+      const sum = rows => rows.reduce((t, r) => t + r.payoutCents, 0)
+      const owed = { totalCents: sum(open), accruingCents: sum(open.filter(r => !r.windowClosed)), closedCents: sum(open.filter(r => r.windowClosed)), races: open.length }
+      return res.status(200).json({ races, owed, rules: { daysBefore: DAYS_BEFORE, daysAfter: DAYS_AFTER, dueDays: DUE_DAYS, defaultPct: DEFAULT_PCT } })
     }
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
     const b = body(req)
@@ -30,6 +35,10 @@ export default async function handler(req, res) {
       const r = withReport(await computeRacePayout(String(b.dealId || '')))
       await recordAudit({ action: 'race_payout.compute', summary: `Pulled ${r.name}'s sales: ${r.sales.unitsSold} units, ${usd(r.sales.netSalesCents)} net, payout ${usd(r.payoutCents)}`, detail: { dealId: r.dealId, sales: r.sales, terms: r.termsUsed }, actor })
       return res.status(200).json({ race: r })
+    }
+    if (b.action === 'refresh_live') {
+      // Machinery, not a decision: no audit entry (the cron runs it hourly too).
+      return res.status(200).json(await refreshLive())
     }
     if (b.action === 'compute_due') {
       const out = await computeDue()

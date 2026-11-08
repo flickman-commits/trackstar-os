@@ -26,6 +26,7 @@ export const financeApi = {
   payoutAction: <T = PayRun,>(body: Record<string, unknown>) => post<T>('/api/finance/payouts', body),
   racePayouts: () => request<RacePayoutsPayload>('/api/finance/race-payouts'),
   racePayoutAction: (body: Record<string, unknown>) => post<{ race: RacePayout }>('/api/finance/race-payouts', body),
+  racePayoutsRefresh: () => post<{ refreshed: number; failed: { name: string; error: string }[] }>('/api/finance/race-payouts', { action: 'refresh_live' }),
   racePayoutsDue: () => post<{ computed: number; failed: { name: string; error: string }[] }>('/api/finance/race-payouts', { action: 'compute_due' }),
   replacements: (month: string) => request<ReplacementsPayload>(`/api/finance/replacements?month=${month}`),
   replacementUpdate: (body: { id: string; reason?: string; note?: string; reimbursed?: boolean }) => post<{ ok: true }>('/api/finance/replacements', body),

@@ -55,12 +55,12 @@ export type RaceTerms = { structure: 'percent' | 'per_order'; pct: number | null
 export type RaceSales = { grossCents: number; discountCents: number; refundCents: number; netSalesCents: number; unitsSold: number; orders: number; computedAt: string; products: string[]; canonical: string | null }
 export type RaceReport = { report: string; subject: string; to: string | null; email: string; window: string }
 export type RacePayout = {
-  dealId: string; name: string; stage: string; raceDate: string | null; window: { start: string; end: string } | null; dueDate: string | null; daysToDue: number | null; windowClosed: boolean
+  dealId: string; name: string; stage: string; raceDate: string | null; window: { start: string; end: string } | null; dueDate: string | null; daysToDue: number | null; windowClosed: boolean; windowOpen: boolean; final: boolean
   terms: RaceTerms; termsUsed: RaceTerms | null; poc: { name: string | null; email: string | null } | null; contractUrl: string | null; webUrl: string | null; runners: number | string | null
   status: 'pending' | 'sent' | 'paid'; sales: RaceSales | null; payoutCents: number | null; sentAt: string | null; paidAt: string | null; paidRef: string | null; note: string | null
   report: RaceReport | null; attio?: string | null
 }
-export type RacePayoutsPayload = { races: RacePayout[]; rules: { daysBefore: number; daysAfter: number; dueDays: number; defaultPct: number } }
+export type RacePayoutsPayload = { races: RacePayout[]; owed: { totalCents: number; accruingCents: number; closedCents: number; races: number }; rules: { daysBefore: number; daysAfter: number; dueDays: number; defaultPct: number } }
 
 /** One month of payouts (Finance > Payouts): every line in three states, and the totals. */
 export type PayoutState = 'in_progress' | 'submitted' | 'approved'

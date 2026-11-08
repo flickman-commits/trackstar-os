@@ -85,3 +85,14 @@ export function StatusChip({ status }: { status: string }) {
   const label: Record<string, string> = { draft: 'In progress', in_progress: 'In progress', rejected: 'In progress', submitted: 'Submitted', approved: 'Approved', paid: 'Paid', empty: 'No hours' }
   return <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold ${tone[status] || tone.draft}`}>{label[status] || status}</span>
 }
+
+/** A big number with a label, for a row of totals. */
+export function Stat({ label, value, sub, warn = false }: { label: string; value: string; sub?: string; warn?: boolean }) {
+  return (
+    <div className={`${card} p-4`}>
+      <p className="text-xs text-off-black/50">{label}</p>
+      <p className={`text-2xl font-semibold tabular-nums mt-0.5 ${warn ? 'text-red-600' : 'text-off-black'}`}>{value}</p>
+      {sub && <p className="text-[11px] text-off-black/50 mt-0.5">{sub}</p>}
+    </div>
+  )
+}

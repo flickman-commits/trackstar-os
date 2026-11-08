@@ -9,6 +9,11 @@
  * order in the window, the line items that are that race's products, net of
  * discounts and refunds.
  *
+ * While a race's window is open the payout keeps accruing: refreshLive()
+ * pulls sales again (cron hourly in the morning, and whenever the Races tab
+ * opens on numbers older than half an hour), so the figure is what we owe
+ * so far, before the payout is due.
+ *
  * Postgres keeps machinery only, in SystemConfig under race_payout:<dealId>:
  * the last computed sales and the status (pending -> sent -> paid). Nothing
  * here duplicates an Attio field.
@@ -79,6 +84,8 @@ function view(deal, state, today) {
     dealId: deal.id, name: deal.name, stage: deal.stage, raceDate: date, window, dueDate,
     daysToDue: dueDate ? daysBetween(today, dueDate) : null,
     windowClosed: window ? window.end < today : false,
+    windowOpen: window ? window.start <= today && today <= window.end : false,
+    final: !!(sales && window && isFinal(sales, window)),
     terms, poc: poc ? { name: [poc.firstName, poc.lastName].filter(Boolean).join(' ') || poc.name || null, email: poc.email || null } : null,
     contractUrl: deal.contractUrl || null, webUrl: deal.webUrl || null, runners: deal.runners || null,
     status: state?.status || 'pending', sales, payoutCents: sales ? payoutCents(state.termsUsed || terms, sales) : null, termsUsed: state?.termsUsed || null,
@@ -124,18 +131,10 @@ export async function ordersIn(window) {
   return all.filter(o => !o.cancelled_at && !o.test)
 }
 
-/** Pull the race's sales from Shopify and keep them. */
-export async function computeRacePayout(dealId, { today = todayET() } = {}) {
-  const deal = await getDeal(dealId, { fresh: true })
-  if (!deal) throw new RacePayoutError('No such deal in Attio', 404)
-  const date = raceDay(deal.raceDate)
-  if (!date) throw new RacePayoutError(`${deal.name} has no race date in Attio. Set race_date on the deal first.`)
-  const { canonical, products } = await productsFor(deal)
-  if (!products.length) throw new RacePayoutError(`No Shopify product matches "${deal.name}". Sync the catalog, or check the product title against the deal name.`)
+/** A race's sales in a set of Shopify orders: its own products' lines, net of discounts and refunds. */
+export function tally(productIds, orders) {
   // The catalog stores the GraphQL id (gid://shopify/Product/123); a REST line item carries the number.
-  const ids = new Set(products.map(p => String(p.productId).split('/').pop()))
-  const window = { start: addDays(date, -DAYS_BEFORE), end: addDays(date, DAYS_AFTER) }
-  const orders = await ordersIn(window)
+  const ids = new Set(productIds.map(id => String(id).split('/').pop()))
   let grossCents = 0, discountCents = 0, refundCents = 0, units = 0, refundedUnits = 0
   const orderIds = new Set()
   for (const o of orders) {
@@ -154,10 +153,85 @@ export async function computeRacePayout(dealId, { today = todayET() } = {}) {
       refundedUnits += Number(rli.quantity || 0)
     }
   }
-  const sales = { grossCents, discountCents, refundCents, netSalesCents: grossCents - discountCents - refundCents, unitsSold: units - refundedUnits, orders: orderIds.size, computedAt: new Date().toISOString(), products: products.map(p => p.title), canonical }
-  const prev = (await loadState([dealId]))[dealId] || {}
-  const state = await saveState(dealId, { ...prev, status: prev.status || 'pending', sales, termsUsed: termsFor(deal) })
+  return { grossCents, discountCents, refundCents, netSalesCents: grossCents - discountCents - refundCents, unitsSold: units - refundedUnits, orders: orderIds.size }
+}
+
+const inWindow = (orders, window) => {
+  const since = etStart(window.start).getTime(), until = etStart(addDays(window.end, 1)).getTime()
+  return orders.filter(o => { const t = new Date(o.created_at).getTime(); return t >= since && t < until })
+}
+
+async function saveSales(deal, { canonical, products }, orders) {
+  const sales = { ...tally(products.map(p => p.productId), orders), computedAt: new Date().toISOString(), products: products.map(p => p.title), canonical }
+  const prev = (await loadState([deal.id]))[deal.id] || {}
+  return saveState(deal.id, { ...prev, status: prev.status || 'pending', sales, termsUsed: termsFor(deal) })
+}
+
+/** Pull the race's sales from Shopify and keep them. */
+export async function computeRacePayout(dealId, { today = todayET() } = {}) {
+  const deal = await getDeal(dealId, { fresh: true })
+  if (!deal) throw new RacePayoutError('No such deal in Attio', 404)
+  const date = raceDay(deal.raceDate)
+  if (!date) throw new RacePayoutError(`${deal.name} has no race date in Attio. Set race_date on the deal first.`)
+  const found = await productsFor(deal)
+  if (!found.products.length) throw new RacePayoutError(`No Shopify product matches "${deal.name}". Sync the catalog, or check the product title against the deal name.`)
+  const window = { start: addDays(date, -DAYS_BEFORE), end: addDays(date, DAYS_AFTER) }
+  const state = await saveSales(deal, found, await ordersIn(window))
   return view(deal, state, today)
+}
+
+/** Sales pulled after the window closed are final; nothing more will land in them. */
+const isFinal = (sales, window) => !!sales?.computedAt && new Date(sales.computedAt).getTime() >= etStart(addDays(window.end, 1)).getTime()
+
+/**
+ * Keep what each race is owed current while it is still selling: every
+ * pending race whose window has opened and whose sales are not yet final,
+ * pulled again when the last pull is older than maxAgeMinutes. Races whose
+ * windows overlap share one read of Shopify's orders, so a busy race season
+ * costs one pass, not one per race. Runs from the finance-sync cron and when
+ * the Races tab opens on stale numbers.
+ */
+export async function refreshLive({ today = todayET(), maxAgeMinutes = 30 } = {}) {
+  if (!isAttioConfigured()) return { refreshed: 0, failed: [], skipped: 'Attio is not connected' }
+  const deals = (await loadDeals()).filter(d => d.motion === 'Race' && d.stage === 'Won')
+  const state = await loadState(deals.map(d => d.id))
+  const cutoff = Date.now() - maxAgeMinutes * 60_000
+  const due = []
+  for (const deal of deals) {
+    const date = raceDay(deal.raceDate)
+    const st = state[deal.id]
+    if (!date || (st?.status && st.status !== 'pending')) continue
+    const window = { start: addDays(date, -DAYS_BEFORE), end: addDays(date, DAYS_AFTER) }
+    if (window.start > today || isFinal(st?.sales, window)) continue
+    if (st?.sales?.computedAt && new Date(st.sales.computedAt).getTime() > cutoff) continue
+    due.push({ deal, window })
+  }
+  if (!due.length) return { refreshed: 0, failed: [] }
+  // Overlapping windows become one read: sort by start, merge while they touch.
+  due.sort((a, b) => a.window.start.localeCompare(b.window.start))
+  const clusters = []
+  for (const d of due) {
+    const last = clusters[clusters.length - 1]
+    if (last && d.window.start <= addDays(last.end, 1)) { last.items.push(d); if (d.window.end > last.end) last.end = d.window.end }
+    else clusters.push({ start: d.window.start, end: d.window.end, items: [d] })
+  }
+  let refreshed = 0
+  const failed = []
+  for (const c of clusters) {
+    const end = c.end < today ? c.end : today
+    let orders
+    try { orders = await ordersIn({ start: c.start, end }) }
+    catch (err) { for (const { deal } of c.items) failed.push({ name: deal.name, error: 'Could not read Shopify orders' }); console.warn('[race-payouts] Shopify read failed:', err?.message); continue }
+    for (const { deal, window } of c.items) {
+      try {
+        const found = await productsFor(deal)
+        if (!found.products.length) { failed.push({ name: deal.name, error: 'No Shopify product matches the deal name' }); continue }
+        await saveSales(deal, found, inWindow(orders, window))
+        refreshed++
+      } catch (err) { failed.push({ name: deal.name, error: err?.expose ? err.message : 'Could not tally sales' }) }
+    }
+  }
+  return { refreshed, failed }
 }
 
 /** Pull sales for every race whose payout is due and not yet sent. */

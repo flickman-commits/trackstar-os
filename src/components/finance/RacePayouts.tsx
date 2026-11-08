@@ -1,18 +1,31 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Check, Copy, ExternalLink, FileText, PencilLine, RefreshCw, Send, Undo2 } from 'lucide-react'
 import ActionModal from '@/components/ActionModal'
 import { btnPrimary, btnSecondary, btnGhost, modalInput, modalPrimary, modalCancel } from '@/lib/ui'
 import { financeApi, usd, dayLabel } from '@/lib/financeApi'
 import type { RacePayout, RacePayoutsPayload } from '@/types/finance'
-import { card, ErrorCard, Spinner, StatusChip, tableHead, num } from './bits'
+import { card, ErrorCard, Spinner, Stat, StatusChip, tableHead, num } from './bits'
 
 /**
  * Partnered races and what each is owed: the deal's terms and race date from
  * Attio, the race's sales from Shopify over its purchase window (15 days
  * before race day to 30 after), the payout due 30 days after the race. The
  * report and the email are the runbook's, word for word.
+ *
+ * While a race is still selling, its payout is what we owe so far: the tab
+ * re-pulls those races when it opens on numbers older than half an hour (the
+ * finance-sync cron keeps them warm too), so the totals up top are live.
  */
+const STALE_MS = 30 * 60_000
+const timeLabel = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }).toLowerCase().replace(' ', '')
+const pulledLabel = (iso: string) => {
+  const d = new Date(iso), today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' }) === today ? `as of ${timeLabel(iso)}` : `pulled ${dayLabel(iso.slice(0, 10))}`
+}
+/** Still selling and its numbers are old (or never pulled): worth a refresh. */
+const needsRefresh = (r: RacePayout) => r.status === 'pending' && !!r.window && !r.final && r.window.start <= new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+  && (!r.sales || Date.now() - new Date(r.sales.computedAt).getTime() > STALE_MS)
 export default function RacePayouts() {
   const [data, setData] = useState<RacePayoutsPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -20,8 +33,24 @@ export default function RacePayouts() {
   const [open, setOpen] = useState<RacePayout | null>(null)
   const [paying, setPaying] = useState<RacePayout | null>(null)
   const [editing, setEditing] = useState<RacePayout | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const refreshedOnce = useRef(false)
   const load = useCallback(async () => { try { setData(await financeApi.racePayouts()); setError(null) } catch (e) { setError((e as Error).message) } }, [])
+  const refreshLive = useCallback(async (quiet: boolean) => {
+    setRefreshing(true)
+    try {
+      const out = await financeApi.racePayoutsRefresh()
+      if (!quiet) out.failed.forEach(f => toast.error(`${f.name}: ${f.error}`))
+      await load()
+    } catch (e) { if (!quiet) toast.error((e as Error).message) } finally { setRefreshing(false) }
+  }, [load])
   useEffect(() => { load() }, [load])
+  // Opened on stale numbers for a race still selling: show what we have, then bring it up to date.
+  useEffect(() => {
+    if (!data || refreshedOnce.current) return
+    refreshedOnce.current = true
+    if (data.races.some(needsRefresh)) refreshLive(true)
+  }, [data, refreshLive])
 
   const act = async (body: Record<string, unknown>, key: string, done: (r: RacePayout) => string) => {
     setBusy(key)
@@ -42,15 +71,20 @@ export default function RacePayouts() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] text-off-black/50">Terms and the race date come from the Attio deal (rev_share_pct, or payout_per_order for a flat fee; {data.rules.defaultPct}% when empty). Sales are that race's prints in Shopify from {data.rules.daysBefore} days before race day to {data.rules.daysAfter} after, net of discounts and refunds. Due {data.rules.dueDays} days after the race.</p>
         <div className="flex items-center gap-2">
-          <button onClick={load} className={btnGhost}><RefreshCw className="w-3.5 h-3.5" /></button>
+          <button onClick={() => refreshLive(false)} disabled={refreshing} className={btnGhost} title="Pull sales again for every race still selling"><RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />{refreshing ? ' Updating' : ''}</button>
           {due.length > 0 && <button onClick={pullDue} disabled={busy !== null} className={btnPrimary}><RefreshCw className={`w-3.5 h-3.5 ${busy === 'due' ? 'animate-spin' : ''}`} /> Pull sales for {due.length} due</button>}
         </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Stat label="Owed to races now" value={usd(data.owed.totalCents, { cents: true })} sub={`${data.owed.races} race${data.owed.races === 1 ? '' : 's'} not yet paid`} />
+        <Stat label="Still selling" value={usd(data.owed.accruingCents, { cents: true })} sub="so far; grows until each window closes" />
+        <Stat label="Window closed, unpaid" value={usd(data.owed.closedCents, { cents: true })} sub="final numbers, payout due or sent" />
       </div>
       {data.races.length === 0 ? <div className={`${card} p-6 text-sm text-off-black/50`}>No won race deals in Attio.</div> : (
         <div className={`${card} overflow-x-auto`}>
           <table className="w-full text-xs whitespace-nowrap">
             <thead><tr className="bg-subtle-gray border-b border-border-gray">
-              {['Race', 'Race day', 'Due', 'Terms', 'Units', 'Net sales', 'Payout', 'Status', ''].map((h, i) => <th key={i} className={`px-3 py-2 ${tableHead} ${i >= 4 && i <= 6 ? num : 'text-left'}`}>{h}</th>)}
+              {['Race', 'Race day', 'Due', 'Terms', 'Units', 'Net sales', 'Owed', 'Status', ''].map((h, i) => <th key={i} className={`px-3 py-2 ${tableHead} ${i >= 4 && i <= 6 ? num : 'text-left'}`}>{h}</th>)}
             </tr></thead>
             <tbody>
               {data.races.map(r => {
@@ -63,8 +97,8 @@ export default function RacePayouts() {
                     <td className="px-3 py-2"><button onClick={() => setEditing(r)} className="inline-flex items-center gap-1 hover:underline" title="Change the terms (written to the Attio deal)">{termsText(r)}<PencilLine className="w-3 h-3 text-off-black/40" /></button></td>
                     <td className={`px-3 py-2 ${num}`}>{r.sales ? r.sales.unitsSold.toLocaleString('en-US') : '–'}</td>
                     <td className={`px-3 py-2 ${num}`}>{r.sales ? usd(r.sales.netSalesCents, { cents: true }) : '–'}</td>
-                    <td className={`px-3 py-2 ${num} font-semibold`}>{r.payoutCents != null ? usd(r.payoutCents, { cents: true }) : '–'}</td>
-                    <td className="px-3 py-2"><StatusChip status={r.status === 'sent' ? 'submitted' : r.status === 'paid' ? 'paid' : 'draft'} />{r.sales && <span className="block text-[10px] text-off-black/40">pulled {dayLabel(r.sales.computedAt.slice(0, 10))}</span>}</td>
+                    <td className={`px-3 py-2 ${num} font-semibold`}>{r.payoutCents != null ? usd(r.payoutCents, { cents: true }) : '–'}{r.payoutCents != null && r.status === 'pending' && !r.final && <span className="block font-normal text-[10px] text-off-black/45">so far</span>}</td>
+                    <td className="px-3 py-2"><StatusChip status={r.status === 'sent' ? 'submitted' : r.status === 'paid' ? 'paid' : 'draft'} />{r.sales && <span className="block text-[10px] text-off-black/40">{r.final ? `final, ${pulledLabel(r.sales.computedAt)}` : pulledLabel(r.sales.computedAt)}</span>}</td>
                     <td className="px-3 py-2">
                       <span className="inline-flex items-center gap-1">
                         {r.status !== 'paid' && <button onClick={() => act({ action: 'compute', dealId: r.dealId }, r.dealId, x => `${x.name}: ${x.sales?.unitsSold} units, ${usd(x.sales?.netSalesCents ?? 0)} net`)} disabled={busy !== null || !r.raceDate} className={btnSecondary} title="Pull this race's sales from Shopify"><RefreshCw className={`w-3.5 h-3.5 ${busy === r.dealId ? 'animate-spin' : ''}`} /> {r.sales ? 'Pull again' : 'Pull sales'}</button>}
