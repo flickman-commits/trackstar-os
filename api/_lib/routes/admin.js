@@ -16,6 +16,7 @@ export default {
   'admin/roles': () => import('../../_routes/admin/roles.js'),
   'admin/stats': () => import('../../_routes/admin/stats.js'),
   'admin/support-closes': () => import('../../_routes/admin/support-closes.js'),
+  'admin/support-stats': () => import('../../_routes/admin/support-stats.js'),
   'admin/users': () => import('../../_routes/admin/users.js'),
   'admin/view-as': () => import('../../_routes/admin/view-as.js'),
   'auth/accept-invite': () => import('../../_routes/auth/accept-invite.js'),
@@ -26,5 +27,6 @@ export default {
   'finance/overview': () => import('../../_routes/finance/overview.js'),
   'finance/payouts': () => import('../../_routes/finance/payouts.js'),
   'finance/race-payouts': () => import('../../_routes/finance/race-payouts.js'),
+  'finance/replacements': () => import('../../_routes/finance/replacements.js'),
   'finance/timesheets': () => import('../../_routes/finance/timesheets.js'),
 }

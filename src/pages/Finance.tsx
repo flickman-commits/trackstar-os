@@ -5,6 +5,7 @@ import { useDocumentHead } from '@/lib/useDocumentHead'
 import Overview from '@/components/finance/Overview'
 import Daily from '@/components/finance/Daily'
 import Payouts from '@/components/finance/Payouts'
+import Replacements from '@/components/finance/Replacements'
 import Timesheets from '@/components/finance/Timesheets'
 import Forecast from '@/components/finance/Forecast'
 
@@ -18,9 +19,9 @@ import Forecast from '@/components/finance/Forecast'
  * fee) and what was paid. Timesheets is every person's hours, for approval.
  * Forecast comes in a later phase. See docs/finance-panel-plan.md.
  */
-type Section = 'overview' | 'daily' | 'payouts' | 'timesheets' | 'forecast'
+type Section = 'overview' | 'daily' | 'payouts' | 'replacements' | 'timesheets' | 'forecast'
 const TABS: [Section, string, string][] = [
-  ['overview', 'Overview', '/finance'], ['daily', 'Daily', '/finance/daily'], ['payouts', 'Payouts', '/finance/payouts'],
+  ['overview', 'Overview', '/finance'], ['daily', 'Daily', '/finance/daily'], ['payouts', 'Payouts', '/finance/payouts'], ['replacements', 'Replacements', '/finance/replacements'],
   ['timesheets', 'Timesheets', '/finance/timesheets'], ['forecast', 'Forecast', '/finance/forecast'],
 ]
 
@@ -50,6 +51,7 @@ export default function Finance() {
           {section === 'overview' && <Overview />}
           {section === 'daily' && <Daily />}
           {section === 'payouts' && <Payouts />}
+          {section === 'replacements' && <Replacements />}
           {section === 'timesheets' && <Timesheets />}
           {section === 'forecast' && <Forecast />}
         </section>

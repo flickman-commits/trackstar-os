@@ -40,7 +40,7 @@ export default async function handler(req, res) {
       // Artelo account; trying the flow is an admin's job.
       if (body.test === true && user.role !== 'admin') return res.status(403).json({ error: 'Test orders are for admins. Leave Test off to send the real one.' })
       await claimOnce('support.artelo_order', body.idempotencyKey)
-      const out = await createReorder({ thread, shopifyOrderId: body.shopifyOrderId, orderIds: Array.isArray(body.orderIds) ? body.orderIds.map(String) : [], changes: body.changes && typeof body.changes === 'object' ? body.changes : null, files: body.files && typeof body.files === 'object' ? body.files : null, frames: Array.isArray(body.frames) ? body.frames : null, address: body.address, email: body.email, instructions: body.instructions, test: body.test === true, actor: user })
+      const out = await createReorder({ thread, shopifyOrderId: body.shopifyOrderId, orderIds: Array.isArray(body.orderIds) ? body.orderIds.map(String) : [], changes: body.changes && typeof body.changes === 'object' ? body.changes : null, files: body.files && typeof body.files === 'object' ? body.files : null, frames: Array.isArray(body.frames) ? body.frames : null, address: body.address, email: body.email, instructions: body.instructions, test: body.test === true, reason: body.reason, note: body.reasonNote, quotedCents: body.quotedCents, actor: user })
       await recordAudit({ action: 'support.artelo_order', summary: out.summary, detail: { threadId: thread.id, shopifyOrderId: body.shopifyOrderId, arteloOrderId: out.orderId, test: out.test }, actor: user })
       return res.status(200).json(out)
     }

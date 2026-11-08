@@ -25,7 +25,7 @@ import LookupHealthPanel from '@/components/LookupHealthPanel'
 import ClearResearchCard from '@/components/ClearResearchCard'
 import Toast, { type ToastMessage } from '@/components/orders/Toast'
 
-export type SettingsPanel = 'features' | 'design_needs' | 'products' | 'pricing' | 'reviews' | 'stats' | 'races' | 'lookup' | 'storefront' | 'account' | 'people' | 'roles' | 'apikeys' | 'connections' | 'crons' | 'assignments' | 'skipped' | 'gallery' | 'support_closes' | 'activity' | 'counter' | 'designs' | 'diagnostics' | 'maintenance'
+export type SettingsPanel = 'features' | 'design_needs' | 'products' | 'pricing' | 'reviews' | 'stats' | 'races' | 'lookup' | 'storefront' | 'account' | 'people' | 'roles' | 'apikeys' | 'connections' | 'crons' | 'assignments' | 'skipped' | 'gallery' | 'support_closes' | 'support_stats' | 'activity' | 'counter' | 'designs' | 'diagnostics' | 'maintenance'
 
 /**
  * Settings navigation. Grouped rather than a flat list because the panels do
@@ -69,7 +69,7 @@ const SETTINGS_NAV: {
     group: 'Reports',
     adminOnly: true,
     items: [
-      { id: 'stats', label: 'Stats', blurb: 'How fast orders go out, Shopify numbers and Tickets Resolved', icon: BarChart3 },
+      { id: 'stats', label: 'Stats', blurb: 'How fast orders go out, Shopify numbers, Tickets Resolved and Support', icon: BarChart3 },
       { id: 'activity', label: 'Activity Log', blurb: 'Who did what, and when', icon: ScrollText },
     ],
   },
@@ -127,10 +127,10 @@ export default function Settings() {
 
   const goToSettings = useNavigate()
   const { pathname: currentPath } = useLocation()
-  // Tickets Resolved is a tab of Stats; its old address (/settings/support_closes) still opens it.
+  // Tickets Resolved and Support are tabs of Stats, at /settings/support_closes and /settings/support_stats.
   const pathPanel = currentPath.split('/')[2]
   const settingsPanelInUrl = visibleItems.find(i => i.id === pathPanel)?.id
-    || (isAdmin && pathPanel === 'support_closes' ? pathPanel as SettingsPanel : null)
+    || (isAdmin && (pathPanel === 'support_closes' || pathPanel === 'support_stats') ? pathPanel as SettingsPanel : null)
   // A phone opens on the list of sections; a desktop opens on the first one this role can see.
   const isPhone = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
   const settingsPanel: SettingsPanel = settingsPanelInUrl || visibleItems[0]?.id || 'account'
@@ -255,7 +255,7 @@ export default function Settings() {
                         <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-off-black/35">{group.group}</p>
                         {items.map((item) => {
                           const Icon = item.icon
-                          const active = settingsPanel === item.id || (item.id === 'stats' && settingsPanel === 'support_closes')
+                          const active = settingsPanel === item.id || (item.id === 'stats' && (settingsPanel === 'support_closes' || settingsPanel === 'support_stats'))
                           return (
                             <button
                               key={item.id}
@@ -285,17 +285,17 @@ export default function Settings() {
                   </button>
                   <div className="min-w-0">
                     <h2 className="text-base font-semibold text-off-black truncate">
-                      {visibleItems.find((i) => i.id === (settingsPanel === 'support_closes' ? 'stats' : settingsPanel))?.label ?? 'Settings'}
+                      {visibleItems.find((i) => i.id === (settingsPanel === 'support_closes' || settingsPanel === 'support_stats' ? 'stats' : settingsPanel))?.label ?? 'Settings'}
                     </h2>
                     <p className="hidden md:block text-xs text-off-black/45 truncate">
-                      {visibleItems.find((i) => i.id === (settingsPanel === 'support_closes' ? 'stats' : settingsPanel))?.blurb ?? ''}
+                      {visibleItems.find((i) => i.id === (settingsPanel === 'support_closes' || settingsPanel === 'support_stats' ? 'stats' : settingsPanel))?.blurb ?? ''}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex-1 overflow-auto p-3 md:p-5">
               {settingsPanel === 'pricing' && isAdmin && <PricingCalculator />}
-              {(settingsPanel === 'stats' || settingsPanel === 'support_closes') && isAdmin && <StatsHub initial={settingsPanel === 'support_closes' ? 'tickets' : 'overview'} />}
+              {(settingsPanel === 'stats' || settingsPanel === 'support_closes' || settingsPanel === 'support_stats') && isAdmin && <StatsHub initial={settingsPanel === 'support_closes' ? 'tickets' : settingsPanel === 'support_stats' ? 'support' : 'overview'} />}
               {/* The Custom Counter lives in Finance > Payouts now; old links still land there. */}
               {settingsPanel === 'counter' && <Navigate to="/finance/payouts" replace />}
               {settingsPanel === 'design_needs' && can('settings.design_needs') && <DesignNeedsPanel />}

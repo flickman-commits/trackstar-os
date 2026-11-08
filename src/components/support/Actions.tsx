@@ -422,7 +422,7 @@ function ArteloTicketForm({ o, thread, onDone, onCancel }: FormProps) {
 }
 
 type ReorderPrep = {
-  number: string; nextOrderId: string; sizes: Choice[]; frames: Choice[]
+  number: string; nextOrderId: string; sizes: Choice[]; frames: Choice[]; reasons?: Choice[]
   items: { orderId: string; label: string; productLabel: string; designFrom: string | null; copyable: boolean; size: string | null; frame: string | null; previewUrl?: string | null; designUrl?: string | null; renderedSizes?: string[] }[]
 }
 
@@ -464,6 +464,9 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
   const [a, setA] = useState<Address>(o.shipTo || o.arteloAddress || blankAddress(thread))
   const [email, setEmail] = useState(thread.customerEmail || '')
   const [instructions, setInstructions] = useState('')
+  // Why it is being sent: Finance > Replacements totals them by reason.
+  const [reason, setReason] = useState('')
+  const [reasonNote, setReasonNote] = useState('')
   const [test, setTest] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [pressKey, setPressKey] = useState('')
@@ -512,7 +515,7 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
     if (!confirming) { setConfirming(true); setPressKey(newIdempotencyKey()); return }
     setBusy(true)
     try {
-      const out = await supportApi.arteloOrder<{ orderId: string; url: string | null; test: boolean }>({ action: 'create', id: thread.id, shopifyOrderId: o.shopifyOrderId, orderIds: picked, changes, frames: frameOn ? [looseFrame] : [], files: Object.fromEntries(Object.entries(files).filter(([id]) => picked.includes(id)).map(([id, f]) => [id, f.ref])), address: a, email, instructions, test: isAdmin && test, idempotencyKey: pressKey })
+      const out = await supportApi.arteloOrder<{ orderId: string; url: string | null; test: boolean }>({ action: 'create', id: thread.id, shopifyOrderId: o.shopifyOrderId, orderIds: picked, changes, frames: frameOn ? [looseFrame] : [], files: Object.fromEntries(Object.entries(files).filter(([id]) => picked.includes(id)).map(([id, f]) => [id, f.ref])), address: a, email, instructions, test: isAdmin && test, reason, reasonNote, quotedCents: quote?.q.totalCents ?? null, idempotencyKey: pressKey })
       setDone(out)
       toast.success(`${out.test ? 'Test order' : 'Artelo order'} ${out.orderId} created`)
       onDone()
@@ -531,10 +534,10 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
   }
   return (
     <ActionModal icon={Repeat} title="New Artelo order" sub={`#${o.number}`} onClose={onCancel} busy={busy} size="lg"
-      hint={confirming ? <span className={`${bad} font-medium`}>{test ? 'Create a test order in Artelo?' : `Send ${[picked.length && `${picked.length} print${picked.length === 1 ? '' : 's'}`, frameOn && 'an empty frame'].filter(Boolean).join(' and ')} to production? Artelo charges ${quote ? usd(quote.q.totalCents) : 'for it'}.`}</span> : 'A reprint or replacement, $0 to the customer.'}
+      hint={confirming ? <span className={`${bad} font-medium`}>{test ? 'Create a test order in Artelo?' : `Send ${[picked.length && `${picked.length} print${picked.length === 1 ? '' : 's'}`, frameOn && 'an empty frame'].filter(Boolean).join(' and ')} to production? Artelo charges ${quote ? usd(quote.q.totalCents) : 'for it'}.`}</span> : (reason || (isAdmin && test) ? 'A reprint or replacement, $0 to the customer.' : 'Pick why it is being sent, then create it.')}
       footer={<>
         <button onClick={() => (confirming ? setConfirming(false) : onCancel())} disabled={busy} className={modalCancel}>{confirming ? 'Back' : 'Cancel'}</button>
-        <button onClick={create} disabled={busy || !prep || (!picked.length && !frameOn)} className={modalPrimary}>{busy && <Spin />}{confirming ? (test ? 'Yes, create test order' : 'Yes, create it') : 'Create Artelo order'}</button>
+        <button onClick={create} disabled={busy || !prep || (!picked.length && !frameOn) || (!reason && !(isAdmin && test))} className={modalPrimary}>{busy && <Spin />}{confirming ? (test ? 'Yes, create test order' : 'Yes, create it') : 'Create Artelo order'}</button>
       </>}>
       {!prep && !err && <Loading>Reading the order from Artelo</Loading>}
       {prep && (
@@ -680,6 +683,16 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
                 )}
             </div>
           )}
+          <div>
+            <div className="text-sm font-semibold text-off-black">Why is it being sent?</div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {(prep.reasons || []).map(r => (
+                <button key={r.value} type="button" onClick={() => setReason(r.value)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium ${reason === r.value ? 'border-[#4600D6] bg-[#4600D6]/[0.06] text-[#4600D6]' : 'border-border-gray text-off-black/70 hover:bg-subtle-gray'}`}>{r.label}</button>
+              ))}
+            </div>
+            {reason && <input className={`${modalInput} mt-2`} value={reasonNote} onChange={e => setReasonNote(e.target.value)} placeholder="What happened, for the books (optional)" />}
+          </div>
           <div className="pt-1 text-sm font-semibold text-off-black">Ship to</div>
           <AddressFields a={a} setA={setA} email={email} setEmail={setEmail} phoneLabel="Phone (needed outside the US)" />
           <Field label="Note for Artelo (optional)"><input className={modalInput} value={instructions} onChange={e => setInstructions(e.target.value)} placeholder="e.g. Replacement, frame arrived cracked" /></Field>

@@ -1699,3 +1699,36 @@ model PayoutLine {
 
   @@index([userId, createdAt])
 }
+
+// A replacement we send at our own cost: an order made from Support's New
+// Artelo order ("4829-R1"), which Artelo bills like any order. The ones
+// Artelo makes free after a damage claim ("4341-R") are not here. Finance >
+// Replacements totals these by month for the P&L. Cost is what Artelo
+// billed (orders/get details.total), read back after the order is made;
+// quotedCents is the price check at the time, until then.
+model Replacement {
+  id             String    @id @default(cuid())
+  arteloOrderId  String    @unique // "4829-R1"
+  arteloId       String?   // Artelo's own id, for the link
+  orderNumber    String    // "4829", the order it replaces
+  shopifyOrderId String?
+  threadId       String?
+  // damaged | lost | our_mistake | customer_change | other
+  reason         String    @default("other")
+  note           String    @default("")
+  // What was sent: [{ label, kind: "print" | "frame", size, frame }]
+  items          Json
+  quotedCents    Int?
+  billedCents    Int?
+  currency       String    @default("USD")
+  // Artelo cancelled it, or it was paid back: left out of the totals.
+  canceled       Boolean   @default(false)
+  reimbursed     Boolean   @default(false)
+  costCheckedAt  DateTime?
+  createdById    String?
+  createdByName  String    @default("")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([createdAt])
+}

@@ -31,6 +31,7 @@ import { storage } from '../../lib/storage.js'
 import { BUCKET } from '../render/jobs.js'
 import { readUpload } from './uploads.js'
 import { accountSetup } from '../../services/arteloPriceCheck.js'
+import { recordReplacement, isReason, REASONS } from '../finance/replacements.js'
 
 const BASE = 'https://www.artelo.com/api/open/'
 
@@ -258,6 +259,7 @@ export async function reorderPrep({ shopifyOrderId }) {
     number,
     nextOrderId: await nextOrderId(number, rows.map(r => r.id)),
     items: await Promise.all(items.map(async i => ({ orderId: i.orderId, label: i.label, productLabel: i.productLabel, designFrom: i.designFrom, copyable: copyable(i), size: i.product?.size || null, frame: i.product?.frameColor || null, renderedSizes: Object.keys(i.otherSizes), ...(await designPreview(i)) }))),
+    reasons: REASONS,
     sizes: REPLACEMENT_SIZES.map(v => ({ value: v, label: sizeLabel(v) })),
     frames: REPLACEMENT_FRAMES.map(v => ({ value: v, label: v === 'Unframed' ? 'Unframed' : v.replace(/([a-z])([A-Z])/g, '$1 $2') })),
   }
@@ -326,7 +328,7 @@ export async function quoteReorder({ lines, address }) {
   }
 }
 
-export async function createReorder({ thread, shopifyOrderId, orderIds, changes, files, frames, address, email, instructions, test, actor }) {
+export async function createReorder({ thread, shopifyOrderId, orderIds, changes, files, frames, address, email, instructions, test, reason, note, quotedCents, actor }) {
   const id = String(shopifyOrderId || '').trim()
   if (!/^\d+$/.test(id)) throw new UserError('That order has no Shopify id')
   const a = {}
@@ -336,6 +338,8 @@ export async function createReorder({ thread, shopifyOrderId, orderIds, changes,
   if (a.country === 'US' && !US_STATES.test(a.province.toUpperCase())) throw new UserError('Use the two-letter state code, like NY')
   if (a.country !== 'US' && !a.phone) throw new UserError('Artelo needs a phone number for an order outside the US')
   const mail = String(email || '').trim()
+  // Why it is being sent, for Finance > Replacements. A test order is not a replacement.
+  if (!test && !isReason(reason)) throw new UserError('Pick why this is being sent')
 
   const { rows, items, stored, number } = await itemsFor(id)
   const picked = items.filter(i => (orderIds || []).includes(i.orderId))
@@ -423,5 +427,12 @@ export async function createReorder({ thread, shopifyOrderId, orderIds, changes,
     // Frames alone go on the order's first print, so the order still counts toward -R numbering.
     ...(test ? [] : (picked.length ? picked.map(i => i.orderId) : rows.slice(0, 1).map(r => r.id)).map(orderRowId => prisma.orderComment.create({ data: { orderId: orderRowId, text: `New Artelo order ${orderId} sent from Support${String(instructions || '').trim() ? `: ${String(instructions).trim().slice(0, 300)}` : ''}`, authorId: actor?.id || null, authorName: by } }))),
   ])
+  if (!test) {
+    await recordReplacement({
+      arteloOrderId: orderId, arteloId: created?.id || null, orderNumber: number, shopifyOrderId: id, threadId: thread.id,
+      reason, note, quotedCents: Number.isInteger(quotedCents) ? quotedCents : null, actor, actorName: by,
+      items: sending.map(i => ({ label: i.label, kind: i.frameOnly ? 'frame' : 'print', size: String(i.product?.size || '').replace(/^x/, ''), frame: i.product?.frameColor || 'Unframed' })),
+    })
+  }
   return { orderId, arteloId: created?.id || null, url, test: Boolean(test), items: sending.length, summary: `Created ${what}` }
 }

@@ -27,6 +27,8 @@ export const financeApi = {
   racePayouts: () => request<RacePayoutsPayload>('/api/finance/race-payouts'),
   racePayoutAction: (body: Record<string, unknown>) => post<{ race: RacePayout }>('/api/finance/race-payouts', body),
   racePayoutsDue: () => post<{ computed: number; failed: { name: string; error: string }[] }>('/api/finance/race-payouts', { action: 'compute_due' }),
+  replacements: (month: string) => request<ReplacementsPayload>(`/api/finance/replacements?month=${month}`),
+  replacementUpdate: (body: { id: string; reason?: string; note?: string; reimbursed?: boolean }) => post<{ ok: true }>('/api/finance/replacements', body),
   forecast: (scenario: string) => request<ForecastPayload>(`/api/finance/forecast?scenario=${scenario}`),
   forecastAction: (body: Record<string, unknown>) => post<ForecastPayload>('/api/finance/forecast', body),
   payoutsMonth: (month: string) => request<MonthPayouts>(`/api/finance/payouts?month=${month}`),
@@ -68,3 +70,15 @@ export const shiftMonth = (month: string, by: number) => { const [y, m] = month.
 
 /** The chart series, in the validated order (dataviz reference palette, light). */
 export const SERIES = { cogs: '#2a78d6', adSpend: '#eb6834', designerFee: '#9b6fd0', cm: '#1baf7a', revenue: '#eda100', muted: '#9a9a9a' }
+
+export type ReplacementRow = {
+  id: string; arteloOrderId: string; orderNumber: string; url: string | null; threadId: string | null
+  reason: string; note: string; items: { label?: string; kind: 'print' | 'frame'; size: string; frame: string }[]
+  cents: number; billed: boolean; canceled: boolean; reimbursed: boolean; by: string | null; createdAt: string
+}
+export type ReplacementsPayload = {
+  month: string; today: string; reasons: { value: string; label: string }[]
+  count: number; totalCents: number; estimated: boolean
+  byReason: { reason: string; label: string; count: number; cents: number }[]
+  rows: ReplacementRow[]
+}
