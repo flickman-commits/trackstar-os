@@ -58,12 +58,16 @@ function actorName(actor) {
 /** The product of an Artelo order item, as the create call wants it. */
 export function productInfo(product, designs) {
   const p = product || {}
+  // An empty frame (PictureFrame) must leave paperType and orientation out
+  // altogether: Artelo rejects them as null ("Invalid Input") and rejects any
+  // value ("There should be no paper type", "Invalid orientation"). Checked
+  // with orders/price-check on 2026-11-08.
+  const bare = p.catalogProductId === 'PictureFrame'
   return {
     catalogProductId: p.catalogProductId,
     size: p.size,
     frameColor: p.frameColor ?? null,
-    paperType: p.paperType ?? null,
-    orientation: p.orientation ?? null,
+    ...(bare ? {} : { paperType: p.paperType ?? null, orientation: p.orientation ?? null }),
     includeMats: Boolean(p.includeMats),
     includeHangingPins: Boolean(p.includeHangingPins),
     includeFramingService: Boolean(p.includeFramingService),
