@@ -24,7 +24,7 @@ export default function BrandToaster() {
       toastOptions={{
         unstyled: true,
         style: toastStyle,
-        classNames: { toast: `${toastCard} w-[356px] max-w-[calc(100vw-32px)]`, icon: 'flex items-center w-2', description: 'text-off-black/55 font-normal' },
+        classNames: { toast: `${toastCard} w-[356px] max-w-[calc(100vw-32px)]`, icon: 'flex items-center w-2', description: 'text-off-black/55 font-normal', content: 'flex-1 min-w-0', actionButton: 'shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-sm font-semibold text-[#4600D6] hover:bg-[#4600D6]/[0.06] transition-colors', cancelButton: 'shrink-0 whitespace-nowrap rounded-md px-2.5 py-1 text-sm font-medium text-off-black/60 hover:bg-subtle-gray' },
       }}
     />
   )

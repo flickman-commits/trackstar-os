@@ -544,7 +544,7 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
           <div className="rounded-xl border border-border-gray p-3 space-y-2.5">
             <div className="flex items-start gap-3">
               <label className="flex-1 flex items-start gap-2.5 cursor-pointer text-off-black">
-                <input type="checkbox" checked={frameOn} onChange={e => setFrameOn(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#4600D6]" />
+                <input type="checkbox" checked={frameOn} onChange={e => { setFrameOn(e.target.checked); if (e.target.checked) setPicked([]) }} className="mt-0.5 w-4 h-4 accent-[#4600D6]" />
                 <span className="min-w-0">
                   <span className="font-medium">Send a frame</span>
                   <span className="block text-xs text-off-black/45">An empty frame with hanging pins, no print</span>
