@@ -284,7 +284,7 @@ async function nextOrderId(number, rowIds) {
 
 const US_STATES = /^[A-Z]{2}$/
 
-export async function createReorder({ thread, shopifyOrderId, orderIds, changes, files, address, email, instructions, test, actor }) {
+export async function createReorder({ thread, shopifyOrderId, orderIds, changes, files, frames, address, email, instructions, test, actor }) {
   const id = String(shopifyOrderId || '').trim()
   if (!/^\d+$/.test(id)) throw new UserError('That order has no Shopify id')
   const a = {}
@@ -297,21 +297,14 @@ export async function createReorder({ thread, shopifyOrderId, orderIds, changes,
 
   const { rows, items, stored, number } = await itemsFor(id)
   const picked = items.filter(i => (orderIds || []).includes(i.orderId))
-  if (!picked.length) throw new UserError('Pick at least one item to send')
-  // A frame on its own needs no design: it is settled here and skips every design step below.
-  for (const i of picked) {
-    const c = changes?.[i.orderId]
-    if (!c?.frameOnly) continue
-    const frame = c.frame || (FRAME_ONLY_FRAMES.includes(i.product?.frameColor) ? i.product.frameColor : 'BlackPremiumOak')
-    i.frameOnly = true
-    i.product = frameOnlyProduct(c.size || i.product?.size, frame)
-    i.productLabel = `Frame only · ${describe(i.product)}`
-    i.designs = []
-    i.driveFile = null
-  }
+  // Empty frames, no print: not tied to any print on the order, so the rep picks their size and colour.
+  const loose = (Array.isArray(frames) ? frames : []).slice(0, 5).map(f => {
+    const product = frameOnlyProduct(String(f?.size || ''), String(f?.frame || ''))
+    return { frameOnly: true, product, productLabel: `Frame only · ${describe(product)}`, label: 'Empty frame', designs: [] }
+  })
+  if (!picked.length && !loose.length) throw new UserError('Pick at least one item to send')
   // A new design file a rep uploaded for an item (the old one had a mistake) replaces its design.
   for (const i of picked) {
-    if (i.frameOnly) continue
     const ref = String(files?.[i.orderId] || '')
     if (!ref) continue
     if (!ref.startsWith('upload:')) throw new UserError('That design file was not uploaded here')
@@ -324,18 +317,17 @@ export async function createReorder({ thread, shopifyOrderId, orderIds, changes,
   // A different size: the approved render at that size, when one was made
   // from the order (Render another size), unless the rep uploaded a file.
   for (const i of picked) {
-    if (i.frameOnly || files?.[i.orderId]) continue
+    if (files?.[i.orderId]) continue
     const want = changes?.[i.orderId]?.size
     if (!want || sizeLabel(want) === sizeLabel(i.product?.size)) continue
     const alt = i.otherSizes[sizeLabel(want)]
     // Without one, the original file is used if it is the same shape (12x18 and 16x24 are); checkDesignFits says if not.
     if (alt) { i.designs = [{ imageId: alt.arteloUploadId }]; i.driveFile = null; i.designFrom = `the approved ${sizeLabel(want)} render (v${alt.version})` }
   }
-  const blocked = picked.find(i => !i.frameOnly && !copyable(i))
+  const blocked = picked.find(i => !copyable(i))
   if (blocked) throw new UserError(`${blocked.label} has no design to copy: no approved render and no PDF named for it in the Drive Orders folder. Build that one in Artelo.`)
   // The size and frame the customer asked for, else the original's.
   for (const i of picked) {
-    if (i.frameOnly) continue
     i.product = productWithChange(i.product, changes?.[i.orderId])
     i.productLabel = describe(i.product)
   }
@@ -346,7 +338,8 @@ export async function createReorder({ thread, shopifyOrderId, orderIds, changes,
     catch (err) { throw new UserError(`Could not copy ${i.driveFile.name} from Drive into Artelo: ${String(err.message).slice(0, 160)}`) }
   }
   // Nothing goes to production on a file the wrong shape for its size.
-  for (const i of picked) for (const d of (i.frameOnly ? [] : i.designs)) await checkDesignFits(d, i.product?.size, i.label)
+  for (const i of picked) for (const d of i.designs) await checkDesignFits(d, i.product?.size, i.label)
+  const sending = [...picked, ...loose]
 
   const orderId = await nextOrderId(number, rows.map(r => r.id))
   const body = {
@@ -359,7 +352,7 @@ export async function createReorder({ thread, shopifyOrderId, orderIds, changes,
       state: a.country === 'US' ? a.province.toUpperCase() : a.province, zipcode: a.zip, country: a.country,
       ...(mail ? { email: mail } : {}), ...(a.phone ? { phone: a.phone } : {}),
     },
-    items: picked.map((i, n) => ({ orderItemId: `${orderId}-${n + 1}`, productInfo: productInfo(i.product, i.designs), quantity: 1, unitPrice: 0 })),
+    items: sending.map((i, n) => ({ orderItemId: `${orderId}-${n + 1}`, productInfo: productInfo(i.product, i.designs), quantity: 1, unitPrice: 0 })),
     shippingCost: 0,
     total: 0,
     ...(String(instructions || '').trim() ? { instructions: String(instructions).trim().slice(0, 1000) } : {}),
@@ -381,11 +374,12 @@ export async function createReorder({ thread, shopifyOrderId, orderIds, changes,
   }
   const url = arteloOrderUrl(created?.id) || null
   const by = actorName(actor)
-  const what = `${test ? 'Test ' : ''}Artelo order ${orderId}: ${picked.map(i => `${i.label} (${i.productLabel})`).join('; ')} to ${a.name}, ${a.city} ${a.province}`
+  const what = `${test ? 'Test ' : ''}Artelo order ${orderId}: ${sending.map(i => `${i.label} (${i.productLabel})`).join('; ')} to ${a.name}, ${a.city} ${a.province}`
   await prisma.$transaction([
     prisma.supportNote.create({ data: { threadId: thread.id, kind: 'event', body: `${by} created ${what}`, authorId: actor?.id || null, authorName: by } }),
     // "New Artelo order" starts the comment so the next one is numbered -R2. A test order does not count.
-    ...(test ? [] : picked.map(i => prisma.orderComment.create({ data: { orderId: i.orderId, text: `New Artelo order ${orderId} sent from Support${String(instructions || '').trim() ? `: ${String(instructions).trim().slice(0, 300)}` : ''}`, authorId: actor?.id || null, authorName: by } }))),
+    // Frames alone go on the order's first print, so the order still counts toward -R numbering.
+    ...(test ? [] : (picked.length ? picked.map(i => i.orderId) : rows.slice(0, 1).map(r => r.id)).map(orderRowId => prisma.orderComment.create({ data: { orderId: orderRowId, text: `New Artelo order ${orderId} sent from Support${String(instructions || '').trim() ? `: ${String(instructions).trim().slice(0, 300)}` : ''}`, authorId: actor?.id || null, authorName: by } }))),
   ])
-  return { orderId, arteloId: created?.id || null, url, test: Boolean(test), items: picked.length, summary: `Created ${what}` }
+  return { orderId, arteloId: created?.id || null, url, test: Boolean(test), items: sending.length, summary: `Created ${what}` }
 }

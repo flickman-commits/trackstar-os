@@ -435,7 +435,11 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
   const [err, setErr] = useState<string | null>(null)
   const [picked, setPicked] = useState<string[]>([])
   // Size and frame per print, starting as the original; a customer may want something new on the replacement.
-  const [changes, setChanges] = useState<Record<string, { size: string; frame: string; frameOnly?: boolean }>>({})
+  // printOnly: the print alone, unframed, even if the original came framed.
+  const [changes, setChanges] = useState<Record<string, { size: string; frame: string; printOnly?: boolean }>>({})
+  // An empty frame, not tied to any print: the rep picks its size and colour.
+  const [frameOn, setFrameOn] = useState(false)
+  const [looseFrame, setLooseFrame] = useState({ size: '', frame: 'BlackPremiumOak' })
   // A new design file per print, for when the old one had a mistake.
   // localUrl is the file read in this browser, for the thumbnail before it is sent.
   const [files, setFiles] = useState<Record<string, { ref: string; name: string; localUrl: string; isPdf: boolean }>>({})
@@ -466,14 +470,14 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
   const [done, setDone] = useState<{ orderId: string; url: string | null; test: boolean } | null>(null)
   useEffect(() => {
     supportApi.arteloOrder<ReorderPrep>({ action: 'prep', id: thread.id, shopifyOrderId: o.shopifyOrderId })
-      .then(r => { setPrep(r); setPicked(r.items.filter(i => i.copyable).map(i => i.orderId)); setChanges(Object.fromEntries(r.items.map(i => [i.orderId, { size: i.size || '', frame: i.frame || 'Unframed' }]))) })
+      .then(r => { setPrep(r); setLooseFrame(f => ({ ...f, size: r.items.find(i => i.size)?.size || r.sizes[0]?.value || '' })); setPicked(r.items.filter(i => i.copyable).map(i => i.orderId)); setChanges(Object.fromEntries(r.items.map(i => [i.orderId, { size: i.size || '', frame: i.frame || 'Unframed' }]))) })
       .catch(e => setErr((e as Error).message))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const create = async () => {
     if (!confirming) { setConfirming(true); setPressKey(newIdempotencyKey()); return }
     setBusy(true)
     try {
-      const out = await supportApi.arteloOrder<{ orderId: string; url: string | null; test: boolean }>({ action: 'create', id: thread.id, shopifyOrderId: o.shopifyOrderId, orderIds: picked, changes, files: Object.fromEntries(Object.entries(files).filter(([id]) => picked.includes(id)).map(([id, f]) => [id, f.ref])), address: a, email, instructions, test: isAdmin && test, idempotencyKey: pressKey })
+      const out = await supportApi.arteloOrder<{ orderId: string; url: string | null; test: boolean }>({ action: 'create', id: thread.id, shopifyOrderId: o.shopifyOrderId, orderIds: picked, changes, frames: frameOn ? [looseFrame] : [], files: Object.fromEntries(Object.entries(files).filter(([id]) => picked.includes(id)).map(([id, f]) => [id, f.ref])), address: a, email, instructions, test: isAdmin && test, idempotencyKey: pressKey })
       setDone(out)
       toast.success(`${out.test ? 'Test order' : 'Artelo order'} ${out.orderId} created`)
       onDone()
@@ -492,54 +496,76 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
   }
   return (
     <ActionModal icon={Repeat} title="New Artelo order" sub={`#${o.number}`} onClose={onCancel} busy={busy} size="lg"
-      hint={confirming ? <span className={`${bad} font-medium`}>{test ? 'Create a test order in Artelo?' : `Send ${picked.length} print${picked.length === 1 ? '' : 's'} to production? Artelo charges for it.`}</span> : 'A reprint or replacement, $0 to the customer.'}
+      hint={confirming ? <span className={`${bad} font-medium`}>{test ? 'Create a test order in Artelo?' : `Send ${[picked.length && `${picked.length} print${picked.length === 1 ? '' : 's'}`, frameOn && 'an empty frame'].filter(Boolean).join(' and ')} to production? Artelo charges for it.`}</span> : 'A reprint or replacement, $0 to the customer.'}
       footer={<>
         <button onClick={() => (confirming ? setConfirming(false) : onCancel())} disabled={busy} className={modalCancel}>{confirming ? 'Back' : 'Cancel'}</button>
-        <button onClick={create} disabled={busy || !prep || !picked.length} className={modalPrimary}>{busy && <Spin />}{confirming ? (test ? 'Yes, create test order' : 'Yes, create it') : 'Create Artelo order'}</button>
+        <button onClick={create} disabled={busy || !prep || (!picked.length && !frameOn)} className={modalPrimary}>{busy && <Spin />}{confirming ? (test ? 'Yes, create test order' : 'Yes, create it') : 'Create Artelo order'}</button>
       </>}>
       {!prep && !err && <Loading>Reading the order from Artelo</Loading>}
       {prep && (
         <>
-          <div className="text-off-black/70">New order <b>{prep.nextOrderId}</b> in Artelo, $0: the same design again, or just a frame.</div>
+          <div className="text-off-black/70">New order <b>{prep.nextOrderId}</b> in Artelo, $0: a print again, an empty frame, or both.</div>
+          {/* An empty frame on its own, not tied to a print: a cracked frame is replaced without reprinting. */}
+          <div className="rounded-xl border border-border-gray p-3 space-y-2.5">
+            <label className="flex items-start gap-2.5 cursor-pointer text-off-black">
+              <input type="checkbox" checked={frameOn} onChange={e => setFrameOn(e.target.checked)} className="mt-0.5 w-4 h-4 accent-[#4600D6]" />
+              <span className="min-w-0">
+                <span className="font-medium">Send a frame</span>
+                <span className="block text-xs text-off-black/45">An empty frame with hanging pins, no print</span>
+              </span>
+            </label>
+            {frameOn && (
+              <div className="pl-6 grid grid-cols-2 gap-3">
+                <Field label="Size">
+                  <select className={modalInput} value={looseFrame.size} onChange={e => setLooseFrame(f => ({ ...f, size: e.target.value }))}>
+                    {prep.sizes.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Frame">
+                  <select className={modalInput} value={looseFrame.frame} onChange={e => setLooseFrame(f => ({ ...f, frame: e.target.value }))}>
+                    {FRAME_ONLY.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                  </select>
+                </Field>
+              </div>
+            )}
+          </div>
           <div className="space-y-3">
             {prep.items.map(i => {
               const on = picked.includes(i.orderId)
               const c = changes[i.orderId] || { size: i.size || '', frame: i.frame || 'Unframed' }
-              const frameOnly = Boolean(c.frameOnly)
-              const changed = !frameOnly && (c.size !== i.size || c.frame !== (i.frame || 'Unframed'))
+              const printOnly = Boolean(c.printOnly)
+              const framed = Boolean(i.frame && i.frame !== 'Unframed')
+              const changed = c.size !== i.size || (!printOnly && c.frame !== (i.frame || 'Unframed'))
               const setC = (k: 'size' | 'frame', v: string) => setChanges(prev => ({ ...prev, [i.orderId]: { ...c, [k]: v } }))
-              // A frame on its own: premium oak, black or natural, and no design. Switching back restores the print's own frame.
-              const setFrameOnly = (v: boolean) => {
-                setChanges(prev => ({ ...prev, [i.orderId]: v
-                  ? { ...c, frameOnly: true, frame: FRAME_ONLY.some(f => f.value === c.frame) ? c.frame : 'BlackPremiumOak' }
-                  : { size: c.size, frame: i.frame || 'Unframed' } }))
-                if (v) setPicked(p => p.includes(i.orderId) ? p : [...p, i.orderId])
-                else if (!i.copyable && !files[i.orderId]) setPicked(p => p.filter(x => x !== i.orderId))
-              }
-              const canPick = frameOnly || i.copyable || Boolean(files[i.orderId])
+              // Replace is the print as it was sent, frame and all; Print only is the print alone, unframed.
+              const setPrintOnly = (v: boolean) => setChanges(prev => ({ ...prev, [i.orderId]: { size: c.size, frame: v ? 'Unframed' : (i.frame || 'Unframed'), printOnly: v } }))
+              const canPick = i.copyable || Boolean(files[i.orderId])
               return (
                 <div key={i.orderId} className="rounded-xl border border-border-gray p-3 space-y-2.5">
                   <label className={`flex items-start gap-2.5 ${canPick ? 'cursor-pointer text-off-black' : 'text-off-black/40'}`} title={i.copyable ? `Design from ${i.designFrom}` : 'No approved render and no PDF named for this print in the Drive Orders folder. Upload a new file, or build this one in Artelo.'}>
                     <input type="checkbox" disabled={!canPick} checked={on} onChange={e => setPicked(p => e.target.checked ? [...p, i.orderId] : p.filter(x => x !== i.orderId))} className="mt-0.5 w-4 h-4 accent-[#4600D6]" />
                     <span className="min-w-0">
                       <span className="font-medium">{i.label}</span> <span className="text-off-black/45">· {i.productLabel}{canPick ? '' : ' · no design to copy'}</span>
-                      {frameOnly
-                        ? <span className="block text-xs text-[#4600D6]">Sends an empty frame, no print</span>
-                        : files[i.orderId]
+                      {files[i.orderId]
                         ? <span className="block text-xs text-[#4600D6]">Design: new file {files[i.orderId].name}</span>
                         : i.copyable && i.designFrom && <span className="block text-xs text-off-black/45">Design: {i.designFrom}</span>}
                     </span>
                   </label>
                   {/* Look before it is made again: the design that will be copied. */}
                   {/* The new file, as it will print: check it is the right one before it goes. */}
-                  {/* What to send: the print again, or only a frame. */}
-                  <div className="pl-6 inline-flex rounded-md border border-border-gray overflow-hidden text-xs">
-                    {([[false, 'Print'], [true, 'Frame only']] as const).map(([v, label]) => (
-                      <button key={label} type="button" onClick={() => setFrameOnly(v)}
-                        className={`px-2.5 py-1 font-medium ${frameOnly === v ? 'bg-[#4600D6] text-white' : 'bg-white text-off-black/60 hover:bg-subtle-gray'}`}>{label}</button>
-                    ))}
-                  </div>
-                  {!frameOnly && files[i.orderId] && (
+                  {/* What to send: the print with its frame again, or the print alone. Only asked when the original came framed. */}
+                  {framed && on && (
+                    <div className="pl-6">
+                      <div className="inline-flex rounded-md bg-subtle-gray p-0.5 text-xs">
+                        {([[false, 'Replace'], [true, 'Print only']] as const).map(([v, label]) => (
+                          <button key={label} type="button" onClick={() => setPrintOnly(v)}
+                            className={`rounded px-3 py-1 font-medium transition-colors ${printOnly === v ? 'bg-white text-off-black shadow-sm' : 'text-off-black/55 hover:text-off-black'}`}>{label}</button>
+                        ))}
+                      </div>
+                      <div className="mt-1 text-xs text-off-black/45">{printOnly ? 'The print alone, unframed' : 'The print in its frame, as it was sent'}</div>
+                    </div>
+                  )}
+                  {files[i.orderId] && (
                     <div className="pl-6">
                       {files[i.orderId].isPdf
                         ? <div className="w-56 rounded-md border border-border-gray bg-subtle-gray overflow-hidden">
@@ -552,7 +578,7 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
                           </a>}
                     </div>
                   )}
-                  {!frameOnly && !files[i.orderId] && i.copyable && (i.previewUrl || i.designUrl) && (
+                  {!files[i.orderId] && i.copyable && (i.previewUrl || i.designUrl) && (
                     <div className="pl-6">
                       {i.previewUrl
                         ? <a href={i.designUrl || i.previewUrl} target="_blank" rel="noopener noreferrer" className="inline-block" title="Open full size">
@@ -561,7 +587,7 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
                         : <a href={i.designUrl!} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-[#4600D6] hover:underline underline-offset-2">Open the design to check it</a>}
                     </div>
                   )}
-                  {!frameOnly && <div className="pl-6 flex items-center gap-4 text-xs">
+                  <div className="pl-6 flex items-center gap-4 text-xs">
                     {uploadingFor === i.orderId
                       ? <span className="inline-flex items-center gap-1 text-off-black/50"><Loader2 className="w-3 h-3 animate-spin" />Uploading</span>
                       : (
@@ -571,27 +597,23 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
                         </label>
                       )}
                     {files[i.orderId] && <button type="button" onClick={() => setFiles(({ [i.orderId]: _gone, ...rest }) => rest)} className="text-off-black/45 hover:text-off-black">Keep the original</button>}
-                  </div>}
+                  </div>
                   {/* What the print is made as: the original unless the customer wants something new. */}
                   {on && (
                     <div className="pl-6 space-y-2">
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className={`grid gap-3 ${printOnly ? 'grid-cols-1 max-w-[50%]' : 'grid-cols-2'}`}>
                         <Field label="Size">
                           <select className={modalInput} value={c.size} onChange={e => setC('size', e.target.value)}>
                             {!prep.sizes.some(s => s.value === c.size) && c.size && <option value={c.size}>{c.size.replace(/^x/, '')}</option>}
                             {prep.sizes.map(s => <option key={s.value} value={s.value}>{s.label}{s.value === i.size ? ' (original)' : ''}</option>)}
                           </select>
                         </Field>
-                        <Field label="Frame">
+                        {!printOnly && <Field label="Frame">
                           <select className={modalInput} value={c.frame} onChange={e => setC('frame', e.target.value)}>
-                            {frameOnly
-                              ? FRAME_ONLY.map(f => <option key={f.value} value={f.value}>{f.label}</option>)
-                              : <>
-                                  {!prep.frames.some(f => f.value === c.frame) && <option value={c.frame}>{c.frame}</option>}
-                                  {prep.frames.map(f => <option key={f.value} value={f.value}>{f.label}{f.value === (i.frame || 'Unframed') ? ' (original)' : ''}</option>)}
-                                </>}
+                            {!prep.frames.some(f => f.value === c.frame) && <option value={c.frame}>{c.frame}</option>}
+                            {prep.frames.map(f => <option key={f.value} value={f.value}>{f.label}{f.value === (i.frame || 'Unframed') ? ' (original)' : ''}</option>)}
                           </select>
-                        </Field>
+                        </Field>}
                       </div>
                       {changed && c.size !== i.size && !files[i.orderId] && (i.renderedSizes || []).includes(c.size.replace(/^x/, ''))
                         ? <div className="text-xs text-green-700">Uses the approved {c.size.replace(/^x/, '')} render of this print.</div>
