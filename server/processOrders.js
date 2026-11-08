@@ -776,13 +776,21 @@ export async function processOrders(options = {}) {
       // Check 2: Which orders have we already counted (but may not be in DB)?
       countedOrderIds = await getCountedOrderIds(prisma)
 
-      // An order is new only if it's NOT in the DB AND NOT already counted
+      // An order is new only if it's NOT in the DB AND NOT already counted.
+      // Only real prints count: a photo print reaches Artelo as two lines (the
+      // print and an empty Photo Add-On line with no product), and that line,
+      // an empty frame, a replacement ("-R1"), a cancelled order and a test
+      // order are not a customer served. Counting every line put the site
+      // ~800 high by Nov 2026 (reset to the audited 8,763 then).
+      const isPrint = it => /ArtPrint/.test(String(it?.product?.catalogProductId || ''))
       for (const order of allOrders) {
         if (!existingParentIds.has(order.orderId) && !countedOrderIds.has(order.orderId)) {
-          const numItems = order.orderItems?.length || 1
-          allNewOrderCount += numItems
-          // Mark as counted so we don't recount on next import
+          // Mark as counted so we don't recount on next import, counted or not
           countedOrderIds.add(order.orderId)
+          const skip = /-R\d*$/.test(String(order.orderId || '')) || order.isTestOrder
+            || order.productionStatus === 'Ignored' || order.status === 'Canceled' || order.productionStatus === 'Canceled'
+          if (skip) continue
+          allNewOrderCount += (order.orderItems || []).filter(isPrint).reduce((n, it) => n + (Number(it.quantity) || 1), 0)
         }
       }
 
