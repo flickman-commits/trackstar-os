@@ -25,7 +25,7 @@ import { setCors, requireAdmin } from '../../_lib/auth.js'
 import { requireAdminRole, recordAudit } from '../../_lib/users.js'
 import {
   nextNumber, dueDateFor, verifiedRaceDate, parseRunnerList, addRunners, readiness, researchPending,
-  addressComplete, FRAME_OPTIONS, SIZE_OPTIONS, isAllowedFileUrl,
+  addressComplete, normalizeZip, FRAME_OPTIONS, SIZE_OPTIONS, isAllowedFileUrl,
 } from '../../../server/domain/bulk/bulkOrders.js'
 import { queueRunnerSend, queueReadyRunners, holdRunner, sendRunnerNow, notReadyReason, sendStateOf, BulkSendError } from '../../../server/domain/bulk/send.js'
 import { getCanonicalRaceName } from '../../../server/scrapers/index.js'
@@ -247,7 +247,7 @@ export default async function handler(req, res) {
       if (body.runnerName && String(body.runnerName).trim()) data.runnerName = String(body.runnerName).trim()
       if (body.address && typeof body.address === 'object') {
         const a = body.address
-        data.shippingAddress = { line1: String(a.line1 || '').trim(), line2: String(a.line2 || '').trim(), city: String(a.city || '').trim(), state: String(a.state || '').trim(), zip: String(a.zip || '').trim(), country: String(a.country || 'United States').trim() }
+        data.shippingAddress = normalizeZip({ line1: String(a.line1 || '').trim(), line2: String(a.line2 || '').trim(), city: String(a.city || '').trim(), state: String(a.state || '').trim(), zip: String(a.zip || '').trim(), country: String(a.country || 'United States').trim() })
       }
       if ('fileUrl' in body) {
         if (body.fileUrl && !isAllowedFileUrl(String(body.fileUrl))) return res.status(400).json({ error: 'Use a Google Drive link or upload the file here.' })

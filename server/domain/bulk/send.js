@@ -22,7 +22,7 @@ import { completeOrder } from '../orders/complete.js'
 import { recordAudit } from '../../../api/_lib/users.js'
 import { slackTo, slackText } from '../../lib/slack.js'
 import { arteloOrderUrl } from '../../lib/links.js'
-import { addressComplete } from './bulkOrders.js'
+import { addressComplete, normalizeZip, usZipProblem } from './bulkOrders.js'
 
 const MIN = 60_000
 // No hold for a bulk runner: there is no customer to write in and ask for a
@@ -46,9 +46,13 @@ export function arteloAddress(order) {
     state = US_STATES[state.toLowerCase()] || state.toUpperCase()
     if (!/^[A-Z]{2}$/.test(state)) throw new BulkSendError(`"${a.state || ''}" is not a state Artelo recognizes`)
   }
+  // A short zip (a spreadsheet's dropped zero, or a typo) would go to Artelo as is.
+  const fixed = normalizeZip({ ...a, state })
+  const zipProblem = usZipProblem(fixed)
+  if (zipProblem) throw new BulkSendError(`${zipProblem}. Fix the address before it goes to Artelo`)
   const name = order.runnerNameOverride || order.runnerName || a.name
   return {
-    name, street1: a.line1, ...(a.line2 ? { street2: a.line2 } : {}), city: a.city, state, zipcode: a.zip, country,
+    name, street1: a.line1, ...(a.line2 ? { street2: a.line2 } : {}), city: a.city, state, zipcode: fixed.zip, country,
     ...(order.customerEmail ? { email: order.customerEmail } : {}), ...(a.phone ? { phone: a.phone } : {}),
   }
 }

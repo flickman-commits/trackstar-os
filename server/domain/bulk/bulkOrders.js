@@ -81,6 +81,9 @@ export function parseRunnerList(text) {
           country: g(iCountry) || 'United States',
         },
       }
+      row.address = normalizeZip(row.address)
+      const zipProblem = row.address.zip ? usZipProblem(row.address) : null
+      if (zipProblem) problems.push(`${name}: ${zipProblem}`)
       if (!row.address.line1 || !row.address.city || !row.address.zip) problems.push(`${name}: address is incomplete`)
       rows.push(row)
     }
@@ -93,6 +96,32 @@ export function parseRunnerList(text) {
     }
   }
   return { rows, problems }
+}
+
+/**
+ * Put back the leading zero a spreadsheet drops. Excel stores 06477 as the
+ * number 6477, so a list typed or pasted from one arrives with 4-digit zips
+ * for every state whose zips start with 0 (BULK-0001: 20 CT, MA and NJ
+ * runners went to Artelo that way on Nov 6-7, 2026). Only for those states:
+ * a short zip anywhere else is a typo a person has to fix, and usZipProblem
+ * stops it at send.
+ */
+const ZERO_ZIP_STATES = new Set(['CT', 'MA', 'ME', 'NH', 'NJ', 'RI', 'VT', 'PR', 'VI', 'AE',
+  'CONNECTICUT', 'MASSACHUSETTS', 'MAINE', 'NEW HAMPSHIRE', 'NEW JERSEY', 'RHODE ISLAND', 'VERMONT', 'PUERTO RICO'])
+const isUs = c => ['', 'US', 'USA', 'UNITED STATES', 'UNITED STATES OF AMERICA'].includes(String(c || '').trim().toUpperCase())
+export function normalizeZip(address) {
+  if (!address || !isUs(address.country)) return address
+  const zip = String(address.zip || '').trim()
+  const m = zip.match(/^(\d{3,4})(-\d{4})?$/)
+  if (!m || !ZERO_ZIP_STATES.has(String(address.state || '').trim().toUpperCase())) return address
+  return { ...address, zip: m[1].padStart(5, '0') + (m[2] || '') }
+}
+
+/** Why a US address's zip cannot be right, or null. */
+export function usZipProblem(address) {
+  if (!address || !isUs(address.country)) return null
+  const zip = String(address.zip || '').trim()
+  return /^\d{5}(-\d{4})?$/.test(zip) ? null : `Zip "${zip}" is not a 5-digit US zip`
 }
 
 export function addressComplete(a) {
@@ -141,7 +170,7 @@ export async function addRunners(bulk, rows) {
         frameType: bulk.frameType,
         trackstarOrderType: 'bulk',
         bulkOrderId: bulk.id,
-        shippingAddress: shipTo || row.address,
+        shippingAddress: shipTo || normalizeZip(row.address),
         customerEventType: bulk.eventType || null,
         customerEmail: row.email,
         customerName: row.runnerName.trim().split(/\s+/)[0],
