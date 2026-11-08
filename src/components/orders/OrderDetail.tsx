@@ -1242,10 +1242,11 @@ Thank you!`
                                 <img src={comment.imageUrl} alt="Attachment" className="max-h-32 rounded-md mb-1.5 border border-amber-200 hover:opacity-90" />
                               </a>
                             )}
-                            {comment.text && <p className="text-[13px] leading-snug text-amber-900 whitespace-pre-wrap"><Linkify text={comment.text} /></p>}
+                            {comment.text && <NoteText text={comment.text} author={comment.authorName} />}
                             <div className="flex items-center justify-between gap-2 mt-0.5">
                               <span className="text-[11px] text-amber-700/70">
-                                {comment.authorName ? `${comment.authorName} · ` : ''}
+                                {comment.authorName && <span className="font-semibold text-amber-900">{comment.authorName}</span>}
+                                {comment.authorName ? ' · ' : ''}
                                 {new Date(comment.createdAt).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                               </span>
                               <button onClick={() => deleteComment(comment.id)} className="text-[11px] text-amber-700/60 hover:text-red-600">Delete</button>
@@ -2386,11 +2387,8 @@ Thank you!`
                     <h4 className="text-xs font-semibold text-blue-700 uppercase tracking-tight mb-1.5">
                       Customer hand entered this data
                     </h4>
-                    <p className="text-body-sm text-blue-900">
-                      Please use exactly what they entered. These numbers came
-                      from the shopper at checkout, not from the timing site,
-                      so do not research this order or correct the spelling.
-                      If something looks wrong, ask them rather than changing it.
+                    <p className="text-body-sm text-blue-900" title="These numbers came from the shopper at checkout, not the timing site. Do not research or respell; ask them if something looks wrong.">
+                      Please use exactly what they entered.
                     </p>
                   </div>
                 )}
@@ -3279,5 +3277,22 @@ function BulkSendLine({ order }: { order: Order }) {
         </a>
       )}
     </div>
+  )
+}
+
+/**
+ * A note's text. The author is shown under it, so a note that starts with
+ * its own author ("Research agent: ...") loses that prefix. Long notes (the
+ * research agent's search reports) fold to a few lines with More.
+ */
+function NoteText({ text, author }: { text: string; author?: string | null }) {
+  const [open, setOpen] = useState(false)
+  const body = author && text.startsWith(`${author}:`) ? text.slice(author.length + 1).trimStart() : text
+  const long = body.length > 240
+  return (
+    <p className="text-[13px] leading-snug text-amber-900 whitespace-pre-wrap">
+      <Linkify text={long && !open ? body.slice(0, 220).trimEnd() + '…' : body} />
+      {long && <button type="button" onClick={() => setOpen(v => !v)} className="ml-1.5 text-[12px] font-medium text-amber-800 hover:underline">{open ? 'Less' : 'More'}</button>}
+    </p>
   )
 }

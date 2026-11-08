@@ -95,9 +95,13 @@ async function raceBudget(race) {
   return limit.allowed
 }
 
+// One agent note per order: a new pass replaces the last pass's note rather
+// than stacking a third paragraph on it. The author shows under the note, so
+// the text does not start with "Research agent:" any more.
 async function note(orderId, text, dryRun) {
   if (dryRun) return
-  await prisma.orderComment.create({ data: { orderId, text: `${AGENT_NAME}: ${text}`.slice(0, 2000), authorId: null, authorName: AGENT_NAME } })
+  await prisma.orderComment.deleteMany({ where: { orderId, authorName: AGENT_NAME } })
+  await prisma.orderComment.create({ data: { orderId, text: String(text).slice(0, 600), authorId: null, authorName: AGENT_NAME } })
 }
 
 /** Step 2: research again through the race's scraper, then other spellings of the name. */
@@ -214,9 +218,10 @@ Return JSON: { "found": boolean, "resultsUrl": string|null, "nameOnPage": string
     console.warn(`[research-agent] ${item.orderNumber}: model call failed: ${e.message}`)
     return { outcome: 'untouched', detail: 'the model call failed' }
   }
-  const seen = sources.slice(0, 4).join(', ')
+  const seen = sources.slice(0, 2).join(', ')
   if (!claim.found || !claim.resultsUrl) {
-    return { outcome: 'person', text: `Searched the web for ${item.runner} in ${item.race} ${item.year} and did not find an official result. ${claim.notes || ''}${seen ? ` Looked at: ${seen}.` : ''} Research by hand or ask the customer.` }
+    // Short: the person needs the verdict and where to look, not the search log.
+    return { outcome: 'person', text: `No official result found on the web for ${item.runner}, ${item.race} ${item.year}.${seen ? ` Looked at ${seen}.` : ''} Research by hand or ask the customer.` }
   }
   return checkFinding(item, claim, { dryRun, by: 'Model' })
 }
@@ -240,7 +245,7 @@ export async function checkFinding(item, claim, opts = {}) {
 
 async function checkClaim(item, claim, { dryRun = false, by = 'Finder' } = {}) {
   const said = `${claim.nameOnPage || item.runner}${claim.bib ? `, bib ${claim.bib}` : ''}, ${claim.chipTime || 'no time'}${claim.pace ? `, ${claim.pace}/mi` : ''}${claim.eventType ? ` (${claim.eventType})` : ''}`
-  const handOff = why => ({ outcome: 'person', text: `Found what looks like the result: ${said}, at ${claim.resultsUrl}${claim.timingCompany ? ` (${claim.timingCompany})` : ''}. Not entered because ${why.charAt(0).toLowerCase()}${why.slice(1)} Check it on that page and enter it under Runner > Edit.${claim.notes ? ` ${by} notes: ${claim.notes}` : ''}` })
+  const handOff = why => ({ outcome: 'person', text: `Found what looks like the result: ${said}, at ${claim.resultsUrl}${claim.timingCompany ? ` (${claim.timingCompany})` : ''}. Not entered because ${why.charAt(0).toLowerCase()}${why.slice(1)} Check it on that page and enter it under Runner > Edit.${claim.notes ? ` ${String(claim.notes).slice(0, 160)}` : ''}` })
   if (isSeveralRunners(item.runner)) return handOff(`"${item.runner}" is more than one runner, and a person decides whose result prints.`)
   if (!sameName(claim.nameOnPage || '', item.runner)) return handOff(`the page lists "${claim.nameOnPage}", not "${item.runner}".`)
   if (!claim.chipTime) return handOff('it has no chip time.')
@@ -264,7 +269,7 @@ export async function submitFinding(orderNumber, claim, { dryRun = false, by = '
   if (!item) return null
   const res = claim.resultsUrl
     ? await checkFinding(item, claim, { dryRun, by })
-    : { outcome: 'person', text: `Searched for ${item.runner} in ${item.race} ${item.year} and found no official result. ${claim.notes || ''}`.trim() }
+    : { outcome: 'person', text: `No official result found for ${item.runner}, ${item.race} ${item.year}. Research by hand or ask the customer.` }
   await note(item.id, res.outcome === 'cleared' ? `Filled in the result: ${res.detail}.` : res.text, dryRun)
   return { order: item.display, runner: item.runner, race: `${item.race} ${item.year}`, outcome: res.outcome, detail: res.detail || res.text }
 }
