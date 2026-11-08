@@ -4,6 +4,7 @@
  * unchanged, so the MCP tool does the same thing.
  */
 import prisma from '../../db.js'
+import { resultsLinkForBib } from './resultsLink.js'
 
 /** Wrong input or nothing found; `status` is the HTTP status the API answers with. */
 export class AcceptMatchError extends Error {
@@ -75,6 +76,12 @@ export async function acceptMatch({ orderNumber, match }) {
       // Don't fail the accept — just save with what we have
       console.warn(`[accept-match] Enrichment failed: ${err.message}`)
     }
+  }
+
+  // The runner's own page when the match came without one (NYRR's candidate
+  // rows have no link, and a match with a time skips the re-search above).
+  if (!enrichedResultsUrl && match.bib) {
+    enrichedResultsUrl = await resultsLinkForBib({ raceName: order.raceNameOverride || order.raceName, raceYear: order.yearOverride || order.raceYear, bib: match.bib })
   }
 
   const updatedResearch = await prisma.runnerResearch.update({

@@ -10,6 +10,7 @@ import { withoutRawOrderData } from '../../_lib/money.js'
 import { getCanonicalRaceName } from '../../../server/scrapers/index.js'
 import { setRaceDate, noteWeatherChange } from '../../../server/domain/races/verification.js'
 import { recordAudit } from '../../_lib/users.js'
+import { resultsLinkForBib } from '../../../server/domain/research/resultsLink.js'
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'POST, OPTIONS' })) return
@@ -266,6 +267,11 @@ export default async function handler(req, res) {
       if (bibNumber !== undefined) researchData.bibNumber = bibNumber || null
       if (officialTime !== undefined) researchData.officialTime = officialTime || null
       if (officialPace !== undefined) researchData.officialPace = officialPace || null
+      // A bib typed by hand gets the runner's own results page where the platform keys one by bib.
+      if (bibNumber) {
+        const link = await resultsLinkForBib({ raceName: existingOrder.raceNameOverride ?? existingOrder.raceName, raceYear: existingOrder.yearOverride ?? existingOrder.raceYear, bib: bibNumber })
+        if (link) researchData.resultsUrl = link
+      }
 
       const latest = await prisma.runnerResearch.findFirst({
         where: { orderId: existingOrder.id },
