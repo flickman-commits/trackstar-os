@@ -5,6 +5,8 @@
  * closes it with a note saying why not). Settings lists open ones first.
  */
 import prisma from '../db.js'
+import { slackTo, slackText } from '../lib/slack.js'
+import { appBaseUrl } from '../lib/links.js'
 
 export class FeatureRequestError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; this.expose = true }
@@ -27,7 +29,7 @@ export async function listFeatureRequests() {
 export async function addFeatureRequest({ title, detail, source, actor }) {
   const t = String(title || '').trim()
   if (!t) throw new FeatureRequestError('Say what you would like built')
-  return prisma.featureRequest.create({
+  const row = await prisma.featureRequest.create({
     data: {
       title: t.slice(0, 200), detail: String(detail || '').trim().slice(0, 4000) || null,
       source: source === 'support' ? 'support' : 'settings',
@@ -35,6 +37,9 @@ export async function addFeatureRequest({ title, detail, source, actor }) {
     },
     select: SHOW,
   })
+  // Matt hears about each one as it comes in; the list in Settings is the record.
+  slackTo('matt', `:bulb: *${slackText(row.createdByName)}* asked for a feature: *${slackText(row.title, 200)}*${row.detail ? `\n> ${slackText(row.detail, 600).replace(/\n/g, '\n> ')}` : ''}\n${appBaseUrl()}/settings/features`).catch(() => {})
+  return row
 }
 
 /** Mark done (with an optional note: shipped, or why not), or put back. */

@@ -21,6 +21,10 @@ import { DesignCard, DesignReview, DesignDetailsTags, DesignFileLinks } from '@/
 import SourceLinks from '@/components/SourceLinks'
 import AssigneePicker from '@/components/AssigneePicker'
 import OrderConversations from '@/components/support/OrderConversations'
+import { SiblingsBadge, OtherPrints } from '@/components/orders/OrderSiblings'
+import { useSiblings } from '@/components/orders/useSiblings'
+import SameRunnerAlert from '@/components/orders/SameRunnerAlert'
+import { sameRunnerEmail } from '@/components/orders/sameRunnerEmail'
 import ProofShowcase from '@/components/ProofShowcase'
 import PhotoCropper from '@/components/PhotoCropper'
 import OrderProduction from '@/components/orders/OrderProduction'
@@ -40,7 +44,7 @@ import {
 } from '@/components/orders/orderFormat'
 import {
   CollapsibleSection, CopyableField, PartnerInfoFields, CustomDetailsFields, PendingField,
-  MissingDateField, NotAvailableField, ApprovalEmailField,
+  MissingDateField, NotAvailableField, ApprovalEmailField, CustomerEmailField, ChangeRace,
 } from '@/components/orders/fields'
 import { putUpload } from '../../lib/putUpload'
 
@@ -85,8 +89,8 @@ export interface OrderDetailProps {
     setToast: Dispatch<SetStateAction<ToastMessage | null>>
     markAsCompleted: (orderNumber: string) => Promise<void>
     assignOrder: (orderId: string, assigneeId: string | null) => Promise<void>
-    /** Open the "Email customer" modal for this order. */
-    emailCustomer: (order: Order) => void
+    /** Open the "Email customer" modal for this order, with a message already written if given. */
+    emailCustomer: (order: Order, preset?: { subject: string; text: string } | null) => void
   }
 }
 
@@ -107,6 +111,9 @@ export default function OrderDetail({
   const generateFilename = (o: Order) => filenameFor(o, raceShorthands)
   const getOrderItemCount = (parentOrderNumber: string) => orderItemCount(orders, parentOrderNumber)
   const getOrderItemPosition = (o: Order) => orderItemPosition(orders, o)
+  // The other prints on the same order, from the server (a completed one is not in the queue).
+  const siblings = useSiblings(selectedOrder)
+  const notifySameRunner = (o: Order, others: Parameters<typeof sameRunnerEmail>[1]) => setEmailingOrder(o, sameRunnerEmail(o, others, user?.firstName || ''))
 
   const [isResearching, setIsResearching] = useState(false)
   // The race year, set by hand from the Order Details card (a missing or wrong year).
@@ -1336,6 +1343,7 @@ Thank you!`
                     {selectedOrder.trackstarOrderType === 'race_partner'
                       ? (selectedOrder.partnerName || selectedOrder.raceName || 'Partner')
                       : `Order ${selectedOrder.displayOrderNumber}`}
+                    {selectedOrder.trackstarOrderType !== 'race_partner' && <span className="ml-2 align-middle"><SiblingsBadge count={siblings.count} position={siblings.position} /></span>}
                   </h3>
                   {/* When it was ordered, pinned with the number on a phone. */}
                   {selectedOrder.trackstarOrderType === 'standard' && (() => { const age = orderAge(selectedOrder); return <div className={`md:hidden text-[11px] leading-tight ${age.cls}`}>{age.label}</div> })()}
@@ -1353,8 +1361,11 @@ Thank you!`
                 {(selectedOrder.notes || (selectedOrder.commentCount ?? 0) > 0) && (
                   <HoverTip text="Has notes or comments"><MessageSquareText className="w-4 h-4 text-amber-500 cursor-help" /></HoverTip>
                 )}
+              </div>
+              <div className="hidden md:flex items-center gap-1">
+                {/* Who has it, at the right with the queue controls, so the number and its badges read on their own. */}
                 {(selectedOrder.trackstarOrderType === 'standard' || selectedOrder.trackstarOrderType === 'custom' || selectedOrder.trackstarOrderType === 'race_partner' || !selectedOrder.trackstarOrderType) && team.length > 0 && (
-                  <span className="ml-1 hidden md:inline">
+                  <span className="mr-2">
                     <AssigneePicker
                       team={team}
                       value={selectedOrder.assigneeId || null}
@@ -1366,8 +1377,6 @@ Thank you!`
                     />
                   </span>
                 )}
-              </div>
-              <div className="hidden md:flex items-center gap-1">
                 {/* S/D navigation — only shown when the open order is in the
                     current visible queue (filteredOrders). Buttons reflect
                     the keyboard shortcuts so the affordance is discoverable. */}
@@ -1505,6 +1514,7 @@ Thank you!`
                       </div>
                     )}
                   </div>
+                  <OtherPrints others={siblings.others} count={siblings.count} />
 
                   {/* Due, ordered, sent and rush, as tags. */}
                   {selectedOrder.trackstarOrderType !== 'race_partner' && (
@@ -2060,7 +2070,20 @@ Thank you!`
                     </div>
                   </div>
                 )}
+                {/* The customer's email, editable: the one on the order bounces or has a typo. Support and Email customer use it from then on. */}
+                <div className="mt-3 pt-2 border-t border-border-gray">
+                  <CustomerEmailField
+                    order={selectedOrder}
+                    onSaved={(email) => {
+                      setSelectedOrder(prev => prev && prev.id === selectedOrder.id ? { ...prev, customerEmail: email } : prev)
+                      setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, customerEmail: email } : o))
+                      setToast({ message: email ? `Customer email is now ${email}` : 'Customer email cleared', type: 'success' })
+                    }}
+                  />
+                </div>
               </div>
+              {/* The other prints on this order, so one of three reads as one of three. */}
+              <OtherPrints others={siblings.others} count={siblings.count} />
 
               {/* Printed yet, shipped, delivered: checkable after the order is complete. */}
               {(selectedOrder.arteloUrl || selectedOrder.shopifyAdminUrl) && <OrderProduction orderId={selectedOrder.id} />}
@@ -2521,6 +2544,8 @@ Thank you!`
                 )}
                 {/* The customer's open Support conversations, above the design: many are a request to change it. */}
                 <OrderConversations variant="alert" orderId={selectedOrder.id} enabled={!!selectedOrder.customerEmail && can('support')} />
+                {/* The same runner's print ordered twice, as separate orders: check before both go out. */}
+                <SameRunnerAlert order={selectedOrder} canEmail={can('support')} onNotify={others => notifySameRunner(selectedOrder, others)} />
                 {/* Missing year. The tag says it, this says what to do. */}
                 {selectedOrder.status === 'missing_year' && (
                   <div className="bg-amber-50 border border-amber-200 rounded-md p-4">
@@ -2733,6 +2758,13 @@ Thank you!`
                     <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-border-gray min-h-[22px]">
                       <span className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider">Race</span>
                       <div className="flex items-center gap-3">
+                      {!isEditingWeather && selectedOrder.status !== 'completed' && (selectedOrder.trackstarOrderType === 'standard' || !selectedOrder.trackstarOrderType) && (
+                        <ChangeRace order={selectedOrder} onSaved={async (raceName) => {
+                          setToast({ message: `Race set to ${raceName}. Researching…`, type: 'success' })
+                          await fetchOrders()
+                          await researchOrder(selectedOrder.orderNumber)
+                        }} />
+                      )}
                       {!isEditingWeather && selectedOrder.raceId && (
                             <div className="flex items-center gap-3">
                               <button

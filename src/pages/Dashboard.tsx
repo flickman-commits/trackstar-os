@@ -11,7 +11,7 @@ import { Avatar, QueuePill, PersonFilter, TeamPanel, type QueueMember } from '@/
 import { setTeamColors } from '@/lib/teamColors'
 import { useSearchParams, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
-import EmailCustomerModal from '@/components/support/EmailCustomerModal'
+import EmailCustomerModal, { type EmailPreset } from '@/components/support/EmailCustomerModal'
 import PageHeader from '@/components/PageHeader'
 import OrderTags, { HoverTip } from '@/components/OrderTags'
 import OrderDetail from '@/components/orders/OrderDetail'
@@ -191,7 +191,8 @@ const DEFAULT_SORT: Record<'standard' | 'custom', SortPrefs> = {
 export default function Dashboard() {
   const { user: currentUser, isAdmin, can } = useAuth()
   // The "Email customer" modal on an order: a new Support conversation about it.
-  const [emailingOrder, setEmailingOrder] = useState<Order | null>(null)
+  const [emailing, setEmailing] = useState<{ order: Order; preset?: EmailPreset | null } | null>(null)
+  const emailingOrder = emailing?.order || null
   // Who is on the team, for the assignee picker, and whether the queue shows
   // only my orders. "mine" is the default for anyone who has orders assigned,
   // so Eli opens the tool to Eli's queue; someone with none sees everything.
@@ -2225,7 +2226,8 @@ export default function Dashboard() {
           <EmailCustomerModal
             order={{ id: emailingOrder.id, displayNumber: emailingOrder.displayOrderNumber || emailingOrder.parentOrderNumber, customerEmail: emailingOrder.customerEmail, customerName: emailingOrder.customerName, runnerName: emailingOrder.effectiveRunnerName || emailingOrder.runnerName, raceName: emailingOrder.effectiveRaceName || emailingOrder.raceName, raceYear: emailingOrder.effectiveRaceYear || emailingOrder.raceYear }}
             repName={currentUser?.firstName || ''}
-            onClose={() => setEmailingOrder(null)}
+            preset={emailing?.preset}
+            onClose={() => setEmailing(null)}
           />
         )}
 
@@ -2245,7 +2247,7 @@ export default function Dashboard() {
           setPossibleMatches={setPossibleMatchesMap}
           edit={{ isEditing, setIsEditing, values: editValues, setValues: setEditValues }}
           nav={{ inline: inlineDetail, index: currentOrderIndex, total: navigableOrders.length, go: navigateOrder, close: closeModal }}
-          actions={{ setOrders, setSelectedOrder, fetchOrders, loadTeam, setToast, markAsCompleted, assignOrder, emailCustomer: setEmailingOrder }}
+          actions={{ setOrders, setSelectedOrder, fetchOrders, loadTeam, setToast, markAsCompleted, assignOrder, emailCustomer: (order, preset) => setEmailing({ order, preset }) }}
         />
 
         {/* New Partner Modal */}

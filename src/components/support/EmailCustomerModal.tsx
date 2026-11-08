@@ -83,13 +83,16 @@ Just reply to this email and we'll take it from there.
 ${bye}`
 }
 
-export default function EmailCustomerModal({ order, repName, onClose }: { order: EmailCustomerOrder; repName: string; onClose: () => void }) {
+/** A message the caller has already written (the duplicate-runner check); the rep can still edit it. */
+export type EmailPreset = { subject: string; text: string }
+
+export default function EmailCustomerModal({ order, repName, onClose, preset }: { order: EmailCustomerOrder; repName: string; onClose: () => void; preset?: EmailPreset | null }) {
   const number = String(order.displayNumber).replace(/^#/, '')
   const subjects = { ask: `Trackstar Order ${number} (Action Required)`, mockup: `Trackstar Order ${number} (Please Approve Your Design)`, address: `Trackstar Order ${number} (Please Confirm Your Address)` }
   const rep = repName || 'The team'
-  const [subject, setSubject] = useState(subjects.ask)
+  const [subject, setSubject] = useState(preset?.subject || subjects.ask)
   const [pick, setPick] = useState<Pick | null>(null)
-  const [text, setText] = useState(() => template(order, rep, null))
+  const [text, setText] = useState(() => preset?.text || template(order, rep, null))
   const [busy, setBusy] = useState(false)
   const [sent, setSent] = useState<{ threadId: string; to: string; held?: boolean } | null>(null)
   // The design the customer would approve: the newest render, else the newest proof.

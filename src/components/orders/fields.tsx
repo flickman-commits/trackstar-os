@@ -276,6 +276,19 @@ export function NotAvailableField({ label }: { label: string }) {
  * in place: the buyer may want them to go to the runner, or typed it wrong.
  */
 export function ApprovalEmailField({ order, onSaved }: { order: Order; onSaved: (email: string) => void }) {
+  return <EmailField order={order} onSaved={onSaved} field="approvalEmail" label="Approval email" title="Proof and approval links are emailed here" help="Proof and approval emails go here from now on. The Shopify order is not changed." />
+}
+
+/**
+ * A standard print's customer email, corrected by hand when the address on
+ * the order bounces or has a typo. Support conversations and Email customer
+ * use it from then on; the Shopify order is not changed.
+ */
+export function CustomerEmailField({ order, onSaved }: { order: Order; onSaved: (email: string) => void }) {
+  return <EmailField order={order} onSaved={onSaved} field="customerEmail" label="Email" title="The customer's email. Edit it if the one on the order bounces or has a typo." help="Support conversations and Email customer use this address from now on. The Shopify order is not changed." />
+}
+
+function EmailField({ order, onSaved, field, label, title, help }: { order: Order; onSaved: (email: string) => void; field: 'approvalEmail' | 'customerEmail'; label: string; title: string; help: string }) {
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(order.customerEmail || '')
   const [saving, setSaving] = useState(false)
@@ -286,7 +299,7 @@ export function ApprovalEmailField({ order, onSaved }: { order: Order; onSaved: 
     if (email === (order.customerEmail || '')) { setEditing(false); return }
     setSaving(true); setErr(null)
     try {
-      const res = await apiFetch('/api/orders/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderNumber: order.orderNumber, approvalEmail: email }) })
+      const res = await apiFetch('/api/orders/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderNumber: order.orderNumber, [field]: email }) })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { setErr(data.error || 'Could not save'); return }
       setEditing(false); onSaved(email)
@@ -295,7 +308,7 @@ export function ApprovalEmailField({ order, onSaved }: { order: Order; onSaved: 
   if (!editing) {
     return (
       <div className="flex justify-between items-center gap-3">
-        <span className="text-body-sm text-off-black/60" title="Proof and approval links are emailed here">Approval email</span>
+        <span className="text-body-sm text-off-black/60" title={title}>{label}</span>
         <span className="inline-flex items-center gap-2 min-w-0">
           <span className={`text-body-sm font-medium truncate ${order.customerEmail ? 'text-off-black' : 'text-off-black/40'}`}>{order.customerEmail || 'Not set'}</span>
           <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 shrink-0"><Pencil className="w-3 h-3" /> Edit</button>
@@ -308,13 +321,13 @@ export function ApprovalEmailField({ order, onSaved }: { order: Order; onSaved: 
   const cancel = () => { setEditing(false); setValue(order.customerEmail || '') }
   return (
     <div className="space-y-1.5">
-      <span className="block text-body-sm text-off-black/60">Approval email</span>
+      <span className="block text-body-sm text-off-black/60">{label}</span>
       <input type="email" autoFocus value={value} onChange={e => setValue(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancel() }}
         placeholder="name@example.com" className="w-full min-w-0 px-2 py-1.5 text-sm border border-border-gray rounded bg-white focus:outline-none focus:ring-1 focus:ring-off-black/20" />
       {err && <p className="text-xs text-red-600">{err}</p>}
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] text-off-black/45">Proof and approval emails go here from now on. The Shopify order is not changed.</p>
+        <p className="text-[11px] text-off-black/45">{help}</p>
         <span className="inline-flex items-center gap-3 shrink-0">
           <button type="button" onClick={cancel} className="text-xs text-off-black/50 hover:text-off-black">Cancel</button>
           <button type="button" onClick={save} disabled={saving} className="inline-flex items-center gap-1 text-xs font-medium text-green-700 disabled:opacity-40"><Check className="w-3.5 h-3.5" /> Save</button>
@@ -419,6 +432,52 @@ export function CustomDetailsFields({ order, onSaved, onToast }: {
           <Check className="w-3 h-3" />{saving ? 'Saving…' : 'Save'}
         </button>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Change which race a print is for, when the customer picked the wrong one
+ * (a half marathon's results on a marathon print, or the wrong city). A
+ * select of every race we have a design for; saving sets the race override
+ * and the caller runs research again, since the result was for the old race.
+ */
+export function ChangeRace({ order, onSaved }: { order: Order; onSaved: (raceName: string) => Promise<void> | void }) {
+  const [open, setOpen] = useState(false)
+  const [races, setRaces] = useState<string[] | null>(null)
+  const [pick, setPick] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const current = order.effectiveRaceName || order.raceName || ''
+  useEffect(() => {
+    if (!open || races) return
+    apiFetch('/api/orders?list=races').then(r => r.json())
+      .then(d => setRaces([...new Set(((d.races || []) as { raceName: string }[]).map(r => r.raceName))].sort((a, b) => a.localeCompare(b))))
+      .catch(() => setRaces([]))
+  }, [open, races])
+  const save = async () => {
+    if (!pick || pick === current) { setOpen(false); return }
+    setSaving(true); setErr(null)
+    try {
+      const res = await apiFetch('/api/orders/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderNumber: order.orderNumber, raceNameOverride: pick }) })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setErr(data.error || 'Could not change the race'); return }
+      setOpen(false); await onSaved(pick)
+    } finally { setSaving(false) }
+  }
+  if (!open) {
+    return <button type="button" onClick={() => { setPick(current); setOpen(true) }} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors" title="The print is for a different race than the order says"><Pencil className="w-3 h-3" /> Change race</button>
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <select value={pick} onChange={e => setPick(e.target.value)} disabled={!races} className="max-w-[220px] text-xs border border-border-gray rounded bg-white px-1.5 py-1">
+        {!races && <option>Loading races…</option>}
+        {races && !races.includes(current) && current && <option value={current}>{current}</option>}
+        {races?.map(r => <option key={r} value={r}>{r}</option>)}
+      </select>
+      <button type="button" onClick={save} disabled={saving || !races} className="flex items-center gap-1 text-xs text-green-700 disabled:opacity-40"><Check className="w-3 h-3" /> Save</button>
+      <button type="button" onClick={() => setOpen(false)} className="text-xs text-off-black/50 hover:text-off-black">Cancel</button>
+      {err && <span className="text-xs text-red-600">{err}</span>}
     </div>
   )
 }

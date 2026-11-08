@@ -36,6 +36,10 @@ export default async function handler(req, res) {
       // A custom order's approval email: where the proof links go (the buyer
       // may want them sent to the runner, or used a typo'd address).
       approvalEmail,
+      // The customer's email on a standard print, corrected by hand when the
+      // one on the order bounces or has a typo. Support conversations and
+      // "Email customer" use it; the Shopify order is not changed.
+      customerEmail,
       // A custom order's details, filled in by hand when the order came in
       // empty and the customer sent them by email afterwards.
       customBib, customTime, creativeDirection } = req.body
@@ -133,6 +137,13 @@ export default async function handler(req, res) {
       if (creativeDirection !== undefined) updateData.creativeDirection = clean(creativeDirection, 4000)
     }
 
+    if (customerEmail !== undefined) {
+      const email = String(customerEmail).trim().toLowerCase()
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'That is not an email address' })
+      if (existingOrder.trackstarOrderType === 'race_partner') return res.status(400).json({ error: 'Change a partner contact under Partner details' })
+      updateData.customerEmail = email || null
+      await recordAudit({ action: 'order.customer-email', summary: `Order ${existingOrder.orderNumber}: customer email is now ${email || 'blank'} (was ${existingOrder.customerEmail || 'none'})`, detail: { orderNumber: existingOrder.orderNumber, before: existingOrder.customerEmail, after: email }, actor })
+    }
     if (approvalEmail !== undefined) {
       if (existingOrder.trackstarOrderType !== 'custom') {
         return res.status(400).json({ error: 'The approval email can only be changed on a custom order' })
