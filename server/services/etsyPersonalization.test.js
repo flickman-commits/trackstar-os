@@ -258,3 +258,18 @@ test('empty text needs attention', () => {
   assert.equal(parseEtsyPersonalization('').needsAttention, true)
   assert.equal(parseEtsyPersonalization(null).runnerName, null)
 })
+
+test('a trailing month abbreviation or race shorthand is not part of the name', () => {
+  for (const [text, name, year] of [
+    ['Eli Yates Nov 2026', 'Eli Yates', 2026],
+    ['Jessica Young NYC marathon 2026\n bib number 67368', 'Jessica Young', 2026],
+    ['Mary Ann Smith Oct 2025', 'Mary Ann Smith', 2025],
+    // Two words stay two words, even when the second looks like a shorthand.
+    ['Jon Nov 2026', 'Jon Nov', 2026],
+  ]) {
+    const r = parseEtsyPersonalization(text)
+    assert.equal(r.runnerName, name, text)
+    assert.equal(r.raceYear, year, text)
+  }
+  assert.equal(parseEtsyPersonalization('Jessica Young NYC marathon 2026\n bib number 67368').bib, '67368')
+})

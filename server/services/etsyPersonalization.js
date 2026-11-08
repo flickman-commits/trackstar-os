@@ -296,6 +296,11 @@ export function parseEtsyPersonalization(rawText) {
   // 7. Strip month names (buyers sometimes include race date)
   const months = /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\b/gi
   text = text.replace(months, '').trim()
+  // A trailing month abbreviation or race shorthand left after the year came
+  // out: "Eli Yates Nov 2026", "Jessica Young NYC marathon 2026". Only with
+  // three or more words, so a two-word name is never cut to one.
+  const TRAILING_JUNK = /\s+(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|NYC|NYCM|MCM|CIM|BAA|TCM|LA|DC|SF)\.?$/i
+  for (let i = 0; i < 2 && text.split(/\s+/).length >= 3 && TRAILING_JUNK.test(text); i++) text = text.replace(TRAILING_JUNK, '').trim()
 
   // 8. Clean up separators. A hyphen inside a name stays ("Scarbeary-Simmons").
   text = text

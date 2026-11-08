@@ -608,6 +608,22 @@ export class ResearchService {
     const scraper = this.scraperFor(raceName, year)
     let results = await this.searchOnce(scraper, raceName, year, runnerName)
 
+    // An apostrophe in the name: timing sites often drop it. NYRR lists
+    // "Nicolette D'Alessio" (Etsy order 4216390997) as "Nicolette Dalessio",
+    // so the name as typed finds nobody and the last name alone finds a
+    // stranger. Search again without it before anything else. The order
+    // keeps printing the name as the customer typed it.
+    const APOSTROPHE = /['\u2018\u2019\u02BC`\u00B4]/g
+    if (!results.found && !results.ambiguous && results.researchStatus !== 'upstream_error' && APOSTROPHE.test(runnerName)) {
+      const plain = runnerName.replace(APOSTROPHE, '')
+      console.log(`[ResearchService] Not found as typed; trying without the apostrophe: "${plain}"`)
+      const again = await this.searchOnce(this.scraperFor(raceName, year), raceName, year, plain)
+      if (again.found || again.ambiguous) {
+        again.researchNotes = [again.researchNotes, `Found by searching "${plain}" (the results list the name without the apostrophe).`].filter(Boolean).join(' ')
+        results = again
+      }
+    }
+
     // Candidates that did not pass namesMatch are SUGGESTIONS, not matches.
     //
     // This used to relabel them 'ambiguous', which put "More than one match -
@@ -886,7 +902,9 @@ export class ResearchService {
       && (existingResearch.source === 'manual_entry' || existingResearch.runnerName === runnerName)
       ? existingResearch.bibNumber || null
       : null
-    const knownBib = handBib || order.customerBib || null
+    // An Etsy buyer's typed bib (bibNumberCustomer) is display-only elsewhere, so it
+    // never stands in for a result, but it is a fair key when the name finds nobody.
+    const knownBib = handBib || order.customerBib || order.bibNumberCustomer || null
     const results = await this.findRunner(raceName, raceYear, runnerName, { bib: knownBib })
 
     // Prepare research data (store the effective name used for search)
