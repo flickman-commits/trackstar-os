@@ -19,6 +19,7 @@ import ResizeHandle from '@/components/support/ResizeHandle'
 import HoursModal from '@/components/hours/HoursModal'
 import type { RichReplyHandle } from '@/components/support/RichReply'
 import { useColumnWidth, useWide } from '@/lib/useColumnWidth'
+import { useConfirm } from '@/components/useConfirm'
 
 /**
  * Support: the shared inbox for fast@trackstar.art, laid out the way
@@ -94,6 +95,8 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
   const [thread, setThread] = useState<ThreadDetail | null>(null)
   const [threadLoading, setThreadLoading] = useState(false)
   const [busy, setBusy] = useState(false)
+  // Asks before closing a conversation the customer has not answered (setStatusOf).
+  const { choose, modal: confirmModal } = useConfirm()
   // Which conversations are being merged in, so their Merge button can spin.
   const [merging, setMerging] = useState<string[]>([])
   const [syncing, setSyncing] = useState(false)
@@ -231,7 +234,25 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
   })
   // Closing takes the conversation off your plate: the pane goes back to empty.
   const putDown = () => { setSelectedId(null); setThread(null) }
-  const setStatusOf = (s: ThreadStatus) => thread && run(async () => {
+  const setStatusOf = async (target: ThreadStatus) => {
+    if (!thread) return
+    // We wrote last and they have never answered: closing it says nobody is
+    // waiting, and its order drops out of Waiting on customer (4991, 5346,
+    // 5759 and 6145 were closed that way). Ask before closing.
+    const owedByThem = target === 'closed' && thread.lastOutboundAt && (!thread.lastInboundAt || new Date(thread.lastOutboundAt) > new Date(thread.lastInboundAt))
+    let s = target
+    if (owedByThem) {
+      const pick = await choose({
+        title: "They haven't answered yet",
+        body: 'Our message is the last one here. Closing tells the order nobody is waiting, so it drops out of Waiting on customer. Mark it waiting instead, and it comes back when they reply.',
+        action: 'Mark waiting', alt: 'Close anyway',
+      })
+      if (pick === 'no') return
+      if (pick === 'yes') s = 'waiting'
+    }
+    await doSetStatus(s)
+  }
+  const doSetStatus = (s: ThreadStatus) => thread && run(async () => {
     const prev = thread
     patchRow(await supportApi.setStatus(thread.id, s))
     if (s === 'closed') { putDown(); loadInbox(true) } else await refreshThread(thread.id)
@@ -372,6 +393,7 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
 
   return (
     <div className={pageShell}>
+      {confirmModal}
       <div className="px-3 md:px-5 w-full flex flex-col h-full">
         {/* The phone header. While a conversation is open it steps aside; the conversation has its own bar. */}
         {!thread && (

@@ -10,6 +10,8 @@ type Ask = {
   action: string
   /** Red button, for anything that cannot be taken back. */
   danger?: boolean
+  /** A second way through ("Close anyway"); `choose` resolves 'alt' for it. */
+  alt?: string
 }
 
 /**
@@ -19,17 +21,20 @@ type Ask = {
  * showing anything. Render `modal` once, anywhere in the component.
  */
 export function useConfirm() {
-  const [req, setReq] = useState<(Ask & { resolve: (yes: boolean) => void }) | null>(null)
-  const confirm = useCallback((a: Ask) => new Promise<boolean>(resolve => setReq({ ...a, resolve })), [])
-  const finish = (yes: boolean) => { req?.resolve(yes); setReq(null) }
+  const [req, setReq] = useState<(Ask & { resolve: (answer: 'yes' | 'alt' | 'no') => void }) | null>(null)
+  /** Three ways out: the yes button, the alt button, or backing out. */
+  const choose = useCallback((a: Ask) => new Promise<'yes' | 'alt' | 'no'>(resolve => setReq({ ...a, resolve })), [])
+  const confirm = useCallback(async (a: Ask) => (await choose(a)) === 'yes', [choose])
+  const finish = (answer: boolean | 'alt') => { req?.resolve(answer === 'alt' ? 'alt' : answer ? 'yes' : 'no'); setReq(null) }
   const modal = req && (
     <ActionModal title={req.title} size="sm" onClose={() => finish(false)}
       footer={<>
         <button className={modalCancel} onClick={() => finish(false)}>Cancel</button>
+        {req.alt && <button className={modalCancel} onClick={() => finish('alt')}>{req.alt}</button>}
         <button className={req.danger ? modalDanger : modalPrimary} onClick={() => finish(true)} autoFocus>{req.action}</button>
       </>}>
       {req.body && <div className="text-off-black/70">{req.body}</div>}
     </ActionModal>
   )
-  return { confirm, modal }
+  return { confirm, choose, modal }
 }
