@@ -95,10 +95,16 @@ export async function waitingOnCustomers(emails) {
   const list = [...new Set(emails.map(e => String(e || '').trim().toLowerCase()).filter(Boolean))]
   const out = new Map()
   if (!list.length) return out
+  // Waiting: the thread is marked waiting, or it is snoozed (a reminder to
+  // chase them) and our message is the latest. Snoozing sets the status back
+  // to open, which used to drop the order out of Waiting on customer the
+  // moment a rep set a reminder on it. A closed thread never counts.
   const rows = await prisma.$queryRaw`
     SELECT lower("customerEmail") AS email, max("lastMessageAt") AS since
     FROM "SupportThread"
-    WHERE status = 'waiting' AND "mergedIntoId" IS NULL AND filtered = false AND lower("customerEmail") = ANY(${list})
+    WHERE "mergedIntoId" IS NULL AND filtered = false AND lower("customerEmail") = ANY(${list})
+      AND (status = 'waiting'
+           OR (status = 'open' AND "snoozedUntil" > now() AND "lastOutboundAt" IS NOT NULL AND "lastOutboundAt" > coalesce("lastInboundAt", 'epoch'::timestamp)))
     GROUP BY lower("customerEmail")`
   for (const r of rows) out.set(r.email, r.since)
   return out

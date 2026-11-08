@@ -2227,7 +2227,8 @@ export default function Dashboard() {
             order={{ id: emailingOrder.id, displayNumber: emailingOrder.displayOrderNumber || emailingOrder.parentOrderNumber, customerEmail: emailingOrder.customerEmail, customerName: emailingOrder.customerName, runnerName: emailingOrder.effectiveRunnerName || emailingOrder.runnerName, raceName: emailingOrder.effectiveRaceName || emailingOrder.raceName, raceYear: emailingOrder.effectiveRaceYear || emailingOrder.raceYear }}
             repName={currentUser?.firstName || ''}
             preset={emailing?.preset}
-            onClose={() => setEmailing(null)}
+            // Sending marks the Support thread waiting on the customer; the queue re-reads so the order moves to Waiting at once.
+            onClose={() => { setEmailing(null); void fetchOrders() }}
           />
         )}
 
