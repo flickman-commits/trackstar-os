@@ -9,7 +9,8 @@ import type { Order } from '@/components/orders/orderModel'
  * sibling that is already complete is not in the queue.
  */
 export function useSiblings(order: Order | null) {
-  const parent = order?.parentOrderNumber || null
+  // A bulk order's runners are one list of eighty, not "other prints": no badge, no list.
+  const parent = order && order.trackstarOrderType !== 'bulk' ? order.parentOrderNumber || null : null
   const [rows, setRows] = useState<Order[]>([])
   useEffect(() => {
     if (!parent) { setRows([]); return }
