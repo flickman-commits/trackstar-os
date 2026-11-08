@@ -43,6 +43,16 @@ export default function ConversationPanel({ orderId, enabled }: { orderId: strin
   const owed = open.some(t => t.last === 'customer' && t.status !== 'waiting')
   const tone = owed ? { box: 'bg-amber-50 border-amber-300', head: 'text-amber-800', line: 'border-amber-200 hover:border-amber-400' } : { box: 'bg-white border-border-gray', head: 'text-off-black/50', line: 'border-border-gray hover:border-off-black/30' }
   if (!shown.length && !closed.length) return null
+  // All closed and folded: one quiet line, no card. Nothing is owed, so nothing should pull the eye.
+  if (!open.length && !showClosed) {
+    return (
+      <div className="flex items-center gap-2 px-1 text-[12px] text-off-black/45">
+        <Inbox className="w-3.5 h-3.5" />
+        <span>{closed.length === 1 ? '1 closed conversation' : `${closed.length} closed conversations`} with this customer</span>
+        <button type="button" onClick={() => setShowClosed(true)} className="font-medium text-off-black/55 hover:text-off-black hover:underline">Show</button>
+      </div>
+    )
+  }
   return (
     <div className={`${tone.box} border rounded-md p-3 space-y-2`}>
       <div className="flex items-center justify-between gap-3">
@@ -55,7 +65,6 @@ export default function ConversationPanel({ orderId, enabled }: { orderId: strin
           </button>
         )}
       </div>
-      {!shown.length && <p className="text-xs text-off-black/50">No open conversation. {closed.length} closed.</p>}
       <div className="space-y-1.5">
         {shown.map(t => (
           <div key={t.id} className={`flex items-start gap-3 rounded-md border bg-white px-3 py-2 transition-colors ${tone.line} ${t.status === 'closed' ? 'opacity-70' : ''}`}>
