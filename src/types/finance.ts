@@ -8,7 +8,7 @@ export type Totals = {
 
 export type TrendDay = { day: string; landed: boolean; revenue: number; cogs: number; adSpend: number; cm: number; designerFee: number; orders: number; roas: number | null; races: string[] }
 export type WaterfallLine = { key: string; label: string; cents: number; kind?: 'total' | 'subtotal'; pctOfRevenue: number | null }
-export type Need = { kind: string; text: string; to?: string; cents?: number }
+export type Need = { kind: string; tone: 'due' | 'soon' | 'alert'; title: string; detail?: string; text: string; cents?: number | null; due?: string; action?: { label: string; to: string } }
 export type SyncInfo = { at: string; read: number; created: number; updated: number; latest: Record<string, string>; missingTabs: string[] } | null
 
 export type OverviewPayload = {

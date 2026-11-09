@@ -5,7 +5,7 @@ import ActionModal from '@/components/ActionModal'
 import { btnPrimary, btnSecondary, btnGhost, modalInput, modalPrimary, modalCancel } from '@/lib/ui'
 import { financeApi, usd, dayLabel } from '@/lib/financeApi'
 import type { RacePayout, RacePayoutsPayload } from '@/types/finance'
-import { card, ErrorCard, Spinner, Stat, StatusChip, tableHead, num } from './bits'
+import { card, ErrorCard, Spinner, Stat, tableHead, num } from './bits'
 
 /**
  * Partnered races and what each is owed: the deal's terms and race date from
@@ -100,7 +100,7 @@ export default function RacePayouts() {
                     <td className={`px-3 py-2 ${num}`}>{r.sales ? r.sales.unitsSold.toLocaleString('en-US') : '–'}</td>
                     <td className={`px-3 py-2 ${num}`}>{r.sales ? usd(r.sales.netSalesCents, { cents: true }) : '–'}</td>
                     <td className={`px-3 py-2 ${num} font-semibold`}>{r.payoutCents != null ? usd(r.payoutCents, { cents: true }) : '–'}{r.payoutCents != null && r.status === 'pending' && !r.final && <span className="block font-normal text-[10px] text-off-black/45">so far</span>}</td>
-                    <td className="px-3 py-2"><StatusChip status={r.status === 'sent' ? 'submitted' : r.status === 'paid' ? 'paid' : 'draft'} />{r.sales && <span className="block text-[10px] text-off-black/40">{r.windowClosed && r.window ? `${dayLabel(r.window.start)} – ${dayLabel(r.window.end)}${r.final ? '' : ', pull again'}` : pulledLabel(r.sales.computedAt)}</span>}{r.emailedTo && r.sentAt && <span className="block text-[10px] text-off-black/40">emailed {dayLabel(r.sentAt.slice(0, 10))}</span>}</td>
+                    <td className="px-3 py-2"><RaceStatus r={r} />{r.sales && <span className="block text-[10px] text-off-black/40">{r.windowClosed && r.window ? `${dayLabel(r.window.start)} – ${dayLabel(r.window.end)}${r.final ? '' : ', pull again'}` : pulledLabel(r.sales.computedAt)}</span>}{r.emailedTo && r.sentAt && <span className="block text-[10px] text-off-black/40">emailed {dayLabel(r.sentAt.slice(0, 10))}</span>}</td>
                     <td className="px-3 py-2">
                       <span className="inline-flex items-center gap-1">
                         {r.status !== 'paid' && <button onClick={() => act({ action: 'compute', dealId: r.dealId }, r.dealId, x => `${x.name}: ${x.sales?.unitsSold} units, ${usd(x.sales?.netSalesCents ?? 0)} net`)} disabled={busy !== null || !r.raceDate} className={btnSecondary} title="Pull this race's sales from Shopify"><RefreshCw className={`w-3.5 h-3.5 ${busy === r.dealId ? 'animate-spin' : ''}`} /> {r.sales ? 'Pull again' : 'Pull sales'}</button>}
@@ -193,4 +193,25 @@ function EmailModal({ r, busy, onClose, onSend }: { r: RacePayout; busy: boolean
       <textarea value={text} onChange={e => setText(e.target.value)} rows={16} className={`${modalInput} font-sans text-sm leading-relaxed`} />
     </ActionModal>
   )
+}
+
+/**
+ * Where a race payout stands, in four steps: In progress (the sales window is
+ * open or not started), Period closed (the window is over, the report is
+ * Matt's to send), Email sent, Paid.
+ */
+function raceStage(r: RacePayout): 'in_progress' | 'period_closed' | 'sent' | 'paid' {
+  if (r.status === 'paid') return 'paid'
+  if (r.status === 'sent') return 'sent'
+  return r.windowClosed ? 'period_closed' : 'in_progress'
+}
+const RACE_STAGE: Record<ReturnType<typeof raceStage>, [string, string]> = {
+  in_progress: ['In progress', 'bg-white border-border-gray text-off-black/60'],
+  period_closed: ['Period closed', 'bg-amber-100 border-amber-300 text-amber-800'],
+  sent: ['Email sent', 'bg-blue-50 border-blue-200 text-blue-800'],
+  paid: ['Paid', 'bg-emerald-100 border-emerald-300 text-emerald-800'],
+}
+function RaceStatus({ r }: { r: RacePayout }) {
+  const [label, tone] = RACE_STAGE[raceStage(r)]
+  return <span className={`inline-flex items-center px-2 py-0.5 rounded border text-[11px] font-semibold whitespace-nowrap ${tone}`}>{label}</span>
 }

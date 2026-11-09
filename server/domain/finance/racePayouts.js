@@ -103,8 +103,11 @@ export async function listRacePayouts({ today = todayET() } = {}) {
   const rows = deals.map(d => view(d, state[d.id], today))
   const order = r => (r.status === 'paid' ? 3 : r.status === 'sent' ? 2 : r.dueDate ? (r.dueDate <= today ? 0 : 1) : 1)
   rows.sort((a, b) => order(a) - order(b) || String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999')))
+  // The Finance overview reads this copy: Attio takes 20 seconds cold (finance/needs.js).
+  await prisma.systemConfig.upsert({ where: { key: RACE_PAYOUTS_CACHE }, update: { value: JSON.stringify(rows) }, create: { key: RACE_PAYOUTS_CACHE, value: JSON.stringify(rows) } }).catch(() => {})
   return rows
 }
+export const RACE_PAYOUTS_CACHE = 'finance_race_payouts_cache'
 
 /** The Shopify products that are this race's prints. */
 async function productsFor(deal) {

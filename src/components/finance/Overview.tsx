@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ExternalLink, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ExternalLink, RefreshCw } from 'lucide-react'
 import { Bar, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, ReferenceDot } from 'recharts'
-import { btnGhost, segment, segmentGroup } from '@/lib/ui'
+import { btnGhost, btnPrimary, btnSecondary, segment, segmentGroup } from '@/lib/ui'
 import { financeApi, usd, usdShort, pctText, xText, intText, dayLabel, SERIES } from '@/lib/financeApi'
-import type { OverviewPayload, TrendDay, WaterfallLine } from '@/types/finance'
+import type { Need, OverviewPayload, TrendDay, WaterfallLine } from '@/types/finance'
 import { card, DeltaPill, ErrorCard, Spark, Spinner, Tile } from './bits'
 import TrybeCheck from './TrybeCheck'
 
@@ -22,7 +22,8 @@ const PERIOD_KEY = 'finance.period'
 
 /**
  * The dashboard: the period's numbers with the compare window, where the
- * money went, the 90-day trend with race days, the levers, and Needs you.
+ * money went, the 90-day trend with race days, the levers. Needs you sits
+ * on top: what to do next, each with the button that does it.
  */
 export default function Overview() {
   // Yesterday by default: the feeds land the next morning, so Today is empty until tomorrow.
@@ -78,6 +79,8 @@ export default function Overview() {
         </div>
       </div>
 
+      {data && !error && <NeedsYou needs={data.needs} />}
+
       {error ? <ErrorCard text={error} /> : !data || !t || !c ? <Spinner /> : t.dayCount === 0 ? (
         <div className={`${card} p-6 text-sm text-off-black/60`}>
           <p className="font-semibold text-off-black mb-1">Nothing has landed for {data.period.label.toLowerCase()} yet.</p>
@@ -114,19 +117,6 @@ export default function Overview() {
               <Waterfall lines={data.waterfall} />
             </div>
             <div className="space-y-3">
-              <div className={`${card} p-4`}>
-                <h3 className="text-sm font-semibold text-off-black mb-2">Needs you</h3>
-                {data.needs.length === 0 ? <p className="text-sm text-off-black/50">Nothing waiting. Hours are approved, payouts are on runs, the feeds landed.</p> : (
-                  <ul className="space-y-1.5">
-                    {data.needs.map((n, i) => (
-                      <li key={i} className="text-sm text-off-black/80 flex items-start gap-2">
-                        <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${n.kind === 'roas' || n.kind === 'cm' ? 'bg-red-500' : n.kind === 'feed' ? 'bg-amber-500' : 'bg-off-black/50'}`} />
-                        <span>{n.to ? <Link to={n.to} className="hover:underline">{n.text}</Link> : n.text}{n.cents != null && <span className="text-off-black/50"> · {usd(n.cents)}</span>}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
               <Pacing data={data} />
             </div>
           </div>
@@ -289,6 +279,57 @@ function Pacing({ data }: { data: OverviewPayload }) {
             <div className="h-1.5 rounded bg-off-black/[0.06] mt-1 overflow-hidden"><div className="h-full rounded bg-off-black/30" style={{ width: `${(rev / max) * 100}%` }} /></div>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+const NEED_TONE: Record<Need['tone'], { box: string; icon: typeof AlertTriangle; iconCls: string; label: string }> = {
+  due: { box: 'border-off-black/15', icon: CalendarClock, iconCls: 'text-off-black', label: 'To do' },
+  soon: { box: 'border-border-gray', icon: CalendarClock, iconCls: 'text-off-black/45', label: 'Coming up' },
+  alert: { box: 'border-amber-200 bg-amber-50/40', icon: AlertTriangle, iconCls: 'text-amber-600', label: 'Look at' },
+}
+
+/**
+ * What Matt has to do, as cards across the top: approve hours, pay the team
+ * every two weeks, pay race partners 30 days after their race, last month's
+ * customs and fee, then the alerts. Each card's button does the next step
+ * (server/domain/finance/needs.js decides what is on them).
+ */
+function NeedsYou({ needs }: { needs: Need[] }) {
+  if (!needs.length) {
+    return (
+      <div className={`${card} p-4 flex items-center gap-2 text-sm text-off-black/60`}>
+        <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Nothing needs you. Hours are approved, the team and the races are paid, the feeds landed.
+      </div>
+    )
+  }
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-off-black mb-2">Needs you</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        {needs.map((n, i) => {
+          const tone = NEED_TONE[n.tone] || NEED_TONE.due
+          const Icon = tone.icon
+          return (
+            <div key={`${n.kind}-${i}`} className={`${card} ${tone.box} p-4 flex flex-col gap-2`}>
+              <div className="flex items-start gap-2">
+                <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${tone.iconCls}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] text-off-black/45">{tone.label}{n.due && n.tone !== 'alert' ? ` · ${dayLabel(n.due)}` : ''}</div>
+                  <div className="text-sm font-semibold text-off-black leading-snug">{n.title}</div>
+                </div>
+                {n.cents != null && n.cents > 0 && <div className="text-sm font-semibold text-off-black tabular-nums whitespace-nowrap">{usd(n.cents, { cents: true })}</div>}
+              </div>
+              {n.detail && <p className="text-[13px] text-off-black/65 leading-snug">{n.detail}</p>}
+              {n.action && (
+                <Link to={n.action.to} className={`mt-auto self-start ${n.tone === 'due' ? btnPrimary : btnSecondary}`}>
+                  {n.action.label} <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

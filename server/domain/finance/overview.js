@@ -9,7 +9,7 @@ import { summarize } from './scoreboard.js'
 import { rowsBetween } from './ledger.js'
 import { lastSync } from './sheetSync.js'
 import { resolvePeriod, todayET, addDays, PERIODS, monthOf, shiftMonth, lastOfMonth, firstOfMonth, dayLabel } from './periods.js'
-import { unpaidWeeks } from './payouts.js'
+import { moneyNeeds, needCard } from './needs.js'
 
 const TZ = 'America/New_York'
 const hourET = (now = new Date()) => Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', hourCycle: 'h23' }).format(now))
@@ -21,13 +21,12 @@ export async function overview({ period = 'today', now = new Date() } = {}) {
   const rules = await loadRules()
   const p = resolvePeriod(period, today)
   const trendFirst = addDays(p.last, -89)
-  const [rows, cmpRows, trendRows, syncInfo, submitted, weeks, races] = await Promise.all([
+  const [rows, cmpRows, trendRows, syncInfo, money, races] = await Promise.all([
     rowsBetween(p.first, p.last),
     rowsBetween(p.compare.first, p.compare.last),
     rowsBetween(trendFirst < p.first ? trendFirst : p.first, p.last),
     lastSync(),
-    prisma.timesheet.count({ where: { status: 'submitted' } }),
-    unpaidWeeks(),
+    moneyNeeds({ today }),
     prisma.race.findMany({ where: { raceDate: { gte: new Date(`${trendFirst}T00:00:00Z`), lte: new Date(`${p.last}T23:59:59Z`) } }, select: { raceName: true, raceDate: true, year: true } }),
   ])
   const s = summarize(rows, rules)
@@ -71,15 +70,13 @@ export async function overview({ period = 'today', now = new Date() } = {}) {
 
   // Needs you.
   const breakeven = ruleFor(rules, 'breakeven_roas', p.last)?.value || 1.56
-  const needs = []
-  if (submitted) needs.push({ kind: 'timesheets', text: `${submitted} week${submitted === 1 ? '' : 's'} of hours waiting for approval`, to: '/finance/timesheets' })
-  const owedCents = weeks.reduce((a, w) => a + w.amountCents, 0)
-  if (weeks.length) needs.push({ kind: 'payouts', text: `${weeks.length} approved week${weeks.length === 1 ? '' : 's'} not on a pay run yet`, cents: owedCents, to: '/finance/payouts' })
+  // Money owed first (needs.js), then the alerts below.
+  const needs = [...money]
   const yesterday = addDays(today, -1)
   const yRow = trend.days.find(d => d.day === yesterday)
   if (yRow && hourET(now) >= 12) {
     const late = Object.entries(yRow.has).filter(([, ok]) => !ok).map(([k]) => ({ shopify: 'Shopify', etsy: 'Etsy', printShop: 'Artelo', meta: 'Meta', google: 'Google Ads' }[k]))
-    if (late.length) needs.push({ kind: 'feed', text: `${late.join(', ')} ${late.length === 1 ? 'has' : 'have'} not landed for ${dayLabel(yesterday)} yet`, to: '/finance/daily' })
+    if (late.length) needs.push(needCard({ kind: 'feed', tone: 'alert', title: `${late.join(', ')} not in yet`, detail: `${dayLabel(yesterday)} has not landed in the Daily Tracker. Check the feed, then Refresh.`, action: { label: 'Day by day', to: '/finance/daily' } }))
   }
   // Days the ads did not pay for themselves, and days that kept too little,
   // as one line each with the worst day, not a line per day: a year view
@@ -89,13 +86,13 @@ export async function overview({ period = 'today', now = new Date() } = {}) {
   const lowRoas = landedDays.filter(d => d.roas != null && d.adSpend > 0 && d.roas < breakeven)
   if (lowRoas.length) {
     const worst = lowRoas.reduce((a, d) => (d.roas < a.roas ? d : a))
-    needs.push({ kind: 'roas', text: `Ads did not pay for themselves on ${lowRoas.length} of ${landedDays.length} day${landedDays.length === 1 ? '' : 's'}: every $1 of ads brought back under $${breakeven.toFixed(2)}, the break-even. Worst was ${dayLabel(worst.day)} at $${worst.roas.toFixed(2)}.`, to: dayLink(worst) })
+    needs.push(needCard({ kind: 'roas', tone: 'alert', title: 'Ads below break-even', detail: `On ${lowRoas.length} of ${landedDays.length} day${landedDays.length === 1 ? '' : 's'} every $1 of ads brought back under $${breakeven.toFixed(2)}. Worst was ${dayLabel(worst.day)} at $${worst.roas.toFixed(2)}.`, action: { label: 'See the day', to: dayLink(worst) } }))
   }
   const lowCm = landedDays.filter(d => d.cmPct != null && d.cmPct < 20)
   if (lowCm.length) {
     const worst = lowCm.reduce((a, d) => (d.cmPct < a.cmPct ? d : a))
     const lost = lowCm.filter(d => d.cmPct < 0).length
-    needs.push({ kind: 'cm', text: `Kept less than 20 cents of each dollar on ${lowCm.length} of ${landedDays.length} day${landedDays.length === 1 ? '' : 's'}${lost ? `, and lost money on ${lost}` : ''}. Worst was ${dayLabel(worst.day)} at ${worst.cmPct.toFixed(0)}%.`, to: dayLink(worst) })
+    needs.push(needCard({ kind: 'cm', tone: 'alert', title: 'Thin margin', detail: `Kept less than 20 cents of each dollar on ${lowCm.length} of ${landedDays.length} day${landedDays.length === 1 ? '' : 's'}${lost ? `, and lost money on ${lost}` : ''}. Worst was ${dayLabel(worst.day)} at ${worst.cmPct.toFixed(0)}%.`, action: { label: 'See the day', to: dayLink(worst) } }))
   }
 
   return {
