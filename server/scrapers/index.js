@@ -520,6 +520,16 @@ export function namedEventsFor(raceName) {
   return findConfigForRace(raceName)?.namedEvents || []
 }
 
+/**
+ * The race's one distance, when it has only one (the Santa Barbara Half): what
+ * an order that names no event ran. Null when the race has several, so nothing
+ * guesses between a marathon and a half.
+ */
+export function onlyEventFor(raceName) {
+  const types = findConfigForRace(raceName)?.eventTypes || []
+  return types.length === 1 ? types[0] : null
+}
+
 export function isMainEvent(raceName, eventType) {
   const e = String(eventType || '').trim().toLowerCase()
   if (!e || e === 'marathon') return true

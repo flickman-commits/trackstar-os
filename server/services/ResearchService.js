@@ -11,7 +11,7 @@
  */
 import { paceFromTypedTime } from '../domain/research/customerPace.js'
 import prisma from '../db.js'
-import { getScraperForRace, hasScraperForRace, getCanonicalRaceName, namedEventsFor, isRacePublicSafe } from '../scrapers/index.js'
+import { getScraperForRace, hasScraperForRace, getCanonicalRaceName, namedEventsFor, isRacePublicSafe, onlyEventFor } from '../scrapers/index.js'
 import { ensureOverridesLoaded } from '../scrapers/scraperOverrides.js'
 import WeatherService from './WeatherService.js'
 
@@ -353,7 +353,9 @@ export class ResearchService {
     // A customer who typed a time but no pace gets the pace worked out from
     // their time and the event's distance (customerPace.js). Their time is
     // used exactly as given; only the missing pace is filled in.
-    const derivedPace = order.customerPace ? null : paceFromTypedTime(order.customerFinishTime, order.customerEventType)
+    // No event on the order means a marathon, unless the race has only one
+    // distance: Santa Barbara is a half, and 2:05 over 26.2 printed 4:46 (9207).
+    const derivedPace = order.customerPace ? null : paceFromTypedTime(order.customerFinishTime, order.customerEventType || onlyEventFor(effectiveRaceName))
 
     // A bib and no time (Portland 2026, 9203; Austin 2025, 8938): the print
     // still needs a time, and only the official results have it. Look the
