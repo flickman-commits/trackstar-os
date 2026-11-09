@@ -128,3 +128,19 @@ test('isFailedSearch: candidates are an answer whatever the note says', () => {
   assert.equal(isFailedSearch({ found: false, researchStatus: 'year_not_configured', researchNotes: 'timed out' }), false)
   assert.equal(isFailedSearch({ found: false, researchStatus: 'not_found', researchNotes: 'Runner not found in Miami Marathon 2025 results' }), false)
 })
+
+test('a name with Jr. that the site cannot search is found without it (Indy 2026, 8945)', async () => {
+  const found = function () { return { ...this.notFoundResult(), found: true, runnerName: 'Robert Pedersen', bibNumber: '37', officialTime: '3:00:00', researchStatus: 'found' } }
+  const scraper = new ScriptedScraper([function () { return this.notFoundResult() }, found])
+  const r = await serviceWith(scraper).findRunner('Miami Marathon', 2025, 'Robert Pedersen Jr.', { skipLastNameFallback: true })
+  assert.equal(r.found, true)
+  assert.equal(r.bibNumber, '37')
+  assert.equal(scraper.calls.at(-1), 'Robert Pedersen')
+})
+
+test('a Sr is not taken for the Jr the customer typed', async () => {
+  const sr = function () { return { ...this.notFoundResult(), found: true, runnerName: 'Robert Pedersen Sr', bibNumber: '38', officialTime: '3:00:00', researchStatus: 'found' } }
+  const scraper = new ScriptedScraper([function () { return this.notFoundResult() }, sr, function () { return this.notFoundResult() }, function () { return this.notFoundResult() }])
+  const r = await serviceWith(scraper).findRunner('Miami Marathon', 2025, 'Robert Pedersen Jr.', { skipLastNameFallback: true })
+  assert.equal(r.found, false)
+})

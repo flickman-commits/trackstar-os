@@ -638,6 +638,24 @@ export class ResearchService {
       }
     }
 
+    // A generational suffix in the search term: ChronoTrack's search finds
+    // nobody for "Robert Pedersen Jr." and the one Robert Pedersen for
+    // "Robert Pedersen" (Indy 2026, order 8945). Search once more without it.
+    // A result carrying a different suffix (Sr for a Jr) is not them.
+    const typed = scraper.parseRunnerName?.(runnerName)
+    if (!results.found && !results.ambiguous && results.researchStatus !== 'upstream_error' && typed?.suffix) {
+      const bare = plain.replace(/[\s,]+(jr|jnr|sr|snr|ii|iii|iv|v)\.?$/i, '').trim()
+      if (bare && bare !== plain) {
+        console.log(`[ResearchService] Not found with the suffix; trying "${bare}"`)
+        const again = await this.searchOnce(this.scraperFor(raceName, year), raceName, year, bare)
+        const theirs = again.found ? scraper.parseRunnerName(again.runnerName || '').suffix : null
+        if ((again.found && (!theirs || theirs === typed.suffix)) || again.ambiguous) {
+          again.researchNotes = [again.researchNotes, `Found by searching "${bare}" (the results search does not take the ${runnerName.trim().split(/\s+/).pop()}).`].filter(Boolean).join(' ')
+          results = again
+        }
+      }
+    }
+
     // Candidates that did not pass namesMatch are SUGGESTIONS, not matches.
     //
     // This used to relabel them 'ambiguous', which put "More than one match -
