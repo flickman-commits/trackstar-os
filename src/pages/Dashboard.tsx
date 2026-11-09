@@ -188,6 +188,36 @@ const DEFAULT_SORT: Record<'standard' | 'custom', SortPrefs> = {
   custom: { newestFirst: false, expeditedTop: false, bigSpenderTop: false },
 }
 
+// Races not yet run cannot be fulfilled; they live in their own bucket.
+const isNotRun = (o: Order) => o.pipeline?.stage === 'waiting' && o.pipeline?.reason === 'Race not run yet'
+// Which queue a standard order sits in. Four a person works, one they watch:
+//   review    renders to approve (and the few seconds while one renders)
+//   action    something a person fixes or decides, including a print they held
+//   waiting   on the customer: a reply, a photo, a payment, or results they
+//             are waiting on too (results not posted yet)
+//   approved  on its way: the 48-hour hold, sending, waiting on sibling prints
+//   not_run   the race has not happened
+const queueOf = (o: Order): 'review' | 'action' | 'waiting' | 'approved' | 'not_run' => {
+  const s = o.pipeline?.stage, r = o.pipeline?.reason || ''
+  if (isNotRun(o)) return 'not_run'
+  if (s === 'action') return 'action'
+  if (s === 'attach' && (r === 'Held' || r === 'Attach in Artelo')) return 'action'
+  if (s === 'review') return 'review'
+  if (s === 'waiting' && /render/i.test(r)) return 'review'
+  if (s === 'hold' || s === 'attach') return 'approved'
+  return 'waiting'
+}
+// Action, grouped so the quick decisions sit above the digging.
+const ACTION_GROUPS = ['Quick decisions', 'Fix in the tool', 'Research', 'Artelo', 'Needs a designer or developer'] as const
+const actionGroup = (o: Order): (typeof ACTION_GROUPS)[number] => {
+  const r = o.pipeline?.reason || '', k = o.pipeline?.kind
+  if (/^(Confirm weather|Confirm race date|Pick a match|Enter the time)$/.test(r)) return 'Quick decisions'
+  if (/^(Design rejected|Render failed|Email bounced|Held|Flagged)$/.test(r)) return 'Fix in the tool'
+  if (k === 'artelo' || /Artelo/.test(r) || r === 'Expedited shipping') return 'Artelo'
+  if (k === 'setup' || /^(Needs a scraper|Needs race data|Needs race date|Needs NO TIME layer|Needs a production file|Make by hand)$/.test(r)) return 'Needs a designer or developer'
+  return 'Research'
+}
+
 export default function Dashboard() {
   const { user: currentUser, isAdmin, can } = useAuth()
   // The "Email customer" modal on an order: a new Support conversation about it.
@@ -944,34 +974,6 @@ export default function Dashboard() {
   // How many open standard orders sit in each stage, for the queue chips.
   // Orders for a race that has not happened yet cannot be fulfilled, so they
   // are kept out of every "to fulfill" count and live in their own bucket.
-  const isNotRun = (o: Order) => o.pipeline?.stage === 'waiting' && o.pipeline?.reason === 'Race not run yet'
-  // Which queue an order sits in. Four a person works, one they watch:
-  //   review    renders to approve (and the few seconds while one renders)
-  //   action    something a person fixes or decides, including a print they held
-  //   waiting   on the customer: a reply, a photo, a payment, or results they
-  //             are waiting on too (results not posted yet)
-  //   approved  on its way: the 48-hour hold, sending, waiting on sibling prints
-  //   not_run   the race has not happened
-  const queueOf = (o: Order): Exclude<StageFilter, '' | 'late'> => {
-    const s = o.pipeline?.stage, r = o.pipeline?.reason || ''
-    if (isNotRun(o)) return 'not_run'
-    if (s === 'action') return 'action'
-    if (s === 'attach' && (r === 'Held' || r === 'Attach in Artelo')) return 'action'
-    if (s === 'review') return 'review'
-    if (s === 'waiting' && /render/i.test(r)) return 'review'
-    if (s === 'hold' || s === 'attach') return 'approved'
-    return 'waiting'
-  }
-  // Action, grouped so the quick decisions sit above the digging.
-  const ACTION_GROUPS = ['Quick decisions', 'Fix in the tool', 'Research', 'Artelo', 'Needs a designer or developer'] as const
-  const actionGroup = (o: Order): (typeof ACTION_GROUPS)[number] => {
-    const r = o.pipeline?.reason || '', k = o.pipeline?.kind
-    if (/^(Confirm weather|Confirm race date|Pick a match|Enter the time)$/.test(r)) return 'Quick decisions'
-    if (/^(Design rejected|Render failed|Email bounced|Held|Flagged)$/.test(r)) return 'Fix in the tool'
-    if (k === 'artelo' || /Artelo/.test(r) || r === 'Expedited shipping') return 'Artelo'
-    if (k === 'setup' || /^(Needs a scraper|Needs race data|Needs race date|Needs NO TIME layer|Needs a production file|Make by hand)$/.test(r)) return 'Needs a designer or developer'
-    return 'Research'
-  }
   const fulfillable = useMemo(() => activeView === 'standard' ? ordersToFulfill.filter(o => !isNotRun(o)) : ordersToFulfill, [ordersToFulfill, activeView])
   // Current Team shows the same: each person's orders that can be worked now.
   const teamQueue = useMemo(() => {
@@ -998,7 +1000,7 @@ export default function Dashboard() {
       else c[q]++
     }
     return c
-  }, [ordersToFulfill, activeView]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ordersToFulfill, activeView])
 
   const filteredOrders = useMemo(() => {
     let base = ordersToFulfill
