@@ -63,6 +63,10 @@ const TESTS = {
     const about = await google.drive({ version: 'v3', auth }).about.get({ fields: 'user(emailAddress)' })
     return `Service account ${about.data.user?.emailAddress || 'answering'}`
   },
+  async trybe() {
+    const { ping } = await import('../services/trybe.js')
+    return ping()
+  },
   async attio() {
     const { workspaceMembers } = await import('../domain/sales/attio.js')
     const members = await workspaceMembers()

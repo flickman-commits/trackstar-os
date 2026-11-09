@@ -19,7 +19,7 @@ const int = (k: string) => (d: Record<string, unknown>) => intText(d[k] as numbe
 const SCOREBOARD: Col[] = [
   { key: 'shopifyRevenue', label: 'Shopify', fmt: money('shopifyRevenue'), group: 'Revenue' }, { key: 'etsyRevenue', label: 'Etsy', fmt: money('etsyRevenue'), group: 'Revenue' }, { key: 'revenue', label: 'Revenue', fmt: money('revenue'), strong: true, group: 'Revenue' },
   { key: 'shopifyFees', label: 'Shopify fees', fmt: money('shopifyFees'), group: 'Costs' }, { key: 'etsyFees', label: 'Etsy fees', fmt: money('etsyFees'), group: 'Costs' }, { key: 'production', label: 'Production', fmt: money('production'), group: 'Costs' }, { key: 'shipping', label: 'Shipping', fmt: money('shipping'), group: 'Costs' }, { key: 'cogs', label: 'COGS', fmt: money('cogs'), strong: true, group: 'Costs' },
-  { key: 'meta', label: 'Meta', fmt: money('meta'), group: 'Ad spend' }, { key: 'google', label: 'Google', fmt: money('google'), group: 'Ad spend' }, { key: 'adSpend', label: 'Ads', fmt: money('adSpend'), strong: true, group: 'Ad spend' },
+  { key: 'meta', label: 'Meta', fmt: money('meta'), group: 'Ad spend' }, { key: 'trybe', label: 'Trybe', fmt: money('trybe'), group: 'Ad spend' }, { key: 'google', label: 'Google', fmt: money('google'), group: 'Ad spend' }, { key: 'adSpend', label: 'Ads', fmt: money('adSpend'), strong: true, group: 'Ad spend' },
   { key: 'grossProfit', label: 'Gross profit', fmt: money('grossProfit'), strong: true, group: 'Profit' }, { key: 'grossMarginPct', label: 'GM %', fmt: pct('grossMarginPct'), group: 'Profit' }, { key: 'designerFee', label: 'Designer', fmt: money('designerFee'), group: 'Profit' }, { key: 'cm', label: 'CM', fmt: money('cm'), strong: true, group: 'Profit' }, { key: 'cmPct', label: 'CM %', fmt: pct('cmPct'), group: 'Profit' },
   { key: 'roas', label: 'ROAS', fmt: x('roas'), group: 'Ratios' }, { key: 'aov', label: 'AOV', fmt: money('aov'), group: 'Ratios' }, { key: 'cpa', label: 'CPA', fmt: money('cpa'), group: 'Ratios' }, { key: 'orders', label: 'Orders', fmt: int('orders'), group: 'Ratios' }, { key: 'breakevenCpa', label: 'BE CPA', fmt: money('breakevenCpa'), group: 'Ratios' }, { key: 'organicOrders', label: 'Organic', fmt: int('organicOrders'), group: 'Ratios' }, { key: 'organicPct', label: 'Organic %', fmt: pct('organicPct'), group: 'Ratios' },
 ]
@@ -37,8 +37,9 @@ const FIELD_LABEL: Record<string, string> = {
   productionCents: 'Production costs', shippingCostCents: 'Shipping costs', unitsProduced: 'Units produced',
   metaSpendCents: 'Ad spend', metaImpressions: 'Impressions', metaClicks: 'Clicks', metaPurchases: 'Purchases', metaPurchaseValueCents: 'Purchase value', metaAddToCarts: 'Add to carts',
   googleSpendCents: 'Ad spend', googleImpressions: 'Impressions', googleClicks: 'Clicks', googleConversions: 'Conversions', googleConversionValueCents: 'Conversion value',
+  trybeSalesCents: 'Attributed sales', trybeConversions: 'Conversions', trybeEarningsCents: 'Creator earnings', trybeCostCents: 'Total cost',
 }
-const TAB_OF = (f: string) => f.startsWith('shopify') ? 'Shopify' : f.startsWith('etsy') ? 'Etsy' : f.startsWith('meta') ? 'Meta Ads' : f.startsWith('google') ? 'Google Ads' : 'Print shop (Artelo)'
+const TAB_OF = (f: string) => f.startsWith('shopify') ? 'Shopify' : f.startsWith('etsy') ? 'Etsy' : f.startsWith('meta') ? 'Meta Ads' : f.startsWith('google') ? 'Google Ads' : f.startsWith('trybe') ? 'Trybe' : 'Print shop (Artelo)'
 const isMoney = (f: string) => f.endsWith('Cents')
 
 /** The Daily Tracker's scoreboard and levers for a month, from the ledger; a day opens to its raw inputs. */

@@ -13,7 +13,7 @@ import { unpaidWeeks } from './payouts.js'
 
 const TZ = 'America/New_York'
 const hourET = (now = new Date()) => Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', hourCycle: 'h23' }).format(now))
-const HEADLINE = ['revenue', 'shopifyRevenue', 'etsyRevenue', 'cm', 'cmPct', 'grossProfit', 'grossMarginPct', 'adSpend', 'meta', 'google', 'roas', 'orders', 'aov', 'cpa', 'breakevenCpa', 'cogs', 'designerFee', 'organicOrders', 'organicPct', 'units', 'dayCount', 'lastLanded', 'first', 'last']
+const HEADLINE = ['revenue', 'shopifyRevenue', 'etsyRevenue', 'cm', 'cmPct', 'grossProfit', 'grossMarginPct', 'adSpend', 'meta', 'trybe', 'google', 'roas', 'orders', 'aov', 'cpa', 'breakevenCpa', 'cogs', 'designerFee', 'organicOrders', 'organicPct', 'units', 'dayCount', 'lastLanded', 'first', 'last']
 const pick = (s, keys) => Object.fromEntries(keys.map(k => [k, s[k]]))
 
 export async function overview({ period = 'today', now = new Date() } = {}) {
@@ -47,6 +47,7 @@ export async function overview({ period = 'today', now = new Date() } = {}) {
     ...(feeBase === 'gp' ? [{ key: 'designerFee', label: 'Designer fee', cents: -s.designerFee }] : []),
     { key: 'grossProfit', label: 'Gross profit', cents: s.grossProfit, kind: 'subtotal' },
     { key: 'meta', label: 'Meta ads', cents: -s.meta },
+    { key: 'trybe', label: 'Trybe creators', cents: -s.trybe },
     { key: 'google', label: 'Google ads', cents: -s.google },
     ...(feeBase === 'cm' ? [{ key: 'designerFee', label: 'Designer fee', cents: -s.designerFee }] : []),
     { key: 'cm', label: 'Contribution margin', cents: s.cm, kind: 'total' },

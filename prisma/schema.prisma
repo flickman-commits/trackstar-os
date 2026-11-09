@@ -1590,6 +1590,11 @@ model FinanceDay {
   metaPurchaseValueCents   Int?
   metaAddToCarts           Int?
   googleSpendCents         Int?
+  // Trybe (creator commissions), from the sheet's Trybe tab: cost = earnings + platform fee + card processing.
+  trybeSalesCents          Int?
+  trybeConversions         Int?
+  trybeEarningsCents       Int?
+  trybeCostCents           Int?
   googleImpressions        Int?
   googleClicks             Int?
   googleConversions        Int?

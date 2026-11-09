@@ -1,8 +1,8 @@
 /**
  * The Daily Tracker's raw tabs -> FinanceDay, one row per day.
  *
- * The five raw tabs (Shopify Data, Etsy Data, Print Shop, Meta Ads, Google
- * Ads) are filled by their own feeds, one row per day of the year, the date
+ * The raw tabs (Shopify Data, Etsy Data, Print Shop, Meta Ads, Google Ads,
+ * and Trybe, which trybeSync.js fills from the Trybe API) are filled by their own feeds, one row per day of the year, the date
  * in column A as MM/DD/YYYY, the headers on row 3. The app reads them as the
  * sheet formats them ("$16,840.00", "1,287", "-" for nothing) and stores
  * integer cents and counts. A cell that is empty or "-" is null: the feed has
@@ -41,6 +41,11 @@ export const TABS = [
   { id: 'google', title: 'Google Ads', key: 'googleSpendCents', columns: {
     'Ad Spend': ['googleSpendCents', 'money'], 'Impressions': ['googleImpressions', 'count'], 'Clicks': ['googleClicks', 'count'],
     'Conversions': ['googleConversions', 'count'], 'Conversion Value': ['googleConversionValueCents', 'money'],
+  } },
+  // Total Cost is the sheet's own formula: creator earnings + platform fee + card processing.
+  { id: 'trybe', title: 'Trybe', key: 'trybeCostCents', columns: {
+    'Attributed Sales': ['trybeSalesCents', 'money'], 'Conversions': ['trybeConversions', 'count'],
+    'Creator Earnings': ['trybeEarningsCents', 'money'], 'Total Cost': ['trybeCostCents', 'money'],
   } },
 ]
 export const FIELDS = TABS.flatMap(t => Object.values(t.columns).map(c => c[0]))

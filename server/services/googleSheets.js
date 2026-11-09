@@ -6,8 +6,10 @@
  *   - GOOGLE_SERVICE_ACCOUNT_EMAIL — the service account's email
  *   - GOOGLE_SERVICE_ACCOUNT_KEY   — the private key (full PEM block, with newlines)
  *
- * The sheet itself must be shared with that service account email (Viewer access).
- * Used by the Marathon Monopoly board (monopolyBoard.js).
+ * The sheet itself must be shared with that service account email. Reading
+ * needs Viewer; writeRanges (the Trybe tab, filled by finance/trybeSync.js)
+ * needs Editor.
+ * Used by the Marathon Monopoly board (monopolyBoard.js) and Finance.
  */
 import { google } from '../lib/google.js'
 import { requireConnection } from '../lib/connections.js'
@@ -17,14 +19,15 @@ import { requireConnection } from '../lib/connections.js'
 const FINANCIAL_TRACKER_SHEET_ID = '1yKe9O8XAHXRxBPlOFKN4pMNlH-eYTsdsLNJsw6Tctwg'
 
 let cachedClient = null
+let cachedWriter = null
 
 /**
  * Build (or reuse) an authenticated Sheets API client.
  * The JWT is cached for the lifetime of the lambda — Sheets tokens last 1h
  * by default and we re-auth on cold start, so we never need to refresh.
  */
-function getSheetsClient() {
-  if (cachedClient) return cachedClient
+function getSheetsClient({ write = false } = {}) {
+  if (write ? cachedWriter : cachedClient) return write ? cachedWriter : cachedClient
 
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
   const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY
@@ -39,11 +42,13 @@ function getSheetsClient() {
   const jwt = new google.auth.JWT({
     email,
     key: privateKey,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    // Reads stay on the read-only scope; only writeRanges asks for more.
+    scopes: [write ? 'https://www.googleapis.com/auth/spreadsheets' : 'https://www.googleapis.com/auth/spreadsheets.readonly'],
   })
 
-  cachedClient = google.sheets({ version: 'v4', auth: jwt })
-  return cachedClient
+  const client = google.sheets({ version: 'v4', auth: jwt })
+  if (write) cachedWriter = client; else cachedClient = client
+  return client
 }
 
 /**
@@ -103,4 +108,16 @@ export async function readRanges(a1List, { spreadsheetId = FINANCIAL_TRACKER_SHE
   // Sheets returns valueRanges in request order, but omits `values` entirely
   // for an empty range — normalize so callers can index without guarding.
   return a1List.map((_, i) => res.data.valueRanges?.[i]?.values || [])
+}
+
+/**
+ * Write several ranges in one request: [{ range: "'Trybe'!B10:D10", values: [[1, 2, 3]] }].
+ * Values go in as typed (RAW), so a number stays a number.
+ */
+export async function writeRanges(data, { spreadsheetId = FINANCIAL_TRACKER_SHEET_ID } = {}) {
+  if (!data.length) return { updatedCells: 0 }
+  await requireConnection('google_drive')
+  const sheets = getSheetsClient({ write: true })
+  const res = await sheets.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: 'RAW', data } })
+  return { updatedCells: res.data.totalUpdatedCells || 0 }
 }

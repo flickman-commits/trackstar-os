@@ -161,7 +161,7 @@ export default function Overview() {
 function Waterfall({ lines }: { lines: WaterfallLine[] }) {
   const top = Math.max(1, ...lines.filter(l => l.kind === 'total' || l.kind === 'subtotal').map(l => Math.abs(l.cents)))
   const colorOf = (l: WaterfallLine) => l.key === 'revenue' ? SERIES.revenue : l.key === 'cm' ? SERIES.cm
-    : (l.kind === 'subtotal') ? SERIES.muted : l.key === 'meta' || l.key === 'google' ? SERIES.adSpend : l.key === 'designerFee' ? SERIES.designerFee : SERIES.cogs
+    : (l.kind === 'subtotal') ? SERIES.muted : l.key === 'meta' || l.key === 'trybe' || l.key === 'google' ? SERIES.adSpend : l.key === 'designerFee' ? SERIES.designerFee : SERIES.cogs
   let running = 0
   const rows = lines.map(l => {
     if (l.kind === 'total' || l.kind === 'subtotal') { running = l.cents; return { l, from: 0, to: Math.max(0, l.cents) } }

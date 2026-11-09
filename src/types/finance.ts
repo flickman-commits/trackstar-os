@@ -2,7 +2,7 @@
 
 export type Totals = {
   revenue: number; shopifyRevenue: number; etsyRevenue: number; cm: number; cmPct: number | null; grossProfit: number; grossMarginPct: number | null
-  adSpend: number; meta: number; google: number; roas: number | null; orders: number; aov: number | null; cpa: number | null; breakevenCpa: number | null
+  adSpend: number; meta: number; trybe: number; google: number; roas: number | null; orders: number; aov: number | null; cpa: number | null; breakevenCpa: number | null
   cogs: number; designerFee: number; organicOrders: number; organicPct: number | null; units: number; dayCount: number; lastLanded: string | null; first: string | null; last: string | null
 }
 

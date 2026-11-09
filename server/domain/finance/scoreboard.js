@@ -14,6 +14,11 @@
  *                               fee = pct x (gross profit - ad spend); CM = that - fee
  * Break-even CPA is gross profit per order in both. Organic orders are the
  * orders Meta and Google do not claim.
+ *
+ * Ad spend is Meta + Trybe + Google. Trybe is what its creators cost us
+ * (commission, platform fee, card processing; see trybeSync.js). Its ads run
+ * on our Meta account, so the spend on them is already in Meta and Trybe's
+ * attributed sales are already in revenue: only the cost is added.
  */
 import { ruleFor } from './rules.js'
 
@@ -64,7 +69,8 @@ export function computeDay(rawRow, rules) {
   const units = n0(row.unitsProduced)
   const meta = n0(row.metaSpendCents)
   const google = n0(row.googleSpendCents)
-  const adSpend = meta + google
+  const trybe = n0(row.trybeCostCents)
+  const adSpend = meta + trybe + google
   const direct = shopifyFees + etsyFees + production + shipping
 
   let designerFee, cogs, grossProfit, cm
@@ -88,9 +94,9 @@ export function computeDay(rawRow, rules) {
     day, landed: any, has,
     // money, cents
     shopifyRevenue, etsyRevenue, revenue, shopifyFees, etsyFees, production, shipping, designerFee, designerFeeBase: fee.base,
-    cogs, adSpend, meta, google, grossProfit, cm,
+    cogs, adSpend, meta, trybe, google, grossProfit, cm, trybeSales: n0(row.trybeSalesCents), trybeEarnings: n0(row.trybeEarningsCents),
     // counts
-    orders, shopifyOrders, etsyOrders, units, metaPurchases, googleConversions, organicOrders,
+    orders, shopifyOrders, etsyOrders, units, metaPurchases, googleConversions, organicOrders, trybeConversions: n0(row.trybeConversions),
     sessions: n0(row.shopifySessions), addToCart: n0(row.shopifyAddToCart), reachedCheckout: n0(row.shopifyReachedCheckout), completedCheckout: n0(row.shopifyCompletedCheckout),
     metaImpressions: n0(row.metaImpressions), metaClicks: n0(row.metaClicks), metaPurchaseValue: n0(row.metaPurchaseValueCents),
     googleImpressions: n0(row.googleImpressions), googleClicks: n0(row.googleClicks), googleConversionValue: n0(row.googleConversionValueCents),
@@ -134,7 +140,7 @@ function ratios(s) {
   }
 }
 
-const SUM_KEYS = ['shopifyRevenue', 'etsyRevenue', 'revenue', 'shopifyFees', 'etsyFees', 'production', 'shipping', 'designerFee', 'cogs', 'adSpend', 'meta', 'google', 'grossProfit', 'cm',
+const SUM_KEYS = ['shopifyRevenue', 'etsyRevenue', 'revenue', 'shopifyFees', 'etsyFees', 'production', 'shipping', 'designerFee', 'cogs', 'adSpend', 'meta', 'trybe', 'google', 'grossProfit', 'cm', 'trybeSales', 'trybeEarnings', 'trybeConversions',
   'orders', 'shopifyOrders', 'etsyOrders', 'units', 'metaPurchases', 'googleConversions', 'organicOrders', 'sessions', 'addToCart', 'reachedCheckout', 'completedCheckout',
   'metaImpressions', 'metaClicks', 'metaPurchaseValue', 'googleImpressions', 'googleClicks', 'googleConversionValue']
 
