@@ -49,11 +49,11 @@ export default function ConversationPanel({ orderId, enabled }: { orderId: strin
   // All closed and folded: one quiet line, no card. Nothing is owed, so nothing should pull the eye.
   if (!open.length && !showClosed) {
     return (
-      <div className="flex items-center gap-2 px-1 text-[12px] text-off-black/45">
+      <button type="button" onClick={() => setShowClosed(true)} className="group flex items-center gap-2 px-1 text-[12px] text-off-black/45 hover:text-off-black">
         <Inbox className="w-3.5 h-3.5" />
         <span>{closed.length === 1 ? '1 closed conversation' : `${closed.length} closed conversations`} with this customer</span>
-        <button type="button" onClick={() => setShowClosed(true)} className="font-medium text-off-black/55 hover:text-off-black hover:underline">Show</button>
-      </div>
+        <span className="font-medium text-off-black/55 group-hover:text-off-black group-hover:underline">Show</span>
+      </button>
     )
   }
   return (
@@ -71,7 +71,7 @@ export default function ConversationPanel({ orderId, enabled }: { orderId: strin
       <div className="space-y-1.5">
         {shown.map(t => (
           <div key={t.id} className={`flex items-start gap-3 rounded-md border bg-white px-3 py-2 transition-colors ${tone.line} ${t.status === 'closed' ? 'opacity-70' : ''}`}>
-            <div className="flex-1 min-w-0">
+            <a href={`/support?thread=${encodeURIComponent(t.id)}`} target="_blank" rel="noopener noreferrer" className="flex-1 min-w-0 rounded hover:bg-subtle-gray/60 -m-1 p-1">
               <div className="flex items-center gap-2 min-w-0">
                 {t.channel === 'instagram' ? <Instagram className="w-3.5 h-3.5 shrink-0 text-off-black/50" /> : <Mail className="w-3.5 h-3.5 shrink-0 text-off-black/40" />}
                 <span className="text-sm font-semibold text-off-black truncate">{t.subject}</span>
@@ -85,7 +85,7 @@ export default function ConversationPanel({ orderId, enabled }: { orderId: strin
                 {t.assignee && <span>· {t.assignee}</span>}
                 {typeof t.messageCount === 'number' && <span>· {t.messageCount} message{t.messageCount === 1 ? '' : 's'}</span>}
               </div>
-            </div>
+            </a>
             <div className="shrink-0 flex flex-col items-end gap-1.5">
               <a href={`/support?thread=${encodeURIComponent(t.id)}`} target="_blank" rel="noopener noreferrer"
                 className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold ${owed && t.status !== 'closed' ? 'bg-amber-600 text-white hover:bg-amber-700' : 'border border-border-gray text-off-black hover:border-off-black/40'}`}>

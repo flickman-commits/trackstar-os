@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { Fragment, useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import Toast, { type ToastMessage } from '@/components/orders/Toast'
 import { Search, Plus, Loader2, ChevronDown as ChevronDownIcon, ImagePlus, MessageSquareText, SlidersHorizontal, Clock } from 'lucide-react'
 import { openHours } from '@/lib/openHours'
@@ -214,7 +214,7 @@ export default function Dashboard() {
   // The race and queue filters live in the address (?race=...&queue=review),
   // so a reload or a shared link keeps the view. Changing one replaces the
   // history entry; the back button is for orders, not filter clicks.
-  type StageFilter = '' | 'review' | 'hold' | 'attach' | 'action' | 'waiting' | 'not_run' | 'late'
+  type StageFilter = '' | 'review' | 'action' | 'waiting' | 'approved' | 'not_run' | 'late'
   const setUrlParam = useCallback((key: string, value: string) => {
     setSearchParams(prev => { const next = new URLSearchParams(prev); if (value) next.set(key, value); else next.delete(key); return next }, { replace: true })
   }, [setSearchParams])
@@ -223,7 +223,7 @@ export default function Dashboard() {
   const [customStatus, setCustomStatus] = useState<string>('')
   const setRaceFilter = useCallback((v: string) => setUrlParam('race', v), [setUrlParam])
   // Standard orders: the queue to work. '' is everything open.
-  const stageFilter: StageFilter = (['review', 'hold', 'attach', 'action', 'waiting', 'not_run', 'late'] as const).find(k => k === searchParams.get('queue')) || ''
+  const stageFilter: StageFilter = (['review', 'action', 'waiting', 'approved', 'not_run', 'late'] as const).find(k => k === searchParams.get('queue')) || ''
   const setStageFilter = useCallback((v: StageFilter) => setUrlParam('queue', v), [setUrlParam])
   // Custom orders: open ones by due date (the default), or every custom order, completed too.
   const customAll = searchParams.get('show') === 'all'
@@ -945,6 +945,33 @@ export default function Dashboard() {
   // Orders for a race that has not happened yet cannot be fulfilled, so they
   // are kept out of every "to fulfill" count and live in their own bucket.
   const isNotRun = (o: Order) => o.pipeline?.stage === 'waiting' && o.pipeline?.reason === 'Race not run yet'
+  // Which queue an order sits in. Four a person works, one they watch:
+  //   review    renders to approve (and the few seconds while one renders)
+  //   action    something a person fixes or decides, including a print they held
+  //   waiting   on the customer: a reply, a photo, a payment, or results they
+  //             are waiting on too (results not posted yet)
+  //   approved  on its way: the 48-hour hold, sending, waiting on sibling prints
+  //   not_run   the race has not happened
+  const queueOf = (o: Order): Exclude<StageFilter, '' | 'late'> => {
+    const s = o.pipeline?.stage, r = o.pipeline?.reason || ''
+    if (isNotRun(o)) return 'not_run'
+    if (s === 'action') return 'action'
+    if (s === 'attach' && (r === 'Held' || r === 'Attach in Artelo')) return 'action'
+    if (s === 'review') return 'review'
+    if (s === 'waiting' && /render/i.test(r)) return 'review'
+    if (s === 'hold' || s === 'attach') return 'approved'
+    return 'waiting'
+  }
+  // Action, grouped so the quick decisions sit above the digging.
+  const ACTION_GROUPS = ['Quick decisions', 'Fix in the tool', 'Research', 'Artelo', 'Needs a designer or developer'] as const
+  const actionGroup = (o: Order): (typeof ACTION_GROUPS)[number] => {
+    const r = o.pipeline?.reason || '', k = o.pipeline?.kind
+    if (/^(Confirm weather|Confirm race date|Pick a match|Enter the time)$/.test(r)) return 'Quick decisions'
+    if (/^(Design rejected|Render failed|Email bounced|Held|Flagged)$/.test(r)) return 'Fix in the tool'
+    if (k === 'artelo' || /Artelo/.test(r) || r === 'Expedited shipping') return 'Artelo'
+    if (k === 'setup' || /^(Needs a scraper|Needs race data|Needs race date|Needs NO TIME layer|Needs a production file|Make by hand)$/.test(r)) return 'Needs a designer or developer'
+    return 'Research'
+  }
   const fulfillable = useMemo(() => activeView === 'standard' ? ordersToFulfill.filter(o => !isNotRun(o)) : ordersToFulfill, [ordersToFulfill, activeView])
   // Current Team shows the same: each person's orders that can be worked now.
   const teamQueue = useMemo(() => {
@@ -963,20 +990,15 @@ export default function Dashboard() {
   }, [fulfillable])
 
   const stageCounts = useMemo(() => {
-    const c = { review: 0, hold: 0, attach: 0, action: 0, waiting: 0, notRun: 0 }
+    const c = { review: 0, action: 0, waiting: 0, approved: 0, notRun: 0 }
     if (activeView !== 'standard') return c
     for (const o of ordersToFulfill) {
-      const s = o.pipeline?.stage
-      if (isNotRun(o)) c.notRun++
-      else if (s === 'review') c.review++
-      else if (s === 'hold') c.hold++
-      else if (s === 'attach') c.attach++
-      else if (s === 'action') c.action++
-      // Waiting holds both kinds: on something outside (a race, a worker) and on a customer's reply.
-      if (!isNotRun(o) && (s === 'waiting' || s === 'needs_research' || o.waitingOnCustomerSince)) c.waiting++
+      const q = queueOf(o)
+      if (q === 'not_run') c.notRun++
+      else c[q]++
     }
     return c
-  }, [ordersToFulfill, activeView])
+  }, [ordersToFulfill, activeView]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredOrders = useMemo(() => {
     let base = ordersToFulfill
@@ -990,9 +1012,9 @@ export default function Dashboard() {
       const late = new Set(onTime?.lateOrders || [])
       base = base.filter(o => late.has(o.orderNumber))
     } else if (stageFilter && activeView === 'standard') {
-      base = base.filter(o => stageFilter === 'not_run' ? isNotRun(o)
-        : stageFilter === 'waiting' ? ((o.pipeline?.stage === 'waiting' || o.pipeline?.stage === 'needs_research' || !!o.waitingOnCustomerSince) && !isNotRun(o))
-        : o.pipeline?.stage === stageFilter)
+      base = base.filter(o => queueOf(o) === stageFilter)
+      // Action reads top to bottom: the 30-second decisions, then the digging. Stable, so the usual order holds inside a group.
+      if (stageFilter === 'action') base = [...base].sort((a, b) => ACTION_GROUPS.indexOf(actionGroup(a)) - ACTION_GROUPS.indexOf(actionGroup(b)))
     } else if (activeView === 'standard') {
       // "All" is everything that can be fulfilled; races not yet run sit under their own chip.
       base = base.filter(o => !isNotRun(o))
@@ -1206,7 +1228,7 @@ export default function Dashboard() {
         <div>
           <div className="hidden md:block text-[10px] font-semibold uppercase tracking-wider text-off-black/40 mb-1">Queue</div>
           <div className="flex md:inline-flex w-full md:w-auto rounded-md border border-border-gray bg-subtle-gray p-0.5">
-            {([['', 'All', fulfillable.length], ['review', 'Review', stageCounts.review], ['hold', 'In hold', stageCounts.hold], ['attach', 'Attach', stageCounts.attach], ['action', 'Action', stageCounts.action], ['waiting', 'Waiting', stageCounts.waiting]] as const).map(([key, label, n]) => (
+            {([['', 'All', fulfillable.length], ['review', 'Review', stageCounts.review], ['action', 'Action', stageCounts.action], ['waiting', 'Waiting on customer', stageCounts.waiting], ['approved', 'Approved', stageCounts.approved]] as const).map(([key, label, n]) => (
               <button
                 key={key || 'all'}
                 onClick={() => setStageFilter(key)}
@@ -1473,12 +1495,15 @@ export default function Dashboard() {
               <div className="md:hidden divide-y divide-border-gray">
                 {activeView === 'standard' ? (
                   <>
-                    {filteredOrders.map((order) => {
+                    {filteredOrders.map((order, index) => {
                       const statusDisplay = getStatusDisplay(order)
                       const itemCount = getOrderItemCount(order.parentOrderNumber)
+                      const group = stageFilter === 'action' ? actionGroup(order) : null
+                      const newGroup = group && (index === 0 || actionGroup(filteredOrders[index - 1]) !== group)
                       return (
+                        <Fragment key={order.id}>
+                        {newGroup && <div className="px-4 py-1.5 bg-subtle-gray/60 text-[10px] font-semibold uppercase tracking-wider text-off-black/45">{group}</div>}
                         <div
-                          key={order.id}
                           onClick={() => setSelectedOrder(order)}
                           className="px-4 py-3 active:bg-subtle-gray cursor-pointer"
                         >
@@ -1523,6 +1548,7 @@ export default function Dashboard() {
                           {/* Row 3: Tags */}
                           <OrderTags order={order} className="mt-1.5" />
                         </div>
+                        </Fragment>
                       )
                     })}
                     {/* Completed orders in search (mobile) */}
@@ -1721,9 +1747,16 @@ export default function Dashboard() {
                       {filteredOrders.map((order, index) => {
                         const statusDisplay = getStatusDisplay(order)
                         const itemCount = getOrderItemCount(order.parentOrderNumber)
+                        const group = stageFilter === 'action' ? actionGroup(order) : null
+                        const newGroup = group && (index === 0 || actionGroup(filteredOrders[index - 1]) !== group)
                         return (
+                          <Fragment key={order.id}>
+                          {newGroup && (
+                            <tr className="bg-subtle-gray/60">
+                              <td colSpan={6} className="px-6 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-off-black/45">{group}</td>
+                            </tr>
+                          )}
                           <tr
-                            key={order.id}
                             onClick={() => setSelectedOrder(order)}
                             className={`hover:bg-subtle-gray cursor-pointer transition-colors ${index % 2 === 1 ? 'bg-subtle-gray/30' : ''}`}
                           >
@@ -1771,6 +1804,7 @@ export default function Dashboard() {
                               <OrderTags order={order} />
                             </td>
                           </tr>
+                          </Fragment>
                         )
                       })}
                       {/* Completed orders inline when searching (standard view) */}
