@@ -492,9 +492,12 @@ export default function OrderDetail({
         const errorData = await response.json()
         throw new Error(errorData.error || 'Failed to accept match')
       }
+      // The saved time: a candidate row often has none (Race Roster), and the server looks it up.
+      const saved = await response.json().catch(() => null) as { research?: { officialTime?: string | null } } | null
+      const time = saved?.research?.officialTime || match.time
 
       setToast({
-        message: `Match accepted: ${match.name} - Bib: ${match.bib}, Time: ${match.time}`,
+        message: `Match accepted: ${match.name}${match.bib ? ` · bib ${match.bib}` : ''}${time ? ` · ${time}` : ''}`,
         type: 'success'
       })
 

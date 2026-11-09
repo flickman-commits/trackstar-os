@@ -148,6 +148,15 @@ function failureDetail(text) {
   return (m ? m[0] : t).slice(0, 80) || null
 }
 
+/**
+ * The research agent's note on an order says what was still missing ("pick
+ * the right one", "not in the results"). Once a result is found it is wrong,
+ * and it sat above 8341's approved design. Gone when research finds one.
+ */
+export async function clearAgentNote(orderId) {
+  await prisma.orderComment.deleteMany({ where: { orderId, authorName: 'Research agent' } }).catch(() => {})
+}
+
 export class ResearchService {
 
   /** The scraper for a race. A method so a test can hand in a stub. */
@@ -274,6 +283,7 @@ export class ResearchService {
       effectiveRaceYear,
       effectiveRunnerName
     }, { force })
+    if (runnerResearch?.researchStatus === 'found' && runnerResearch.officialTime) await clearAgentNote(order.id)
 
     return {
       race,

@@ -105,6 +105,8 @@ export async function acceptMatch({ orderNumber, match }) {
     where: { id: order.id },
     data: { status: 'ready', researchedAt: new Date() }
   })
+  // The research agent's "pick the right one" note no longer applies (ResearchService clearAgentNote).
+  await prisma.orderComment.deleteMany({ where: { orderId: order.id, authorName: 'Research agent' } }).catch(() => {})
 
   console.log(`[accept-match] Match accepted for order ${orderNumber}: ${match.name} (time: ${enrichedTime || 'n/a'})`)
   return updatedResearch
