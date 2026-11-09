@@ -1704,7 +1704,7 @@ Thank you!`
 
                   {/* The customer's open Support conversations, at the top like on a
                       standard order: on a custom they are usually a change to the design. */}
-                  <ConversationPanel orderId={selectedOrder.id} enabled={!!selectedOrder.customerEmail && can('support')} />
+                  <ConversationPanel orderId={selectedOrder.id} enabled={!!selectedOrder.customerEmail && can('support')} onChanged={() => { fetchOrders() }} />
 
                   {/* ═══ STAGE-SPECIFIC PRIMARY ACTION — always at the top ═══ */}
 
@@ -2542,7 +2542,7 @@ Thank you!`
                   </div>
                 )}
                 {/* The customer's open Support conversations, above the design: many are a request to change it. */}
-                <ConversationPanel orderId={selectedOrder.id} enabled={!!selectedOrder.customerEmail && can('support')} />
+                <ConversationPanel orderId={selectedOrder.id} enabled={!!selectedOrder.customerEmail && can('support')} onChanged={() => { fetchOrders() }} />
                 {/* The same runner's print ordered twice, as separate orders: check before both go out. */}
                 <SameRunnerAlert order={selectedOrder} canEmail={can('support')} onNotify={others => notifySameRunner(selectedOrder, others)} />
                 {/* Missing year. The tag says it, this says what to do. */}

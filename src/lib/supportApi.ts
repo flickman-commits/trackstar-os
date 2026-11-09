@@ -36,7 +36,7 @@ export function newIdempotencyKey(): string {
 }
 
 /** A Support conversation with an order's customer, as the order view lists it. */
-export interface OrderConversation { id: string; subject: string; status: ThreadStatus; snippet: string; lastMessageAt: string; snoozed: boolean; channel: string; assignee: string | null; messageCount?: number; last?: 'us' | 'customer' | null; bounced?: boolean }
+export interface OrderConversation { id: string; subject: string; status: ThreadStatus; snippet: string; lastMessageAt: string; snoozed: boolean; channel: string; assignee: string | null; messageCount?: number; last?: 'us' | 'customer' | null; bounced?: boolean; waiting?: boolean }
 
 /** A saved playbook version: an edit, a taught lesson, a reset, a restore, or the weekly review. */
 export type PlaybookVersion = { id: string; source: 'edit' | 'lesson' | 'reset' | 'weekly' | 'restore'; summary: string | null; createdAt: string }
@@ -97,6 +97,7 @@ export const supportApi = {
   merge: (id: string, sourceIds: string[]) => act<ThreadDetail>(id, 'merge', { sourceIds }),
   // Attach an order to this customer by its number, for when they ordered under another email.
   linkOrder: (id: string, number: string, confirmed = false) => act<ThreadDetail>(id, 'linkOrder', { number, confirmed }),
+  notWaiting: (id: string) => act<unknown>(id, 'notWaiting'),
   unlinkOrder: (id: string, number: string) => act<ThreadDetail>(id, 'unlinkOrder', { number }),
   saveSettings: (defaultAssigneeId: string | null, applyToOpen = false) => post<{ defaultAssigneeId: string | null; assigned: number }>('/api/support/settings', { defaultAssigneeId, applyToOpen }),
   filters: () => request<{ filters: SenderFilter[] }>('/api/support/filters'),

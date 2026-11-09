@@ -299,6 +299,16 @@ export async function setStatus(id, status, actor) {
   return row(t)
 }
 
+/**
+ * "Not waiting" from the order: our last email did not need an answer, so
+ * the order leaves Waiting on customer. Holds until we write again.
+ */
+export async function setNotWaiting(id, actor) {
+  const t = await prisma.supportThread.update({ where: { id }, data: { notWaitingAt: new Date(), ...(await prisma.supportThread.findUnique({ where: { id }, select: { status: true } }))?.status === 'waiting' ? { status: 'open' } : {} }, ...withAssignee })
+  await event(id, `${actorName(actor)} marked this not waiting on the customer`, actor)
+  return row(t)
+}
+
 export async function assign(id, assigneeId, actor) {
   let who = null
   if (assigneeId) {

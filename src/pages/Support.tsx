@@ -236,15 +236,19 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
   const putDown = () => { setSelectedId(null); setThread(null) }
   const setStatusOf = async (target: ThreadStatus) => {
     if (!thread) return
-    // We wrote last and they have never answered: closing it says nobody is
-    // waiting, and its order drops out of Waiting on customer (4991, 5346,
-    // 5759 and 6145 were closed that way). Ask before closing.
-    const owedByThem = target === 'closed' && thread.lastOutboundAt && (!thread.lastInboundAt || new Date(thread.lastOutboundAt) > new Date(thread.lastInboundAt))
+    // We wrote last and they have not answered. When our message asked them
+    // something ("?"), the order keeps waiting on them however the
+    // conversation is closed (compose.js threadWaiting), so close quietly.
+    // A request with no question mark ("Send us the bib.") would drop the
+    // order out of Waiting, so ask first (4991, 5346, 5759, 6145).
+    const lastOut = [...(thread.messages || [])].reverse().find(m => m.direction === 'out')
+    const asked = /\?/.test(String(lastOut?.text || '').split(/\nOn .{3,200}wrote:|\n>/)[0].replace(/https?:\/\/\S+/g, ''))
+    const owedByThem = target === 'closed' && !asked && thread.lastOutboundAt && (!thread.lastInboundAt || new Date(thread.lastOutboundAt) > new Date(thread.lastInboundAt))
     let s = target
     if (owedByThem) {
       const pick = await choose({
         title: "They haven't answered yet",
-        body: 'Our message is the last one here. Closing tells the order nobody is waiting, so it drops out of Waiting on customer. Mark it waiting instead, and it comes back when they reply.',
+        body: 'Our message is the last one here and it does not ask them anything, so closing takes the order out of Waiting on customer. If we are waiting on them for something, mark it waiting: it comes back when they reply.',
         action: 'Mark waiting', alt: 'Close anyway',
       })
       if (pick === 'no') return

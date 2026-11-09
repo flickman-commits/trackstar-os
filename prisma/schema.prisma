@@ -1314,6 +1314,9 @@ model SupportThread {
   // notice newer than our last message). Cleared by a later send or a real
   // reply. The order shows "Email bounced" under Action instead of waiting.
   bouncedAt       DateTime?
+  // "Not waiting" pressed on the order: our last email did not need an
+  // answer after all. Holds until we write again (compose.js threadWaiting).
+  notWaitingAt    DateTime?
   // Set by the backfill for threads that were already over when the mirror
   // was built, so a report can tell history from live work.
   backfilled      Boolean   @default(false)

@@ -16,6 +16,7 @@
  *   POST { id, action: 'linkOrder', number }    attach an order to this customer by its number, for when they
  *                                               wrote in from a different email than they ordered under
  *   POST { id, action: 'unlinkOrder', number }
+ *   POST { id, action: 'notWaiting' }          our last email needed no answer: the order leaves Waiting until we write again
  *   POST { id, action: 'mockups', orderIds }    the newest mockups for these order rows (Refresh beside Attach mockup)
  *
  * Every change leaves an event in the thread and a line in the audit log.
@@ -23,7 +24,7 @@
 import { seesMoney } from '../../_lib/money.js'
 import { setCors } from '../../_lib/auth.js'
 import { requireCapability, recordAudit } from '../../_lib/users.js'
-import { getThread, assign, setStatus, snooze, setPriority, setTags, addNote, deleteNote, markRead, markUnread, noteRow, setProposal, linkOrder, unlinkOrder } from '../../../server/domain/support/threads.js'
+import { getThread, assign, setStatus, snooze, setPriority, setTags, addNote, deleteNote, markRead, markUnread, noteRow, setProposal, linkOrder, unlinkOrder, setNotWaiting } from '../../../server/domain/support/threads.js'
 import { escalate } from '../../../server/domain/support/actions.js'
 import { draftThread } from '../../../server/domain/support/draft.js'
 import { listMockups } from '../../../server/domain/support/mockups.js'
@@ -110,6 +111,11 @@ export default async function handler(req, res) {
         const out = await linkOrder(id, body.number, user, { confirmed: body.confirmed === true })
         await audit(`Linked order #${out.number} to a customer`, { number: out.number, orderEmail: out.orderEmail })
         return res.status(200).json(await getThread(id, { userId: user.id, money: seesMoney(user) }))
+      }
+      case 'notWaiting': {
+        const out = await setNotWaiting(id, user)
+        await audit('Marked a conversation not waiting on the customer', { threadId: id })
+        return res.status(200).json(out)
       }
       case 'unlinkOrder': {
         const out = await unlinkOrder(id, body.number, user)

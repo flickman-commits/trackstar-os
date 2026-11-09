@@ -234,6 +234,37 @@ async function render(job) {
   return { notes: result.notes || '', output }
 }
 
+/**
+ * One more try for the failures that are not about the print: Illustrator
+ * hung (12 of them on Nov 9, each fine on a second run) or the network
+ * dropped mid-upload. A hung Illustrator is quit (forced if it will not) and
+ * reopened first. Anything else fails at once, as before.
+ */
+const RETRYABLE = /did not finish in time|fetch failed|ECONNRESET|ETIMEDOUT|socket hang up/i
+async function renderWithRetry(job) {
+  try {
+    return await render(job)
+  } catch (e) {
+    if (!RETRYABLE.test(e.message)) throw e
+    log(`  ${e.message}; trying once more`)
+    if (/did not finish in time/i.test(e.message)) await restartIllustrator()
+    else await sleep(10000)
+    return render(job)
+  }
+}
+
+function restartIllustrator() {
+  return new Promise(resolve => {
+    log('  restarting Illustrator')
+    execFile('osascript', ['-e', 'with timeout of 30 seconds\ntell application "Adobe Illustrator" to quit saving no\nend timeout'], { timeout: 35000 }, () => {
+      // Still there after a polite quit: force it.
+      execFile('pkill', ['-9', '-f', 'Adobe Illustrator.app/Contents/MacOS'], () => {
+        execFile('open', ['-a', 'Adobe Illustrator'], () => setTimeout(resolve, 20000))
+      })
+    })
+  })
+}
+
 async function main() {
   log(`Render worker "${NAME}" (${WORKER_ID}) -> ${URL_BASE}`)
   // The tool may be mid-deploy or the Mac may be offline; keep trying rather than exiting.
@@ -253,7 +284,7 @@ async function main() {
       idle = POLL_MS
       log(`Job ${job.id}: ${job.spec.file} (${job.spec.size}${job.spec.photoPath ? ', photo' : ''}${job.spec.noTime ? ', no time' : ''})`)
       try {
-        const { notes, output } = await render(job)
+        const { notes, output } = await renderWithRetry(job)
         await api('complete', { jobId: job.id, notes, output })
         log(`  done${notes ? `: ${notes}` : ''}${output ? ` [${output.trimIn}, bleed ${output.bleedIn?.left}", ${output.color}]` : ''}`)
       } catch (e) {

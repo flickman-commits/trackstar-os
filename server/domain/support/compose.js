@@ -12,7 +12,7 @@
  * render or proof, or a file made by hand and uploaded from the modal.
  */
 import prisma from '../../db.js'
-import { sendNew } from './mailbox.js'
+import { sendNew, stripQuoted } from './mailbox.js'
 import { replyToHtml } from './format.js'
 import { UserError } from './errors.js'
 import { listMockups, resolveMockup } from './mockups.js'
@@ -91,22 +91,92 @@ export async function emailCustomer({ orderId, subject, text, actor, mockupRef =
  * @param {string[]} emails
  * @returns {Promise<Map<string, Date>>}
  */
+/**
+ * Whether the part of our email we wrote asks the customer something: a "?"
+ * outside links and the quoted thread underneath. "Which race instead?", "Do
+ * you have a better photo?" count; "Done! It ships to Ed." does not.
+ */
+export function asksCustomer(text) {
+  const own = stripQuoted(text).replace(/https?:\/\/\S+/g, '').replace(/\b\S+@\S+\.\S+\b/g, '')
+  // Each question, minus the ones nobody waits on: a review ask ("would you
+  // mind leaving us a review?", 8769) or "any other questions?".
+  const questions = own.match(/[^.!?\n]*\?/g) || []
+  if (questions.some(q => !/\breview\b|\bany (other )?questions\b|\banything else\b/i.test(q))) return true
+  // A request with no question mark: "Just let us know which option works
+  // best for you" (8475), "Please send us her bib", "Reply with the address".
+  return /\blet (us|me) know (which|what|whether|how|when|where|who|if you'?d|if you would|your)\b|\bplease (send|reply|confirm|share|upload|attach|choose|pick)\b|\b(send|email|reply to) (us|me)\b|\breply with\b/i.test(own)
+}
+
+/** How long a question keeps an order waiting with no reply. After that it is Action again. */
+const QUESTION_DAYS = 30
+
+/**
+ * Is this conversation waiting on the customer? Marked waiting by a person,
+ * or our message is the last one and it either asked them something or the
+ * thread is snoozed for a follow-up. The thread's status does not decide it:
+ * Send and close, closing by hand and escalating all used to drop an order
+ * out of Waiting while its question was still unanswered (7735's photo,
+ * 7294's which-runner, 6457's bib, Nov 2026). "Not waiting" on the order
+ * (notWaitingAt) overrides it until we write again.
+ */
+export function threadWaiting(t, lastOutText, now = new Date()) {
+  if (t.bouncedAt) return false
+  const weSpokeLast = Boolean(t.lastOutboundAt) && (!t.lastInboundAt || t.lastOutboundAt > t.lastInboundAt)
+  if (t.notWaitingAt && (!t.lastOutboundAt || t.notWaitingAt >= t.lastOutboundAt)) return false
+  if (t.status === 'waiting') return true
+  if (!weSpokeLast) return false
+  if (t.status !== 'closed' && t.snoozedUntil && t.snoozedUntil > now) return true
+  if (now - new Date(t.lastOutboundAt) > QUESTION_DAYS * 86_400_000) return false
+  return asksCustomer(lastOutText)
+}
+
+/** The newest message we sent on each of these threads, by thread id. */
+async function lastOutboundText(ids) {
+  if (!ids.length) return new Map()
+  const rows = await prisma.$queryRaw`
+    SELECT DISTINCT ON ("threadId") "threadId" AS id, "bodyText" AS body
+    FROM "SupportMessage" WHERE "threadId" = ANY(${ids}) AND direction = 'out'
+    ORDER BY "threadId", "sentAt" DESC`
+  return new Map(rows.map(r => [r.id, r.body || '']))
+}
+
+/**
+ * The conversations to read for these order emails: the customer's own
+ * address, plus any address an order was linked to by hand (they wrote in
+ * from another email). Thread email -> the order emails it speaks for.
+ */
+async function threadEmailsFor(list) {
+  const map = new Map(list.map(e => [e, new Set([e])]))
+  const links = await prisma.supportLinkedOrder.findMany({ where: { orderEmail: { in: list } }, select: { customerKey: true, orderEmail: true } })
+  for (const l of links) {
+    if (!l.customerKey || l.customerKey.startsWith('ig:')) continue
+    if (!map.has(l.customerKey)) map.set(l.customerKey, new Set())
+    map.get(l.customerKey).add(l.orderEmail)
+  }
+  return map
+}
+
 export async function waitingOnCustomers(emails) {
   const list = [...new Set(emails.map(e => String(e || '').trim().toLowerCase()).filter(Boolean))]
   const out = new Map()
   if (!list.length) return out
-  // Waiting: the thread is marked waiting, or it is snoozed (a reminder to
-  // chase them) and our message is the latest. Snoozing sets the status back
-  // to open, which used to drop the order out of Waiting on customer the
-  // moment a rep set a reminder on it. A closed thread never counts.
-  const rows = await prisma.$queryRaw`
-    SELECT lower("customerEmail") AS email, max("lastMessageAt") AS since
-    FROM "SupportThread"
-    WHERE "mergedIntoId" IS NULL AND filtered = false AND "bouncedAt" IS NULL AND lower("customerEmail") = ANY(${list})
-      AND (status = 'waiting'
-           OR (status = 'open' AND "snoozedUntil" > now() AND "lastOutboundAt" IS NOT NULL AND "lastOutboundAt" > coalesce("lastInboundAt", 'epoch'::timestamp)))
-    GROUP BY lower("customerEmail")`
-  for (const r of rows) out.set(r.email, r.since)
+  const speaksFor = await threadEmailsFor(list)
+  const since = new Date(Date.now() - QUESTION_DAYS * 86_400_000)
+  const threads = await prisma.supportThread.findMany({
+    where: {
+      customerEmail: { in: [...speaksFor.keys()], mode: 'insensitive' }, mergedIntoId: null, filtered: false, bouncedAt: null,
+      OR: [{ status: 'waiting' }, { lastOutboundAt: { gte: since } }, { snoozedUntil: { gt: new Date() } }],
+    },
+    select: { id: true, customerEmail: true, status: true, snoozedUntil: true, lastInboundAt: true, lastOutboundAt: true, lastMessageAt: true, bouncedAt: true, notWaitingAt: true },
+  })
+  const texts = await lastOutboundText(threads.map(t => t.id))
+  for (const t of threads) {
+    if (!threadWaiting(t, texts.get(t.id) || '')) continue
+    const sinceAt = t.lastOutboundAt || t.lastMessageAt
+    for (const e of speaksFor.get(t.customerEmail.toLowerCase()) || []) {
+      if (!out.has(e) || out.get(e) < sinceAt) out.set(e, sinceAt)
+    }
+  }
   return out
 }
 
@@ -134,17 +204,23 @@ export async function bouncedCustomers(emails) {
  * order's email; filtered and merged-away threads never show.
  */
 export async function conversationsForOrder(orderId, { all = false } = {}) {
-  const order = await prisma.order.findUnique({ where: { id: String(orderId || '') }, select: { customerEmail: true } })
-  const email = String(order?.customerEmail || '').trim()
-  if (!email) return []
+  const order = await prisma.order.findUnique({ where: { id: String(orderId || '') }, select: { customerEmail: true, shopifyOrderData: true, parentOrderNumber: true, orderNumber: true } })
+  const email = String(order?.customerEmail || '').trim().toLowerCase()
+  // Addresses this order was linked to by hand (they wrote in from another email).
+  const linked = order ? await prisma.supportLinkedOrder.findMany({ where: { orderNumber: customerOrderNumber(order) }, select: { customerKey: true } }) : []
+  const emails = [...new Set([email, ...linked.map(l => l.customerKey).filter(k => k && !k.startsWith('ig:'))].filter(Boolean))]
+  if (!emails.length) return []
   // all: closed ones too, for the order's Conversation panel ("Show closed").
   const rows = await prisma.supportThread.findMany({
-    where: { customerEmail: { equals: email, mode: 'insensitive' }, mergedIntoId: null, filtered: false, ...(all ? {} : { status: { not: 'closed' } }) },
+    where: { customerEmail: { in: emails, mode: 'insensitive' }, mergedIntoId: null, filtered: false, ...(all ? {} : { status: { not: 'closed' } }) },
     orderBy: { lastMessageAt: 'desc' },
     take: all ? 25 : 5,
-    select: { id: true, subject: true, status: true, snippet: true, lastMessageAt: true, lastInboundAt: true, lastOutboundAt: true, bouncedAt: true, messageCount: true, snoozedUntil: true, channel: true, assignee: { select: { firstName: true } } },
+    select: { id: true, subject: true, status: true, snippet: true, lastMessageAt: true, lastInboundAt: true, lastOutboundAt: true, bouncedAt: true, messageCount: true, snoozedUntil: true, notWaitingAt: true, channel: true, assignee: { select: { firstName: true } } },
   })
+  const texts = await lastOutboundText(rows.map(t => t.id))
   return rows.map(t => ({
+    // This conversation keeps the order under Waiting (threadWaiting).
+    waiting: threadWaiting(t, texts.get(t.id) || ''),
     id: t.id, subject: t.subject || '(no subject)', status: t.status, snippet: t.snippet || '', lastMessageAt: t.lastMessageAt,
     snoozed: Boolean(t.snoozedUntil && t.snoozedUntil > new Date()), channel: t.channel, assignee: t.assignee?.firstName || null,
     messageCount: t.messageCount,

@@ -81,3 +81,14 @@ node worker/check-template.mjs --file "Austin Marathon/Illustrator Files/Austin 
 ```
 
 Stop the worker first; both talk to the same Illustrator.
+
+## Keep it running
+
+`bash worker/install-launchd.sh` installs a launchd agent: the worker starts at
+login, comes back within 30 seconds if it exits, and runs under `caffeinate -s`
+so the Mac stays awake while plugged in. Log: `~/Library/Logs/trackstar-render-worker.log`
+(`tail -f` it). `bash worker/install-launchd.sh uninstall` removes it. Rerun the
+install after changing Node versions. Don't also run `npm run worker` in a terminal.
+
+A render that times out (Illustrator hung) or loses the network gets one more
+try, after Illustrator is quit and reopened, before it is marked Render failed.
