@@ -107,6 +107,9 @@ function HoursBody({ onClose }: { onClose: () => void }) {
   const today = data?.today || todayET()
   const thisMonday = mondayOf(today)
   const running = data?.running
+  // Only a timer in this week holds up submitting it. Dani and Elí started
+  // today's timer on Nov 9 and could not submit the week of Nov 2.
+  const timerInWeek = Boolean(running?.day && running.day >= week && running.day < addDays(week, 7))
   const elapsed = running?.startedAt ? Math.max(0, Math.floor((Date.now() - new Date(running.startedAt).getTime()) / 60000)) : 0
   void tick
 
@@ -119,7 +122,7 @@ function HoursBody({ onClose }: { onClose: () => void }) {
       footer={ts && <>
         {isAdmin && !locked && <button onClick={() => { setManual(true); setMDay(days.includes(today) ? today : days[0]) }} className="text-sm text-off-black/55 hover:text-off-black inline-flex items-center gap-1 mr-3"><Plus className="w-3.5 h-3.5" />Manually add hours</button>}
         <span className="text-sm text-off-black/60 mr-auto">{minutesText(ts.totalMinutes)} this week{ts.hourlyRateCents != null && ts.status === 'approved' ? ` · approved at $${(ts.hourlyRateCents / 100).toFixed(2)}/h` : ''}</span>
-        {!locked && <button onClick={() => setConfirm(true)} disabled={busy || !ts.totalMinutes || Boolean(running)} className={modalPrimary}><Send className="w-3.5 h-3.5" /> Submit week</button>}
+        {!locked && <button onClick={() => setConfirm(true)} disabled={busy || !ts.totalMinutes || timerInWeek} title={timerInWeek ? 'Stop the timer first' : !ts.totalMinutes ? 'Add your hours first' : undefined} className={modalPrimary}><Send className="w-3.5 h-3.5" /> Submit week</button>}
         {locked && <StatusChip status={ts.status} />}
       </>}>
       <div className="p-4 md:p-5 space-y-4">
