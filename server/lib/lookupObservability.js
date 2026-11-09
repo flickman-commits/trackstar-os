@@ -161,6 +161,6 @@ export async function maybeAlertLookupError({ race, year, errorType, detail }) {
     `_The nightly sweep looks into it either way. One ping per race every 6 hours._`,
   ].filter(Boolean).join('\n')
 
-  // #trackstar-alerts only, never Matt's DM (Matt, Nov 9): a slow channel post used to fall through to the DM.
-  if (!(await slackTo('lookup', text, { or: ['alerts'], timeoutMs: 8000 }))) console.warn('[lookupObservability] Slack alert failed')
+  // #admin-alerts, never Matt's DM (Matt, Nov 9): a slow channel post used to fall through to the DM.
+  if (!(await slackTo('admin', text, { timeoutMs: 8000 }))) console.warn('[lookupObservability] Slack alert failed')
 }

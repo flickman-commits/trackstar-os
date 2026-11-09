@@ -31,6 +31,11 @@ import { isConnectionOn } from './connections.js'
 //   reports  a summary on a schedule, read when it lands: support triage,
 //            bulk orders this week, the nightly sweep, the weekly health
 //            check and playbook review.
+//   admin    #admin-alerts, Matt only (Nov 9): something broken that only he
+//            or a developer fixes (lookup down, uploads, database, mailbox,
+//            triage, the nightly run), and money (Artelo billing, a refund
+//            that failed, statements that did not go out). #trackstar-alerts
+//            keeps what design, fulfillment and support act on.
 //   matt     the TrackstarOS DM: only what is Matt's own to act on, a
 //            conversation escalated to him or an @mention, a week of hours to
 //            approve, a refund or fix only he can make.
@@ -38,6 +43,7 @@ export const DESTINATIONS = {
   // Customers approving a custom design, and nothing else.
   proofs: { label: '#proof-approvals', channel: 'C0AMW4YKY9L', env: 'SLACK_PROOF_WEBHOOK_URL' },
   alerts: { label: '#trackstar-alerts', channel: 'C0CELD9LGNM', env: 'SLACK_PROOF_WEBHOOK_URL' },
+  admin: { label: '#admin-alerts', channel: 'C0CG4N2H0RG', env: 'SLACK_ADMIN_WEBHOOK_URL' },
   reports: { label: '#trackstar-reports', channel: 'C0CD55QHYJU', env: 'SLACK_REPORTS_WEBHOOK_URL' },
   team: { label: '#all-hands', channel: 'C0A6NQD4PLH', env: 'SLACK_WEBHOOK_URL' },
   design: { label: '#all-hands (design standup)', channel: 'C0A6NQD4PLH', env: 'SLACK_DESIGN_WEBHOOK_URL' },

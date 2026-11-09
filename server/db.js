@@ -50,7 +50,7 @@ function alertPoolFull(err, retried) {
   const now = Date.now()
   if (now - lastAlertAt < ALERT_EVERY_MS) return
   lastAlertAt = now
-  slackTo('alerts', `:rotating_light: *Supabase pooler full (EMAXCONN)* ${retried ? 'The retry got through.' : 'The retry failed too, so someone saw an error.'} If this keeps up, bump the Supabase compute tier (client connections are 200 on Micro). \`${String(err?.message || err).split('\n').pop().trim().slice(0, 200)}\``).catch(() => {})
+  slackTo('admin', `:rotating_light: *Supabase pooler full (EMAXCONN)* ${retried ? 'The retry got through.' : 'The retry failed too, so someone saw an error.'} If this keeps up, bump the Supabase compute tier (client connections are 200 on Micro). \`${String(err?.message || err).split('\n').pop().trim().slice(0, 200)}\``).catch(() => {})
 }
 function withRetry(client) {
   return client.$extends({

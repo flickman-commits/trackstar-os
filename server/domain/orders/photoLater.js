@@ -101,7 +101,7 @@ async function refundAddons(rows, why) {
     result = 'refunded'
   } catch (err) {
     result = `failed: ${String(err.message || err).slice(0, 160)}`
-    await slackTo('matt', `⚠️ Photo after the race: could not refund the Photo Add-On on order *${slackText(numberOf(o))}* (${rows.length} print${rows.length === 1 ? '' : 's'}, ${why}). ${slackText(result)}. Refund it in Shopify by hand.`, { or: 'alerts' }).catch(() => {})
+    await slackTo('admin', `⚠️ Photo after the race: could not refund the Photo Add-On on order *${slackText(numberOf(o))}* (${rows.length} print${rows.length === 1 ? '' : 's'}, ${why}). ${slackText(result)}. Refund it in Shopify by hand.`, { or: 'alerts' }).catch(() => {})
   }
   await prisma.order.updateMany({ where: { id: { in: rows.map(r => r.id) } }, data: { photoLaterRefund: result } })
   await prisma.orderComment.createMany({

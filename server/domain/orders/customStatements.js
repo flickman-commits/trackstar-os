@@ -70,7 +70,7 @@ export async function sendCustomStatements({ now = new Date(), force = false } =
     else missingWebhook.push(d.name)
   }
   if (missingWebhook.length) {
-    await slackTo('matt', `The ${monthLabel} custom statements could not reach ${missingWebhook.join(', ')} in Slack: their TrackstarOS email must match their Slack email for the bot to find them. Settings > Custom Counter has their totals.`)
+    await slackTo('admin', `The ${monthLabel} custom statements could not reach ${missingWebhook.join(', ')} in Slack: their TrackstarOS email must match their Slack email for the bot to find them. Settings > Custom Counter has their totals.`)
   }
   await prisma.systemConfig.upsert({ where: { key }, update: { value: JSON.stringify({ sent, missingWebhook, at: new Date().toISOString() }) }, create: { key, value: JSON.stringify({ sent, missingWebhook, at: new Date().toISOString() }) } })
   return { month, sent, missingWebhook }

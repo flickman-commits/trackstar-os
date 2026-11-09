@@ -241,7 +241,7 @@ export async function alertMailboxDown(why) {
     if (last && Date.now() - new Date(last).getTime() < DOWN_ALERT_EVERY_MS) return false
     await setConfig(KEY_DOWN_ALERT, new Date().toISOString())
     const { slackTo } = await import('../../lib/slack.js')
-    await slackTo('alerts', `:rotating_light: *Support mailbox down* (${mailboxEmail()})\n${why}`)
+    await slackTo('admin', `:rotating_light: *Support mailbox down* (${mailboxEmail()})\n${why}`)
     return true
   } catch (err) {
     console.warn(`[support] could not send the mailbox-down alert: ${err.message}`)

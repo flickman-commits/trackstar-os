@@ -202,7 +202,7 @@ export async function scheduledTriage({ retryOnly = false } = {}) {
 
   // Could not reach the model: say so loudly, once, and do not tell the team "nothing urgent".
   if (out.status === 'down') {
-    if (!retryOnly) await slackTo('alerts', `:warning: *Support triage could not reach Claude*, so none of the ${out.due} waiting conversations were read and nothing was marked urgent. It tries again every hour until it works.\nError: ${slackText(out.firstError || 'unknown', 300)}`, { timeoutMs: 8000 })
+    if (!retryOnly) await slackTo('admin', `:warning: *Support triage could not reach Claude*, so none of the ${out.due} waiting conversations were read and nothing was marked urgent. It tries again every hour until it works.\nError: ${slackText(out.firstError || 'unknown', 300)}`, { timeoutMs: 8000 })
     return out
   }
   // A retry that did nothing new stays quiet.

@@ -126,12 +126,12 @@ async function storeFailedRun(notes) {
 
   // This is the one thing that always pages: a run that could not look is not
   // a quiet night, and the email alone would under-sell it.
-  await postToSlack(`:rotating_light: *Nightly run could not sweep*\n${notes}`, 'alerts').catch(() => {})
+  await postToSlack(`:rotating_light: *Nightly run could not sweep*\n${notes}`, 'admin').catch(() => {})
   return stored
 }
 
 // The nightly report is a summary: #trackstar-reports. A run that could not
-// sweep is a ping: #trackstar-alerts.
+// sweep is a ping for Matt: #admin-alerts.
 async function postToSlack(text, dest = 'reports') {
   if (await slackTo(dest, text, { or: dest === 'reports' ? 'alerts' : [], timeoutMs: 8000 })) return { sent: true }
   console.warn('[nightly-sweep] Slack did not take the report')

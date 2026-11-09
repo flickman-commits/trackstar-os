@@ -16,6 +16,6 @@ export async function alertError(context, error, meta = {}) {
   const metaStr = Object.keys(meta).length
     ? '\n' + Object.entries(meta).map(([k, v]) => `• ${k}: ${v}`).join('\n')
     : ''
-  const sent = await slackTo('alerts', `🚨 *System Alert - ${context}*\n\`${errorMsg}\`${metaStr}`).catch(() => false)
+  const sent = await slackTo('admin', `🚨 *System Alert - ${context}*\n\`${errorMsg}\`${metaStr}`).catch(() => false)
   if (!sent) console.error(`[alert] Could not reach Slack. Error in ${context}:`, error)
 }

@@ -159,7 +159,12 @@ export async function alertArteloHolds(arteloOrders, { link } = {}) {
       const h = arteloHoldText(o.productionStatus)
       return `• *${slackText(h.label)}*: #${slackText(name)}${r ? ` (${slackText(r.raceName || '')}${r.runnerName ? ` / ${slackText(r.runnerName)}` : ''})` : ''}${url ? ` <${url}|Open in Artelo>` : ''}\n    _${slackText(h.why)}._`
     })
-    await slackTo('alerts', `:octagonal_sign: *Artelo is holding ${fresh.length === 1 ? 'an order' : `${fresh.length} orders`}* and will not print until someone sorts it out in Artelo:\n${lines.join('\n')}`)
+    // Billing and unpaid holds are Matt's (#admin-alerts); address and design holds are the team's.
+    const money = fresh.map((o, i) => /unpaid|billing|payment/i.test(arteloHoldText(o.productionStatus).label) ? i : -1).filter(i => i >= 0)
+    for (const [dest, idx] of [['admin', money], ['alerts', fresh.map((_, i) => i).filter(i => !money.includes(i))]]) {
+      if (!idx.length) continue
+      await slackTo(dest, `:octagonal_sign: *Artelo is holding ${idx.length === 1 ? 'an order' : `${idx.length} orders`}* and will not print until someone sorts it out in Artelo:\n${idx.filter(i => i < lines.length).map(i => lines[i]).join('\n')}`)
+    }
   }
   // Remember the newest 500, so a hold is told once even after it scrolls out of the page.
   const value = JSON.stringify([...new Set([...holds.map(key), ...told])].slice(0, 500))
