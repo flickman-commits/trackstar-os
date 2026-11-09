@@ -355,6 +355,21 @@ export class ResearchService {
     // used exactly as given; only the missing pace is filled in.
     const derivedPace = order.customerPace ? null : paceFromTypedTime(order.customerFinishTime, order.customerEventType)
 
+    // A bib and no time (Portland 2026, 9203; Austin 2025, 8938): the print
+    // still needs a time, and only the official results have it. Look the
+    // runner up, and take the time only from the row wearing their bib. They
+    // typed no time, so nothing of theirs is replaced.
+    let official = null
+    if (!order.customerFinishTime && order.customerBib && !order.hadNoTime && hasScraperForRace(effectiveRaceName)) {
+      try {
+        const r = await this.findRunner(effectiveRaceName, effectiveRaceYear, effectiveRunnerName, { bib: order.customerBib, skipLastNameFallback: true })
+        const sameBib = String(r?.bibNumber || '').replace(/^0+/, '').toLowerCase() === String(order.customerBib).trim().replace(/^0+/, '').toLowerCase()
+        if (r?.found && sameBib && r.officialTime) official = r
+      } catch (err) {
+        console.warn(`[ResearchService] Bib lookup for ${orderNumber} failed: ${err.message}`)
+      }
+    }
+
     // TIER 2 (replaced): write the customer-confirmed result.
     await ensureOverridesLoaded()
     const ownPage = runnerPage(effectiveRaceName, effectiveRaceYear, order.customerBib)
@@ -364,15 +379,17 @@ export class ResearchService {
       raceId: race.id,
       runnerName: effectiveRunnerName,
       bibNumber: order.customerBib || null,
-      officialTime: order.customerFinishTime || null,
-      officialPace: order.customerPace || derivedPace || null,
-      eventType: order.customerEventType || null,
+      officialTime: order.customerFinishTime || official?.officialTime || null,
+      officialPace: order.customerPace || derivedPace || official?.officialPace || null,
+      eventType: order.customerEventType || official?.eventType || null,
       yearFound: effectiveRaceYear,
       researchStatus: 'found',
       source: verified ? 'customer_verified' : 'customer_supplied',
       researchNotes: verified
         ? 'Customer-confirmed via Instant Lookup (matched official results)'
-        : `Entered by the customer at checkout, not matched against official results. Their numbers, used as given.${derivedPace ? ` Pace ${derivedPace} calculated from their time.` : ''}`,
+        : official
+          ? `The customer gave bib ${order.customerBib} and no time; time ${official.officialTime} and pace from the official results row for that bib.`
+          : `Entered by the customer at checkout, not matched against official results. Their numbers, used as given.${derivedPace ? ` Pace ${derivedPace} calculated from their time.` : ''}`,
       // The runner's own page when the timing site has one, else the race's results list.
       resultsUrl: ownPage || race.resultsUrl || null,
       possibleMatches: null,
