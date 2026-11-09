@@ -14,6 +14,10 @@
  *             a $20 Photo Add-On to the Shopify order (Shopify emails the
  *             invoice). The photo counts as hand-added, so the print waits
  *             until Shopify reads paid (photoPayment.js), like one support adds
+ *   replace_photo  swap the photo on a print that has one, free (the add-on
+ *             is already paid). Open until the print goes to production, even
+ *             after the 48-hour window: a better photo is what support asks
+ *             for when the first one will not print well (the bad-photo hold).
  * The time and pace are not offered: hiding them is rare and support does it.
  * and for the order:
  *   address   the ship-to (support/actions.shippingAddress)
@@ -237,6 +241,27 @@ export async function manageChange(shopifyOrderId, signature, body = {}) {
     await rerender(row, 'The customer added a photo; a new design with it replaces this one')
     await slackTo('alerts', `:frame_with_picture: Customer added a photo to *#${slackText(numberOf(row) || row.orderNumber)}* from Manage your order; $${PHOTO_ADDON_PRICE} invoice sent by Shopify.`).catch(() => {})
     return { ok: true, invoiced: true, price: PHOTO_ADDON_PRICE, print: printView({ ...row, photoPath: path }, { photoUrl: await photoUrlOf(path) }) }
+  }
+
+  if (action === 'replace_photo') {
+    // Past the 48 hours is fine; gone to production, shipped or cancelled is not.
+    if (ctx.reason && ctx.reason !== 'window') open(ctx)
+    const row = printOf(ctx, body.printId)
+    if (row.trackstarOrderType !== 'standard' || !row.photoPath) throw new ManageError('unavailable', 409, 'no_photo')
+    const path = String(body.path || '')
+    if (!VERIFIED_PATH.test(path)) throw new ManageError('photo_failed')
+    if (path === row.photoPath) return { ok: true, print: printView(row, { photoUrl: await photoUrlOf(path) }) }
+    const { error } = await storage().storage.from(PHOTO_BUCKET).createSignedUrl(path, 60)
+    if (error) throw new ManageError('photo_failed')
+    // Only if the photo is still the one the page showed, so two tabs cannot cross.
+    const { count } = await prisma.order.updateMany({ where: { id: row.id, photoPath: row.photoPath }, data: { photoPath: path, photoPlacedAt: null } })
+    if (!count) throw new ManageError('unavailable', 409, 'photo_changed')
+    // An approved design that has not gone to Artelo yet still has the old photo: close it too.
+    await prisma.renderJob.updateMany({ where: { orderId: row.id, status: 'done', review: 'approved', arteloSentAt: null }, data: { review: 'closed', reviewNote: 'The customer replaced the photo; a new design with it replaces this one', reviewedAt: new Date() } })
+    await comment(row, 'The customer replaced the photo from Manage your order (no charge). A new design with the new photo replaces the old one.')
+    await rerender(row, 'The customer replaced the photo; a new design with it replaces this one')
+    await slackTo('alerts', `:frame_with_picture: Customer replaced the photo on *#${slackText(numberOf(row) || row.orderNumber)}* from Manage your order; it renders again with the new one.`).catch(() => {})
+    return { ok: true, print: printView({ ...row, photoPath: path }, { photoUrl: await photoUrlOf(path) }) }
   }
 
   if (action === 'address') {

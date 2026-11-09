@@ -54,6 +54,8 @@ const ERR: Record<string, string> = {
   same_frame: "That's the frame it already has.",
   photo_failed: "We couldn't add the photo. Please try again, or reply to your order email.",
   has_photo: 'This print already has a photo.',
+  no_photo: "This print doesn't have a photo to replace.",
+  photo_changed: 'The photo was just changed. Reload the page to see it.',
 }
 /** The new address costs more sales tax: the server saved nothing and says how much. */
 class TaxDue extends Error {
@@ -166,6 +168,14 @@ export default function ManageOrder() {
                 </>
               )}
             </div>
+            {/* After the 48 hours a photo can still be swapped until the print is made (a better photo, when we ask for one). */}
+            {info.reason === 'window' && info.prints.filter(p => p.standard && p.photo === 'on_print').map(p => (
+              <div key={p.id} className={card}>
+                <p className="text-[15px] font-medium text-[#666666]">You can still replace the photo</p>
+                <p className="text-[24px] font-bold leading-[1.1] mt-0.5 mb-2">{p.raceName}{p.year ? ` ${p.year}` : ''}</p>
+                <ReplacePhotoRow print={p} post={post} onChange={setPrint} />
+              </div>
+            ))}
           </>
         )}
 
@@ -184,7 +194,7 @@ export default function ManageOrder() {
             )}
             <div>
               <h1 className="text-[30px] md:text-[34px] font-bold leading-[1.1]">Manage your order</h1>
-              <p className="text-[18px] leading-snug mt-2">Fix a name, change the frame, add a photo or update your address. We'll print it exactly as it reads here.</p>
+              <p className="text-[18px] leading-snug mt-2">Fix a name, change the frame, add or replace a photo, or update your address. We'll print it exactly as it reads here.</p>
             </div>
             {info.prints.map(p => (
               <PrintCard key={p.id} print={p} photoPrice={info.photoPrice || 20} post={post} onChange={setPrint} />
@@ -222,6 +232,74 @@ function Row({ title, value, action, children }: { title: string; value: React.R
       </div>
       {children}
     </div>
+  )
+}
+
+/** The storefront's upload: a signed slot, the file, then photo-verify (which checks and cleans it). Returns the stored path. */
+async function uploadPhoto(cropped: File): Promise<string> {
+  const slot = await postJson('/api/public/photo-upload-url', { filename: cropped.name, contentType: cropped.type || 'image/jpeg', size: cropped.size })
+  if (!slot.ok) throw new Error(slot.data.message || 'We could not start the upload. Please try again.')
+  const put = await putUpload(slot.data.uploadUrl, { headers: { 'Content-Type': cropped.type || 'image/jpeg', 'x-upsert': 'false' }, body: cropped })
+  if (!put.ok) throw new Error('The photo did not upload. Please try again.')
+  const verified = await postJson('/api/public/photo-verify', { path: slot.data.path, contentType: cropped.type || 'image/jpeg' })
+  if (!verified.ok) throw new Error(verified.data.message || 'That photo did not work. Please try a different one.')
+  return verified.data.path
+}
+
+/** The photo on a print, with Replace: free, until the print is made. */
+function ReplacePhotoRow({ print: p, post, onChange }: { print: Print; post: Post; onChange: (p: Print) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [file, setFile] = useState<File | null>(null)
+  const cropExport = useRef<(() => Promise<File>) | null>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [saved, setSaved] = useState('')
+  const close = () => { setEditing(false); setFile(null); setErr('') }
+  const save = async () => {
+    if (!file || !cropExport.current) return
+    setBusy(true); setErr(''); setSaved('')
+    try {
+      const path = await uploadPhoto(await cropExport.current())
+      const d = await post({ action: 'replace_photo', printId: p.id, path })
+      if (d.print) onChange(d.print)
+      close()
+      setSaved("Photo replaced. We'll print it with your new photo.")
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Something went wrong.') } finally { setBusy(false) }
+  }
+  return (
+    <Row title="Photo" value={null}
+      action={!editing && <button type="button" className={editBtn} onClick={() => { setSaved(''); setEditing(true) }} disabled={busy}><ImagePlus className="w-4 h-4" />Replace</button>}>
+      {!editing && (
+        <div className="flex items-center gap-3 mt-2">
+          {p.photoUrl && <img src={p.photoUrl} alt="Your photo for the print" className="w-[72px] h-[72px] rounded-[4px] border border-[#E0E0E0] object-cover" />}
+          <p className="text-[18px] font-bold">On the print</p>
+        </div>
+      )}
+      {editing && (
+        <div className="mt-2 space-y-3">
+          <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { setFile(e.target.files?.[0] || null); setErr('') }} />
+          {file ? (
+            <>
+              <PhotoCropper file={file} exportRef={cropExport} />
+              <button type="button" onClick={() => fileInput.current?.click()} disabled={busy} className="text-[15px] font-medium underline text-[#666666]">Choose a different photo</button>
+            </>
+          ) : (
+            <button type="button" onClick={() => fileInput.current?.click()} className="w-full flex flex-col items-center justify-center gap-2 py-10 rounded-[8px] bg-[#F6F5F2]" style={{ border: '1.5px dashed #E0E0E0' }}>
+              <ImagePlus className="w-7 h-7 text-[#4600D6]" />
+              <span className="text-[18px] font-bold">Choose a new photo</span>
+              <span className="text-[15px] text-[#666666] px-4 text-center">JPG or PNG. The original from your phone works best, not a screenshot. No extra charge.</span>
+            </button>
+          )}
+          <div className="flex gap-2">
+            {file && <button type="button" className={`${primary} flex-1`} onClick={save} disabled={busy}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}Use this photo</button>}
+            <button type="button" className={file ? secondary : 'text-[15px] font-medium underline text-[#666666]'} onClick={close} disabled={busy}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {err && <p className="text-[15px] text-[#B42318] pt-2">{err}</p>}
+      {saved && <p className="flex items-start gap-1.5 text-[16px] text-[#2E7D5B] pt-2 leading-snug"><CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />{saved}</p>}
+    </Row>
   )
 }
 
@@ -268,14 +346,8 @@ function PrintCard({ print: p, photoPrice, post, onChange }: { print: Print; pho
   // Upload the storefront's way, then attach: the server adds the add-on and Shopify sends the invoice.
   const savePhoto = () => run(async () => {
     if (!file || !cropExport.current) return
-    const cropped = await cropExport.current()
-    const slot = await postJson('/api/public/photo-upload-url', { filename: cropped.name, contentType: cropped.type || 'image/jpeg', size: cropped.size })
-    if (!slot.ok) throw new Error(slot.data.message || 'We could not start the upload. Please try again.')
-    const put = await putUpload(slot.data.uploadUrl, { headers: { 'Content-Type': cropped.type || 'image/jpeg', 'x-upsert': 'false' }, body: cropped })
-    if (!put.ok) throw new Error('The photo did not upload. Please try again.')
-    const verified = await postJson('/api/public/photo-verify', { path: slot.data.path, contentType: cropped.type || 'image/jpeg' })
-    if (!verified.ok) throw new Error(verified.data.message || 'That photo did not work. Please try a different one.')
-    const d = await post({ action: 'photo', printId: p.id, path: verified.data.path })
+    const path = await uploadPhoto(await cropExport.current())
+    const d = await post({ action: 'photo', printId: p.id, path })
     if (d.print) onChange(d.print)
     close()
     setSaved(`Photo added. We've emailed you an invoice for ${money(Number(d.price || photoPrice))}. Your print goes ahead once it's paid.`)
@@ -341,14 +413,16 @@ function PrintCard({ print: p, photoPrice, post, onChange }: { print: Print; pho
         </Row>
       )}
 
-      {p.photo === 'on_print' && (
-        <Row title="Photo" value={null}>
-          <div className="flex items-center gap-3 mt-2">
-            {p.photoUrl && <img src={p.photoUrl} alt="Your photo for the print" className="w-[72px] h-[72px] rounded-[4px] border border-[#E0E0E0] object-cover" />}
-            <p className="text-[18px] font-bold">On the print</p>
-          </div>
-        </Row>
-      )}
+      {p.photo === 'on_print' && (p.standard
+        ? <ReplacePhotoRow print={p} post={post} onChange={onChange} />
+        : (
+          <Row title="Photo" value={null}>
+            <div className="flex items-center gap-3 mt-2">
+              {p.photoUrl && <img src={p.photoUrl} alt="Your photo for the print" className="w-[72px] h-[72px] rounded-[4px] border border-[#E0E0E0] object-cover" />}
+              <p className="text-[18px] font-bold">On the print</p>
+            </div>
+          </Row>
+        ))}
       {p.photo === 'after_race' && (
         <Row title="Photo" value="Coming after the race">
           <p className="text-[16px] text-[#666666] mt-1">We'll email you a link to add it the day after race day.</p>
