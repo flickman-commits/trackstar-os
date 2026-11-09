@@ -39,6 +39,7 @@ export const TAG_SUGGESTIONS = [
 const TEAM_SELECT = { id: true, firstName: true, lastName: true }
 const notSnoozed = () => ({ OR: [{ snoozedUntil: null }, { snoozedUntil: { lte: new Date() } }] })
 const OPENISH = { status: { in: ['open', 'waiting', 'escalated'] } }
+const NEEDS_US = { status: { in: ['open', 'escalated'] } }
 
 /** The where clause for a view. `teammate:<id>` is that person's open work. */
 /**
@@ -55,15 +56,19 @@ export function viewWhere(view, userId) {
 }
 
 function baseView(view, userId) {
-  if (view.startsWith('teammate:')) return { assigneeId: view.slice('teammate:'.length), ...OPENISH }
+  // A person's inbox is what needs them now: open or escalated, not snoozed.
+  // Waiting on customer and Snoozed have their own lists, and a conversation
+  // comes back here when the customer replies or the snooze runs out (Dani,
+  // Nov 9: waiting ones were mixed in with the real open work).
+  if (view.startsWith('teammate:')) return { assigneeId: view.slice('teammate:'.length), ...NEEDS_US, ...notSnoozed() }
   switch (view) {
-    case 'inbox': return { assigneeId: userId, ...OPENISH }
+    case 'inbox': return { assigneeId: userId, ...NEEDS_US, ...notSnoozed() }
     case 'mentions': return { ...OPENISH, notes: { some: { kind: 'note', mentions: { has: userId } } } }
     case 'unassigned': return { assigneeId: null, status: 'open', ...notSnoozed() }
     case 'all': return { status: 'open', ...notSnoozed() }
     case 'waiting': return { status: 'waiting' }
     case 'escalated': return { status: 'escalated' }
-    case 'snoozed': return { status: 'open', snoozedUntil: { gt: new Date() } }
+    case 'snoozed': return { ...NEEDS_US, snoozedUntil: { gt: new Date() } }
     case 'closed': return { status: 'closed' }
     default: return { status: 'open', ...notSnoozed() }
   }
@@ -104,7 +109,7 @@ export async function listThreads({ view = 'all', userId, q = '', sort = 'waitin
     prisma.supportThread.count({ where: viewWhere('waiting') }),
     prisma.supportThread.count({ where: viewWhere('escalated') }),
     prisma.supportThread.count({ where: viewWhere('snoozed') }),
-    prisma.supportThread.groupBy({ by: ['assigneeId'], where: { ...OPENISH, filtered: false, mergedIntoId: null, NOT: AUTOMATION_ONLY }, _count: { _all: true } }),
+    prisma.supportThread.groupBy({ by: ['assigneeId'], where: { ...NEEDS_US, ...notSnoozed(), filtered: false, mergedIntoId: null, NOT: AUTOMATION_ONLY }, _count: { _all: true } }),
   ])
   const reads = userId && threads.length
     ? await prisma.supportRead.findMany({ where: { userId, threadId: { in: threads.map(t => t.id) } } })
