@@ -387,6 +387,20 @@ export function parseMessage(msg, mailbox) {
 }
 
 /**
+ * A delivery failure notice, not a person: mailer-daemon, postmaster, or
+ * the subject every mail system uses for one. It is stored on the thread
+ * like any message (a person reads it), but it is never the customer
+ * writing, so it does not reopen the thread as a reply or count as an
+ * answer; it marks the thread bounced instead.
+ */
+export function isBounce(m) {
+  const from = String(m?.fromEmail || '').toLowerCase()
+  if (/^(mailer-daemon|postmaster|mail-?delivery(-subsystem)?)@/.test(from)) return true
+  return /\b(delivery status notification|undeliverable|mail delivery failed|delivery (has )?failed|returned mail|address not found)\b/i.test(String(m?.subject || ''))
+}
+const NOT_BOUNCE_SENDER = { NOT: [{ fromEmail: { startsWith: 'mailer-daemon@' } }, { fromEmail: { startsWith: 'postmaster@' } }, { fromEmail: { startsWith: 'mail-delivery-subsystem@' } }] }
+
+/**
  * Whether an address is one of ours: the mailbox itself, or anyone on its
  * domain. Matt writes to customers from matt@trackstar.art with fast@ in
  * the thread, and those are our replies, not a customer called Matt.
@@ -518,9 +532,10 @@ export async function refreshThread(thread, stored, { backfill = false, mailbox 
     prisma.supportMessage.aggregate({ where: { threadId: thread.id }, _count: { _all: true }, _max: { sentAt: true } }),
     prisma.supportMessage.findFirst({ where: { threadId: thread.id }, orderBy: { sentAt: 'desc' }, select: { id: true, direction: true, bodyText: true, sentAt: true } }),
     prisma.supportMessage.findFirst({ where: { threadId: thread.id }, orderBy: { sentAt: 'asc' }, select: { subject: true, direction: true, fromEmail: true, fromName: true, toEmails: true } }),
-    prisma.supportMessage.findFirst({ where: { threadId: thread.id, direction: 'in' }, orderBy: { sentAt: 'desc' }, select: { sentAt: true } }),
+    prisma.supportMessage.findFirst({ where: { threadId: thread.id, direction: 'in', ...NOT_BOUNCE_SENDER }, orderBy: { sentAt: 'desc' }, select: { sentAt: true } }),
     prisma.supportMessage.findFirst({ where: { threadId: thread.id, direction: 'out' }, orderBy: { sentAt: 'desc' }, select: { sentAt: true } }),
   ])
+  const bounce = isBounce(stored)
   const data = {
     messageCount: agg._count._all,
     lastMessageAt: agg._max.sentAt || thread.lastMessageAt,
@@ -547,6 +562,10 @@ export async function refreshThread(thread, stored, { backfill = false, mailbox 
     if (stored.direction === 'in' && thread.status !== 'escalated' && thread.status !== 'open') data.status = 'open'
     if (stored.direction === 'out' && thread.status === 'open') data.status = 'waiting'
     if (stored.direction === 'in' && thread.snoozedUntil) data.snoozedUntil = null
+    // A bounce marks the thread (a person has to find the right address); our
+    // next send, or a real reply from the customer, clears it.
+    if (bounce) data.bouncedAt = stored.sentAt
+    else if (thread.bouncedAt) data.bouncedAt = null
   }
   if (backfill) {
     const ageDays = (Date.now() - new Date(data.lastMessageAt).getTime()) / 86400000

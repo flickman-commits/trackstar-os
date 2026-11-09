@@ -139,6 +139,7 @@ function row(t, readAt) {
     lastMessageAt: t.lastMessageAt,
     lastInboundAt: t.lastInboundAt,
     lastOutboundAt: t.lastOutboundAt,
+    bouncedAt: t.bouncedAt || null,
     backfilled: t.backfilled,
     unread: Boolean(t.lastInboundAt) && (!readAt || new Date(t.lastInboundAt) > new Date(readAt)),
   }

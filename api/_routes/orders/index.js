@@ -17,7 +17,7 @@ import { dateVerified } from '../../../server/domain/races/verification.js'
 import { pipelineFor } from '../../../server/domain/orders/pipeline.js'
 import { loadPipelineContext } from '../../../server/domain/orders/pipelineStatus.js'
 import { sendPublicError } from '../../../server/lib/publicError.js'
-import { waitingOnCustomers } from '../../../server/domain/support/compose.js'
+import { waitingOnCustomers, bouncedCustomers } from '../../../server/domain/support/compose.js'
 
 
 /**
@@ -499,10 +499,14 @@ export default async function handler(req, res) {
     // Waiting on a customer's reply to something we asked (Support, "waiting").
     try {
       const open = transformedOrders.filter(o => o.status !== 'completed' && o.customerEmail)
-      const waiting = await waitingOnCustomers(open.map(o => o.customerEmail))
+      const [waiting, bounced] = await Promise.all([waitingOnCustomers(open.map(o => o.customerEmail)), bouncedCustomers(open.map(o => o.customerEmail))])
       for (const o of open) {
-        const since = waiting.get(String(o.customerEmail).trim().toLowerCase())
+        const key = String(o.customerEmail).trim().toLowerCase()
+        const since = waiting.get(key)
         if (since) o.waitingOnCustomerSince = since
+        // Our last email bounced: the order is an Action (find the right address), not waiting.
+        const bouncedAt = bounced.get(key)
+        if (bouncedAt) o.emailBouncedAt = bouncedAt
       }
     } catch (err) { console.warn('[orders] waiting-on-customer lookup failed:', err.message) }
 
@@ -513,7 +517,7 @@ export default async function handler(req, res) {
       if (!o || o.trackstarOrderType !== 'standard') continue
       const research = o.runnerResearch?.find(r => r.researchStatus === 'found') || o.runnerResearch?.[0] || null
       const race = research?.race || raceFor(o.raceNameOverride ?? o.raceName, o.yearOverride ?? o.raceYear)
-      t.pipeline = pipelineFor({ order: o, research, race, render: o.renderJobs?.find(j => !j.spec?.altSize) || null, hasScraper: t.hasScraperAvailable, templates: templateKeys, noTimeGaps: gaps, photoUnpaid: t.photoUnpaid, workerOnline, waitingOnCustomer: t.waitingOnCustomerSince || null })
+      t.pipeline = pipelineFor({ order: o, research, race, render: o.renderJobs?.find(j => !j.spec?.altSize) || null, hasScraper: t.hasScraperAvailable, templates: templateKeys, noTimeGaps: gaps, photoUnpaid: t.photoUnpaid, workerOnline, waitingOnCustomer: t.waitingOnCustomerSince || null, emailBounced: t.emailBouncedAt || null })
     }
 
     return res.status(200).json({ orders: transformedOrders, ...(openOnly ? { completedCount } : {}) })

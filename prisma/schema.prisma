@@ -1310,6 +1310,10 @@ model SupportThread {
   lastMessageAt   DateTime  @default(now())
   lastInboundAt   DateTime?
   lastOutboundAt  DateTime?
+  // Our last email to this customer came back undeliverable (a mailer-daemon
+  // notice newer than our last message). Cleared by a later send or a real
+  // reply. The order shows "Email bounced" under Action instead of waiting.
+  bouncedAt       DateTime?
   // Set by the backfill for threads that were already over when the mirror
   // was built, so a report can tell history from live work.
   backfilled      Boolean   @default(false)

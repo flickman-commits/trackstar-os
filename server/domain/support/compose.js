@@ -102,11 +102,29 @@ export async function waitingOnCustomers(emails) {
   const rows = await prisma.$queryRaw`
     SELECT lower("customerEmail") AS email, max("lastMessageAt") AS since
     FROM "SupportThread"
-    WHERE "mergedIntoId" IS NULL AND filtered = false AND lower("customerEmail") = ANY(${list})
+    WHERE "mergedIntoId" IS NULL AND filtered = false AND "bouncedAt" IS NULL AND lower("customerEmail") = ANY(${list})
       AND (status = 'waiting'
            OR (status = 'open' AND "snoozedUntil" > now() AND "lastOutboundAt" IS NOT NULL AND "lastOutboundAt" > coalesce("lastInboundAt", 'epoch'::timestamp)))
     GROUP BY lower("customerEmail")`
   for (const r of rows) out.set(r.email, r.since)
+  return out
+}
+
+/**
+ * Customers whose last email from us bounced (the conversation is still
+ * going): the order shows "Email bounced" under Action, since nobody is
+ * waiting on an email that never arrived. By lowercased email -> when.
+ */
+export async function bouncedCustomers(emails) {
+  const list = [...new Set(emails.map(e => String(e || '').trim().toLowerCase()).filter(Boolean))]
+  const out = new Map()
+  if (!list.length) return out
+  const rows = await prisma.$queryRaw`
+    SELECT lower("customerEmail") AS email, max("bouncedAt") AS at
+    FROM "SupportThread"
+    WHERE "bouncedAt" IS NOT NULL AND status <> 'closed' AND "mergedIntoId" IS NULL AND filtered = false AND lower("customerEmail") = ANY(${list})
+    GROUP BY lower("customerEmail")`
+  for (const r of rows) out.set(r.email, r.at)
   return out
 }
 
@@ -124,12 +142,13 @@ export async function conversationsForOrder(orderId, { all = false } = {}) {
     where: { customerEmail: { equals: email, mode: 'insensitive' }, mergedIntoId: null, filtered: false, ...(all ? {} : { status: { not: 'closed' } }) },
     orderBy: { lastMessageAt: 'desc' },
     take: all ? 25 : 5,
-    select: { id: true, subject: true, status: true, snippet: true, lastMessageAt: true, lastInboundAt: true, lastOutboundAt: true, messageCount: true, snoozedUntil: true, channel: true, assignee: { select: { firstName: true } } },
+    select: { id: true, subject: true, status: true, snippet: true, lastMessageAt: true, lastInboundAt: true, lastOutboundAt: true, bouncedAt: true, messageCount: true, snoozedUntil: true, channel: true, assignee: { select: { firstName: true } } },
   })
   return rows.map(t => ({
     id: t.id, subject: t.subject || '(no subject)', status: t.status, snippet: t.snippet || '', lastMessageAt: t.lastMessageAt,
     snoozed: Boolean(t.snoozedUntil && t.snoozedUntil > new Date()), channel: t.channel, assignee: t.assignee?.firstName || null,
     messageCount: t.messageCount,
+    bounced: Boolean(t.bouncedAt),
     // Who spoke last: the customer (an answer is owed) or us (we are waiting on them).
     last: !t.lastInboundAt && !t.lastOutboundAt ? null : (t.lastOutboundAt || 0) > (t.lastInboundAt || 0) ? 'us' : 'customer',
   }))

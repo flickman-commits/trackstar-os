@@ -29,6 +29,8 @@ export interface ThreadRow {
   lastMessageAt: string
   lastInboundAt: string | null
   lastOutboundAt: string | null
+  /** Our last email came back undeliverable; a person has to find the right address. */
+  bouncedAt?: string | null
   backfilled: boolean
   /** From a sender the team filtered out: shown only under Filtered. */
   filtered: boolean

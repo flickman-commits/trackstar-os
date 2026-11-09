@@ -36,7 +36,7 @@ export function newIdempotencyKey(): string {
 }
 
 /** A Support conversation with an order's customer, as the order view lists it. */
-export interface OrderConversation { id: string; subject: string; status: ThreadStatus; snippet: string; lastMessageAt: string; snoozed: boolean; channel: string; assignee: string | null; messageCount?: number; last?: 'us' | 'customer' | null }
+export interface OrderConversation { id: string; subject: string; status: ThreadStatus; snippet: string; lastMessageAt: string; snoozed: boolean; channel: string; assignee: string | null; messageCount?: number; last?: 'us' | 'customer' | null; bounced?: boolean }
 
 /** A saved playbook version: an edit, a taught lesson, a reset, a restore, or the weekly review. */
 export type PlaybookVersion = { id: string; source: 'edit' | 'lesson' | 'reset' | 'weekly' | 'restore'; summary: string | null; createdAt: string }

@@ -50,6 +50,7 @@ function raceRun(race, year) {
  * @param {boolean} p.photoUnpaid
  * @param {boolean} p.workerOnline
  * @param {Date|string|null} [p.waitingOnCustomer] since when Support has been waiting on this customer's reply
+ * @param {Date|string|null} [p.emailBounced]      when our last email to this customer came back undeliverable
  */
 /** "Thu 3:15 PM", Eastern: when a print in hold goes. */
 export function holdUntil(at) {
@@ -69,7 +70,7 @@ function approvedStage(render, stage) {
   return stage('attach', 'Attach in Artelo', { fix: 'The print is approved and in the Artelo library (Orders folder), but was not sent. Send it to production, or attach it in Artelo by hand and mark the order done.' })
 }
 
-export function pipelineFor({ order, research, race, render, hasScraper, templates, noTimeGaps, photoUnpaid, workerOnline, waitingOnCustomer = null }) {
+export function pipelineFor({ order, research, race, render, hasScraper, templates, noTimeGaps, photoUnpaid, workerOnline, waitingOnCustomer = null, emailBounced = null }) {
   const raceName = order.raceNameOverride ?? order.raceName
   const year = order.yearOverride ?? order.raceYear
   const stage = (s, reason, extra = {}) => ({ stage: s, reason, ...extra })
@@ -85,6 +86,8 @@ export function pipelineFor({ order, research, race, render, hasScraper, templat
   // them): nothing to review or fix until they answer. An approved print
   // already on its way to Artelo keeps its own status. Their reply reopens the
   // conversation, and the order's real status comes back.
+  // Our email to them never arrived: nobody is waiting on anything until a person finds the right address.
+  if (emailBounced && !(render?.status === 'done' && render.review === 'approved')) return stage('action', 'Email bounced', { kind: 'data', fix: `Our email to ${order.customerEmail || 'the customer'} came back undeliverable (${new Date(emailBounced).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}). Find the right address (the Shopify order, or a phone number), put it under Email in the right-hand panel, then Email customer again.` })
   if (waitingOnCustomer && !(render?.status === 'done' && render.review === 'approved')) return stage('waiting', 'Waiting on customer', { fix: 'Support is waiting on the customer\'s reply. This goes back to its usual status when they answer; open the conversation from the order to see what was asked.' })
   // A design waiting for review comes first: it is the one thing the tool wants from a person.
   if (render?.status === 'done' && render.review === 'pending') return stage('review', 'Ready for review')

@@ -53,6 +53,7 @@ function Row({ t, active, onClick }: { t: ThreadRow; active: boolean; onClick: (
           <span className={`text-[13px] truncate ${bold ? 'font-semibold text-off-black' : 'font-medium text-off-black/85'}`}>{who}</span>
           {/* Just the badge: why it is a priority is a note in the conversation. */}
           {t.priority && <span className="shrink-0 px-1.5 py-px rounded-full bg-amber-100 border border-amber-300 text-[10px] font-semibold text-amber-800">Priority</span>}
+          {t.bouncedAt && <span className="shrink-0 px-1.5 py-px rounded-full bg-red-100 border border-red-300 text-[10px] font-semibold text-red-800">Bounced</span>}
           <span className="ml-auto shrink-0 text-[11px] text-off-black/40 tabular-nums">{ago(t.lastMessageAt)}</span>
         </div>
         <div className={`text-[13px] truncate ${bold ? 'text-off-black' : 'text-off-black/70'}`}>{line}</div>

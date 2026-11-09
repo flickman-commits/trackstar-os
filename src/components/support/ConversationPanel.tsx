@@ -40,8 +40,11 @@ export default function ConversationPanel({ orderId, enabled }: { orderId: strin
   const closed = threads.filter(t => t.status === 'closed')
   const shown = showClosed ? threads : open
   // An answer owed to the customer is the thing to see first: the panel goes amber then.
+  const bounced = open.some(t => t.bounced)
   const owed = open.some(t => t.last === 'customer' && t.status !== 'waiting')
-  const tone = owed ? { box: 'bg-amber-50 border-amber-300', head: 'text-amber-800', line: 'border-amber-200 hover:border-amber-400' } : { box: 'bg-white border-border-gray', head: 'text-off-black/50', line: 'border-border-gray hover:border-off-black/30' }
+  // A bounce is red: the customer never got our email. An answer owed is amber.
+  const tone = bounced ? { box: 'bg-red-50 border-red-300', head: 'text-red-800', line: 'border-red-200 hover:border-red-400' }
+    : owed ? { box: 'bg-amber-50 border-amber-300', head: 'text-amber-800', line: 'border-amber-200 hover:border-amber-400' } : { box: 'bg-white border-border-gray', head: 'text-off-black/50', line: 'border-border-gray hover:border-off-black/30' }
   if (!shown.length && !closed.length) return null
   // All closed and folded: one quiet line, no card. Nothing is owed, so nothing should pull the eye.
   if (!open.length && !showClosed) {
@@ -57,7 +60,7 @@ export default function ConversationPanel({ orderId, enabled }: { orderId: strin
     <div className={`${tone.box} border rounded-md p-3 space-y-2`}>
       <div className="flex items-center justify-between gap-3">
         <div className={`text-[11px] font-semibold uppercase tracking-wider inline-flex items-center gap-1.5 ${tone.head}`}>
-          <Inbox className="w-3.5 h-3.5" />Conversation{open.length !== 1 ? 's' : ''}{open.length ? ` · ${open.length} open` : ''}{owed ? ' · the customer is waiting on us' : ''}
+          <Inbox className="w-3.5 h-3.5" />Conversation{open.length !== 1 ? 's' : ''}{open.length ? ` · ${open.length} open` : ''}{bounced ? ' · our email bounced' : owed ? ' · the customer is waiting on us' : ''}
         </div>
         {closed.length > 0 && (
           <button type="button" onClick={() => setShowClosed(v => !v)} className="text-[11px] font-medium text-off-black/50 hover:text-off-black">
@@ -73,6 +76,7 @@ export default function ConversationPanel({ orderId, enabled }: { orderId: strin
                 {t.channel === 'instagram' ? <Instagram className="w-3.5 h-3.5 shrink-0 text-off-black/50" /> : <Mail className="w-3.5 h-3.5 shrink-0 text-off-black/40" />}
                 <span className="text-sm font-semibold text-off-black truncate">{t.subject}</span>
                 <span className={`${chip} ${STATUS_TONE[t.status]} shrink-0`}>{t.snoozed ? 'Snoozed' : STATUS_LABEL[t.status]}</span>
+                {t.bounced && <span className={`${chip} bg-red-100 text-red-800 shrink-0`} title="Our last email came back undeliverable">Email bounced</span>}
               </div>
               {t.snippet && <p className="text-[13px] text-off-black/70 line-clamp-2 mt-0.5">{t.snippet}</p>}
               <div className="text-[11px] text-off-black/50 mt-0.5 inline-flex items-center gap-1.5 flex-wrap">
