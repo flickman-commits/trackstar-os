@@ -22,6 +22,8 @@ export const financeApi = {
   hoursAction: (body: Record<string, unknown>) => post<HoursPayload>('/api/finance/hours', body),
   timesheetsWeek: (week: string) => request<{ timesheets: Timesheet[]; people: Person[]; weekStart: string; thisWeek: string }>(`/api/finance/timesheets?week=${week}`),
   timesheets: (status = 'all', user = '') => request<{ timesheets: Timesheet[]; people: Person[] }>(`/api/finance/timesheets?status=${status}${user ? `&user=${user}` : ''}`),
+  addHoursFor: (userId: string, day: string, minutes: number, note: string) => post<unknown>('/api/finance/timesheets', { action: 'add', userId, day, minutes, note }),
+  removeHoursFor: (userId: string, entryId: string) => post<unknown>('/api/finance/timesheets', { action: 'remove', userId, entryId }),
   review: (id: string, action: 'approve' | 'reject' | 'withdraw', note = '') => post<{ timesheet: Timesheet }>('/api/finance/timesheets', { action, id, note }),
   payoutAction: <T = PayRun,>(body: Record<string, unknown>) => post<T>('/api/finance/payouts', body),
   racePayouts: () => request<RacePayoutsPayload>('/api/finance/race-payouts'),

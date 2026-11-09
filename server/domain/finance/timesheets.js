@@ -72,13 +72,16 @@ export async function myWeeks(userId, { today = todayET(), count = 12 } = {}) {
   return starts.map(ws => { const r = by.get(ws); return r ? { weekStart: ws, weekEnd: addDays(ws, 6), status: r.status, totalMinutes: summarizeEntries(r.entries).totalMinutes, reviewNote: r.reviewNote } : { weekStart: ws, weekEnd: addDays(ws, 6), status: 'empty', totalMinutes: 0, reviewNote: null } })
 }
 
-async function editableWeek(userId, day, today) {
+// byAdmin: Matt adding or removing someone's time from the review page. A
+// submitted week is still waiting on him, so he may change it; an approved
+// one has to be withdrawn first (its rate is frozen and it may be on a run).
+async function editableWeek(userId, day, today, { byAdmin = false } = {}) {
   const { weekStart } = weekFor(day)
   if (weekStart > mondayOf(today)) throw new HoursError('That day has not come yet')
   const ts = await prisma.timesheet.findUnique({ where: { userId_weekStart: { userId, weekStart } } })
     || await prisma.timesheet.create({ data: { userId, weekStart } })
-  if (ts.status === 'submitted') throw new HoursError('That week is submitted and locked. Ask Matt to send it back if something is wrong.')
-  if (ts.status === 'approved') throw new HoursError('That week is approved and locked.')
+  if (ts.status === 'submitted' && !byAdmin) throw new HoursError('That week is submitted and locked. Ask Matt to send it back if something is wrong.')
+  if (ts.status === 'approved') throw new HoursError(byAdmin ? 'That week is approved. Withdraw the approval first, then add or remove time.' : 'That week is approved and locked.')
   if (ts.status === 'rejected') await prisma.timesheet.update({ where: { id: ts.id }, data: { status: 'draft' } })
   return ts
 }
@@ -90,10 +93,10 @@ function cleanMinutes(minutes) {
 }
 const cleanNote = note => { const s = String(note ?? '').trim(); if (s.length > 300) throw new HoursError('Keep the note under 300 characters'); return s || null }
 
-export async function addEntry(userId, { day, minutes, note }, { today = todayET() } = {}) {
+export async function addEntry(userId, { day, minutes, note }, { today = todayET(), byAdmin = false } = {}) {
   if (!isValidDay(day)) throw new HoursError('day must be YYYY-MM-DD')
   if (day > today) throw new HoursError('That day has not come yet')
-  const ts = await editableWeek(userId, day, today)
+  const ts = await editableWeek(userId, day, today, { byAdmin })
   const e = await prisma.timeEntry.create({ data: { timesheetId: ts.id, userId, day, minutes: cleanMinutes(minutes), note: cleanNote(note) }, select: ENTRY_SELECT })
   return { entry: e, weekStart: ts.weekStart }
 }
@@ -109,12 +112,13 @@ export async function updateEntry(userId, id, { minutes, note }, { today = today
   return prisma.timeEntry.update({ where: { id }, data, select: ENTRY_SELECT })
 }
 
-export async function deleteEntry(userId, id, { today = todayET() } = {}) {
+export async function deleteEntry(userId, id, { today = todayET(), byAdmin = false } = {}) {
   const e = await prisma.timeEntry.findFirst({ where: { id, userId } })
   if (!e) throw new HoursError('No such entry', 404)
-  await editableWeek(userId, e.day, today)
+  if (byAdmin && e.startedAt && !e.endedAt) throw new HoursError('Their timer is still running on that entry')
+  await editableWeek(userId, e.day, today, { byAdmin })
   await prisma.timeEntry.delete({ where: { id } })
-  return { deleted: id }
+  return { deleted: id, day: e.day, minutes: e.minutes }
 }
 
 export async function runningTimer(userId) {
