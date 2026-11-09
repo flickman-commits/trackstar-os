@@ -1230,14 +1230,21 @@ export default function Dashboard() {
         <div>
           <div className="hidden md:block text-[10px] font-semibold uppercase tracking-wider text-off-black/40 mb-1">Queue</div>
           <div className="flex md:inline-flex w-full md:w-auto rounded-md border border-border-gray bg-subtle-gray p-0.5">
-            {([['', 'All', fulfillable.length], ['review', 'Review', stageCounts.review], ['action', 'Action', stageCounts.action], ['waiting', 'Waiting on customer', stageCounts.waiting], ['approved', 'Approved', stageCounts.approved]] as const).map(([key, label, n]) => (
+            {([
+              ['', 'All', fulfillable.length, 'Every open order that can be worked now. Races not run yet are left out.'],
+              ['review', 'Review', stageCounts.review, 'Renders ready to approve, and any still rendering.'],
+              ['action', 'Action', stageCounts.action, 'Something a person has to fix or decide. Grouped: quick decisions first, then fixes, research, Artelo, and what needs a designer or developer.'],
+              ['waiting', 'Waiting', stageCounts.waiting, 'Waiting on the customer (a reply, a photo, a payment) or on results the timer has not posted yet. Moves back on its own when they come in.'],
+              ['approved', 'Approved', stageCounts.approved, 'Approved and on its way: in the 48-hour change window, sending to Artelo, or waiting on the other prints in its order. Nothing to do.'],
+            ] as const).map(([key, label, n, help]) => (
               <button
                 key={key || 'all'}
                 onClick={() => setStageFilter(key)}
-                className={`flex-1 md:flex-none px-2 md:px-3 py-1.5 md:py-2.5 rounded text-xs md:text-sm font-medium whitespace-nowrap transition-colors inline-flex items-center justify-center gap-1 md:gap-1.5 ${stageFilter === key ? 'bg-white text-off-black shadow-sm' : 'text-off-black/55 hover:text-off-black'}`}
+                title={help}
+                className={`flex-1 md:flex-none px-2 md:px-3 py-1.5 md:py-2.5 rounded text-xs md:text-sm font-medium whitespace-nowrap transition-colors inline-flex items-center justify-center gap-1 md:gap-1.5 ${stageFilter === key ? 'bg-off-black text-white shadow-sm' : 'text-off-black/55 hover:text-off-black'}`}
               >
                 {label}
-                <span className={`text-[11px] tabular-nums ${stageFilter === key ? 'text-off-black/50' : 'text-off-black/35'}`}>{n}</span>
+                <span className={`text-[11px] tabular-nums ${stageFilter === key ? 'text-white/60' : 'text-off-black/35'}`}>{n}</span>
               </button>
             ))}
           </div>
@@ -1245,7 +1252,7 @@ export default function Dashboard() {
           {stageCounts.notRun > 0 && (
             <button onClick={() => setStageFilter(stageFilter === 'not_run' ? '' : 'not_run')}
               title="Orders for races that have not happened yet. Nothing to do until race day; they are not counted as orders to fulfill."
-              className={`ml-0 md:ml-2 mt-1.5 md:mt-0 inline-flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 md:py-2.5 rounded-md border border-dashed text-xs md:text-sm font-medium whitespace-nowrap transition-colors ${stageFilter === 'not_run' ? 'bg-white border-off-black/30 text-off-black shadow-sm' : 'border-border-gray text-off-black/45 hover:text-off-black'}`}>
+              className={`ml-0 md:ml-2 mt-1.5 md:mt-0 inline-flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 md:py-2.5 rounded-md border border-dashed text-xs md:text-sm font-medium whitespace-nowrap transition-colors ${stageFilter === 'not_run' ? 'bg-off-black border-off-black text-white shadow-sm' : 'border-border-gray text-off-black/45 hover:text-off-black'}`}>
               Not run yet <span className="text-[11px] tabular-nums opacity-70">{stageCounts.notRun}</span>
             </button>
           )}
