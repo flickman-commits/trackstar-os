@@ -1,7 +1,8 @@
 /**
- * GET /api/cron/finance-sync - each morning, hourly from 7am Eastern until
- * early afternoon: fill the Trybe tab from the Trybe API (trybeSync.js), then
- * read the Daily Tracker's raw tabs into the ledger
+ * GET /api/cron/finance-sync - each morning on the hour, 10:00 to 18:00 UTC
+ * (Vercel crons run on UTC, so there is a 6am Eastern run in winter and in
+ * summer and the numbers are in by 7). Fill the Trybe tab from the Trybe API
+ * (trybeSync.js), then read the Daily Tracker's raw tabs into the ledger
  * (server/domain/finance/sheetSync.js). The whole year every time; only
  * changed days are written. Then keep each partner race's payout current
  * while its window is open (racePayouts.refreshLive). Cron only.
