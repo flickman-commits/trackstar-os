@@ -23,6 +23,7 @@ import { loadDeals, getDeal, patchDeal, isAttioConfigured } from '../sales/attio
 import { shopifyFetch } from '../../services/shopifyAuth.js'
 import { getCanonicalRaceName } from '../../scrapers/index.js'
 import { addDays, daysBetween, isValidDay, todayET, dayLabel } from './periods.js'
+import { sendMessage, textToHtml } from '../sales/gmail.js'
 
 export class RacePayoutError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; this.expose = true }
@@ -90,7 +91,7 @@ function view(deal, state, today) {
     terms, poc: poc ? { name: [poc.firstName, poc.lastName].filter(Boolean).join(' ') || poc.name || null, email: poc.email || null } : null,
     contractUrl: deal.contractUrl || null, webUrl: deal.webUrl || null, runners: deal.runners || null,
     status: state?.status || 'pending', sales, payoutCents: sales ? payoutCents(state.termsUsed || terms, sales) : null, termsUsed: state?.termsUsed || null,
-    sentAt: state?.sentAt || null, paidAt: state?.paidAt || null, paidRef: state?.paidRef || null, note: state?.note || null,
+    sentAt: state?.sentAt || null, emailedTo: state?.emailedTo || null, paidAt: state?.paidAt || null, paidRef: state?.paidRef || null, note: state?.note || null,
   }
 }
 
@@ -277,7 +278,16 @@ export function reportFor(r) {
   const owesNothing = r.payoutCents === 0
   const report = [`${r.name} Trackstar Sales Report`, `Units Sold: ${r.sales.unitsSold.toLocaleString('en-US')}`, `Net Sales: ${usd(r.sales.netSalesCents)}`, ...(owesNothing ? [] : [line])].join('\n')
   const first = (r.poc?.name || '').split(' ')[0] || 'there'
-  const email = [`Hey ${first},`, '', `Had a great time working with you guys. Here's our sales report for the ${r.name} prints:`, '', report, '', ...(owesNothing ? [] : [`What's the easiest way to get you guys paid? Do you want a check or do you want to send me an invoice?`, '']), `${owesNothing ? 'Would' : 'Additionally, would'} love to hop on a quick post-mortem call and see what we can improve and talk about ideas for next year!`, '', 'Thanks,', 'Matt'].join('\n')
+  // The runbook's email, plus the gift: every partner is offered a free print for someone in their community who ran, or for themselves.
+  const email = [
+    `Hey ${first},`, '',
+    `Had a great time working with you guys. Here's our sales report for the ${r.name} prints:`, '',
+    report, '',
+    ...(owesNothing ? [] : [`What's the easiest way to get you guys paid? Do you want a check or do you want to send me an invoice?`, '']),
+    `As a thank you, we'd love to gift a free print to someone in your community who ran, or to you. Just send me their name and address and we'll get it made.`, '',
+    `${owesNothing ? 'Would' : 'Additionally, would'} love to hop on a quick post-mortem call and see what we can improve and talk about ideas for next year!`, '',
+    'Thanks,', 'Matt',
+  ].join('\n')
   return { report, subject: owesNothing ? `${r.name} Sales Report | Trackstar` : `${r.name} Sales Report + Payout | Trackstar`, to: r.poc?.email || null, email, window: `${dayLabel(r.window.start, 'long')} to ${dayLabel(r.window.end, 'long')}` }
 }
 
@@ -310,4 +320,28 @@ export async function setRaceTerms(dealId, { structure, pct, perOrder }, { today
   const prev = (await loadState([dealId]))[dealId]
   const state = prev?.sales ? await saveState(dealId, { ...prev, termsUsed: termsFor(fresh) }) : prev
   return view(fresh, state, today)
+}
+
+/**
+ * Email the race partner their report, from the sender's own Gmail (the
+ * mailbox synced to Attio, so it logs on the deal), and mark the report sent.
+ * Only once the window has closed and a pull after the close has made the
+ * numbers final, and never a report with no sales (the runbook's rule).
+ */
+export async function emailRacePartner(dealId, { to, subject, text, userId }, { today = todayET() } = {}) {
+  const deal = await getDeal(dealId, { fresh: true })
+  if (!deal) throw new RacePayoutError('No such deal in Attio', 404)
+  const prev = (await loadState([dealId]))[dealId] || {}
+  const r = view(deal, prev, today)
+  if (!r.sales) throw new RacePayoutError('Pull the sales first')
+  if (!r.final) throw new RacePayoutError(r.windowClosed ? 'These numbers were pulled before the window closed. Pull again, then email.' : `The window is still open until ${dayLabel(r.window.end, 'long')}; the numbers are not final yet.`)
+  if (!r.sales.unitsSold) throw new RacePayoutError('No sales to report. Check the products matched before emailing a race.')
+  const addr = String(to || '').trim()
+  if (!/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(addr)) throw new RacePayoutError('Enter one email address to send to')
+  const subj = String(subject || '').trim().slice(0, 200)
+  const body = String(text || '').trim()
+  if (!subj || !body) throw new RacePayoutError('The email needs a subject and a message')
+  const sent = await sendMessage({ userId, to: addr, subject: subj, html: textToHtml(body) })
+  const state = await saveState(dealId, { ...prev, status: prev.status === 'paid' ? 'paid' : 'sent', sentAt: new Date().toISOString(), emailedTo: addr, gmailThreadId: sent.threadId || null })
+  return view(deal, state, today)
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Check, Copy, ExternalLink, FileText, PencilLine, RefreshCw, Send, Undo2 } from 'lucide-react'
+import { Check, Copy, ExternalLink, FileText, Mail, PencilLine, RefreshCw, Send, Undo2 } from 'lucide-react'
 import ActionModal from '@/components/ActionModal'
 import { btnPrimary, btnSecondary, btnGhost, modalInput, modalPrimary, modalCancel } from '@/lib/ui'
 import { financeApi, usd, dayLabel } from '@/lib/financeApi'
@@ -11,7 +11,8 @@ import { card, ErrorCard, Spinner, Stat, StatusChip, tableHead, num } from './bi
  * Partnered races and what each is owed: the deal's terms and race date from
  * Attio, the race's sales from Shopify over its purchase window (15 days
  * before race day to 30 after), the payout due 30 days after the race. The
- * report and the email are the runbook's, word for word.
+ * report and the email are the runbook's (plus the gift offer); Email race
+ * partner sends it from your own Gmail once the window has closed.
  *
  * While a race is still selling, its payout is what we owe so far: the tab
  * re-pulls those races when it opens on numbers older than half an hour (the
@@ -33,6 +34,7 @@ export default function RacePayouts() {
   const [open, setOpen] = useState<RacePayout | null>(null)
   const [paying, setPaying] = useState<RacePayout | null>(null)
   const [editing, setEditing] = useState<RacePayout | null>(null)
+  const [emailing, setEmailing] = useState<RacePayout | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const refreshedOnce = useRef(false)
   const load = useCallback(async () => { try { setData(await financeApi.racePayouts()); setError(null) } catch (e) { setError((e as Error).message) } }, [])
@@ -54,7 +56,7 @@ export default function RacePayouts() {
 
   const act = async (body: Record<string, unknown>, key: string, done: (r: RacePayout) => string) => {
     setBusy(key)
-    try { const { race } = await financeApi.racePayoutAction(body); toast.success(done(race)); setPaying(null); setEditing(null); if (open?.dealId === race.dealId) setOpen(race); await load() }
+    try { const { race } = await financeApi.racePayoutAction(body); toast.success(done(race)); setPaying(null); setEditing(null); setEmailing(null); if (open?.dealId === race.dealId) setOpen(race); await load() }
     catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
   }
   const pullDue = async () => {
@@ -98,10 +100,11 @@ export default function RacePayouts() {
                     <td className={`px-3 py-2 ${num}`}>{r.sales ? r.sales.unitsSold.toLocaleString('en-US') : '–'}</td>
                     <td className={`px-3 py-2 ${num}`}>{r.sales ? usd(r.sales.netSalesCents, { cents: true }) : '–'}</td>
                     <td className={`px-3 py-2 ${num} font-semibold`}>{r.payoutCents != null ? usd(r.payoutCents, { cents: true }) : '–'}{r.payoutCents != null && r.status === 'pending' && !r.final && <span className="block font-normal text-[10px] text-off-black/45">so far</span>}</td>
-                    <td className="px-3 py-2"><StatusChip status={r.status === 'sent' ? 'submitted' : r.status === 'paid' ? 'paid' : 'draft'} />{r.sales && <span className="block text-[10px] text-off-black/40">{r.final ? `final, ${pulledLabel(r.sales.computedAt)}` : pulledLabel(r.sales.computedAt)}</span>}</td>
+                    <td className="px-3 py-2"><StatusChip status={r.status === 'sent' ? 'submitted' : r.status === 'paid' ? 'paid' : 'draft'} />{r.sales && <span className="block text-[10px] text-off-black/40">{r.windowClosed && r.window ? `${dayLabel(r.window.start)} – ${dayLabel(r.window.end)}${r.final ? '' : ', pull again'}` : pulledLabel(r.sales.computedAt)}</span>}{r.emailedTo && r.sentAt && <span className="block text-[10px] text-off-black/40">emailed {dayLabel(r.sentAt.slice(0, 10))}</span>}</td>
                     <td className="px-3 py-2">
                       <span className="inline-flex items-center gap-1">
                         {r.status !== 'paid' && <button onClick={() => act({ action: 'compute', dealId: r.dealId }, r.dealId, x => `${x.name}: ${x.sales?.unitsSold} units, ${usd(x.sales?.netSalesCents ?? 0)} net`)} disabled={busy !== null || !r.raceDate} className={btnSecondary} title="Pull this race's sales from Shopify"><RefreshCw className={`w-3.5 h-3.5 ${busy === r.dealId ? 'animate-spin' : ''}`} /> {r.sales ? 'Pull again' : 'Pull sales'}</button>}
+                        {r.status === 'pending' && r.final && !!r.sales?.unitsSold && r.report && <button onClick={() => setEmailing(r)} disabled={busy !== null} className={btnPrimary} title="Send the report from your Gmail"><Mail className="w-3.5 h-3.5" /> Email race partner</button>}
                         {r.report && <button onClick={() => setOpen(r)} className={btnSecondary}><FileText className="w-3.5 h-3.5" /> Report</button>}
                         {r.status === 'pending' && r.sales && <button onClick={() => act({ action: 'sent', dealId: r.dealId }, r.dealId, x => `Report marked sent for ${x.name}`)} disabled={busy !== null} className={btnGhost} title="The report went to the race"><Send className="w-3.5 h-3.5" /> Sent</button>}
                         {r.status !== 'paid' && r.sales && <button onClick={() => setPaying(r)} disabled={busy !== null} className={btnPrimary}><Check className="w-3.5 h-3.5" /> Paid</button>}
@@ -116,6 +119,7 @@ export default function RacePayouts() {
           </table>
         </div>
       )}
+      {emailing && emailing.report && <EmailModal r={emailing} busy={busy === emailing.dealId} onClose={() => setEmailing(null)} onSend={b => act({ action: 'email', dealId: emailing.dealId, ...b }, emailing.dealId, x => `Report sent to ${x.emailedTo}`)} />}
       {open && open.report && <ReportModal r={open} onClose={() => setOpen(null)} />}
       {editing && <TermsModal r={editing} busy={busy === editing.dealId} onClose={() => setEditing(null)} onSave={b => act({ action: 'set_terms', dealId: editing.dealId, ...b }, editing.dealId, x => `${x.name}: terms saved to Attio`)} />}
       {paying && <PaidModal r={paying} busy={busy === paying.dealId} onClose={() => setPaying(null)} onPay={ref => act({ action: 'paid', dealId: paying.dealId, paidRef: ref }, paying.dealId, x => `${x.name} marked paid${x.attio ? `: ${x.attio}` : ''}`)} />}
@@ -170,6 +174,23 @@ function TermsModal({ r, busy, onClose, onSave }: { r: RacePayout; busy: boolean
       {structure === 'percent'
         ? <div className="flex items-center gap-2"><input value={pct} onChange={e => setPct(e.target.value)} inputMode="decimal" className={modalInput} autoFocus /><span className="text-off-black/50">%</span></div>
         : <div className="flex items-center gap-2"><span className="text-off-black/50">$</span><input value={perOrder} onChange={e => setPerOrder(e.target.value)} inputMode="decimal" className={modalInput} autoFocus /><span className="text-off-black/50 whitespace-nowrap">per order</span></div>}
+    </ActionModal>
+  )
+}
+
+/** The report email, editable, sent from your own Gmail; the payout is then marked sent. */
+function EmailModal({ r, busy, onClose, onSend }: { r: RacePayout; busy: boolean; onClose: () => void; onSend: (b: { to: string; subject: string; text: string }) => void }) {
+  const rep = r.report!
+  const [to, setTo] = useState(rep.to || '')
+  const [subject, setSubject] = useState(rep.subject)
+  const [text, setText] = useState(rep.email)
+  const ok = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(to.trim()) && subject.trim() !== '' && text.trim() !== ''
+  return (
+    <ActionModal icon={Mail} title="Email race partner" sub={r.name} description={`${rep.window}. Sent from your Gmail, so it logs on the Attio deal; the payout is then marked sent.`} onClose={onClose} busy={busy} size="lg"
+      footer={<><button onClick={onClose} className={modalCancel} disabled={busy}>Cancel</button><button onClick={() => onSend({ to: to.trim(), subject: subject.trim(), text })} disabled={busy || !ok} className={modalPrimary}><Send className="w-3.5 h-3.5" /> Send</button></>}>
+      <input value={to} onChange={e => setTo(e.target.value)} placeholder="To" className={modalInput} autoFocus={!rep.to} />
+      <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Subject" className={modalInput} />
+      <textarea value={text} onChange={e => setText(e.target.value)} rows={16} className={`${modalInput} font-sans text-sm leading-relaxed`} />
     </ActionModal>
   )
 }

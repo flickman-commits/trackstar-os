@@ -54,3 +54,15 @@ test('a race owed nothing gets the sales report without the payout line or the h
   assert.ok(!rep.email.includes('get you guys paid'))
   assert.equal(rep.subject, 'Test Marathon Sales Report | Trackstar')
 })
+
+test('the partner email gives net sales, the share and the payout, asks how to pay, and offers the gift', () => {
+  const r = { name: 'Test Marathon', poc: { name: 'Pat Lee', email: 'pat@example.com' }, window: { start: '2026-09-11', end: '2026-10-26' }, terms: termsFor({ revSharePct: 15 }), termsUsed: null, payoutCents: 11400, sales: { unitsSold: 7, netSalesCents: 76000 } }
+  const rep = reportFor(r)
+  assert.ok(rep.email.startsWith('Hey Pat,'))
+  assert.ok(rep.email.includes('Net Sales: $760.00'))
+  assert.ok(rep.email.includes('Race Payout (15%): $114.00'))
+  assert.ok(rep.email.includes('get you guys paid'))
+  assert.ok(rep.email.includes('gift a free print to someone in your community who ran, or to you'))
+  assert.ok(rep.email.indexOf('gift') < rep.email.indexOf('post-mortem'))
+  assert.equal(rep.to, 'pat@example.com')
+})

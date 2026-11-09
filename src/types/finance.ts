@@ -57,7 +57,7 @@ export type RaceReport = { report: string; subject: string; to: string | null; e
 export type RacePayout = {
   dealId: string; name: string; stage: string; raceDate: string | null; window: { start: string; end: string } | null; dueDate: string | null; daysToDue: number | null; windowClosed: boolean; windowOpen: boolean; final: boolean
   terms: RaceTerms; termsUsed: RaceTerms | null; poc: { name: string | null; email: string | null } | null; contractUrl: string | null; webUrl: string | null; runners: number | string | null
-  status: 'pending' | 'sent' | 'paid'; sales: RaceSales | null; payoutCents: number | null; sentAt: string | null; paidAt: string | null; paidRef: string | null; note: string | null
+  status: 'pending' | 'sent' | 'paid'; sales: RaceSales | null; payoutCents: number | null; sentAt: string | null; emailedTo: string | null; paidAt: string | null; paidRef: string | null; note: string | null
   report: RaceReport | null; attio?: string | null
 }
 export type RacePayoutsPayload = { races: RacePayout[]; owed: { totalCents: number; accruingCents: number; closedCents: number; races: number }; rules: { daysBefore: number; daysAfter: number; dueDays: number; defaultPct: number } }

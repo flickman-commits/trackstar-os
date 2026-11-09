@@ -5,12 +5,13 @@
  * POST /api/finance/race-payouts { action: 'compute', dealId }     pull the race's sales from Shopify
  *                               { action: 'refresh_live' }         re-pull every race still selling whose numbers are over 30 minutes old
  *                               { action: 'compute_due' }          every race due and not yet sent
+ *                               { action: 'email', dealId, to, subject, text }   send the report from the sender's Gmail, then mark it sent
  *                               { action: 'sent' | 'paid' | 'reopen', dealId, paidRef?, note? }
  *                               { action: 'set_terms', dealId, structure: 'percent' | 'per_order', pct?, perOrder? }   written to the Attio deal
  */
 import { setCors } from '../../_lib/auth.js'
 import { requireAdminOnly, recordAudit } from '../../_lib/users.js'
-import { listRacePayouts, computeRacePayout, refreshLive, computeDue, setRacePayoutStatus, setRaceTerms, reportFor, DAYS_BEFORE, DAYS_AFTER, DUE_DAYS, DEFAULT_PCT } from '../../../server/domain/finance/racePayouts.js'
+import { listRacePayouts, computeRacePayout, refreshLive, emailRacePartner, computeDue, setRacePayoutStatus, setRaceTerms, reportFor, DAYS_BEFORE, DAYS_AFTER, DUE_DAYS, DEFAULT_PCT } from '../../../server/domain/finance/racePayouts.js'
 import { answerError, body } from '../../_lib/finance.js'
 
 const withReport = r => ({ ...r, report: reportFor(r) })
@@ -44,6 +45,11 @@ export default async function handler(req, res) {
       const out = await computeDue()
       await recordAudit({ action: 'race_payout.compute_due', summary: `Pulled sales for ${out.computed} race${out.computed === 1 ? '' : 's'} due a payout${out.failed.length ? ` (${out.failed.length} failed)` : ''}`, detail: out, actor })
       return res.status(200).json(out)
+    }
+    if (b.action === 'email') {
+      const r = withReport(await emailRacePartner(String(b.dealId || ''), { to: b.to, subject: b.subject, text: b.text, userId: actor.id }))
+      await recordAudit({ action: 'race_payout.emailed', summary: `Emailed ${r.name} their sales report (${usd(r.payoutCents)} payout) to ${r.emailedTo}`, detail: { dealId: r.dealId, to: r.emailedTo, sales: r.sales, terms: r.termsUsed || r.terms }, actor })
+      return res.status(200).json({ race: r })
     }
     if (b.action === 'set_terms') {
       const r = withReport(await setRaceTerms(String(b.dealId || ''), { structure: b.structure, pct: b.pct, perOrder: b.perOrder }))
