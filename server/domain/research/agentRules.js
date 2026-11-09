@@ -61,6 +61,10 @@ const NICKNAMES = {
   ben: 'benjamin', andy: 'andrew', drew: 'andrew', greg: 'gregory', jon: 'jonathan', josh: 'joshua', pat: 'patrick',
   rick: 'richard', rich: 'richard', dick: 'richard', ted: 'edward', ed: 'edward', sue: 'susan', deb: 'deborah',
   debbie: 'deborah', abby: 'abigail', maddie: 'madeline', meg: 'megan', zach: 'zachary', jake: 'jacob', tim: 'timothy',
+  // Jack Karl (6534) is "John Karl" in the NYRR results.
+  jack: 'john', johnny: 'john', lex: 'alexander', bobby: 'robert', becky: 'rebecca', cathy: 'catherine', jeff: 'jeffrey',
+  ken: 'kenneth', ron: 'ronald', don: 'donald', larry: 'lawrence', jerry: 'gerald', mandy: 'amanda', vicky: 'victoria',
+  nate: 'nathan', tommy: 'thomas', charlie: 'charles', chuck: 'charles', peggy: 'margaret', maggie: 'margaret',
 }
 
 /**
@@ -75,6 +79,9 @@ export function nameVariants(name) {
   const first = parts[0], last = parts[parts.length - 1]
   const out = new Set()
   if (parts.length > 2) out.add(`${first} ${last}`)
+  // Two first names run together ("JohnAndre", 6481): each spaced, and the first alone.
+  const joined = first.match(/^([A-Z][a-z]+)([A-Z][a-z]+)$/)
+  if (joined) { out.add(`${joined[1]} ${joined[2]} ${last}`); out.add(`${joined[1]} ${last}`) }
   const f = first.toLowerCase()
   if (NICKNAMES[f]) out.add(`${cap(NICKNAMES[f])} ${last}`)
   for (const [nick, full] of Object.entries(NICKNAMES)) if (full === f) out.add(`${cap(nick)} ${last}`)

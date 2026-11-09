@@ -613,13 +613,17 @@ export class ResearchService {
     // so the name as typed finds nobody and the last name alone finds a
     // stranger. Search again without it before anything else. The order
     // keeps printing the name as the customer typed it.
+    //
+    // Accents and hyphens the same way: NYRR has "Santiago Milian" and
+    // "Lezlie King Terry" for the customers who typed "Milián" (5633) and
+    // "King-Terry" (9158). One more search with all three flattened.
     const APOSTROPHE = /['\u2018\u2019\u02BC`\u00B4]/g
-    if (!results.found && !results.ambiguous && results.researchStatus !== 'upstream_error' && APOSTROPHE.test(runnerName)) {
-      const plain = runnerName.replace(APOSTROPHE, '')
-      console.log(`[ResearchService] Not found as typed; trying without the apostrophe: "${plain}"`)
+    const plain = runnerName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(APOSTROPHE, '').replace(/[-\u2010-\u2014]+/g, ' ').replace(/\s+/g, ' ').trim()
+    if (!results.found && !results.ambiguous && results.researchStatus !== 'upstream_error' && plain && plain !== runnerName.trim()) {
+      console.log(`[ResearchService] Not found as typed; trying "${plain}"`)
       const again = await this.searchOnce(this.scraperFor(raceName, year), raceName, year, plain)
       if (again.found || again.ambiguous) {
-        again.researchNotes = [again.researchNotes, `Found by searching "${plain}" (the results list the name without the apostrophe).`].filter(Boolean).join(' ')
+        again.researchNotes = [again.researchNotes, `Found by searching "${plain}" (the results write the name without accents, hyphens or apostrophes).`].filter(Boolean).join(' ')
         results = again
       }
     }
