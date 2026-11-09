@@ -165,6 +165,9 @@ export class SVETimingScraper extends BaseScraper {
   }
 
   async searchRunner(runnerName) {
+    // The year is in the URL, so any year "works"; a year before the config's
+    // first one is not on this page layout and must say so, not "site down".
+    if (this.config.firstYear && this.year < this.config.firstYear) return this.yearNotConfiguredResult(`${this.config.tag || this.raceName} is wired up from ${this.config.firstYear}`)
     console.log(`\n${'='.repeat(50)}`)
     console.log(`[${this.tag} ${this.year}] Searching for: "${runnerName}"`)
     console.log(`${'='.repeat(50)}`)

@@ -21,6 +21,9 @@
  */
 export default {
   platform: 'svetiming',
+  // Earlier years use other slugs and are not wired up: they answer HTTP 500,
+  // which read as "Timing site down" (orders 7260, 4224473488).
+  firstYear: 2022,
   raceName: 'Big Sur Marathon',
   tag: 'BigSur',
   location: 'Big Sur, CA',

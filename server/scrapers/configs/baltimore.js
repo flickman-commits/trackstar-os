@@ -17,6 +17,7 @@
  */
 export default {
   platform: 'svetiming',
+  firstYear: 2021,
   raceName: 'Baltimore Marathon',
   tag: 'Baltimore',
   location: 'Baltimore, MD',
