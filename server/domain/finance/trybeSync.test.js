@@ -46,3 +46,9 @@ test('Trybe cost counts as ad spend next to Meta and Google, so it lowers CM and
   assert.equal(withTrybe.designerFee, Math.round((100000 - 28000 - 36000) * 0.075))
   assert.equal(withTrybe.cm, 100000 - 28000 - 36000 - withTrybe.designerFee)
 })
+
+test('Trybe all-in is its cost over the sales it attributed', () => {
+  const d = computeDay({ day: '2026-11-03', shopifyNetCents: 4942100, trybeSalesCents: 381508, trybeCostCents: 64775 }, [])
+  assert.equal(Math.round(d.trybeAllInPct * 100) / 100, 16.98)
+  assert.equal(computeDay({ day: '2026-11-03', shopifyNetCents: 100 }, []).trybeAllInPct, null)
+})

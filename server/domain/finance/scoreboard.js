@@ -101,7 +101,7 @@ export function computeDay(rawRow, rules) {
     metaImpressions: n0(row.metaImpressions), metaClicks: n0(row.metaClicks), metaPurchaseValue: n0(row.metaPurchaseValueCents),
     googleImpressions: n0(row.googleImpressions), googleClicks: n0(row.googleClicks), googleConversionValue: n0(row.googleConversionValueCents),
     // ratios
-    ...ratios({ revenue, grossProfit, cm, adSpend, orders, cogs, production, shipping, units, organicOrders, shopifyRevenue, etsyRevenue, shopifyOrders, etsyOrders,
+    ...ratios({ trybe, trybeSales: n0(row.trybeSalesCents), revenue, grossProfit, cm, adSpend, orders, cogs, production, shipping, units, organicOrders, shopifyRevenue, etsyRevenue, shopifyOrders, etsyOrders,
       meta, metaPurchases, metaPurchaseValue: n0(row.metaPurchaseValueCents), metaClicks: n0(row.metaClicks), metaImpressions: n0(row.metaImpressions),
       google, googleConversions, googleConversionValue: n0(row.googleConversionValueCents), googleClicks: n0(row.googleClicks), googleImpressions: n0(row.googleImpressions),
       sessions: n0(row.shopifySessions), addToCart: n0(row.shopifyAddToCart), reachedCheckout: n0(row.shopifyReachedCheckout), completedCheckout: n0(row.shopifyCompletedCheckout) }),
@@ -121,6 +121,8 @@ function ratios(s) {
     costPerUnit: s.units ? Math.round((s.production + s.shipping) / s.units) : null, // cents
     cogsPct: pct(s.cogs, s.revenue),
     adSpendPct: pct(s.adSpend, s.revenue),
+    // What Trybe costs us all in (earnings + platform fee + processing) per dollar of the sales it attributes.
+    trybeAllInPct: pct(s.trybe, s.trybeSales),
     shopifyPct: pct(s.shopifyRevenue, s.revenue),
     etsyPct: pct(s.etsyRevenue, s.revenue),
     shopifyAov: s.shopifyOrders ? Math.round(s.shopifyRevenue / s.shopifyOrders) : null,
