@@ -9,10 +9,12 @@
  *   changeItemPrep      { id, shopifyOrderId }  -> the prints on the order and their sizes/frames
  *   changeItem          { id, shopifyOrderId, lineItemId?, size, frame }  size/frame swap before production
  *   shippingAddress     { id, shopifyOrderId, address: { name, address1, address2, city, province, zip, country, phone } }
- *   refundable          { id, shopifyOrderId }                  -> what is left to refund, and the $200 line
- *   refund              { id, shopifyOrderId, cents, reason }   over $200 refused unless admin (re-read from the database)
+ *   refundable          { id, shopifyOrderId }                  -> what is left to refund, and the $250 line
+ *   refund              { id, shopifyOrderId, cents, reason }   over $250 refused unless admin (re-read from the database)
  *   cancelOrder         { id, shopifyOrderId, reason, customerConfirmed: true }
- *   sendInvoice         { id, cents, title, email?, orderName?, message? }  a Shopify invoice for any amount; over $200 admin only
+ *   sendInvoice         { id, cents, title, email?, orderName?, message? }  a Shopify invoice for any amount; over $250 admin only
+ *   giftCardLimit       { id }                                  -> the $250 line and the customer's email
+ *   sendGiftCard        { id, cents, reason, email?, orderName?, message? }  a Shopify gift card Shopify emails them; over $250 admin only
  *
  * Anyone on Support; a discount code also needs the Discount codes
  * capability, the same gate as the dashboard's discount tool. Every
@@ -30,12 +32,13 @@ import prisma from '../../_lib/prisma.js'
 import { changeItemPrep, changeItem } from '../../../server/domain/support/changeItem.js'
 import { discount15, lookupCode, orderNote, fixPersonalization, slackMatt, shippingAddress, refundable, refund, cancelOrder, REFUND_LIMIT_CENTS, DISCOUNT_LIMIT_PERCENT } from '../../../server/domain/support/actions.js'
 import { sendSupportInvoice, INVOICE_LIMIT_CENTS } from '../../../server/domain/support/invoice.js'
+import { sendSupportGiftCard, GIFT_CARD_LIMIT_CENTS } from '../../../server/domain/support/giftCards.js'
 import { assertOrderInThread } from '../../../server/domain/support/threads.js'
 import { claimOnce } from '../../../server/domain/support/idempotency.js'
 import { publicMessage, publicStatus } from '../../../server/domain/support/errors.js'
 
 /** Actions that move money or change an order in Shopify: once per press. */
-const ONCE = new Set(['refund', 'cancelOrder', 'changeItem', 'sendInvoice'])
+const ONCE = new Set(['refund', 'cancelOrder', 'changeItem', 'sendInvoice', 'sendGiftCard'])
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'POST, OPTIONS' })) return
@@ -106,6 +109,12 @@ export default async function handler(req, res) {
       case 'sendInvoice': {
         const out = await sendSupportInvoice({ thread, cents: body.cents, title: body.title, email: body.email, orderName: body.orderName, message: body.message, actor: user, isAdmin: user.role === 'admin' })
         await audit(`Sent Shopify invoice ${out.draftName} for $${out.dollars} to ${out.to}`, { cents: Math.round(Number(body.cents)), currency: 'USD', title: body.title || null, orderName: body.orderName || null })
+        return res.status(200).json(out)
+      }
+      case 'giftCardLimit': return res.status(200).json({ limitCents: GIFT_CARD_LIMIT_CENTS, isAdmin: user.role === 'admin', email: thread.customerEmail || '' })
+      case 'sendGiftCard': {
+        const out = await sendSupportGiftCard({ thread, cents: body.cents, reason: body.reason, email: body.email, orderName: body.orderName, message: body.message, actor: user, isAdmin: user.role === 'admin' })
+        await audit(`Sent a $${out.dollars} gift card (ending ${out.last4}) to ${out.to}`, { cents: Math.round(Number(body.cents)), currency: 'USD', reason: body.reason || null, orderName: body.orderName || null, giftCardId: out.giftCardId })
         return res.status(200).json(out)
       }
       case 'slackMatt': {

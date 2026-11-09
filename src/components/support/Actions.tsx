@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { Ban, BadgePercent, Palette, Repeat, Check, Copy, Image as ImageIcon, Link2, Loader2, MapPin, MessageSquareWarning, Pencil, Plus, Receipt, RefreshCw, Ruler, Search, Star, Truck, X } from 'lucide-react'
+import { BadgePercent, Ban, Check, Copy, Gift, Image as ImageIcon, Link2, Loader2, MapPin, MessageSquareWarning, Palette, Pencil, Plus, Receipt, RefreshCw, Repeat, Ruler, Search, Star, Truck, X } from 'lucide-react'
 import { reviewAsk, reviewLinkFor } from '@/lib/reviewLinks'
 import { toast } from 'sonner'
 import { newIdempotencyKey, supportApi } from '@/lib/supportApi'
@@ -946,6 +946,81 @@ function InvoiceForm({ thread, orderName, onDone, onCancel }: { thread: ThreadDe
   )
 }
 
+/**
+ * A Shopify gift card, to make something right. Shopify emails it to the
+ * customer with the message; the code also comes back here, to paste into the
+ * reply. Over the limit ($250) is an admin's; the server holds the same line.
+ */
+function GiftCardForm({ thread, orderName, onInsert, onDone, onCancel }: { thread: ThreadDetail; orderName?: string; onInsert?: (text: string) => void; onDone: () => void; onCancel: () => void }) {
+  const [amount, setAmount] = useState('25')
+  const [reason, setReason] = useState('')
+  const [email, setEmail] = useState('')
+  const [message, setMessage] = useState('')
+  const [info, setInfo] = useState<{ limitCents: number; isAdmin: boolean } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [pressKey, setPressKey] = useState('')
+  const [sent, setSent] = useState<{ code: string; last4: string; dollars: string; to: string; emailed: boolean } | null>(null)
+  useEffect(() => {
+    supportApi.action<{ limitCents: number; isAdmin: boolean; email: string }>('giftCardLimit', { id: thread.id })
+      .then(r => { setInfo(r); setEmail(e => e || r.email) }).catch(() => {})
+  }, [thread.id])
+  const cents = Math.round(Number(amount) * 100) || 0
+  const over = info ? cents > info.limitCents && !info.isAdmin : false
+  const ok = cents >= 100 && !over && reason.trim().length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+  const send = async () => {
+    if (!ok) return
+    if (!confirming) { setConfirming(true); setPressKey(newIdempotencyKey()); return }
+    setBusy(true)
+    try {
+      const out = await supportApi.action<{ code: string; last4: string; dollars: string; to: string; emailed: boolean }>('sendGiftCard', { id: thread.id, cents, reason: reason.trim(), email: email.trim(), orderName: orderName || undefined, message: message.trim() || undefined, idempotencyKey: pressKey })
+      setSent(out); onDone()
+    } catch (e) { toast.error((e as Error).message); setConfirming(false) } finally { setBusy(false) }
+  }
+  if (sent) {
+    const line = `Here's a $${Number(sent.dollars).toFixed(0)} Trackstar gift card: ${sent.code}`
+    return (
+      <ActionModal icon={Gift} title="Gift card sent" sub={`Ending ${sent.last4}`} onClose={onCancel}
+        footer={<>
+          {onInsert && <button onClick={() => { onInsert(line); onCancel() }} className={modalCancel}>Put the code in my reply</button>}
+          <button onClick={onCancel} className={modalPrimary}>Done</button>
+        </>}>
+        <Done title={`$${sent.dollars} gift card for ${sent.to}`}>
+          {sent.emailed ? 'Shopify emailed it to them. ' : 'Shopify could not email it, so send them the code. '}The code is <b className="font-mono">{sent.code}</b>. Shopify only shows the last 4 from now on.
+        </Done>
+      </ActionModal>
+    )
+  }
+  return (
+    <ActionModal icon={Gift} title="Send gift card" sub={orderName ? `For #${orderName}` : undefined} onClose={onCancel} busy={busy}
+      hint={confirming ? <span className="font-medium">Send a ${(cents / 100).toFixed(2)} gift card to {email.trim()}? This is real money.</span> : 'Shopify emails it to them with your message.'}
+      footer={<>
+        <button onClick={() => (confirming ? setConfirming(false) : onCancel())} disabled={busy} className={modalCancel}>{confirming ? 'Back' : 'Cancel'}</button>
+        <button onClick={send} disabled={busy || !ok} className={modalPrimary}>{busy && <Spin />}{confirming ? 'Yes, send it' : `Send $${cents ? (cents / 100).toFixed(2) : '?'} gift card`}</button>
+      </>}>
+      <Field label="Amount">
+        <div className="flex flex-wrap items-center gap-2">
+          {[10, 25, 50, 100].map(n => <button key={n} type="button" onClick={() => { setAmount(String(n)); setConfirming(false) }} className={modalChip(amount === String(n))}>${n}</button>)}
+          <div className="relative w-28 ml-1">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-off-black/45">$</span>
+            <input value={amount} onChange={e => { setAmount(e.target.value.replace(/[^0-9.]/g, '').slice(0, 8)); setConfirming(false) }} inputMode="decimal" className={`${modalInput} pl-7 text-right`} />
+          </div>
+        </div>
+      </Field>
+      <Field label="Why (for our records)">
+        <input value={reason} onChange={e => { setReason(e.target.value.slice(0, 160)); setConfirming(false) }} placeholder="Frame arrived late, sorry gift" className={modalInput} autoFocus />
+      </Field>
+      <Field label="Send to">
+        <input value={email} onChange={e => { setEmail(e.target.value); setConfirming(false) }} className={modalInput} />
+      </Field>
+      <Field label="Message in Shopify's email (optional)">
+        <textarea value={message} onChange={e => setMessage(e.target.value.slice(0, 200))} rows={2} className={`${modalInput} resize-none`} placeholder="Sorry for the trouble, this one's on us!" />
+      </Field>
+      {over && <div className={bad}>Over ${(info!.limitCents / 100).toFixed(0)} is Matt's call. Slack Matt instead.</div>}
+    </ActionModal>
+  )
+}
+
 function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChanged }: { o: CustomerOrder; thread: ThreadDetail; multiple: boolean; isAdmin: boolean; onInsert: (text: string) => void; onAttach: (m: Mockup) => void; onChanged: () => void }) {
   const [picking, setPicking] = useState(false)
   // Refresh: the newest mockups after a re-render, in place of what the page loaded with.
@@ -966,7 +1041,7 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
   }
   const [busy, setBusy] = useState<string | null>(null)
   // The one modal open for this order, if any.
-  const [open, setOpen] = useState<null | 'address' | 'change' | 'fix' | 'note' | 'claim' | 'reorder' | 'refund' | 'cancel' | 'invoice'>(null)
+  const [open, setOpen] = useState<null | 'address' | 'change' | 'fix' | 'note' | 'claim' | 'reorder' | 'refund' | 'cancel' | 'invoice' | 'giftcard'>(null)
   const close = () => setOpen(null)
   const form = { o, thread, onDone: onChanged, onCancel: close }
   const [converting, setConverting] = useState<string | null>(null)
@@ -1078,6 +1153,7 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
         {/* A reprint or replacement: the same print to this customer, built in Artelo from here. */}
         {o.shopifyOrderId && o.items.length > 0 && <ActionLink icon={Repeat} onClick={() => setOpen('reorder')} title="The same print to this customer: a reprint or a replacement. Artelo bills us for it, so damage goes through the claim instead.">New Artelo order</ActionLink>}
         <ActionLink icon={Receipt} onClick={() => setOpen('invoice')} title="A Shopify invoice for any amount, for something that does not invoice itself: a second size, an extra frame, rush shipping">Send invoice</ActionLink>
+        <ActionLink icon={Gift} onClick={() => setOpen('giftcard')} title="A Shopify gift card Shopify emails them, to make something right. Over $250 is Matt's call.">Send gift card</ActionLink>
         {o.shopifyOrderId && o.financialStatus !== 'REFUNDED' && <ActionLink icon={Receipt} onClick={() => setOpen('refund')} title="All or part, to the card they paid with. Over $250 is Matt's call.">Refund</ActionLink>}
         {/* Cancel only before anything is made or shipped. */}
         {o.shopifyOrderId && !shipped && !o.items.some(it => it.status === 'completed' || it.designStatus === 'sent_to_production') && o.financialStatus !== 'REFUNDED' && <ActionLink icon={Ban} onClick={() => setOpen('cancel')} title="Only after the customer says yes, and only before production">Cancel and refund</ActionLink>}
@@ -1095,6 +1171,7 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
       {open === 'refund' && <RefundForm {...form} />}
       {open === 'cancel' && <CancelForm {...form} />}
       {open === 'invoice' && <InvoiceForm thread={thread} orderName={o.number} onDone={onChanged} onCancel={close} />}
+      {open === 'giftcard' && <GiftCardForm thread={thread} orderName={o.number} onInsert={onInsert} onDone={onChanged} onCancel={close} />}
     </div>
   )
 }
