@@ -123,7 +123,12 @@ export function pipelineFor({ order, research, race, render, hasScraper, templat
   if (!raceRun(race, year)) return stage('waiting', 'Race not run yet', { fix: `${raceName} ${year} has not happened yet. Results are looked up two days after race day.` })
 
   const rs = research?.researchStatus || null
-  if (!hasScraper || rs === 'no_scraper') return stage('action', 'Needs a scraper', { kind: 'setup', fix: `There is no scraper for ${raceName}. A developer adds one, or research the runner by hand.` })
+  // No scraper only matters while the result is missing. A result already on
+  // file (the customer typed bib and time, or a person entered it) renders
+  // like any other: Richmond 2023, order 9225, sat in Needs a scraper with
+  // all its numbers there.
+  const haveResult = rs === 'found' && Boolean(research?.officialTime || order.hadNoTime)
+  if ((!hasScraper || rs === 'no_scraper') && !haveResult) return stage('action', 'Needs a scraper', { kind: 'setup', fix: `There is no scraper for ${raceName}. A developer adds one, or research the runner by hand.` })
   // The results site itself has no such year (Boston before 2010): nothing to
   // wire up, so this is research by hand or a question for the customer.
   if (rs === 'year_not_configured' && /not available on the results site/.test(research?.researchNotes || '')) return stage('action', 'Results not online', { kind: 'data', fix: `${raceName} ${year} results are not on the timing site. Check the year with the customer, or enter the result by hand from their bib, certificate or another source.` })

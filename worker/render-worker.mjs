@@ -122,6 +122,19 @@ function fileState(templates) {
   return files
 }
 
+/**
+ * Copy a production file. macOS's fast copy fails with "Unknown system error
+ * -11" on a Google Drive file Drive has not finished bringing down (Richmond,
+ * Nov 9, the day it was added); a plain read and write works and pulls it.
+ */
+function copyFile(src, dest) {
+  try { fs.copyFileSync(src, dest) }
+  catch (e) {
+    if (!/-11|EDEADLK|EAGAIN|ENOTSUP/i.test(`${e.code} ${e.message}`)) throw e
+    fs.writeFileSync(dest, fs.readFileSync(src))
+  }
+}
+
 function runIllustrator(script, timeout) {
   return new Promise((resolve, reject) => {
     // AppleScript gives up on an app after two minutes unless told otherwise,
@@ -147,7 +160,7 @@ async function checkChanged(templates, files) {
   fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true })
   const input = due.map((t, i) => {
     const copy = path.join(dir, `${i}.ai`)
-    fs.copyFileSync(localFile(t), copy)
+    copyFile(localFile(t), copy)
     return { key: t.key, path: copy, race: t.key.split(' / ')[0], artboard: t.rules?.artboard || null, artboardExclude: t.rules?.artboardExclude || null, photoArtboard: t.rules?.photoArtboard || null }
   })
   log(`Checking ${due.length} template${due.length > 1 ? 's' : ''}: ${due.map(t => t.key).join(', ')}`)
@@ -207,7 +220,7 @@ async function render(job) {
 
   // A copy of the production file, so the live one is never opened or touched.
   const template = path.join(dir, 'template.ai')
-  fs.copyFileSync(src, template)
+  copyFile(src, template)
 
   let photo = null
   if (job.photoUrl) { photo = path.join(dir, 'photo' + (path.extname(spec.photoPath || '') || '.jpg')); await download(job.photoUrl, photo) }
