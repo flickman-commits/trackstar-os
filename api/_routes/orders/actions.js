@@ -549,7 +549,7 @@ async function handleNotifyCustomDelay({ orderNumber, daysLate }, res, actor) {
 
   // A ping for the team, fire-and-forget.
   const dueDateText = originalDueDate ? ` (was due ${originalDueDate})` : ''
-  slackTo('alerts', `⏰ *Custom-order delay notice sent* - order *${displayNum}* for ${existing.customerName || 'customer'} (${existing.raceName || 'custom design'}). Promised *${days} day${days === 1 ? '' : 's'}* late${dueDateText}. Email went to ${existing.customerEmail}.`, { or: 'matt' })
+  slackTo('alerts', `⏰ *Custom-order delay notice sent* - order *${displayNum}* for ${existing.customerName || 'customer'} (${existing.raceName || 'custom design'}). Promised *${days} day${days === 1 ? '' : 's'}* late${dueDateText}. Email went to ${existing.customerEmail}.`, { timeoutMs: 8000 })
 
   console.log(`[actions/notify-custom-delay] Order ${orderNumber}: delay email sent (${days} days late)`)
   return res.status(200).json({ success: true, order: withoutRawOrderData(order) })

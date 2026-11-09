@@ -133,7 +133,7 @@ async function storeFailedRun(notes) {
 // The nightly report is a summary: #trackstar-reports. A run that could not
 // sweep is a ping: #trackstar-alerts.
 async function postToSlack(text, dest = 'reports') {
-  if (await slackTo(dest, text, { or: dest === 'reports' ? 'alerts' : 'matt' })) return { sent: true }
+  if (await slackTo(dest, text, { or: dest === 'reports' ? 'alerts' : [], timeoutMs: 8000 })) return { sent: true }
   console.warn('[nightly-sweep] Slack did not take the report')
   return { sent: false, reason: 'Slack is not set up or did not answer' }
 }

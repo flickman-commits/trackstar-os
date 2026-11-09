@@ -260,7 +260,7 @@ export async function manageChange(shopifyOrderId, signature, body = {}) {
     try { o = await cancellable(ctx.id) } catch (e) { throw new ManageError('unavailable', 409, friendly(e)) }
     const out = await cancelAndRefund({ order: o, why: 'the customer cancelled from Manage your order', by: 'Cancelled by the customer from Manage your order' })
     // The Shopify cancel carries over to Artelo on its own; this is for the record.
-    await slackTo('alerts', `:x: Customer cancelled *#${slackText(out.number)}* from Manage your order; ${slackText(out.display)} refunded in Shopify${shopifyAdminUrl(ctx.id) ? ` (${shopifyAdminUrl(ctx.id)})` : ''}`, { or: 'matt' }).catch(() => {})
+    await slackTo('alerts', `:x: Customer cancelled *#${slackText(out.number)}* from Manage your order; ${slackText(out.display)} refunded in Shopify${shopifyAdminUrl(ctx.id) ? ` (${shopifyAdminUrl(ctx.id)})` : ''}`, { timeoutMs: 8000 }).catch(() => {})
     return { ok: true, refunded: out.display }
   }
 

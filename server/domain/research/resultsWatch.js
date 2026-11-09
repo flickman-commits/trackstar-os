@@ -28,7 +28,7 @@ const BACKLOG_DAYS = 3
 const POSTED = 'results_posted:'
 
 // A ping for the team: #trackstar-alerts.
-const post = text => slackTo('alerts', text, { or: 'matt' })
+const post = text => slackTo('alerts', text, { timeoutMs: 8000 })
 
 export async function watchOfficialResults() {
   await ensureOverridesLoaded()

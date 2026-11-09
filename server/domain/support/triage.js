@@ -202,7 +202,7 @@ export async function scheduledTriage({ retryOnly = false } = {}) {
 
   // Could not reach the model: say so loudly, once, and do not tell the team "nothing urgent".
   if (out.status === 'down') {
-    if (!retryOnly) await slackTo('alerts', `:warning: *Support triage could not reach Claude*, so none of the ${out.due} waiting conversations were read and nothing was marked urgent. It tries again every hour until it works.\nError: ${slackText(out.firstError || 'unknown', 300)}`, { or: 'matt' })
+    if (!retryOnly) await slackTo('alerts', `:warning: *Support triage could not reach Claude*, so none of the ${out.due} waiting conversations were read and nothing was marked urgent. It tries again every hour until it works.\nError: ${slackText(out.firstError || 'unknown', 300)}`, { timeoutMs: 8000 })
     return out
   }
   // A retry that did nothing new stays quiet.
@@ -225,7 +225,7 @@ export async function scheduledTriage({ retryOnly = false } = {}) {
     `Cost ${costLine(out.usage)}.`,
     ...(heldBySupport ? [`${heldBySupport} approved print${heldBySupport === 1 ? ' is' : 's are'} held from production by an open conversation; closing it sends the print.`] : []),
   ].join('\n')
-  await slackTo('reports', report, { or: 'matt' })
+  await slackTo('reports', report, { or: 'alerts', timeoutMs: 8000 })
 
   // The support team's summary: how many are open, how many are urgent, and the three to start with.
   const open = await prisma.supportThread.count({ where: { status: 'open', filtered: false, mergedIntoId: null } })

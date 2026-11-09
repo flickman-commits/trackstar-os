@@ -45,6 +45,6 @@ function alertSchema(what) {
   if (Date.now() - last < ALERT_EVERY_MS) return
   lastAlert.set(key, Date.now())
   import('./slack.js')
-    .then(({ slackTo }) => slackTo('alerts', `:rotating_light: *Database out of date*: the app expects ${what ? `\`${what}\`` : 'a column or table'} and the database does not have it, so every page that reads it fails. A schema change went out without \`npx prisma db push\`. Run it from the repo to fix.`, { or: 'matt' }))
+    .then(({ slackTo }) => slackTo('alerts', `:rotating_light: *Database out of date*: the app expects ${what ? `\`${what}\`` : 'a column or table'} and the database does not have it, so every page that reads it fails. A schema change went out without \`npx prisma db push\`. Run it from the repo to fix.`, { timeoutMs: 8000 }))
     .catch(() => {})
 }
