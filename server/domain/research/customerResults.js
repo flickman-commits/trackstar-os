@@ -16,6 +16,7 @@
 import prisma from '../../db.js'
 import { ResearchService } from '../../services/ResearchService.js'
 import { paceFromTypedTime } from './customerPace.js'
+import { onlyEventFor } from '../../scrapers/index.js'
 
 export async function ordersMissingCustomerResult(limit = 500) {
   return prisma.order.findMany({
@@ -70,11 +71,11 @@ export async function fillCustomerPace({ dryRun = false, limit = 500, log = () =
     where: { source: { in: ['customer_supplied', 'customer_verified'] }, researchStatus: 'found', officialPace: null, officialTime: { not: null } },
     orderBy: { createdAt: 'asc' },
     take: limit,
-    select: { id: true, officialTime: true, eventType: true, researchNotes: true, order: { select: { orderNumber: true, customerEventType: true } } },
+    select: { id: true, officialTime: true, eventType: true, researchNotes: true, order: { select: { orderNumber: true, customerEventType: true, raceName: true, raceNameOverride: true } } },
   })
   const out = { checked: rows.length, filled: 0, rows: [] }
   for (const r of rows) {
-    const pace = paceFromTypedTime(r.officialTime, r.eventType || r.order?.customerEventType)
+    const pace = paceFromTypedTime(r.officialTime, r.eventType || r.order?.customerEventType || onlyEventFor(r.order?.raceNameOverride ?? r.order?.raceName))
     if (!pace) continue
     out.rows.push({ orderNumber: r.order?.orderNumber, time: r.officialTime, pace })
     log(`${dryRun ? 'would fill' : 'filled'} ${r.order?.orderNumber}: ${r.officialTime} -> ${pace}/mi`)
