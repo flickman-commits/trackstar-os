@@ -937,6 +937,28 @@ export const CHIP_TIME_FIXTURES = [
     expectedBib: '3691',
     notes: 'Pace is the figure the official page shows (read from the field it renders). Santa Barbara 2025 Half (3ygc7zccvxdfgrb2, sub-event 247019). Chip 2:21:10, gun 2:34:44 (13 min apart, guards against gun time). 8470s / 13.1 = 646.6 -> 10:47.',
   },
+  {
+    platform: 'raceroster',
+    race: 'Santa Barbara Half Marathon',
+    year: 2026,
+    runner: 'Justin Outland',
+    expectedChipTime: '2:47:25',
+    expectedChipPace: '12:46',
+    expectedBib: '8898',
+    officialPage: { url: 'https://results.raceroster.com/v3/events/nw7x4k7ksgdmww6m/race/385187/participant/6mybkue5s7nyunqh', shows: '2:47:25', readOn: '2026-11-09' },
+    notes: 'Santa Barbara 2026 Half (nw7x4k7ksgdmww6m, sub-event 385187), the event santabarbarahalf.com/results links as "2026 Results". Raw chip 10044.59 s (2:47:24.59, past .5); the page shows Chip Elapsed Time 2:47:25, Gun Elapsed Time 3:02:44 (guards against gun). Slowed: 5 mi split at 11:40/mi, overall 12:46. The page prints no overall pace; 12:46 is the API overallPace, and 10045 s / 13.1 = 766.8 -> 12:46.',
+  },
+  {
+    platform: 'raceroster',
+    race: 'Santa Barbara Half Marathon',
+    year: 2026,
+    runner: 'Ricky Cardenas',
+    expectedChipTime: '1:14:30',
+    expectedChipPace: '5:41',
+    expectedBib: '1067',
+    officialPage: { url: 'https://results.raceroster.com/v3/events/nw7x4k7ksgdmww6m/race/385187', shows: '1:14:30', readOn: '2026-11-09' },
+    notes: 'Santa Barbara 2026 Half leaderboard, place 11: gun 1:14:33, chip 1:14:30. Raw chip 4469.25 s (1:14:29.25, under .5): RaceRoster shows it rounded UP to :30, and the scraper prints what the page shows. 4470 s / 13.1 = 341.2 -> 5:41.',
+  },
   // ── Behind the Rocks Ultramarathon (UltraSignup) ──────────────────────
   {
     platform: 'ultrasignup',
