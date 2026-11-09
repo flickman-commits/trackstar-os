@@ -18,6 +18,7 @@ import { watchOfficialResults } from '../../../server/domain/research/resultsWat
 import { autoQueueRenders } from '../../../server/domain/render/jobs.js'
 import { researchRacedRunners } from '../../../server/domain/bulk/bulkOrders.js'
 import { closeShopifyCancels } from '../../../server/domain/orders/shopifyCancels.js'
+import { closeEtsyCancels } from '../../../server/domain/orders/etsyCancels.js'
 import { deliverPending } from '../../../server/domain/render/deliver.js'
 import { uploadPending } from '../../../server/domain/render/artelo.js'
 import { refreshUnpaidPhotoOrders } from '../../../server/domain/orders/photoRefresh.js'
@@ -72,6 +73,9 @@ export default async function handler(req, res) {
       // Orders cancelled in Shopify itself leave the queue as complete.
       const cancels = await closeShopifyCancels().catch(err => { console.error('[orders.auto-import] Shopify cancels failed:', err.message); return null })
       if (cancels?.closed) console.log(`[orders.auto-import] closed ${cancels.closed} order(s) cancelled in Shopify`)
+      // And the same for Etsy, which nothing asked before (4215477029 sat in Action a week).
+      const etsyCancels = await closeEtsyCancels().catch(err => { console.error('[orders.auto-import] Etsy cancels failed:', err.message); return null })
+      if (etsyCancels?.closed) console.log(`[orders.auto-import] closed ${etsyCancels.closed} order(s) cancelled on Etsy`)
       return imported
     })
     await storageCheck
