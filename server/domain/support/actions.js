@@ -412,8 +412,8 @@ export async function refund({ thread, shopifyOrderId, cents, reason, actor }) {
 /**
  * Cancel and refund in full (scenario 14: wrong frame, changed their mind
  * before production). Only with the customer's yes, only while nothing has
- * been produced or shipped. Our rows leave the queue with a note; Artelo
- * has no API to cancel, so the thread says it still needs cancelling there.
+ * been produced or shipped. Our rows leave the queue with a note. The
+ * Shopify cancel carries over to Artelo on its own (9181, Nov 9).
  */
 export async function cancelOrder({ thread, shopifyOrderId, reason, customerConfirmed, actor }) {
   if (!customerConfirmed) throw new UserError('Only after the customer says yes to cancelling. Ask them first.')
@@ -421,7 +421,7 @@ export async function cancelOrder({ thread, shopifyOrderId, reason, customerConf
   const o = await cancellable(shopifyOrderId)
   guardLimit(o.availableCents, actor, { alreadyCents: o.refundedCents })
   const out = await cancelAndRefund({ order: o, why, by: `support: ${why}`, actor })
-  await event(thread.id, `${actorName(actor)} cancelled #${o.name} and refunded ${money(o.availableCents)}: ${why}. Artelo still needs cancelling.`, actor)
+  await event(thread.id, `${actorName(actor)} cancelled #${o.name} and refunded ${money(o.availableCents)}: ${why}.`, actor)
   return out
 }
 

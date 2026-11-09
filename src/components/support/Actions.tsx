@@ -27,7 +27,7 @@ const FRAME_ONLY = [{ value: 'BlackPremiumOak', label: 'Black Premium Oak' }, { 
  * address copied for Artelo, which has no API to edit an order); fix the
  * name or year before production; a note for fulfillment; refund all or
  * part (over $150 is Matt's); cancel and refund before production, with the
- * customer's yes, then cancel it in Artelo by hand. For the customer: a 15% code, Slack
+ * customer's yes (Artelo cancels on its own). For the customer: a 15% code, Slack
  * Matt. Last and small: check a code they pasted. Every one is a person's
  * press, an event in the thread and an audit line.
  */

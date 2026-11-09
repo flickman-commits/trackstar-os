@@ -706,6 +706,24 @@ export class ResearchService {
     const nameSettledNothing = !results.found && (
       results.researchStatus === 'not_found' || (results.ambiguous && !bibAmongCandidates)
     )
+    // Several finishers share the name and one of them wears the bib: the bib
+    // says which. Some platforms list same-name candidates with no time
+    // (Race Roster: Twin Cities 2026 had two Kayla Millers, order 8341, and
+    // the customer gave bib 9370), so the order sat in Pick a match with its
+    // answer on file. Look the bib up for the full result.
+    const bibPicksAmongNamesakes = !results.found && results.ambiguous && bibAmongCandidates
+    if (wantedBib && bibPicksAmongNamesakes && typeof scraper.searchRunnerByBib === 'function') {
+      try {
+        const byBib = await scraper.searchRunnerByBib(wantedBib)
+        if (byBib?.found && String(byBib.bibNumber || '').trim() === wantedBib && byBib.officialTime) {
+          console.log(`[ResearchService] ${candidates.length} finishers named "${runnerName}"; bib ${wantedBib} picks one`)
+          byBib.researchNotes = [`Several finishers are named "${runnerName}"; bib ${wantedBib} says which.`, byBib.researchNotes].filter(Boolean).join(' ')
+          results = byBib
+        }
+      } catch (e) {
+        console.warn(`[ResearchService] Bib lookup failed for ${wantedBib}: ${e.message}`)
+      }
+    }
     if (wantedBib && nameSettledNothing && typeof scraper.searchRunnerByBib === 'function') {
       try {
         const byBib = await scraper.searchRunnerByBib(wantedBib)
