@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth'
 import ConvertToCustomModal from '@/components/orders/ConvertToCustomModal'
 import ActionModal from '@/components/ActionModal'
 import { parseAddress } from '@/lib/parseAddress'
-import { fieldLabel, modalCancel, modalChip, modalDanger, modalInput, modalPrimary } from '@/lib/ui'
+import { fieldLabel, modalCancel, modalChip, modalDanger, modalInput, modalPrimary, segment, segmentGroup } from '@/lib/ui'
 import type { Address, CodeLookup, CustomerOrder, Mockup, ThreadDetail } from '@/types/support'
 import { putUpload } from '../../lib/putUpload'
 import { usd } from '@/lib/financeApi'
@@ -820,7 +820,7 @@ function TextForm({ icon, title, sub, label, start = '', placeholder, hint, acti
 }
 
 /** A one-use code for the customer: the percent and the code's start, then it goes into the reply. */
-function DiscountForm({ thread, first, isAdmin, onInsert, onDone, onCancel }: { thread: ThreadDetail; first: string; isAdmin: boolean; onInsert: (text: string) => void; onDone: () => void; onCancel: () => void }) {
+function DiscountForm({ thread, first, isAdmin, onInsert, onDone, onCancel, top }: { thread: ThreadDetail; first: string; isAdmin: boolean; onInsert: (text: string) => void; onDone: () => void; onCancel: () => void; top?: React.ReactNode }) {
   const [pct, setPct] = useState('15')
   // The code's prefix: the first name by default, anything the rep types instead (VIP, BOSTON).
   const defaultPrefix = (first || 'TRACKSTAR').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20)
@@ -846,12 +846,13 @@ function DiscountForm({ thread, first, isAdmin, onInsert, onDone, onCancel }: { 
   }
   const enter = (e: React.KeyboardEvent) => { if (e.key === 'Enter') create() }
   return (
-    <ActionModal icon={BadgePercent} title="Discount code" sub={first || undefined} onClose={onCancel} busy={busy}
+    <ActionModal icon={BadgePercent} title="Discounts & Gift Cards" sub={first || undefined} onClose={onCancel} busy={busy}
       hint={confirming ? <span className={`${bad} font-medium`}>A {pctNum}% code? That is a big one.</span> : `One use, 30 days: ${cleanPrefix || defaultPrefix}-${pctNum || '?'}. Added to your reply.`}
       footer={<>
         <button onClick={() => (confirming ? setConfirming(false) : onCancel())} disabled={busy} className={modalCancel}>{confirming ? 'Back' : 'Cancel'}</button>
         <button onClick={create} disabled={busy || !pctOk} className={confirming ? modalDanger : modalPrimary}>{busy && <Spin />}{confirming ? `Yes, create ${pctNum}% code` : `Create ${pctOk ? `${pctNum}% ` : ''}code`}</button>
       </>}>
+      {top}
       <Field label="Percent off">
         <div className="flex flex-wrap items-center gap-2">
           {[10, 15, 20].map(n => <button key={n} type="button" onClick={() => { setPct(String(n)); setConfirming(false) }} className={modalChip(pct === String(n))}>{n}%</button>)}
@@ -951,7 +952,7 @@ function InvoiceForm({ thread, orderName, onDone, onCancel }: { thread: ThreadDe
  * customer with the message; the code also comes back here, to paste into the
  * reply. Over the limit ($250) is an admin's; the server holds the same line.
  */
-function GiftCardForm({ thread, orderName, onInsert, onDone, onCancel }: { thread: ThreadDetail; orderName?: string; onInsert?: (text: string) => void; onDone: () => void; onCancel: () => void }) {
+function GiftCardForm({ thread, orderName, onInsert, onDone, onCancel, top }: { thread: ThreadDetail; orderName?: string; onInsert?: (text: string) => void; onDone: () => void; onCancel: () => void; top?: React.ReactNode }) {
   const [amount, setAmount] = useState('25')
   const [reason, setReason] = useState('')
   const [email, setEmail] = useState('')
@@ -992,12 +993,13 @@ function GiftCardForm({ thread, orderName, onInsert, onDone, onCancel }: { threa
     )
   }
   return (
-    <ActionModal icon={Gift} title="Send gift card" sub={orderName ? `For #${orderName}` : undefined} onClose={onCancel} busy={busy}
+    <ActionModal icon={Gift} title="Discounts & Gift Cards" sub={orderName ? `For #${orderName}` : undefined} onClose={onCancel} busy={busy}
       hint={confirming ? <span className="font-medium">Send a ${(cents / 100).toFixed(2)} gift card to {email.trim()}? This is real money.</span> : 'Shopify emails it to them with your message.'}
       footer={<>
         <button onClick={() => (confirming ? setConfirming(false) : onCancel())} disabled={busy} className={modalCancel}>{confirming ? 'Back' : 'Cancel'}</button>
         <button onClick={send} disabled={busy || !ok} className={modalPrimary}>{busy && <Spin />}{confirming ? 'Yes, send it' : `Send $${cents ? (cents / 100).toFixed(2) : '?'} gift card`}</button>
       </>}>
+      {top}
       <Field label="Amount">
         <div className="flex flex-wrap items-center gap-2">
           {[10, 25, 50, 100].map(n => <button key={n} type="button" onClick={() => { setAmount(String(n)); setConfirming(false) }} className={modalChip(amount === String(n))}>${n}</button>)}
@@ -1041,7 +1043,7 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
   }
   const [busy, setBusy] = useState<string | null>(null)
   // The one modal open for this order, if any.
-  const [open, setOpen] = useState<null | 'address' | 'change' | 'fix' | 'note' | 'claim' | 'reorder' | 'refund' | 'cancel' | 'invoice' | 'giftcard'>(null)
+  const [open, setOpen] = useState<null | 'address' | 'change' | 'fix' | 'note' | 'claim' | 'reorder' | 'refund' | 'cancel' | 'invoice'>(null)
   const close = () => setOpen(null)
   const form = { o, thread, onDone: onChanged, onCancel: close }
   const [converting, setConverting] = useState<string | null>(null)
@@ -1153,7 +1155,6 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
         {/* A reprint or replacement: the same print to this customer, built in Artelo from here. */}
         {o.shopifyOrderId && o.items.length > 0 && <ActionLink icon={Repeat} onClick={() => setOpen('reorder')} title="The same print to this customer: a reprint or a replacement. Artelo bills us for it, so damage goes through the claim instead.">New Artelo order</ActionLink>}
         <ActionLink icon={Receipt} onClick={() => setOpen('invoice')} title="A Shopify invoice for any amount, for something that does not invoice itself: a second size, an extra frame, rush shipping">Send invoice</ActionLink>
-        <ActionLink icon={Gift} onClick={() => setOpen('giftcard')} title="A Shopify gift card Shopify emails them, to make something right. Over $250 is Matt's call.">Send gift card</ActionLink>
         {o.shopifyOrderId && o.financialStatus !== 'REFUNDED' && <ActionLink icon={Receipt} onClick={() => setOpen('refund')} title="All or part, to the card they paid with. Over $250 is Matt's call.">Refund</ActionLink>}
         {/* Cancel only before anything is made or shipped. */}
         {o.shopifyOrderId && !shipped && !o.items.some(it => it.status === 'completed' || it.designStatus === 'sent_to_production') && o.financialStatus !== 'REFUNDED' && <ActionLink icon={Ban} onClick={() => setOpen('cancel')} title="Only after the customer says yes, and only before production">Cancel and refund</ActionLink>}
@@ -1171,7 +1172,6 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
       {open === 'refund' && <RefundForm {...form} />}
       {open === 'cancel' && <CancelForm {...form} />}
       {open === 'invoice' && <InvoiceForm thread={thread} orderName={o.number} onDone={onChanged} onCancel={close} />}
-      {open === 'giftcard' && <GiftCardForm thread={thread} orderName={o.number} onInsert={onInsert} onDone={onChanged} onCancel={close} />}
     </div>
   )
 }
@@ -1208,6 +1208,20 @@ function CodeCheck() {
   )
 }
 
+/** Discounts & Gift Cards: one action, a discount code or a Shopify gift card. */
+function DiscountsAndGiftCards({ thread, first, isAdmin, orderName, onInsert, onDone, onCancel }: { thread: ThreadDetail; first: string; isAdmin: boolean; orderName?: string; onInsert: (text: string) => void; onDone: () => void; onCancel: () => void }) {
+  const [kind, setKind] = useState<'code' | 'card'>('code')
+  const top = (
+    <div className={segmentGroup}>
+      <button type="button" onClick={() => setKind('code')} className={segment(kind === 'code', 'sm')}>Discount code</button>
+      <button type="button" onClick={() => setKind('card')} className={segment(kind === 'card', 'sm')}>Gift card</button>
+    </div>
+  )
+  return kind === 'code'
+    ? <DiscountForm thread={thread} first={first} isAdmin={isAdmin} onInsert={onInsert} onDone={onDone} onCancel={onCancel} top={top} />
+    : <GiftCardForm thread={thread} orderName={orderName} onInsert={onInsert} onDone={onDone} onCancel={onCancel} top={top} />
+}
+
 export default function Actions({ thread, onInsert, onAttach, onChanged }: { thread: ThreadDetail; onInsert: (text: string) => void; onAttach: (m: Mockup) => void; onChanged: () => void }) {
   const { isAdmin } = useAuth()
   const first = (thread.customerName || '').trim().split(/\s+/)[0] || ''
@@ -1220,14 +1234,14 @@ export default function Actions({ thread, onInsert, onAttach, onChanged }: { thr
       <div>
         {orders.length > 1 && <div className={heading}>Customer</div>}
         <div className="flex flex-col items-stretch gap-1.5">
-          <ActionLink icon={BadgePercent} title="One use, 30 days, named after them" onClick={() => setOpen('code')}>Create discount code for {first || 'them'}</ActionLink>
+          <ActionLink icon={BadgePercent} title="A one-use discount code named after them, or a Shopify gift card emailed to them" onClick={() => setOpen('code')}>Discounts &amp; Gift Cards</ActionLink>
           {!orders.length && <ActionLink icon={Receipt} title="A Shopify invoice for any amount" onClick={() => setOpen('invoice')}>Send invoice</ActionLink>}
           <ActionLink icon={MessageSquareWarning} title="Posts to Slack with a link to this thread, and marks it escalated" onClick={() => setOpen('slack')}>Slack Matt</ActionLink>
         </div>
       </div>
       <CodeCheck />
       {open === 'invoice' && <InvoiceForm thread={thread} onDone={onChanged} onCancel={() => setOpen(null)} />}
-      {open === 'code' && <DiscountForm thread={thread} first={first} isAdmin={isAdmin} onInsert={onInsert} onDone={onChanged} onCancel={() => setOpen(null)} />}
+      {open === 'code' && <DiscountsAndGiftCards thread={thread} first={first} isAdmin={isAdmin} orderName={orders.length === 1 ? orders[0].number : undefined} onInsert={onInsert} onDone={onChanged} onCancel={() => setOpen(null)} />}
       {open === 'slack' && (
         <TextForm icon={MessageSquareWarning} title="Slack Matt" label="What should Matt know?" action="Send to Slack"
           hint="Goes to Slack with a link to this thread, and marks it escalated." onCancel={() => setOpen(null)}
