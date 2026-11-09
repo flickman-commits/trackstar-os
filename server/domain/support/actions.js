@@ -9,7 +9,7 @@
  *   orderNote         a comment on our order row, for whoever is fulfilling it
  *   fixPersonalization the runner's name or year on our order row, before production (scenario 3)
  *   shippingAddress   a new ship-to on the Shopify order and our rows (scenario 19); Artelo is changed by hand
- *   refund            money back on a Shopify order, all or part (scenarios 5, 15); over $150 is an admin's
+ *   refund            money back on a Shopify order, all or part (scenarios 5, 15); over $200 is an admin's
  *   cancelOrder       cancel and fully refund an order not yet in production, once the customer said yes (scenario 14)
  *   slackMatt         the escalation rules: a line in Slack with a link to the thread
  *
@@ -299,12 +299,12 @@ export async function shippingAddress({ thread, shopifyOrderId, address, actor, 
 // ---------------------------------------------------------------------------
 //
 // Amounts travel as integer cents and become Shopify's decimal strings only
-// at the call. The playbook's line is $150: under it a rep refunds on their
+// at the call. The playbook's line is $200: under it a rep refunds on their
 // own, over it the server refuses anyone but an admin, whatever the page
 // says. Nothing here notifies the customer through Shopify; the rep's reply
 // is the message.
 
-export const REFUND_LIMIT_CENTS = 15000
+export const REFUND_LIMIT_CENTS = 20000
 
 const ORDER_MONEY = `
   query($id: ID!) {
@@ -367,7 +367,7 @@ async function waitForCancel(id) {
 }
 
 /**
- * The $150 line is per order, not per press: what has already been refunded
+ * The $200 line is per order, not per press: what has already been refunded
  * on the order, by anyone, counts toward it, so three $100 refunds cannot
  * walk past it.
  */

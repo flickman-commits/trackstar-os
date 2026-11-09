@@ -107,7 +107,7 @@ export default async function handler(req, res) {
         return res.status(200).json(n)
       }
       case 'linkOrder': {
-        const out = await linkOrder(id, body.number, user)
+        const out = await linkOrder(id, body.number, user, { confirmed: body.confirmed === true })
         await audit(`Linked order #${out.number} to a customer`, { number: out.number, orderEmail: out.orderEmail })
         return res.status(200).json(await getThread(id, { userId: user.id, money: seesMoney(user) }))
       }
@@ -125,7 +125,7 @@ export default async function handler(req, res) {
     }
   } catch (error) {
     // A UserError is the person's input ("We can't find order #1234"); say it as is.
-    if (isUserError(error)) return res.status(publicStatus(error)).json({ error: error.message })
+    if (isUserError(error)) return res.status(publicStatus(error)).json({ error: error.message, ...(error.code ? { code: error.code } : {}) })
     console.error('[API /support/thread]', error)
     return res.status(publicStatus(error)).json({ error: publicMessage(error, 'That did not work. Reload the conversation and try again.') })
   }

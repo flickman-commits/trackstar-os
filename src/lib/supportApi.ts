@@ -96,7 +96,7 @@ export const supportApi = {
   setProposal: (id: string, noteId: string, proposalId: string, status: 'done' | 'dismissed') => act<Note>(id, 'proposal', { noteId, proposalId, status }),
   merge: (id: string, sourceIds: string[]) => act<ThreadDetail>(id, 'merge', { sourceIds }),
   // Attach an order to this customer by its number, for when they ordered under another email.
-  linkOrder: (id: string, number: string) => act<ThreadDetail>(id, 'linkOrder', { number }),
+  linkOrder: (id: string, number: string, confirmed = false) => act<ThreadDetail>(id, 'linkOrder', { number, confirmed }),
   unlinkOrder: (id: string, number: string) => act<ThreadDetail>(id, 'unlinkOrder', { number }),
   saveSettings: (defaultAssigneeId: string | null, applyToOpen = false) => post<{ defaultAssigneeId: string | null; assigned: number }>('/api/support/settings', { defaultAssigneeId, applyToOpen }),
   filters: () => request<{ filters: SenderFilter[] }>('/api/support/filters'),

@@ -661,9 +661,29 @@ export function normalizeOrderNumber(raw) {
   return /^\d{3,12}$/.test(n) ? n : null
 }
 
-const ORDER_BY_NAME = `query($q: String!) { orders(first: 1, query: $q) { nodes { name email } } }`
+const ORDER_BY_NAME = `query($q: String!) { orders(first: 1, query: $q) { nodes { name email customer { firstName lastName } } } }`
 
-export async function linkOrder(threadId, raw, actor) {
+const nameWords = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z]+/).filter(w => w.length >= 3)
+
+/**
+ * Whether an order looks like this conversation's customer: the same email,
+ * or a name word of the sender's (usually the last name) in the order's
+ * customer name or email. Kristina Blass wrote in from her own address about
+ * 4859 (kristina.blass@compass.com) and #3426, Lauren von Klein's order, was
+ * linked instead; a replacement went to the wrong person. Unknown either side
+ * (an Instagram handle, an order with no email) counts as no mismatch.
+ */
+export function orderLooksLikeSender(t, { email, name }) {
+  const theirs = String(t?.customerEmail || '').trim().toLowerCase()
+  const orderEmail = String(email || '').trim().toLowerCase()
+  if (theirs && orderEmail && theirs === orderEmail) return true
+  const senderWords = [...nameWords(t?.customerName), ...nameWords(theirs.split('@')[0])]
+  const orderText = `${String(name || '').toLowerCase()} ${orderEmail.split('@')[0]}`
+  if (!senderWords.length || !orderText.trim()) return true
+  return senderWords.some(w => orderText.includes(w))
+}
+
+export async function linkOrder(threadId, raw, actor, { confirmed = false } = {}) {
   const t = await prisma.supportThread.findUnique({ where: { id: threadId } })
   if (!t) throw userError('No such thread')
   const number = normalizeOrderNumber(raw)
@@ -674,14 +694,20 @@ export async function linkOrder(threadId, raw, actor) {
   // It has to be a real order: ours first, then Shopify (not imported yet).
   const ours = await prisma.order.findFirst({
     where: { OR: orderNumberWhere(number) },
-    select: { customerEmail: true },
+    select: { customerEmail: true, customerName: true, shopifyOrderData: true },
   })
   let orderEmail = ours?.customerEmail || ''
+  let orderName = [ours?.shopifyOrderData?.customer?.first_name, ours?.shopifyOrderData?.customer?.last_name].filter(Boolean).join(' ') || ours?.customerName || ''
   if (!ours) {
     const data = await shopifyGraphQL(ORDER_BY_NAME, { q: `name:#${number}` })
     const node = (data?.orders?.nodes || []).find(n => String(n.name).replace(/^#/, '') === number)
     if (!node) throw userError(`We can't find order #${number}`)
     orderEmail = node.email || ''
+    orderName = [node.customer?.firstName, node.customer?.lastName].filter(Boolean).join(' ')
+  }
+  if (!confirmed && !orderLooksLikeSender(t, { email: orderEmail, name: orderName })) {
+    const whose = [orderName, orderEmail && `(${orderEmail})`].filter(Boolean).join(' ') || 'someone else'
+    throw new UserError(`#${number} was ordered by ${whose}, not ${t.customerName || t.customerEmail}. Link it anyway?`, { status: 409, code: 'confirm_link' })
   }
 
   await prisma.supportLinkedOrder.upsert({

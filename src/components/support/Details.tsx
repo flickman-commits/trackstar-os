@@ -2,7 +2,8 @@ import { useState, type ReactNode } from 'react'
 import { Check, ChevronDown, Copy, Loader2, Package, Truck, AlertCircle, Database, Mail, X, Plus, Instagram, KeyRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { btnSecondary, chip } from '@/lib/ui'
-import { supportApi } from '@/lib/supportApi'
+import { supportApi, SupportApiError } from '@/lib/supportApi'
+import { useConfirm } from '@/components/useConfirm'
 import { useArmed } from '@/lib/useArmed'
 import { ago, day } from '@/lib/supportDates'
 import { STATUS_LABEL, STATUS_TONE } from '@/lib/supportStatus'
@@ -184,7 +185,31 @@ function OrderCard({ o, onUnlink }: { o: CustomerOrder; onUnlink?: () => void })
  * the order, it is linked to the customer (not just this conversation), so it
  * shows here from now on and in their future conversations too.
  */
+/**
+ * Link an order, asking first when it was ordered by someone other than the
+ * person writing in (the server checks name and email). #3426 was linked to
+ * Kristina Blass's conversation and a replacement went to Lauren von Klein.
+ * Resolves true once linked.
+ */
+function useLinkOrder(threadId: string) {
+  const { confirm, modal } = useConfirm()
+  const link = async (number: string) => {
+    try {
+      await supportApi.linkOrder(threadId, number)
+      return true
+    } catch (e) {
+      if (!(e instanceof SupportApiError) || e.code !== 'confirm_link') throw e
+      const yes = await confirm({ title: 'Not this customer\'s order?', body: e.message.replace(/ Link it anyway\?$/, ' Check the name and email before linking.'), action: 'Link anyway', danger: true })
+      if (!yes) return false
+      await supportApi.linkOrder(threadId, number, true)
+      return true
+    }
+  }
+  return { link, modal }
+}
+
 function AddOrder({ threadId, onChanged }: { threadId: string; onChanged: () => void }) {
+  const { link, modal } = useLinkOrder(threadId)
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
@@ -193,7 +218,7 @@ function AddOrder({ threadId, onChanged }: { threadId: string; onChanged: () => 
     if (!v || busy) return
     setBusy(true)
     try {
-      await supportApi.linkOrder(threadId, v)
+      if (!(await link(v))) return
       toast.success(`Linked order #${v.replace(/^#/, '')}`)
       setValue(''); setOpen(false)
       onChanged()
@@ -212,6 +237,7 @@ function AddOrder({ threadId, onChanged }: { threadId: string; onChanged: () => 
   }
   return (
     <form onSubmit={e => { e.preventDefault(); submit() }} className="mt-2 flex items-center gap-1.5">
+      {modal}
       <input
         autoFocus
         value={value}
@@ -233,13 +259,15 @@ function AddOrder({ threadId, onChanged }: { threadId: string; onChanged: () => 
 /** An order number the customer wrote: what it is, and one click to link it. */
 function SuggestedOrder({ s, threadId, onChanged }: { s: NonNullable<ThreadDetail['suggestedOrders']>[number]; threadId: string; onChanged: () => void }) {
   const [busy, setBusy] = useState(false)
+  const { link: linkIt, modal } = useLinkOrder(threadId)
   const link = async () => {
     setBusy(true)
-    try { await supportApi.linkOrder(threadId, s.number); toast.success(`Linked #${s.number}`); onChanged() }
+    try { if (await linkIt(s.number)) { toast.success(`Linked #${s.number}`); onChanged() } }
     catch (e) { toast.error((e as Error).message) } finally { setBusy(false) }
   }
   return (
     <div className="flex items-start gap-2 rounded-md border border-dashed border-[#4600D6]/30 bg-[#4600D6]/[0.03] px-2.5 py-2">
+      {modal}
       <div className="flex-1 min-w-0 text-xs">
         <div className="font-semibold text-off-black">#{s.number} <span className="font-normal text-off-black/45">ordered {new Date(s.orderedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></div>
         {s.items.map((it, i) => (

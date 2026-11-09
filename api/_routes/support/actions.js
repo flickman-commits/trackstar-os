@@ -9,8 +9,8 @@
  *   changeItemPrep      { id, shopifyOrderId }  -> the prints on the order and their sizes/frames
  *   changeItem          { id, shopifyOrderId, lineItemId?, size, frame }  size/frame swap before production
  *   shippingAddress     { id, shopifyOrderId, address: { name, address1, address2, city, province, zip, country, phone } }
- *   refundable          { id, shopifyOrderId }                  -> what is left to refund, and the $150 line
- *   refund              { id, shopifyOrderId, cents, reason }   over $150 refused unless admin (re-read from the database)
+ *   refundable          { id, shopifyOrderId }                  -> what is left to refund, and the $200 line
+ *   refund              { id, shopifyOrderId, cents, reason }   over $200 refused unless admin (re-read from the database)
  *   cancelOrder         { id, shopifyOrderId, reason, customerConfirmed: true }
  *   sendInvoice         { id, cents, title, email?, orderName?, message? }  a Shopify invoice for any amount; over $200 admin only
  *

@@ -64,7 +64,7 @@ Trackstar sells personalized race prints: an illustrated course map with the run
 - Buyer's remorse on a correct print: politely no.
 
 ## Escalate to Matt (flag it; the rep uses Slack Matt)
-- Any refund over $150.
+- Any refund over $200.
 - Legal threats, BBB, or a social media callout.
 - Press or media.
 - A race organizer or partner (reply only that Matt, the founder, handles partnerships and will be in touch).
@@ -77,7 +77,7 @@ Trackstar sells personalized race prints: an illustrated course map with the run
 3. Broken frame in transit (most common): ask for TWO photos, the broken frame and the shipping label on the box. Do not promise a replacement until Artelo confirms the ticket.
 4. Wrong personalization: our error means remake under the Accuracy Guarantee. Their typo before production: fix it free. Their typo after production: offer a corrected print at 50% off.
 5. Race not available: point to custom prints (trackstar.art/products/custom) and say we are adding their race to the request list. A triathlon is available: send the triathlon page.
-6. Refunds: damage or our error, offer a reprint first; refund if they insist. Never on a correct print. Over $150 is Matt's.
+6. Refunds: damage or our error, offer a reprint first; refund if they insist. Never on a correct print. Over $200 is Matt's.
 7. Product questions: answer from the facts above, briefly.
 8. Custom order status: designs land 2 weeks after the order date (give the date). Proofs already sent: resend the approval link. Past due: apologize, give a new date, flag Matt.
 9. Race organizer: escalate, see above.
