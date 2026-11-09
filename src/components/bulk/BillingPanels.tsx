@@ -200,7 +200,7 @@ export function OrderModal({ order, onClose, onCreated }: { order?: Billing; onC
           <label className="col-span-2 block">{label(pt?.org || 'Organization')}<input required value={f.partnerName} onChange={set('partnerName')} placeholder={pt?.orgPlaceholder || 'American Heart Association, Philadelphia'} className={`${inputBase} w-full`} /></label>
           <label className="block">{label('Contact')}<input value={f.contactName} onChange={set('contactName')} placeholder="Miles McCaskey" className={`${inputBase} w-full`} /></label>
           <label className="block">{label('Contact email (invoice goes here)')}<input type="email" value={f.contactEmail} onChange={set('contactEmail')} className={`${inputBase} w-full`} /></label>
-          <div className="col-span-2">{label('Billing address')}<AddressFields value={billing} onChange={setBilling} /></div>
+          <div className="col-span-2">{label(f.shipping === 'organization' ? 'Billing address' : 'Billing address (Shopify charges sales tax from it)')}<AddressFields value={billing} onChange={setBilling} /></div>
         </div>
 
         {/* What. A race with no design yet: the designer makes it in Partners, so there is nothing to choose. */}

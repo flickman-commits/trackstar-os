@@ -276,7 +276,34 @@ export async function quote(id) {
   const subtotalCents = line.subtotalCents || 0
   const discountCents = order.discountKind === 'percent' ? Math.round(subtotalCents * order.discountPercent / 100)
     : order.discountKind === 'amount' ? Math.min(order.discountCents, subtotalCents) : 0
-  return { order, lines: [line], subtotalCents, discountCents, totalCents: subtotalCents - discountCents, currency: order.currency, missing: line.missing ? [line.missing] : [] }
+  const gap = taxAddressGap(order)
+  return { order, lines: [line], subtotalCents, discountCents, totalCents: subtotalCents - discountCents, currency: order.currency, missing: [line.missing, gap].filter(Boolean) }
+}
+
+const US_STATES = { alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA', colorado: 'CO', connecticut: 'CT', delaware: 'DE', 'district of columbia': 'DC', florida: 'FL', georgia: 'GA', hawaii: 'HI', idaho: 'ID', illinois: 'IL', indiana: 'IN', iowa: 'IA', kansas: 'KS', kentucky: 'KY', louisiana: 'LA', maine: 'ME', maryland: 'MD', massachusetts: 'MA', michigan: 'MI', minnesota: 'MN', mississippi: 'MS', missouri: 'MO', montana: 'MT', nebraska: 'NE', nevada: 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', ohio: 'OH', oklahoma: 'OK', oregon: 'OR', pennsylvania: 'PA', 'rhode island': 'RI', 'south carolina': 'SC', 'south dakota': 'SD', tennessee: 'TN', texas: 'TX', utah: 'UT', vermont: 'VT', virginia: 'VA', washington: 'WA', 'west virginia': 'WV', wisconsin: 'WI', wyoming: 'WY', 'puerto rico': 'PR' }
+const countryCode = a => { const c = String(a?.country || 'US').trim(); return c.length === 2 ? c.toUpperCase() : 'US' }
+/** "Minnesota", "mn", "Minn" -> "MN" for a US address; anything else as typed, upper-cased. */
+export function provinceCode(a) {
+  const v = String(a?.province || '').trim()
+  if (!v) return ''
+  if (countryCode(a) === 'US') return US_STATES[v.toLowerCase().replace(/\./g, '')] || v.toUpperCase()
+  return v.toUpperCase()
+}
+
+/**
+ * Shopify charges sales tax by where the order goes: the ship-to address, or
+ * the billing address when the prints go to each runner (the address the
+ * draft carries). With no full address on it, Shopify charges no tax at all,
+ * so the invoice is not built until there is one.
+ */
+export function taxAddressGap(order) {
+  const toOrg = order.shipping === 'organization'
+  const a = toOrg ? order.shipToAddress : order.billingAddress
+  const which = toOrg ? 'ship-to address' : 'billing address'
+  const why = 'Shopify works out sales tax from it'
+  if (!a?.address1 || !a?.city || !a?.zip) return `Add the ${which} (street, city, zip): ${why}`
+  if (countryCode(a) === 'US' && !/^[A-Z]{2}$/.test(provinceCode(a))) return `Add the state to the ${which}: ${why}`
+  return null
 }
 
 function shopifyAddress(a, fallbackName) {
@@ -284,7 +311,7 @@ function shopifyAddress(a, fallbackName) {
   return {
     company: a.company || undefined, firstName: undefined, lastName: a.name || fallbackName || undefined,
     address1: a.address1 || undefined, address2: a.address2 || undefined, city: a.city || undefined,
-    provinceCode: a.province || undefined, zip: a.zip || undefined, countryCode: (a.country || 'US').length === 2 ? (a.country || 'US').toUpperCase() : 'US',
+    provinceCode: provinceCode(a) || undefined, zip: a.zip || undefined, countryCode: countryCode(a),
     phone: a.phone || undefined,
   }
 }
