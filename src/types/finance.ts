@@ -91,3 +91,18 @@ export type ForecastPayload = {
   totals: { revenue: number; forecastRevenue: number; cm: number; orders: number }
   cash: { opening: number; banks: Bank[]; bufferCents: number; fixedCosts: FixedCost[]; ownerDrawMonthlyCents: number; weeks: CashWeek[]; lowest: { cents: number; weekStart: string }; weeksBelowBuffer: number; partners: { name: string; dueDate: string; cents: number; estimated: boolean }[]; hasBalance: boolean }
 }
+
+/** Is Trybe paying for itself (Finance > Overview): one Monday-to-Sunday week. Money is cents. */
+export type TrybeWeek = {
+  start: string; end: string; last: string; partial: boolean
+  trybe: { adSpendCents: number; adPurchaseValueCents: number; adPurchases: number; earningsCents: number; gmvCents: number; conversions: number; ads: number; newSubmissions: number; activeCreators: number }
+  meta: { spendCents: number; purchaseValueCents: number }
+  costCents: number; gmPct: number | null; metaShare: number | null
+  otherSpendCents: number; otherValueCents: number; trybeRoas: number | null; otherRoas: number | null; afterRoas: number | null; breakEvenRoas: number | null; costShare: number | null
+  vsOtherCents: number | null; verdict: 'paying' | 'not_paying' | 'quiet' | 'unknown'
+}
+export type TrybeCheck = {
+  configured: boolean; at?: string; weeks: TrybeWeek[]
+  totals: { costCents: number; vsOtherCents: number; newSubmissions: number; adSpendCents: number; weeksPaying: number; fullWeeks: number } | null
+}
+

@@ -52,3 +52,16 @@ test('Trybe all-in is its cost over the sales it attributed', () => {
   assert.equal(Math.round(d.trybeAllInPct * 100) / 100, 16.98)
   assert.equal(computeDay({ day: '2026-11-03', shopifyNetCents: 100 }, []).trybeAllInPct, null)
 })
+
+test('the weekly Trybe check: ROAS on Meta basis both sides, the break-even after commission, and the margin against other ads', async () => {
+  const { weekVerdict } = await import('./trybeCheck.js')
+  // The 30 days to Nov 8: Trybe ads $24,574 spend, $51,594 value; account $264,410 / $624,113; Trybe cost $5,523; GM 64.5%.
+  const v = weekVerdict({ trybe: { adSpendCents: 2457400, adPurchaseValueCents: 5159400 }, meta: { spendCents: 26441000, purchaseValueCents: 62411300 }, cost: 552300, gmPct: 64.5 })
+  assert.equal(v.trybeRoas.toFixed(2), '2.10')
+  assert.equal(v.otherRoas.toFixed(2), '2.39')
+  assert.equal(v.breakEvenRoas.toFixed(2), '2.86')
+  assert.equal(v.afterRoas.toFixed(2), '1.71')
+  assert.equal(v.verdict, 'not_paying')
+  assert.ok(Math.abs(v.vsOtherCents / 100 - -10080) < 20)
+  assert.equal(weekVerdict({ trybe: { adSpendCents: 0, adPurchaseValueCents: 0 }, meta: { spendCents: 100, purchaseValueCents: 200 }, cost: 0, gmPct: 60 }).verdict, 'quiet')
+})

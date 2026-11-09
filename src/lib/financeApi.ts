@@ -1,6 +1,6 @@
 /** Typed client for /api/finance/*, and the money and time spellings the pages share. */
 import { apiFetch } from '@/lib/api'
-import type { ForecastPayload, MonthPayouts, DailyPayload, DayInput, HoursPayload, OverviewPayload, PayRun, Person, RacePayout, RacePayoutsPayload, Rate, SyncInfo, Timesheet } from '@/types/finance'
+import type { ForecastPayload, MonthPayouts, DailyPayload, DayInput, HoursPayload, OverviewPayload, PayRun, Person, RacePayout, RacePayoutsPayload, Rate, SyncInfo, Timesheet, TrybeCheck } from '@/types/finance'
 
 export class FinanceApiError extends Error {}
 
@@ -26,6 +26,7 @@ export const financeApi = {
   payoutAction: <T = PayRun,>(body: Record<string, unknown>) => post<T>('/api/finance/payouts', body),
   racePayouts: () => request<RacePayoutsPayload>('/api/finance/race-payouts'),
   racePayoutAction: (body: Record<string, unknown>) => post<{ race: RacePayout }>('/api/finance/race-payouts', body),
+  trybeCheck: (refresh = false) => request<TrybeCheck>(`/api/finance/trybe${refresh ? '?refresh=1' : ''}`),
   racePayoutsRefresh: () => post<{ refreshed: number; failed: { name: string; error: string }[] }>('/api/finance/race-payouts', { action: 'refresh_live' }),
   racePayoutsDue: () => post<{ computed: number; failed: { name: string; error: string }[] }>('/api/finance/race-payouts', { action: 'compute_due' }),
   replacements: (month: string) => request<ReplacementsPayload>(`/api/finance/replacements?month=${month}`),

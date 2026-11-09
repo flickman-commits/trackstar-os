@@ -41,26 +41,38 @@ async function trybeGet(path, params = {}, attempt = 0) {
 }
 
 /**
- * One UTC day, summed across every creator: what they earned, and the sales
- * and conversions Trybe attributed to them.
+ * A UTC day range, summed across every creator. Earnings, attributed sales
+ * and conversions are Trybe's (click-based, what commission is paid on);
+ * adSpendCents, adPurchases and adPurchaseValueCents are the ad platforms'
+ * own figures for the ads running creators' content, the same basis as the
+ * Meta Ads tab. Never add the two kinds together.
  */
-export async function dayTotals(day) {
+export async function rangeTotals(start, end) {
   let after = null
-  const out = { earningsCents: 0, gmvCents: 0, conversions: 0, creators: 0 }
+  const out = { earningsCents: 0, gmvCents: 0, conversions: 0, adSpendCents: 0, adPurchases: 0, adPurchaseValueCents: 0, ads: 0, newSubmissions: 0, creators: 0, activeCreators: 0 }
   for (let page = 0; page < 50; page++) {
-    const res = await trybeGet('/creator-performance', { start_date: day, end_date: day, limit: 100, after })
+    const res = await trybeGet('/creator-performance', { start_date: start, end_date: end, limit: 100, after })
     for (const row of res.data || []) {
       const p = row.performance || {}
       out.earningsCents += Number(p.earnings_cents || 0)
       out.gmvCents += Number(p.trybe_gmv_cents || 0)
       out.conversions += Number(p.trybe_conversions || 0)
+      out.adSpendCents += Number(p.spend_cents || 0)
+      out.adPurchases += Number(p.purchases || 0)
+      out.adPurchaseValueCents += Number(p.purchase_value_cents || 0)
+      out.ads += Number(p.ads || 0)
+      out.newSubmissions += Number(p.new_submissions || 0)
       out.creators++
+      if (p.earnings_cents || p.spend_cents) out.activeCreators++
     }
     if (!res.has_more || !res.next_cursor) break
     after = res.next_cursor
   }
   return out
 }
+
+/** One UTC day: what creators earned, and the sales and conversions Trybe attributed to them. */
+export const dayTotals = day => rangeTotals(day, day)
 
 /** Read-only check for Settings > Connections. */
 export async function ping() {

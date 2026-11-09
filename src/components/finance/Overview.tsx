@@ -7,6 +7,7 @@ import { btnGhost, segment, segmentGroup } from '@/lib/ui'
 import { financeApi, usd, usdShort, pctText, xText, intText, dayLabel, SERIES } from '@/lib/financeApi'
 import type { OverviewPayload, TrendDay, WaterfallLine } from '@/types/finance'
 import { card, DeltaPill, ErrorCard, Spark, Spinner, Tile } from './bits'
+import TrybeCheck from './TrybeCheck'
 
 /** "Up from $14,443 in September 2026": what the pill's percent is measured against. */
 function versus(now: number | null, before: number | null, fmt: (v: number) => string, label: string) {
@@ -145,6 +146,7 @@ export default function Overview() {
             </div>
             <Levers data={data} />
           </div>
+          <TrybeCheck />
           {data.sync?.missingTabs?.length ? <ErrorCard text={`The sheet is missing tabs the app reads: ${data.sync.missingTabs.join(', ')}`} /> : null}
           <p className="text-[11px] text-off-black/40">Numbers come from the Daily Tracker's raw tabs, read each morning. <a href="https://docs.google.com/spreadsheets/d/1yKe9O8XAHXRxBPlOFKN4pMNlH-eYTsdsLNJsw6Tctwg" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 hover:underline">Open the sheet <ExternalLink className="w-3 h-3" /></a></p>
         </>
