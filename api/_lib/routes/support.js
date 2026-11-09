@@ -9,6 +9,7 @@ export default {
   'support/filters': () => import('../../_routes/support/filters.js'),
   'support/gmail-callback': () => import('../../_routes/support/gmail-callback.js'),
   'support/gmail': () => import('../../_routes/support/gmail.js'),
+  'support/hall-of-fame': () => import('../../_routes/support/hall-of-fame.js'),
   'support/instagram-callback': () => import('../../_routes/support/instagram-callback.js'),
   'support/instagram-webhook': () => import('../../_routes/support/instagram-webhook.js'),
   'support/instagram': () => import('../../_routes/support/instagram.js'),

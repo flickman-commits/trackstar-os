@@ -7,6 +7,8 @@
  *                        { action: 'update', id, minutes?, note? }   minutes: admin only
  *                        { action: 'delete', id }
  *                        { action: 'start', note? } | { action: 'stop' }
+ *                        { action: 'pause' } | { action: 'resume' }   stop for now, then carry on with the same work
+ *                        { action: 'end' }   finish a paused session without resuming
  *                        { action: 'submit', weekStart }
  */
 import { setCors } from '../../_lib/auth.js'
@@ -16,8 +18,10 @@ import { todayET, mondayOf, dayLabel } from '../../../server/domain/finance/peri
 import { answerError, body } from '../../_lib/finance.js'
 
 async function payload(userId, weekStart) {
-  const [week, weeks, running] = await Promise.all([hours.getWeek(userId, weekStart), hours.myWeeks(userId), hours.runningTimer(userId)])
-  return { week, weeks, running, today: todayET() }
+  const [week, weeks, running, session] = await Promise.all([hours.getWeek(userId, weekStart), hours.myWeeks(userId), hours.runningTimer(userId), hours.timerSession(userId)])
+  // A session whose timer is gone (stopped somewhere else, or deleted) is not paused or carried.
+  const s = session && (session.pausedAt || running) ? session : null
+  return { week, weeks, running, paused: s?.pausedAt && !running ? { note: s.note, carriedMinutes: s.carriedMinutes, since: s.pausedAt } : null, carriedMinutes: running && s ? s.carriedMinutes : 0, today: todayET() }
 }
 
 export default async function handler(req, res) {
@@ -43,6 +47,9 @@ export default async function handler(req, res) {
       case 'delete': { await hours.deleteEntry(user.id, String(b.id || '')); break }
       case 'start': { const out = await hours.startTimer(user.id, { note: b.note }); weekStart = out.weekStart; break }
       case 'stop': { const e = await hours.stopTimer(user.id); weekStart = mondayOf(e.day); break }
+      case 'pause': { const e = await hours.pauseTimer(user.id); weekStart = mondayOf(e.day); break }
+      case 'resume': { const out = await hours.resumeTimer(user.id); weekStart = out.weekStart; break }
+      case 'end': { await hours.endSession(user.id); break }
       case 'submit': {
         const ts = await hours.submitWeek(user.id, String(b.weekStart || ''))
         await recordAudit({ action: 'hours.submit', summary: `Submitted ${hours.hoursText(ts.totalMinutes)} for the week of ${dayLabel(ts.weekStart)}`, detail: { timesheetId: ts.id, weekStart: ts.weekStart, minutes: ts.totalMinutes }, actor: user })

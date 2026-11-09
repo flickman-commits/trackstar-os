@@ -54,7 +54,8 @@ export const supportApi = {
   // The newest mockups for these order rows (after a re-render): api/_routes/support/thread.js, action mockups.
   mockups: (threadId: string, orderIds: string[]) => post<{ mockups: Mockup[] }>('/api/support/thread', { id: threadId, action: 'mockups', orderIds }),
   uploadSlot: (filename: string, contentType: string, size: number) => post<{ ref: string; uploadUrl: string; filename: string }>('/api/support/upload', { filename, contentType, size }),
-  emailCustomer: (orderId: string, subject: string, text: string, mockupRef?: string | null) => post<{ threadId: string; to: string; subject: string; held?: boolean }>('/api/support/compose', { orderId, subject, text, mockupRef: mockupRef || undefined }),
+  hallOfFameCard: (orderId: string) => post<{ card: { code: string; last4: string; customerAssigned: boolean; already: boolean } }>('/api/support/hall-of-fame', { orderId }),
+  emailCustomer: (orderId: string, subject: string, text: string, mockupRef?: string | null, waiting = true) => post<{ threadId: string; to: string; subject: string; held?: boolean }>('/api/support/compose', { orderId, subject, text, mockupRef: mockupRef || undefined, waiting }),
   connectUrl: `${API_BASE}/api/support/gmail?action=connect`,
   disconnect: () => post<{ success: boolean }>('/api/support/gmail', { action: 'disconnect' }),
   sync: () => post<SyncResult>('/api/support/sync', {}),

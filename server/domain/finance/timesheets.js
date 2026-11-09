@@ -125,17 +125,51 @@ export async function runningTimer(userId) {
   return prisma.timeEntry.findFirst({ where: { userId, startedAt: { not: null }, endedAt: null }, select: ENTRY_SELECT })
 }
 
-export async function startTimer(userId, { note } = {}, { now = new Date() } = {}) {
+/**
+ * Pause and resume. Pausing stops the running entry like Stop does (the time
+ * so far is logged), and remembers what it was for and how long the session
+ * has run, so Resume picks the same work back up and the clock carries on
+ * from there. Stop ends the session. Kept in SystemConfig per person:
+ * { note, carriedMinutes, pausedAt } (pausedAt null while running again).
+ */
+const SESSION_KEY = userId => `hours_session:${userId}`
+
+export async function timerSession(userId) {
+  const row = await prisma.systemConfig.findUnique({ where: { key: SESSION_KEY(userId) } }).catch(() => null)
+  if (!row) return null
+  try { const s = JSON.parse(row.value); return { note: s.note || null, carriedMinutes: Number(s.carriedMinutes) || 0, pausedAt: s.pausedAt || null } } catch { return null }
+}
+const saveSession = (userId, s) => prisma.systemConfig.upsert({ where: { key: SESSION_KEY(userId) }, update: { value: JSON.stringify(s) }, create: { key: SESSION_KEY(userId), value: JSON.stringify(s) } })
+export const endSession = userId => prisma.systemConfig.deleteMany({ where: { key: SESSION_KEY(userId) } })
+
+export async function pauseTimer(userId, { now = new Date() } = {}) {
+  const before = await timerSession(userId)
+  const e = await stopTimer(userId, { now, keepSession: true })
+  await saveSession(userId, { note: e.note, carriedMinutes: (before?.carriedMinutes || 0) + e.minutes, pausedAt: now.toISOString() })
+  return e
+}
+
+export async function resumeTimer(userId, { now = new Date() } = {}) {
+  const s = await timerSession(userId)
+  if (!s?.pausedAt) throw new HoursError('Nothing is paused')
+  const out = await startTimer(userId, { note: s.note }, { now, keepSession: true })
+  await saveSession(userId, { ...s, pausedAt: null })
+  return out
+}
+
+export async function startTimer(userId, { note } = {}, { now = new Date(), keepSession = false } = {}) {
   if (await runningTimer(userId)) throw new HoursError('A timer is already running. Stop it first.')
+  if (!keepSession) await endSession(userId)
   const today = todayET(now)
   const ts = await editableWeek(userId, today, today)
   const e = await prisma.timeEntry.create({ data: { timesheetId: ts.id, userId, day: today, minutes: 0, startedAt: now, note: cleanNote(note) }, select: ENTRY_SELECT })
   return { entry: e, weekStart: ts.weekStart }
 }
 
-export async function stopTimer(userId, { now = new Date() } = {}) {
+export async function stopTimer(userId, { now = new Date(), keepSession = false } = {}) {
   const e = await runningTimer(userId)
   if (!e) throw new HoursError('No timer is running')
+  if (!keepSession) await endSession(userId)
   const minutes = Math.min(MAX_MINUTES_PER_ENTRY, Math.max(1, Math.round((now - new Date(e.startedAt)) / 60000)))
   return prisma.timeEntry.update({ where: { id: e.id }, data: { endedAt: now, minutes }, select: ENTRY_SELECT })
 }

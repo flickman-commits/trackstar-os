@@ -38,14 +38,15 @@ function actorName(actor) {
   return [actor?.firstName, actor?.lastName].filter(Boolean).join(' ') || 'Someone'
 }
 
-export async function emailCustomer({ orderId, subject, text, actor, mockupRef = null }) {
+// waiting: false for a note that asks nothing (the Hall of Fame card): the thread is closed and the order never parks in Waiting on customer; a reply opens it.
+export async function emailCustomer({ orderId, subject, text, actor, mockupRef = null, waiting = true }) {
   const order = await prisma.order.findUnique({ where: { id: String(orderId || '') }, select: { id: true, orderNumber: true, parentOrderNumber: true, shopifyOrderData: true, customerEmail: true, customerName: true } })
   if (!order) throw new UserError('No such order')
   const to = String(order.customerEmail || '').trim().toLowerCase()
   if (!EMAIL.test(to)) throw new UserError('This order has no customer email to write to')
   const body = String(text || '').replace(/\r\n/g, '\n').trim()
   if (!body) throw new UserError('Write the email first')
-  if (/\[[^\]\n]*(what we need|the address on the order)[^\]\n]*\]/i.test(body)) throw new UserError('Fill in what we need from them first')
+  if (/\[[^\]\n]*(what we need|the address on the order|gift card code)[^\]\n]*\]/i.test(body)) throw new UserError('Fill in what we need from them first')
   const number = customerOrderNumber(order)
   // A page loaded before the fix filled in our internal id; the customer only knows the display number.
   let subj = String(subject || '').trim().slice(0, 200) || defaultSubject(number)
@@ -73,7 +74,7 @@ export async function emailCustomer({ orderId, subject, text, actor, mockupRef =
     prisma.supportThread.update({
       where: { id: stored.threadId },
       // Waiting on the customer from the start: the ball is in their court until they reply (a reply moves it to open).
-      data: { status: 'waiting', assigneeId: actor?.id || undefined, ...(order.customerName ? { customerName: order.customerName } : {}) },
+      data: { status: waiting ? 'waiting' : 'closed', ...(waiting ? {} : { notWaitingAt: new Date() }), assigneeId: actor?.id || undefined, ...(order.customerName ? { customerName: order.customerName } : {}) },
     }),
     prisma.supportNote.create({ data: { threadId: stored.threadId, kind: 'event', body: `${by} emailed from Fulfillment about #${number}`, authorId: actor?.id || null, authorName: by } }),
     prisma.orderComment.create({ data: { orderId: order.id, text: mockupRef

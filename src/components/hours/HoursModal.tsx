@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ChevronLeft, ChevronRight, Clock, Play, Plus, Send, Square, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Clock, Pause, Play, Plus, Send, Square, Trash2 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import ActionModal from '@/components/ActionModal'
 import { btnPrimary, btnGhost, inputBase, modalPrimary, modalCancel } from '@/lib/ui'
@@ -110,7 +110,9 @@ function HoursBody({ onClose }: { onClose: () => void }) {
   // Only a timer in this week holds up submitting it. Dani and Elí started
   // today's timer on Nov 9 and could not submit the week of Nov 2.
   const timerInWeek = Boolean(running?.day && running.day >= week && running.day < addDays(week, 7))
-  const elapsed = running?.startedAt ? Math.max(0, Math.floor((Date.now() - new Date(running.startedAt).getTime()) / 60000)) : 0
+  // A resumed session counts the time before the pause too.
+  const elapsed = (running?.startedAt ? Math.max(0, Math.floor((Date.now() - new Date(running.startedAt).getTime()) / 60000)) : 0) + (data?.carriedMinutes || 0)
+  const paused = !running ? data?.paused : null
   void tick
 
   return (
@@ -144,9 +146,30 @@ function HoursBody({ onClose }: { onClose: () => void }) {
                       <p className="text-2xl font-bold tabular-nums text-off-black mt-0.5">{minutesText(elapsed)}</p>
                       {running.note && <p className="text-sm text-off-black/55 truncate">{running.note}</p>}
                     </div>
-                    <button onClick={() => act({ action: 'stop' }, 'Timer stopped')} disabled={busy} className="md:w-72 h-16 rounded-xl bg-dark-fill text-white text-sm font-semibold inline-flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
-                      <Square className="w-4 h-4 fill-white" /> Stop timer
-                    </button>
+                    <div className="flex gap-2 md:w-72">
+                      <button onClick={() => act({ action: 'pause' }, 'Timer paused')} disabled={busy} className="flex-1 h-16 rounded-xl border border-border-gray bg-white text-off-black text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-subtle-gray transition-colors disabled:opacity-50">
+                        <Pause className="w-4 h-4 fill-off-black" /> Pause
+                      </button>
+                      <button onClick={() => act({ action: 'stop' }, 'Timer stopped')} disabled={busy} className="flex-1 h-16 rounded-xl bg-dark-fill text-white text-sm font-semibold inline-flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
+                        <Square className="w-4 h-4 fill-white" /> Stop
+                      </button>
+                    </div>
+                  </div>
+                ) : paused ? (
+                  <div className="flex flex-col md:flex-row md:items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="inline-flex items-center gap-2 text-sm font-semibold text-off-black"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />Paused</p>
+                      <p className="text-2xl font-bold tabular-nums text-off-black mt-0.5">{minutesText(paused.carriedMinutes)}</p>
+                      {paused.note && <p className="text-sm text-off-black/55 truncate">{paused.note}</p>}
+                    </div>
+                    <div className="flex gap-2 md:w-72">
+                      <button onClick={() => act({ action: 'resume' }, 'Timer resumed')} disabled={busy || locked} className="flex-1 h-16 rounded-xl bg-[#4600D6] text-white text-sm font-semibold inline-flex items-center justify-center gap-2 hover:bg-[#3A00B0] transition-colors disabled:opacity-50">
+                        <Play className="w-4 h-4 fill-white" /> Resume
+                      </button>
+                      <button onClick={() => act({ action: 'end' }, 'Done for now')} disabled={busy} title="Your time so far is already logged" className="flex-1 h-16 rounded-xl bg-dark-fill text-white text-sm font-semibold inline-flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50">
+                        <Square className="w-4 h-4 fill-white" /> Stop
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex flex-col md:flex-row md:items-end gap-3">

@@ -37,7 +37,7 @@ export type Timesheet = {
   hourlyRateCents: number | null; paid: boolean; entries: TimeEntry[]; totalMinutes: number; byDay: Record<string, number>; flags: string[]; rateNow?: number | null
 }
 export type WeekSummary = { weekStart: string; weekEnd: string; status: TimesheetStatus | 'empty'; totalMinutes: number; reviewNote: string | null }
-export type HoursPayload = { week: Timesheet; weeks: WeekSummary[]; running: TimeEntry | null; today: string }
+export type HoursPayload = { week: Timesheet; weeks: WeekSummary[]; running: TimeEntry | null; paused?: { note: string | null; carriedMinutes: number; since: string } | null; carriedMinutes?: number; today: string }
 export type Person = { id: string; firstName: string; lastName: string; role: string; hourlyRateCents: number | null }
 
 export type Rate = { userId: string; name: string; role: string; hourlyRateCents: number | null; customs: { newCents: number; repeatCents: number; custom: boolean } | null }

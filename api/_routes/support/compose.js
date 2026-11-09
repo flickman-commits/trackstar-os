@@ -4,7 +4,7 @@
  *   GET  ?orderId=&all=1              the customer's conversations (not closed; all=1 adds closed ones), the order's mockups and where it ships
  *   POST { orderId, subject, text, mockupRef? }   "Email customer": sends from fast@; returns { threadId, to, subject, held }
  *        With mockupRef (render:, proof: or upload: from /api/support/upload), the mockup goes attached for the customer
- *        to approve and the print is held from production.
+ *        to approve and the print is held from production. waiting: false (Hall of Fame) sends it without parking the order in Waiting on customer.
  *
  * The address comes from the order, never from the page.
  */
@@ -34,7 +34,7 @@ export default async function handler(req, res) {
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {}
     const mockupRef = typeof body.mockupRef === 'string' && body.mockupRef ? body.mockupRef : null
-    const out = await emailCustomer({ orderId: body.orderId, subject: body.subject, text: body.text, actor: user, mockupRef })
+    const out = await emailCustomer({ orderId: body.orderId, subject: body.subject, text: body.text, actor: user, mockupRef, waiting: body.waiting !== false })
     await recordAudit({ action: 'support.compose', summary: `${mockupRef ? 'Sent the design to approve to' : 'Emailed'} ${out.to}: "${out.subject}"${out.held ? ', held from production' : ''}`, detail: { orderId: body.orderId, threadId: out.threadId, mockupRef, held: out.held }, actor: user })
     return res.status(200).json(out)
   } catch (error) {

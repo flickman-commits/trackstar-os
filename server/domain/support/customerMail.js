@@ -14,6 +14,18 @@
 import prisma from '../../db.js'
 import { sendNew, isConnected } from './mailbox.js'
 import { UserError } from './errors.js'
+import { can } from '../../../api/_lib/roles.js'
+
+/**
+ * Who owns a conversation a person starts: the sender, when they work Support
+ * (a fulfillment teammate, Matt). A designer sending proofs is not, so that
+ * thread keeps the routing rule's person. The bot (no id) never owns one.
+ */
+export async function senderOwnerId(actor) {
+  if (!actor?.id) return null
+  const u = await prisma.user.findUnique({ where: { id: actor.id }, select: { id: true, isActive: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true } }).catch(() => null)
+  return u?.isActive && await can(u, 'support').catch(() => false) ? u.id : null
+}
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -37,10 +49,11 @@ export async function sendOrderEmail({ order, to, subject, html, text, actor, ev
   if (!subject || !html) throw new UserError('An email needs a subject and a body')
   const stored = await sendNew({ userId: actor?.id || null, to: addr, subject, html, text: text || '', attachments: [] })
   const by = actorName(actor)
+  const owner = await senderOwnerId(actor)
   await prisma.$transaction([
     prisma.supportThread.update({
       where: { id: stored.threadId },
-      data: { status: waiting ? 'waiting' : 'closed', ...(order?.customerName ? { customerName: order.customerName } : {}) },
+      data: { status: waiting ? 'waiting' : 'closed', ...(owner ? { assigneeId: owner } : {}), ...(order?.customerName ? { customerName: order.customerName } : {}) },
     }),
     ...(event ? [prisma.supportNote.create({ data: { threadId: stored.threadId, kind: 'event', body: event, authorId: actor?.id || null, authorName: by } })] : []),
     ...(comment && order?.id ? [prisma.orderComment.create({ data: { orderId: order.id, text: comment, authorId: actor?.id || null, authorName: by } })] : []),

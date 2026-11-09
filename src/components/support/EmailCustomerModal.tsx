@@ -15,7 +15,9 @@ import { putUpload } from '../../lib/putUpload'
  * registered under, a finish time). It sends from fast@ through the support
  * mailbox, so the conversation and their reply live in Support. Or it sends
  * the design for them to approve, and the print waits on their answer. Or
- * it asks them to confirm the ship-to when Artelo could not verify it.
+ * it asks them to confirm the ship-to when Artelo could not verify it. Or
+ * it tells them they made the Trackstar Hall of Fame, with the $50 gift card
+ * made in Shopify from here (Create gift card fills the code in).
  */
 export interface EmailCustomerOrder {
   id: string
@@ -30,13 +32,15 @@ export interface EmailCustomerOrder {
 
 const ASK = '[what we need]'
 // Each chip writes the whole email for that one ask; picking another replaces it.
-type Pick = 'bib' | 'name' | 'time' | 'race' | 'mockup' | 'address'
-const ASKS: { id: Exclude<Pick, 'mockup' | 'address'>; label: string; text: string }[] = [
-  { id: 'bib', label: 'Bib number', text: "their bib number from the race. It's on the race app, the confirmation email, or the bib itself" },
-  { id: 'name', label: 'Last name', text: 'the full name they registered under, exactly as on the results (a maiden name, a hyphenated name or a nickname is often why we cannot find them)' },
-  { id: 'time', label: 'Finish time', text: 'their official finish time (chip time if you have it)' },
-  { id: 'race', label: 'Which race', text: 'which race and year this print is for, and the distance they ran' },
+type Pick = 'bib' | 'name' | 'time' | 'race' | 'mockup' | 'address' | 'hof'
+const ASKS: { id: Exclude<Pick, 'mockup' | 'address' | 'hof'>; label: string; text: string }[] = [
+  { id: 'bib', label: 'Bib number', text: 'the bib number (it\'s on the race app or confirmation email)' },
+  { id: 'name', label: 'Last name', text: 'the full name they registered under, exactly as it shows in the results' },
+  { id: 'time', label: 'Finish time', text: 'the official finish time' },
+  { id: 'race', label: 'Which race', text: 'which race, year and distance this is for' },
 ]
+// The Hall of Fame email waits on the gift card; Send stays off until Create gift card fills this in.
+const GIFT_CODE = '[gift card code]'
 
 function firstName(name?: string | null) {
   const f = String(name || '').trim().split(/\s+/)[0] || ''
@@ -50,35 +54,50 @@ function addressBlock(a: Address | null) {
   return [a.name, a.address1, a.address2, [a.city, a.province, a.zip].filter(Boolean).join(' '), a.country].filter(Boolean).join('\n')
 }
 
-function template(o: EmailCustomerOrder, rep: string, pick: Pick | null, shipTo: Address | null = null) {
+function template(o: EmailCustomerOrder, rep: string, pick: Pick | null, shipTo: Address | null = null, code: string | null = null) {
   const who = firstName(o.customerName)
   const runner = String(o.runnerName || '').trim()
   const race = [o.raceName, o.raceYear].filter(Boolean).join(' ')
   const forWhat = runner && race ? `${runner}'s ${race} print` : race ? `your ${race} print` : 'your print'
   const hi = `Hey${who ? ` ${who}` : ''},`
   const bye = `Thanks,\n${rep} from Trackstar`
+  if (pick === 'hof') {
+    const runnerFirst = firstName(runner) || 'your runner'
+    const raceOnly = o.raceName || 'race'
+    return `${who || 'Hey'},
+
+I was just fulfilling your order for ${runner || 'your print'} and was so impressed by ${runnerFirst}'s ${raceOnly} time.
+
+We have a tradition at Trackstar called the Trackstar Hall of Fame, where we celebrate the 5 fastest male and female runners who have ordered Trackstar prints with a $50 Trackstar Gift Card to help build out your collection.
+
+I've sent a Trackstar gift card to your email (you can also use this code: ${code || GIFT_CODE}).
+
+Congrats to you and ${runnerFirst}!
+
+Matt, Owner of Trackstar`
+  }
   if (pick === 'mockup') return `${hi}
 
-Thanks so much for your order! Here's the design for ${forWhat}, attached. Before we send it to print, could you take a quick look and make sure everything is exactly how you want it: the name, the race and the details?
+Here's the design for ${forWhat} (attached). Does everything look right?
 
-Just reply "looks good" and we'll send it to print, or tell us what to change.
+Reply "looks good" and we'll print it, or tell us what to change.
 
 ${bye}`
   if (pick === 'address') return `${hi}
 
-Thanks so much for your order! ${forWhat[0].toUpperCase()}${forWhat.slice(1)} is almost ready to go, but our shipping partner couldn't verify the shipping address on the order:
+Our shipping partner couldn't verify the address for ${forWhat}:
 
 ${addressBlock(shipTo)}
 
-Could you reply to confirm it's right, or send us the correct address (including any apartment or unit number)? We'll ship it as soon as we hear back.
+Is that right? If not, reply with the correct address (include any apt or unit number).
 
 ${bye}`
   const ask = ASKS.find(a => a.id === pick)?.text || ASK
   return `${hi}
 
-Thanks so much for your order! We're getting started on ${forWhat}, and we need one more thing from you before we can finish it: ${ask}.
+We're working on ${forWhat} and need one thing from you: ${ask}.
 
-Just reply to this email and we'll take it from there.
+Just reply here and we'll take it from there.
 
 ${bye}`
 }
@@ -88,7 +107,7 @@ export type EmailPreset = { subject: string; text: string }
 
 export default function EmailCustomerModal({ order, repName, onClose, preset }: { order: EmailCustomerOrder; repName: string; onClose: () => void; preset?: EmailPreset | null }) {
   const number = String(order.displayNumber).replace(/^#/, '')
-  const subjects = { ask: `Trackstar Order ${number} (Action Required)`, mockup: `Trackstar Order ${number} (Please Approve Your Design)`, address: `Trackstar Order ${number} (Please Confirm Your Address)` }
+  const subjects = { ask: `Trackstar Order ${number} (Action Required)`, mockup: `Trackstar Order ${number} (Please Approve Your Design)`, address: `Trackstar Order ${number} (Please Confirm Your Address)`, hof: 'Trackstar Hall of Fame' }
   const rep = repName || 'The team'
   const [subject, setSubject] = useState(preset?.subject || subjects.ask)
   const [pick, setPick] = useState<Pick | null>(null)
@@ -99,6 +118,9 @@ export default function EmailCustomerModal({ order, repName, onClose, preset }: 
   const [mockup, setMockup] = useState<Mockup | null>(null)
   // Where the order ships (Artelo's copy first), for the address check.
   const [shipTo, setShipTo] = useState<Address | null>(null)
+  // The Hall of Fame gift card for this order, once made (one per order).
+  const [card, setCard] = useState<{ code: string; last4: string; customerAssigned: boolean } | null>(null)
+  const [making, setMaking] = useState(false)
   // Or a design made by hand: a file from the rep's computer, which replaces
   // the render for this email.
   const [ownFile, setOwnFile] = useState<{ ref: string; name: string; preview: string | null } | null>(null)
@@ -130,21 +152,32 @@ export default function EmailCustomerModal({ order, repName, onClose, preset }: 
     return () => { live = false }
   }, [order.id])
 
-  const unfilled = text.includes(ASK) || text.includes(NO_ADDRESS)
+  const unfilled = text.includes(ASK) || text.includes(NO_ADDRESS) || text.includes(GIFT_CODE)
   const choose = (next: Pick) => {
     // Anything typed into the email since the last template would be lost.
-    if (text !== template(order, rep, pick, shipTo) && !arm(`replace:${next}`)) return
+    if (text !== template(order, rep, pick, shipTo, card?.code) && !arm(`replace:${next}`)) return
     setPick(next)
-    setText(template(order, rep, next, shipTo))
-    if (Object.values(subjects).includes(subject)) setSubject(next === 'mockup' || next === 'address' ? subjects[next] : subjects.ask)
+    setText(template(order, rep, next, shipTo, card?.code))
+    if (Object.values(subjects).includes(subject)) setSubject(next === 'mockup' || next === 'address' || next === 'hof' ? subjects[next] : subjects.ask)
     box.current?.focus()
+  }
+  // Makes the $50 card in Shopify (or returns the one already made) and puts its code in the email.
+  const makeCard = async () => {
+    setMaking(true)
+    try {
+      const { card: c } = await supportApi.hallOfFameCard(order.id)
+      setCard(c)
+      setText(t => t.split(GIFT_CODE).join(c.code))
+      toast.success(c.already ? `This order already has a Hall of Fame card (ending ${c.last4})` : `$50 gift card made (ending ${c.last4})`)
+    } catch (e) { toast.error((e as Error).message) }
+    finally { setMaking(false) }
   }
   // What goes attached: a file made by hand wins over the render.
   const attached = pick === 'mockup' ? (ownFile ? { ref: ownFile.ref, label: ownFile.name, thumbUrl: ownFile.preview } : mockup) : null
   const send = async () => {
     setBusy(true)
     try {
-      const out = await supportApi.emailCustomer(order.id, subject, text, attached ? attached.ref : null)
+      const out = await supportApi.emailCustomer(order.id, subject, text, attached ? attached.ref : null, pick !== 'hof')
       setSent(out)
       toast.success(`Sent to ${out.to}`)
     } catch (e) { toast.error((e as Error).message) }
@@ -185,10 +218,22 @@ export default function EmailCustomerModal({ order, repName, onClose, preset }: 
                 title={mockup ? `Attach ${mockup.label} for them to approve, and hold the print until they do` : 'Attach a mockup you made for them to approve'}>Approve mockup</button>
               <button onClick={() => choose('address')} className={modalChip(pick === 'address')}
                 title="Ask them to confirm the ship-to when Artelo says the address does not exist">Confirm address</button>
+              <button onClick={() => choose('hof')} className={modalChip(pick === 'hof')}
+                title="They made the Trackstar Hall of Fame: a $50 gift card and a note from Matt">Hall of Fame</button>
             </div>
-            {[...ASKS.map(a => a.id), 'mockup' as Pick, 'address' as Pick].some(id => isArmed(`replace:${id}`)) && <p className="mt-2 text-amber-700">Click it again to replace what you wrote with the template.</p>}
+            {[...ASKS.map(a => a.id), 'mockup' as Pick, 'address' as Pick, 'hof' as Pick].some(id => isArmed(`replace:${id}`)) && <p className="mt-2 text-amber-700">Click it again to replace what you wrote with the template.</p>}
           </div>
           <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,application/pdf" className="hidden" onChange={e => attachOwn(e.target.files?.[0])} />
+          {pick === 'hof' && (
+            <div className="flex items-center gap-3 rounded-xl bg-subtle-gray border border-border-gray p-3 text-off-black/60">
+              <span className="min-w-0">{card
+                ? <>$50 gift card made, ending <b className="text-off-black/80 font-medium">{card.last4}</b>.{card.customerAssigned ? ' Shopify emailed it to them too.' : ' They have no Shopify account, so the code in this email is how they get it.'}</>
+                : <>Only for the top 5 men or women (official result from November 2025 on). This makes a real $50 gift card in Shopify, once per order.</>}</span>
+              {!card && <button onClick={makeCard} disabled={making} className="ml-auto shrink-0 inline-flex items-center gap-1.5 text-sm font-medium text-[#4600D6] hover:underline disabled:opacity-50">
+                {making && <Loader2 className="w-4 h-4 animate-spin" />}Create gift card
+              </button>}
+            </div>
+          )}
           {pick === 'mockup' && (
             <div className="flex items-center gap-3 rounded-xl bg-subtle-gray border border-border-gray p-3 text-off-black/60">
               {attached ? (
@@ -210,7 +255,7 @@ export default function EmailCustomerModal({ order, repName, onClose, preset }: 
           <label className="block"><span className={fieldLabel}>Email</span>
             <textarea ref={box} value={text} onChange={e => setText(e.target.value)} rows={11} className={`${modalInput} leading-relaxed`} />
           </label>
-          {unfilled && <p className="text-amber-700">{text.includes(NO_ADDRESS) ? <>This order has no address we can show. Replace {NO_ADDRESS} with it.</> : <>Pick what we need above, or replace {ASK} yourself.</>}</p>}
+          {unfilled && <p className="text-amber-700">{text.includes(GIFT_CODE) ? <>Create the gift card above to fill in its code.</> : text.includes(NO_ADDRESS) ? <>This order has no address we can show. Replace {NO_ADDRESS} with it.</> : <>Pick what we need above, or replace {ASK} yourself.</>}</p>}
         </>
       )}
     </ActionModal>
