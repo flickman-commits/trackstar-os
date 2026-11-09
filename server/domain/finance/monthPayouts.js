@@ -106,6 +106,7 @@ export async function monthPayouts(month, { today = todayET() } = {}) {
     const races = await listRacePayouts({ today })
     for (const r of races) {
       if (!r.dueDate || r.dueDate < first || r.dueDate > last) continue
+      if (r.terms.structure === 'percent' && r.terms.pct === 0) continue // forgoes its share: nothing to pay
       lines.push({
         key: `race:${r.dealId}`, kind: 'race', dealId: r.dealId, name: r.name,
         status: r.status === 'paid' ? 'approved' : r.status === 'sent' ? 'submitted' : 'in_progress', paid: r.status === 'paid',

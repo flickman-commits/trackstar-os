@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { tally, payoutCents, termsFor } from './racePayouts.js'
+import { tally, payoutCents, termsFor, reportFor } from './racePayouts.js'
 
 const order = (id, lines, refunds = []) => ({ id, created_at: '2026-10-01T16:00:00Z', line_items: lines, refunds })
 const line = (id, productId, price, qty = 1, discount = '0.00') => ({ id, product_id: productId, price, quantity: qty, total_discount: discount })
@@ -38,4 +38,19 @@ test('rev share times net sales, rounded to the cent', () => {
   const terms = termsFor({ revSharePct: 15 })
   assert.equal(payoutCents(terms, { netSalesCents: 123_45, unitsSold: 3 }), 1852)
   assert.equal(termsFor({}).assumed, true)
+})
+
+test('0% is a race that forgoes its share, not an empty field', () => {
+  const zero = termsFor({ revSharePct: 0 })
+  assert.deepEqual([zero.pct, zero.assumed], [0, false])
+  assert.equal(payoutCents(zero, { netSalesCents: 100_000, unitsSold: 10 }), 0)
+  assert.equal(termsFor({ revSharePct: null }).pct, 15)
+})
+
+test('a race owed nothing gets the sales report without the payout line or the how-to-pay ask', () => {
+  const r = { name: 'Test Marathon', poc: { name: 'Pat Lee' }, window: { start: '2026-10-01', end: '2026-11-15' }, terms: termsFor({ revSharePct: 0 }), termsUsed: null, payoutCents: 0, sales: { unitsSold: 4, netSalesCents: 30000 } }
+  const rep = reportFor(r)
+  assert.ok(!rep.report.includes('Race Payout'))
+  assert.ok(!rep.email.includes('get you guys paid'))
+  assert.equal(rep.subject, 'Test Marathon Sales Report | Trackstar')
 })

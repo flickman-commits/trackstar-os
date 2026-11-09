@@ -377,7 +377,7 @@ export async function forecast({ scenario = 'base', today = todayET() } = {}) {
         const match = raceList.find(r => r.key === raceKey(p.name) && Math.abs(daysBetween(r.date, p.raceDate || r.date)) < 40)
         if (match) {
           const rev = match.expected * d.revenuePerOrderCents
-          cents = p.terms.structure === 'per_order' ? match.expected * p.terms.perOrderCents : Math.round(rev * (p.terms.pct || 15) / 100)
+          cents = p.terms.structure === 'per_order' ? match.expected * p.terms.perOrderCents : Math.round(rev * (p.terms.pct ?? 15) / 100)
           estimated = true
         }
       }

@@ -65,7 +65,7 @@ export default function RacePayouts() {
   if (error) return <ErrorCard text={error} />
   if (!data) return <Spinner />
   const due = data.races.filter(r => r.status === 'pending' && r.dueDate && r.daysToDue != null && r.daysToDue <= 0)
-  const termsText = (r: RacePayout) => r.terms.structure === 'per_order' ? `${usd(r.terms.perOrderCents)}/order` : `${r.terms.pct}%${r.terms.assumed ? ' (assumed)' : ''}`
+  const termsText = (r: RacePayout) => r.terms.structure === 'per_order' ? `${usd(r.terms.perOrderCents)}/order` : r.terms.pct === 0 ? 'No share' : `${r.terms.pct}%${r.terms.assumed ? ' (assumed)' : ''}`
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -159,9 +159,9 @@ function TermsModal({ r, busy, onClose, onSave }: { r: RacePayout; busy: boolean
   const [structure, setStructure] = useState<'percent' | 'per_order'>(r.terms.structure)
   const [pct, setPct] = useState(r.terms.pct != null ? String(r.terms.pct) : '15')
   const [perOrder, setPerOrder] = useState(r.terms.perOrderCents != null ? String(r.terms.perOrderCents / 100) : '10')
-  const ok = structure === 'percent' ? Number(pct) > 0 : Number(perOrder) > 0
+  const ok = structure === 'percent' ? pct.trim() !== '' && Number(pct) >= 0 && Number(pct) <= 100 : Number(perOrder) > 0
   return (
-    <ActionModal icon={PencilLine} title="Payout terms" sub={r.name} description="Saved to the deal in Attio (rev_share_pct, or payout_per_order for a flat fee). Sales already pulled are re-priced." onClose={onClose} busy={busy} size="sm"
+    <ActionModal icon={PencilLine} title="Payout terms" sub={r.name} description="Saved to the deal in Attio (rev_share_pct, or payout_per_order for a flat fee). Use 0% for a race that forgoes its share. Sales already pulled are re-priced." onClose={onClose} busy={busy} size="sm"
       footer={<><button onClick={onClose} className={modalCancel} disabled={busy}>Cancel</button><button onClick={() => onSave(structure === 'percent' ? { structure, pct: Number(pct) } : { structure, perOrder: Number(perOrder) })} disabled={busy || !ok} className={modalPrimary}>Save to Attio</button></>}>
       <div className="flex gap-2">
         <button onClick={() => setStructure('percent')} className={`${btnSecondary} flex-1 ${structure === 'percent' ? '!bg-dark-fill !text-white' : ''}`}>Share of net sales</button>

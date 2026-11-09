@@ -52,8 +52,9 @@ function raceDay(d) {
 export function termsFor(deal) {
   const per = Number(deal.payoutPerOrder)
   if (deal.payoutPerOrder != null && Number.isFinite(per) && per > 0) return { structure: 'per_order', perOrderCents: Math.round(per * 100), pct: null, assumed: false }
+  // 0 is a real answer: some races forgo their share. Only an empty field falls back to the default.
   const pct = Number(deal.revSharePct)
-  if (deal.revSharePct != null && Number.isFinite(pct) && pct > 0) return { structure: 'percent', pct, perOrderCents: null, assumed: false }
+  if (deal.revSharePct != null && deal.revSharePct !== '' && Number.isFinite(pct) && pct >= 0) return { structure: 'percent', pct, perOrderCents: null, assumed: false }
   return { structure: 'percent', pct: DEFAULT_PCT, perOrderCents: null, assumed: true }
 }
 
@@ -273,10 +274,11 @@ export function reportFor(r) {
   if (!r.sales) return null
   const t = r.termsUsed || r.terms
   const line = t.structure === 'per_order' ? `Race Payout (${usd(t.perOrderCents)}/order × ${r.sales.unitsSold}): ${usd(r.payoutCents)}` : `Race Payout (${t.pct}%): ${usd(r.payoutCents)}`
-  const report = [`${r.name} Trackstar Sales Report`, `Units Sold: ${r.sales.unitsSold.toLocaleString('en-US')}`, `Net Sales: ${usd(r.sales.netSalesCents)}`, line].join('\n')
+  const owesNothing = r.payoutCents === 0
+  const report = [`${r.name} Trackstar Sales Report`, `Units Sold: ${r.sales.unitsSold.toLocaleString('en-US')}`, `Net Sales: ${usd(r.sales.netSalesCents)}`, ...(owesNothing ? [] : [line])].join('\n')
   const first = (r.poc?.name || '').split(' ')[0] || 'there'
-  const email = [`Hey ${first},`, '', `Had a great time working with you guys. Here's our sales report for the ${r.name} prints:`, '', report, '', `What's the easiest way to get you guys paid? Do you want a check or do you want to send me an invoice?`, '', `Additionally, would love to hop on a quick post-mortem call and see what we can improve and talk about ideas for next year!`, '', 'Thanks,', 'Matt'].join('\n')
-  return { report, subject: `${r.name} Sales Report + Payout | Trackstar`, to: r.poc?.email || null, email, window: `${dayLabel(r.window.start, 'long')} to ${dayLabel(r.window.end, 'long')}` }
+  const email = [`Hey ${first},`, '', `Had a great time working with you guys. Here's our sales report for the ${r.name} prints:`, '', report, '', ...(owesNothing ? [] : [`What's the easiest way to get you guys paid? Do you want a check or do you want to send me an invoice?`, '']), `${owesNothing ? 'Would' : 'Additionally, would'} love to hop on a quick post-mortem call and see what we can improve and talk about ideas for next year!`, '', 'Thanks,', 'Matt'].join('\n')
+  return { report, subject: owesNothing ? `${r.name} Sales Report | Trackstar` : `${r.name} Sales Report + Payout | Trackstar`, to: r.poc?.email || null, email, window: `${dayLabel(r.window.start, 'long')} to ${dayLabel(r.window.end, 'long')}` }
 }
 
 /**
@@ -290,7 +292,7 @@ export async function setRaceTerms(dealId, { structure, pct, perOrder }, { today
   let values
   if (structure === 'percent') {
     const n = Number(pct)
-    if (!Number.isFinite(n) || n <= 0 || n > 100) throw new RacePayoutError('The share must be between 0 and 100 percent')
+    if (pct === '' || pct == null || !Number.isFinite(n) || n < 0 || n > 100) throw new RacePayoutError('The share must be from 0 to 100 percent (0 when the race forgoes it)')
     values = { rev_share_pct: n, ...(deal.payoutPerOrder != null ? { payout_per_order: null } : {}) }
   } else if (structure === 'per_order') {
     const n = Number(perOrder)
