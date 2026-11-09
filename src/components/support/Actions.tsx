@@ -26,7 +26,7 @@ const FRAME_ONLY = [{ value: 'BlackPremiumOak', label: 'Black Premium Oak' }, { 
  * link into the reply; change the ship-to (Shopify and our rows, then the
  * address copied for Artelo, which has no API to edit an order); fix the
  * name or year before production; a note for fulfillment; refund all or
- * part (over $200 is Matt's); cancel and refund before production, with the
+ * part (over $250 is Matt's); cancel and refund before production, with the
  * customer's yes (Artelo cancels on its own). For the customer: a 15% code, Slack
  * Matt. Last and small: check a code they pasted. Every one is a person's
  * press, an event in the thread and an audit line.
@@ -167,7 +167,7 @@ function useRefundable(thread: ThreadDetail, o: CustomerOrder) {
   return { info, err, load }
 }
 
-/** Money back, all or part (scenarios 5 and 15). Over $200 needs an admin, and the server checks too. */
+/** Money back, all or part (scenarios 5 and 15). Over $250 needs an admin, and the server checks too. */
 function RefundForm({ o, thread, onDone, onCancel }: FormProps) {
   const { info, err, load } = useRefundable(thread, o)
   const [amount, setAmount] = useState('')
@@ -179,7 +179,7 @@ function RefundForm({ o, thread, onDone, onCancel }: FormProps) {
   const [failed, setFailed] = useState<string | null>(null)
   useEffect(load, []) // eslint-disable-line react-hooks/exhaustive-deps
   const cents = Math.round(Number(amount) * 100) || 0
-  // The $200 line is per order: earlier refunds on it count.
+  // The $250 line is per order: earlier refunds on it count.
   const over = info ? (info.refundedCents || 0) + cents > info.limitCents && !info.isAdmin : false
   const tooMuch = info ? cents > info.availableCents : false
   const save = async () => {
@@ -878,7 +878,7 @@ function DiscountForm({ thread, first, isAdmin, onInsert, onDone, onCancel }: { 
  * A Shopify invoice for any amount, for a request that does not make one by
  * itself (a second size, an extra frame, rush shipping). Shopify emails it
  * with a pay link; the paid draft becomes an ordinary order. Over the limit
- * ($200) is an admin's; the server holds the same line.
+ * ($250) is an admin's; the server holds the same line.
  */
 function InvoiceForm({ thread, orderName, onDone, onCancel }: { thread: ThreadDetail; orderName?: string; onDone: () => void; onCancel: () => void }) {
   const [amount, setAmount] = useState('35')
@@ -1078,7 +1078,7 @@ function OrderActions({ o, thread, multiple, isAdmin, onInsert, onAttach, onChan
         {/* A reprint or replacement: the same print to this customer, built in Artelo from here. */}
         {o.shopifyOrderId && o.items.length > 0 && <ActionLink icon={Repeat} onClick={() => setOpen('reorder')} title="The same print to this customer: a reprint or a replacement. Artelo bills us for it, so damage goes through the claim instead.">New Artelo order</ActionLink>}
         <ActionLink icon={Receipt} onClick={() => setOpen('invoice')} title="A Shopify invoice for any amount, for something that does not invoice itself: a second size, an extra frame, rush shipping">Send invoice</ActionLink>
-        {o.shopifyOrderId && o.financialStatus !== 'REFUNDED' && <ActionLink icon={Receipt} onClick={() => setOpen('refund')} title="All or part, to the card they paid with. Over $200 is Matt's call.">Refund</ActionLink>}
+        {o.shopifyOrderId && o.financialStatus !== 'REFUNDED' && <ActionLink icon={Receipt} onClick={() => setOpen('refund')} title="All or part, to the card they paid with. Over $250 is Matt's call.">Refund</ActionLink>}
         {/* Cancel only before anything is made or shipped. */}
         {o.shopifyOrderId && !shipped && !o.items.some(it => it.status === 'completed' || it.designStatus === 'sent_to_production') && o.financialStatus !== 'REFUNDED' && <ActionLink icon={Ban} onClick={() => setOpen('cancel')} title="Only after the customer says yes, and only before production">Cancel and refund</ActionLink>}
       </div>

@@ -13,7 +13,7 @@ import { shopifyGraphQL } from '../../services/shopifyAuth.js'
 import { requireConnection } from '../../lib/connections.js'
 import { UserError } from './errors.js'
 
-export const INVOICE_LIMIT_CENTS = 20000
+export const INVOICE_LIMIT_CENTS = 25000
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const actorName = a => [a?.firstName, a?.lastName].filter(Boolean).join(' ') || 'Someone'
 
