@@ -505,7 +505,8 @@ export async function escalate(id, actor) {
 export async function slackMatt({ thread, text, actor }) {
   await requireConnection('slack')
   const who = thread.customerName || thread.customerEmail || 'a customer'
-  const msg = `:rotating_light: *Support escalation* from ${actorName(actor)}\n*${who}*: ${thread.subject || '(no subject)'}\n${String(text || '').trim() || 'Needs your call.'}\n${threadUrl(thread.id)}`
+  // Name and subject are the customer's words: escaped, so they cannot make a link or an @channel.
+  const msg = `:rotating_light: *Support escalation* from ${slackText(actorName(actor), 80)}\n*${slackText(who, 120)}*: ${slackText(thread.subject || '(no subject)', 200)}\n${slackText(String(text || '').trim() || 'Needs your call.', 1500)}\n${threadUrl(thread.id)}`
   if (!(await slackTo('matt', msg, { or: 'alerts' }))) throw new UserError('Slack did not take the message. Check Settings > Connections > Slack.')
   if (thread.status !== 'escalated') await setStatus(thread.id, 'escalated', actor)
   await assignToOwner(thread, await escalationOwner(), actor)

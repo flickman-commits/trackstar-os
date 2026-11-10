@@ -15,7 +15,7 @@
  */
 import prisma from '../../db.js'
 import { createGiftCard } from './giftCards.js'
-import { slackTo } from '../../lib/slack.js'
+import { slackTo, slackText } from '../../lib/slack.js'
 import { UserError } from './errors.js'
 
 export const HALL_OF_FAME_CENTS = 5000
@@ -43,6 +43,6 @@ export async function createHallOfFameCard({ orderId, actor }) {
     prisma.systemConfig.create({ data: { key: KEY(order.id), value: JSON.stringify(card) } }),
     prisma.orderComment.create({ data: { orderId: order.id, text: `Hall of Fame: $50 gift card made in Shopify (ending ${card.last4})${customerId ? ', emailed to the customer by Shopify' : ''}.`, authorId: actor?.id || null, authorName: by } }),
   ])
-  await slackTo('admin', `:trophy: *Hall of Fame gift card* $50 for ${order.runnerName} (${order.raceName} ${order.raceYear}, order ${order.parentOrderNumber}), made by ${by}. Ends ${card.last4}.`).catch(() => {})
+  await slackTo('admin', `:trophy: *Hall of Fame gift card* $50 for ${slackText(order.runnerName, 120)} (${slackText(order.raceName, 120)} ${order.raceYear}, order ${order.parentOrderNumber}), made by ${slackText(by, 80)}. Ends ${card.last4}.`).catch(() => {})
   return { ...card, already: false }
 }

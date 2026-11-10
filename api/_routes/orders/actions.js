@@ -552,7 +552,7 @@ async function handleNotifyCustomDelay({ orderNumber, daysLate }, res, actor) {
 
   // A ping for the team, fire-and-forget.
   const dueDateText = originalDueDate ? ` (was due ${originalDueDate})` : ''
-  slackTo('alerts', `⏰ *Custom-order delay notice sent* - order *${displayNum}* for ${existing.customerName || 'customer'} (${existing.raceName || 'custom design'}). Promised *${days} day${days === 1 ? '' : 's'}* late${dueDateText}. Email went to ${existing.customerEmail}.`, { timeoutMs: 8000 })
+  slackTo('alerts', `⏰ *Custom-order delay notice sent* - order *${displayNum}* for ${slackText(existing.customerName || 'customer', 120)} (${slackText(existing.raceName || 'custom design', 120)}). Promised *${days} day${days === 1 ? '' : 's'}* late${dueDateText}. Email went to ${slackText(existing.customerEmail || '', 120)}.`, { timeoutMs: 8000 })
 
   console.log(`[actions/notify-custom-delay] Order ${orderNumber}: delay email sent (${days} days late)`)
   return res.status(200).json({ success: true, order: withoutRawOrderData(order) })
@@ -633,7 +633,7 @@ async function handleMessageCustomer({ orderId, body }, res, actor) {
   // orthogonal to design progress — the order stays in Dan's queue until he
   // actually sends proofs.
   const sender = [actor?.firstName, actor?.lastName].filter(Boolean).join(' ') || 'A designer'
-  slackTo('alerts', `💬 *${slackText(sender)}* sent a question to *${slackText(existing.customerName || 'the customer')}* on custom order *${slackLink(orderAppUrl(displayNum), displayNum)}* - emailed ${existing.customerEmail}. I'll ping you here when they reply.`)
+  slackTo('alerts', `💬 *${slackText(sender)}* sent a question to *${slackText(existing.customerName || 'the customer')}* on custom order *${slackLink(orderAppUrl(displayNum), displayNum)}* - emailed ${slackText(existing.customerEmail || '', 120)}. I'll ping you here when they reply.`)
 
   console.log(`[actions/message-customer] Order ${existing.orderNumber}: question sent to ${existing.customerEmail}`)
   return res.status(200).json({ success: true, message, portalUrl })
