@@ -34,7 +34,7 @@ import { acceptMatch, AcceptMatchError } from '../../../server/domain/research/a
 import prisma from '../../_lib/prisma.js'
 import { ensureApprovalToken } from '../../_lib/approvalToken.js'
 import { setDesignStatus, DESIGN_STATUSES } from '../../../server/domain/orders/designStatus.js'
-import { setCors, requireAdmin, isCronRequest } from '../../_lib/auth.js'
+import { setCors, requireAdmin, isCronRequest, refuseCrossSiteGet } from '../../_lib/auth.js'
 import { withoutRawOrderData } from '../../_lib/money.js'
 import { requireAdminRole, requireAdminOnly, requireCapability, recordAudit } from '../../_lib/users.js'
 import { alertError } from '../../_lib/alerts.js'
@@ -117,7 +117,7 @@ export default async function handler(req, res) {
     if (action === 'daily-design-update') {
       // Cron uses CRON_SECRET; a manual run (it posts to Slack) is admin only.
       const isCron = isCronRequest(req)
-      if (!isCron && !(await requireAdminOnly(req, res))) return
+      if (!isCron && (refuseCrossSiteGet(req, res) || !(await requireAdminOnly(req, res)))) return
       return await handleDailyDesignUpdate(res)
     }
     if (action === 'race-shorthands') {
@@ -145,7 +145,7 @@ export default async function handler(req, res) {
       // Detailed Artelo / Shopify / Etsy step-by-step connection diagnostics.
       // Admin only: it names env vars, the store and the Etsy shop, and it
       // rotates the Etsy refresh token.
-      if (!(await requireAdminOnly(req, res))) return
+      if (refuseCrossSiteGet(req, res) || !(await requireAdminOnly(req, res))) return
       return await handleTestConnections(res)
     }
     if (action === 'ping') {

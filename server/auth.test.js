@@ -72,3 +72,18 @@ test('safeEqual compares without throwing on different lengths', () => {
   assert.equal(safeEqual('abc', 'abc'), true)
   assert.equal(safeEqual('abc', 'abcd'), false)
 })
+
+test('a change from another site is cross-site; one from the app is not', async () => {
+  const { isCrossSite } = await import('../api/_lib/auth.js')
+  const req = h => ({ method: 'POST', headers: { host: 'fast.trackstar.art', ...h } })
+  assert.equal(isCrossSite(req({ origin: 'https://fast.trackstar.art', 'sec-fetch-site': 'same-origin' })), false)
+  assert.equal(isCrossSite(req({ origin: 'https://trackstar-fulfillment-git-x.vercel.app' })), false)
+  // The shop is same-site to the app, so the browser says same-site: the origin still gives it away.
+  assert.equal(isCrossSite(req({ origin: 'https://trackstar.art', 'sec-fetch-site': 'same-site' })), true)
+  assert.equal(isCrossSite(req({ origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' })), true)
+  assert.equal(isCrossSite(req({ origin: 'null' })), true)
+  // A server-side caller with no browser headers is not a page on another site.
+  assert.equal(isCrossSite(req({})), false)
+  // Served from a host not on the list: its own pages still count as its own.
+  assert.equal(isCrossSite({ method: 'POST', headers: { host: 'os.example.com', origin: 'https://os.example.com' } }), false)
+})

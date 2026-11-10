@@ -26,7 +26,7 @@
  * do with this report is write a bad pull request.
  */
 import prisma from '../../_lib/prisma.js'
-import { setCors, requireAdmin, isCronRequest, safeEqual } from '../../_lib/auth.js'
+import { setCors, requireAdmin, isCronRequest, safeEqual, refuseCrossSiteGet } from '../../_lib/auth.js'
 import { requireAdminOnly } from '../../_lib/users.js'
 import { agentActor } from '../../_lib/agentToken.js'
 import { runNightlySweep, combineSweepPasses, NIGHTLY_REPORT_KEY } from '../../../server/services/nightlySweep.js'
@@ -163,7 +163,7 @@ export default async function handler(req, res) {
   const isAgent = Boolean(agentActor(req))
   // People need the admin role: a run overwrites the stored report and its
   // baseline, and a POST files the report Matt reads in the morning.
-  if (!isCron && !isReportReader && !isAgent && !(await requireAdminOnly(req, res))) return
+  if (!isCron && !isReportReader && !isAgent && (refuseCrossSiteGet(req, res) || !(await requireAdminOnly(req, res)))) return
 
   const dryRun = req.query?.dryRun === '1' || req.query?.dryRun === 'true'
 

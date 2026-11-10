@@ -244,6 +244,40 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5173',
 ]
 
+/** This app's own origin: the host the request came to, a known origin, or this project's preview. */
+function ownOrigin(origin, req) {
+  if (ALLOWED_ORIGINS.includes(origin)) return true
+  if (/^https:\/\/trackstar-fulfillment(-[a-z0-9-]+)?\.vercel\.app$/.test(origin)) return true
+  try { return new URL(origin).host === String(req.headers?.host || '') } catch { return false }
+}
+
+/**
+ * A request another site's page made with the signed-in person's cookie.
+ * SameSite=Lax keeps the cookie off most of those, but not a form posted from
+ * a page on another *.trackstar.art host (the shop is same-site), and not a
+ * top-level link. The browser says where a request came from (Sec-Fetch-Site,
+ * Origin); a change is only taken from this app's own pages.
+ */
+export function isCrossSite(req) {
+  if (String(req.headers?.['sec-fetch-site'] || '') === 'cross-site') return true
+  const origin = req.headers?.origin
+  if (origin === undefined || origin === '') return false
+  // "null" is a sandboxed or redirected page: not ours.
+  if (origin === 'null') return true
+  return !ownOrigin(String(origin), req)
+}
+
+/**
+ * For the few GET endpoints a person can call that change something (post to
+ * Slack, rotate a token, run a sweep): refuse one that a link on another site
+ * started. Answers 403 and returns true when refused.
+ */
+export function refuseCrossSiteGet(req, res) {
+  if (String(req.headers?.['sec-fetch-site'] || '') !== 'cross-site') return false
+  res.status(403).json({ error: 'Open this from TrackstarOS, not from a link on another site.' })
+  return true
+}
+
 /**
  * Set CORS headers. Returns true if this was a preflight OPTIONS request (caller should return).
  */
@@ -300,6 +334,12 @@ export async function requireAdmin(req, res) {
   const cookies = parseCookies(req)
   if (cookies[SESSION_COOKIE]) {
     const actor = await liveSession(cookies[SESSION_COOKIE])
+    // A change made with this cookie from another site's page (isCrossSite).
+    // Reads stay open: OAuth callbacks and links arrive cross-site as GETs.
+    if (actor && !READ_METHODS.has(String(req.method || 'GET').toUpperCase()) && isCrossSite(req)) {
+      res.status(403).json({ error: 'That request came from another site. Make the change from TrackstarOS.' })
+      return false
+    }
     if (actor) {
       const viewing = cookies[VIEW_AS_COOKIE] ? await viewAsTarget(req, actor) : null
       if (!viewing) return actor

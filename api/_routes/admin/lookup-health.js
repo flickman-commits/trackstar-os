@@ -17,7 +17,7 @@
  * underneath, because the decision being made here is "which race do I go fix",
  * not "what happened at 09:32".
  */
-import { setCors, requireAdmin } from '../../_lib/auth.js'
+import { setCors, requireAdmin, refuseCrossSiteGet } from '../../_lib/auth.js'
 import { requireAdminOnly } from '../../_lib/users.js'
 import { agentActor } from '../../_lib/agentToken.js'
 import prisma from '../../_lib/prisma.js'
@@ -102,7 +102,7 @@ export default async function handler(req, res) {
   // token is checked against a fixed allowlist rather than a role.
   // People need the admin role: save-override and discover-ids decide which
   // event a race's results come from, which is what gets printed.
-  if (!agentActor(req) && !(await requireAdminOnly(req, res))) return
+  if (!agentActor(req) && (refuseCrossSiteGet(req, res) || !(await requireAdminOnly(req, res)))) return
 
   res.setHeader('Cache-Control', 'private, no-store, max-age=0')
 
