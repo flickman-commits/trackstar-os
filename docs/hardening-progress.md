@@ -1,0 +1,80 @@
+# Hardening build: progress
+
+The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per session. Marks: `[x]` done, `[~]` partly done, `[!]` not done (reason given), `[ ]` not started. Commits stay local until Matt pushes.
+
+## Phase 1: Make the build itself safe
+- [ ] 1.1 Run tests against an offline database address
+- [ ] 1.2 `CONNECTIONS_FORCE_OFF` switch for local sessions
+- [ ] 1.3 Lint server code; lint in the build
+- [ ] 1.4 Keep stray business files out of git
+- [ ] 1.5 Pin the Node version
+
+## Phase 2: Stop a wrong print reaching production
+- [ ] 2.1 Re-check an approved design against the order when it is sent
+- [ ] 2.2 Close stale approved designs when the order is edited
+- [ ] 2.3 Only a design waiting for review can be approved
+- [ ] 2.4 No research under a guessed year (`missing_year`)
+- [ ] 2.5 A result found for a different race must not print
+- [ ] 2.6 Hold or Reject stops an attached print on a multi-print order
+- [ ] 2.7 Customer approval page refuses a second answer
+- [ ] 2.8 The "A" shortcut does not approve from behind a dialog
+- [ ] 2.9 State from one order does not carry into the next
+
+## Phase 3: Tighten the research gate
+- [ ] 3.1 A single unlabelled time is not proof of chip time
+- [ ] 3.2 Same-name finishers and the wrong year
+- [ ] 3.3 Never overwrite a customer-typed time on the web path
+- [ ] 3.4 MCP `accept_match` does not accept an unchecked result
+- [ ] 3.5 Scraper health probe compares the time, not only the bib
+
+## Phase 4: Security
+- [ ] 4.1 Remove the legacy `x-admin-secret` door; `SESSION_SECRET` required
+- [ ] 4.2 Validate the cart photo path
+- [ ] 4.3 Cap discount codes non-admins can create
+- [ ] 4.4 Signing out ends the session
+- [ ] 4.5 Refuse cross-site requests that change things
+- [ ] 4.6 No session recording on pages with an access token
+- [ ] 4.7 Smaller items (Etsy OAuth state, Slack escaping, bulk tokens, proof image URLs, worker redirects)
+- [ ] 4.8 Retire `MCP_TOKEN` / `MCP_WRITE_TOKEN`
+
+## Phase 5: Reliability and alerting
+- [ ] 5.1 Alert when a cron fails
+- [ ] 5.2 Watchdog for crons that stop
+- [ ] 5.3 Import paging and a daily Shopify/Etsy reconciliation
+- [ ] 5.4 Auto-import time budget
+- [ ] 5.5 Bulk-runner order creation cannot double-create (suspected)
+- [ ] 5.6 Photo-later emails and refunds
+- [ ] 5.7 Etsy token refresh
+- [ ] 5.8 Unique (orderId, version) and (orderId, raceId)
+- [ ] 5.9 Import-side completion goes through `completeOrder`
+- [ ] 5.10 Photo add-on charge without a photo (suspected)
+- [ ] 5.11 "When production is broken" notes in the README
+
+## Phase 6: AI and outbound email
+- [ ] 6.1 Weekly playbook review proposes, does not publish
+- [ ] 6.2 Mark untrusted text in drafting and triage prompts
+- [ ] 6.3 LLM plumbing (timeouts, max_tokens, model ids, retry backoff)
+- [ ] 6.4 Sales suppression, reply detection, `[First line]` in AI Rewrite
+- [ ] 6.5 Do not trust the From address without authentication
+- [ ] 6.6 Support reply idempotency
+- [ ] 6.7 Guard rails for the nightly routine
+
+## Phase 7: Customer pages and the operator's screen
+- [ ] 7.1 A failed load is not a dead link
+- [ ] 7.2 Session handling does not throw away work
+- [ ] 7.3 A refresh after a save does not show old data
+- [ ] 7.4 Support inbox ordering and unsent drafts
+- [ ] 7.5 Errors people can read
+- [ ] 7.6 Confirm and pending guards
+- [ ] 7.7 Smaller items
+
+## Phase 8: Housekeeping
+- [ ] 8.1 Dependencies
+- [ ] 8.2 Environment file drift
+- [ ] 8.3 One Shopify API version
+- [ ] 8.4 Stale documentation
+- [ ] 8.5 Dead code
+- [ ] 8.6 List of unused public files
+
+## Waiting on Matt
+(nothing yet)
