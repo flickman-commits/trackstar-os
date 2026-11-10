@@ -15,6 +15,7 @@ import prisma from '../../db.js'
 import { sendNew, stripQuoted } from './mailbox.js'
 import { replyToHtml } from './format.js'
 import { UserError } from './errors.js'
+import { senderOwnerId } from './customerMail.js'
 import { listMockups, resolveMockup } from './mockups.js'
 import { holdForCustomer } from '../render/arteloSend.js'
 
@@ -70,11 +71,13 @@ export async function emailCustomer({ orderId, subject, text, actor, mockupRef =
   const stored = await sendNew({ userId: actor?.id || null, to, subject: subj, html: replyToHtml(body), text: body, attachments })
   const held = mockupRef ? await holdForCustomer({ orderId: order.id, actor }) : null
   const by = actorName(actor)
+  // The sender owns the conversation only if they work in Support (a designer does not).
+  const owner = await senderOwnerId(actor)
   await prisma.$transaction([
     prisma.supportThread.update({
       where: { id: stored.threadId },
       // Waiting on the customer from the start: the ball is in their court until they reply (a reply moves it to open).
-      data: { status: waiting ? 'waiting' : 'closed', ...(waiting ? {} : { notWaitingAt: new Date() }), assigneeId: actor?.id || undefined, ...(order.customerName ? { customerName: order.customerName } : {}) },
+      data: { status: waiting ? 'waiting' : 'closed', ...(waiting ? {} : { notWaitingAt: new Date() }), assigneeId: owner || undefined, ...(order.customerName ? { customerName: order.customerName } : {}) },
     }),
     prisma.supportNote.create({ data: { threadId: stored.threadId, kind: 'event', body: `${by} emailed from Fulfillment about #${number}`, authorId: actor?.id || null, authorName: by } }),
     prisma.orderComment.create({ data: { orderId: order.id, text: mockupRef

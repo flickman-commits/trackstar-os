@@ -6,7 +6,7 @@
  * names the file by `ref` (server/domain/support/uploads.js).
  */
 import { setCors } from '../../_lib/auth.js'
-import { requireCapability } from '../../_lib/users.js'
+import { requireAnyCapability } from '../../_lib/users.js'
 import { uploadSlot } from '../../../server/domain/support/uploads.js'
 
 const SAFE = /^(Only images|That file is over)/
@@ -14,7 +14,8 @@ const SAFE = /^(Only images|That file is over)/
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'POST, OPTIONS' })) return
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
-  const user = await requireCapability(req, res, 'support')
+  // Designers attach files to Email customer on custom orders too.
+  const user = await requireAnyCapability(req, res, ['support', 'orders.message_customer'])
   if (!user) return
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {}

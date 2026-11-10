@@ -157,6 +157,26 @@ export async function requireCapability(req, res, capability) {
 }
 
 /**
+ * Signed in and holding at least one of `capabilities`. Returns the user with
+ * `has` (the ones they hold), so the handler can narrow what the weaker one
+ * may do; or null after responding 401/403.
+ */
+export async function requireAnyCapability(req, res, capabilities) {
+  const actor = (await requireAdmin(req, res))
+  if (!actor) return null
+  const user = await loadActiveUser(actor)
+  if (!user) {
+    res.status(401).json({ error: 'Your account is no longer active. Sign in again.' })
+    return null
+  }
+  const has = new Set()
+  for (const c of capabilities) if (user.isSystem || await can(user, c)) has.add(c)
+  if (has.size) return Object.assign(user, { has })
+  res.status(403).json({ error: 'That is not part of your role. Ask Matt if you need it.', code: 'not_allowed' })
+  return null
+}
+
+/**
  * Authenticate AND require the admin role, in one call.
  *
  * `requireAdmin` is a misnomer inherited from when this app had one shared

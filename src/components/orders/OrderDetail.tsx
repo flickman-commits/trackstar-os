@@ -1654,8 +1654,9 @@ Thank you!`
                             : proofActions.messageCount > 0 ? <span className="text-off-black/40 font-normal">({proofActions.messageCount})</span> : null}
                         </button>
                       )}
-                      {selectedOrder.customerEmail && can('support') && (
-                        <button onClick={() => setEmailingOrder(selectedOrder)} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2" title={`Email ${selectedOrder.customerEmail} from fast@ (opens a Support conversation)`}>
+                      {/* Designers too (no Support access): the conversation opens in Support, unassigned. */}
+                      {selectedOrder.customerEmail && (can('support') || can('orders.message_customer')) && (
+                        <button onClick={() => setEmailingOrder(selectedOrder)} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2" title={`Email ${selectedOrder.customerEmail} from fast@ (opens a Support conversation; replies come into Support)`}>
                           <Mail className="w-3.5 h-3.5" /> Email customer from Support
                         </button>
                       )}

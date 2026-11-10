@@ -7,9 +7,15 @@
  *        to approve and the print is held from production. waiting: false (Hall of Fame) sends it without parking the order in Waiting on customer.
  *
  * The address comes from the order, never from the page.
+ *
+ * Designers (orders.message_customer, no Support access) may use it on a
+ * custom order: the email goes out the same way and opens a Support
+ * conversation, but it is not assigned to them and they are not shown the
+ * customer's other conversations.
  */
 import { setCors } from '../../_lib/auth.js'
-import { requireCapability, recordAudit } from '../../_lib/users.js'
+import { requireAnyCapability, recordAudit } from '../../_lib/users.js'
+import prisma from '../../_lib/prisma.js'
 import { emailCustomer, conversationsForOrder } from '../../../server/domain/support/compose.js'
 import { listMockups } from '../../../server/domain/support/mockups.js'
 import { shipToForOrder } from '../../../server/domain/support/threads.js'
@@ -19,13 +25,20 @@ const SAFE = /^(No such order|Unknown attachment|That attachment is gone|That mo
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, POST, OPTIONS' })) return
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
-  const user = await requireCapability(req, res, 'support')
+  const user = await requireAnyCapability(req, res, ['support', 'orders.message_customer'])
   if (!user) return
+  const support = user.has.has('support')
+  if (!support) {
+    // A designer: custom orders only.
+    const id = String((req.method === 'GET' ? req.query?.orderId : (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {}).orderId) || '')
+    const o = id ? await prisma.order.findUnique({ where: { id }, select: { trackstarOrderType: true } }) : null
+    if (o?.trackstarOrderType !== 'custom') return res.status(403).json({ error: 'That is not part of your role. Ask Matt if you need it.', code: 'not_allowed' })
+  }
   if (req.method === 'GET') {
     try {
       const orderId = String(req.query?.orderId || '')
       const [threads, mockups, shipTo] = await Promise.all([conversationsForOrder(orderId, { all: req.query?.all === '1' }), orderId ? listMockups([orderId]).catch(() => []) : [], shipToForOrder(orderId).catch(() => null)])
-      return res.status(200).json({ threads, mockups, shipTo })
+      return res.status(200).json({ threads: support ? threads : [], mockups, shipTo })
     } catch (error) {
       console.error('[API /support/compose GET]', error)
       return res.status(500).json({ error: 'Could not read Support conversations' })
