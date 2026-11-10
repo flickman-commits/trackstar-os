@@ -45,8 +45,22 @@ const clean = s => String(s || '').replace(/[\\/:*?"<>|#]+/g, '').replace(/\s+/g
  * @param {{ order: object, proof: { imageUrl: string, version: number, fileName?: string } }} args
  * @returns {Promise<string|null>} the Drive file id, or null on failure
  */
+/**
+ * Only our own storage is fetched. A proof's imageUrl can be typed in by
+ * staff, and the server fetching whatever address it holds would let it read
+ * internal addresses and copy what it finds into Drive.
+ */
+function ourStorageUrl(u) {
+  try {
+    const url = new URL(String(u))
+    const base = new URL(String(process.env.SUPABASE_URL || ''))
+    return url.protocol === 'https:' && url.host === base.host && url.pathname.startsWith('/storage/v1/object/')
+  } catch { return false }
+}
+
 export async function saveApprovedMockup({ order, proof }) {
   try {
+    if (!ourStorageUrl(proof.imageUrl)) throw new Error('the proof image is not in our storage, so it is not fetched')
     const res = await fetchWithTimeout(proof.imageUrl, {}, 20000)
     if (!res.ok) throw new Error(`image download ${res.status}`)
     const mimeType = res.headers.get('content-type') || 'image/jpeg'

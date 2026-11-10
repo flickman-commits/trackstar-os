@@ -328,7 +328,7 @@ async function relayLoop() {
       try { host = new URL(r.url).host } catch { /* refused below */ }
       if (!RELAY_HOSTS.includes(host)) { await api('relayDone', { id: r.id, error: `not a relay host: ${host}` }).catch(() => {}); continue }
       try {
-        const res = await fetch(r.url, { method: r.method || 'GET', headers: r.headers || {}, body: r.body || undefined, redirect: 'follow' })
+        const res = await relayFetch(r)
         const body = await res.text()
         const setCookies = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : []
         await api('relayDone', { id: r.id, status: res.status, body, setCookies })
@@ -340,6 +340,23 @@ async function relayLoop() {
     }
     await sleep(relays.length ? 300 : RELAY_POLL_MS)
   }
+}
+
+/**
+ * Fetch for the relay, following redirects only to the allowed relay hosts.
+ * With redirect: 'follow' an allowed site (or whoever controls it) could
+ * bounce this Mac to any address on its home network.
+ */
+async function relayFetch(r) {
+  let url = r.url
+  for (let hop = 0; hop < 5; hop++) {
+    const res = await fetch(url, { method: hop ? 'GET' : (r.method || 'GET'), headers: r.headers || {}, body: hop ? undefined : (r.body || undefined), redirect: 'manual' })
+    if (res.status < 300 || res.status >= 400 || !res.headers.get('location')) return res
+    const next = new URL(res.headers.get('location'), url)
+    if (!RELAY_HOSTS.includes(next.host) || !/^https?:$/.test(next.protocol)) throw new Error(`redirected off the relay hosts, to ${next.host}`)
+    url = next.toString()
+  }
+  throw new Error('too many redirects')
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
