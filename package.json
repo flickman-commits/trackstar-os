@@ -16,7 +16,7 @@
     "lint:scrapers": "node scripts/lint-scrapers.js",
     "test:scrapers": "node scripts/verify-scraper-chip-times.js",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "test": "node --test \"server/**/*.test.js\""
+    "test": "DATABASE_URL=postgresql://offline:offline@127.0.0.1:1/offline DIRECT_URL=postgresql://offline:offline@127.0.0.1:1/offline node --test \"server/**/*.test.js\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
