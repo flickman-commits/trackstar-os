@@ -1,11 +1,12 @@
 /**
  * Shared auth + CORS helpers for API endpoints.
  *
- * Auth: Merchant endpoints require either a valid `ts_session` cookie (set by
- *   the browser login flow in api/_routes/auth/login.js) or the `x-admin-secret` header
- *   (server-to-server callers: Vercel crons, internal tooling). The session
- *   token is a stateless HMAC-signed value — no DB lookup, no client-readable
- *   secret in the bundle.
+ * Auth: Merchant endpoints require a valid `ts_session` cookie (set by the
+ *   browser login flow in api/_routes/auth/login.js). Crons present
+ *   CRON_SECRET (isCronRequest), agents an API key (_lib/apiKeys.js). The
+ *   shared `x-admin-secret` header was removed on 2026-11-10: its value had
+ *   been compiled into the public bundle from April to June 2026. The session
+ *   token is an HMAC-signed value checked against the database (liveSession).
  * CORS: Locked to known origins (Vercel + localhost for dev).
  */
 
@@ -16,13 +17,21 @@ import { recordCronRun } from '../../server/lib/cronJobs.js'
 export const SESSION_COOKIE = 'ts_session'
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
-/** Signing key for session tokens — dedicated secret, falls back to ADMIN_SECRET. */
+/**
+ * Signing key for session and view-as tokens: SESSION_SECRET only. It used to
+ * fall back to ADMIN_SECRET, whose value was public for two months, so a
+ * missing SESSION_SECRET now means no session verifies (and none can be made)
+ * instead of sessions signed with a key others have.
+ */
 function sessionSecret() {
-  return process.env.SESSION_SECRET || process.env.ADMIN_SECRET || ''
+  return String(process.env.SESSION_SECRET || '').trim()
 }
 
 function sign(payload) {
-  return crypto.createHmac('sha256', sessionSecret()).update(payload).digest('hex')
+  const key = sessionSecret()
+  // Never sign with an empty key: that is a signature anyone can make.
+  if (!key) throw new Error('SESSION_SECRET is not set; sessions cannot be signed')
+  return crypto.createHmac('sha256', key).update(payload).digest('hex')
 }
 
 /** Constant-time string compare that won't throw on length mismatch. */
@@ -253,7 +262,7 @@ export function setCors(req, res, { methods = 'GET, POST, OPTIONS', allowPublic 
   }
 
   res.setHeader('Access-Control-Allow-Methods', methods)
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-admin-secret, Cookie')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cookie')
   res.setHeader('Access-Control-Allow-Credentials', 'true')
 
   if (req.method === 'OPTIONS') {
@@ -264,12 +273,6 @@ export function setCors(req, res, { methods = 'GET, POST, OPTIONS', allowPublic 
   return false
 }
 
-/**
- * Authorize a request. Returns true if authorized, sends 401/500 and returns
- * false otherwise. Accepts either:
- *   1. a valid `ts_session` cookie (browser users), or
- *   2. the `x-admin-secret` header matching ADMIN_SECRET (server-to-server).
- */
 /**
  * Require an authenticated caller and return WHO they are.
  *
@@ -285,9 +288,8 @@ export function setCors(req, res, { methods = 'GET, POST, OPTIONS', allowPublic 
  * and requireCapability in _lib/users.js.
  */
 export async function requireAdmin(req, res) {
-  const secret = process.env.ADMIN_SECRET
-  if (!secret) {
-    console.error('[auth] ADMIN_SECRET not configured - blocking request')
+  if (!sessionSecret()) {
+    console.error('[auth] SESSION_SECRET not configured - blocking request')
     res.status(500).json({ error: 'Server misconfigured' })
     return false
   }
@@ -307,15 +309,6 @@ export async function requireAdmin(req, res) {
       }
       return viewing
     }
-  }
-
-  // Server-to-server path: shared admin secret header (constant-time compare).
-  // It has no user row and acts as "system". It is deliberately NOT an admin:
-  // loadActiveUser refuses it, so it reaches only endpoints that need nothing
-  // more than a signed-in caller, never a role-gated or destructive one.
-  const provided = req.headers['x-admin-secret']
-  if (provided && safeEqual(provided, secret)) {
-    return { id: null, email: 'system', name: 'System', role: 'system', isSystem: true }
   }
 
   res.status(401).json({ error: 'Unauthorized' })

@@ -1491,7 +1491,7 @@ async function handleHealthCheck(res, { sendSlack = false } = {}) {
   // 6. Environment variables
   results.checks.envVars = (() => {
     const required = [
-      'DATABASE_URL', 'ADMIN_SECRET', 'CRON_SECRET',
+      'DATABASE_URL', 'SESSION_SECRET', 'CRON_SECRET',
       'SHOPIFY_STORE', 'SHOPIFY_CLIENT_ID', 'SHOPIFY_CLIENT_SECRET',
       'ETSY_API_KEY', 'ETSY_SHARED_SECRET', 'ETSY_SHOP_ID',
       'RESEND_API_KEY', 'SLACK_BOT_TOKEN',

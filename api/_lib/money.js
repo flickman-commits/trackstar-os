@@ -1,7 +1,7 @@
 /**
  * Money is for admins: prices, totals, costs, discounts, margins and
  * commission never reach another role, in the UI or in an API response.
- * The x-admin-secret system caller (server to server) counts as an admin here.
+ * A system caller (an internal job, or an API key with no person) counts as an admin here.
  */
 export function seesMoney(actor) {
   return actor?.role === 'admin' || actor?.isSystem === true

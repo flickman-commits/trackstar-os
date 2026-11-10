@@ -99,11 +99,9 @@ export function isValidEmail(email) {
  */
 export async function loadActiveUser(actor) {
   if (!actor) return null
-  // The shared x-admin-secret header has no user row. It used to pass as an
-  // admin here, which made one leaked env var a key to every destructive
-  // action. Nothing in the app sends it any more (crons use CRON_SECRET, the
-  // nightly agent its own token, people their own sign-in), so it is refused
-  // for anything that needs a person or a role.
+  // A system caller (an internal job, an API key with no person) has no user
+  // row, so it is refused for anything that needs a person or a role. The
+  // shared x-admin-secret header that used to arrive here was removed.
   if (actor.isSystem) return null
   if (!actor.id) return null
   const user = await prisma.user.findUnique({

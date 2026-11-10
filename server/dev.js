@@ -39,7 +39,7 @@ app.options('/api/*', (req, res) => {
   const origin = String(req.headers.origin || '')
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) res.setHeader('Access-Control-Allow-Origin', origin)
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-admin-secret, Cookie')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cookie')
   res.setHeader('Access-Control-Allow-Credentials', 'true')
   res.status(204).end()
 })
