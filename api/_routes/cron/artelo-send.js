@@ -11,6 +11,7 @@
  */
 import { sendBulkDue } from '../../../server/domain/bulk/send.js'
 import { isCronRequest } from '../../_lib/auth.js'
+import { alertCronFailure } from '../../_lib/alerts.js'
 import { sendDue } from '../../../server/domain/render/arteloSend.js'
 
 export default async function handler(req, res) {
@@ -23,6 +24,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ ...out, bulk })
   } catch (error) {
     console.error('[cron/artelo-send]', error)
+    await alertCronFailure('artelo-send', error)
     return res.status(500).json({ error: 'Send failed' })
   }
 }

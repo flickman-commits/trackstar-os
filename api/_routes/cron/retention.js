@@ -3,6 +3,7 @@
  * log tables (server/lib/retention.js). Cron only.
  */
 import { isCronRequest } from '../../_lib/auth.js'
+import { alertCronFailure } from '../../_lib/alerts.js'
 import { pruneLogs } from '../../../server/lib/retention.js'
 
 export default async function handler(req, res) {
@@ -13,6 +14,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ removed })
   } catch (error) {
     console.error('[cron/retention]', error)
+    await alertCronFailure('retention', error)
     return res.status(500).json({ error: 'Retention failed' })
   }
 }

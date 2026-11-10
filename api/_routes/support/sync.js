@@ -11,6 +11,7 @@
  * runs nothing.
  */
 import { setCors, isCronRequest } from '../../_lib/auth.js'
+import { alertCronFailure } from '../../_lib/alerts.js'
 import { requireCapability } from '../../_lib/users.js'
 import { sync, isConnected, alertMailboxDown, clearMailboxDownAlert } from '../../../server/domain/support/mailbox.js'
 import { refreshTokenIfDue, ensureSubscribed, catchUpIfDue } from '../../../server/domain/support/instagram.js'
@@ -60,6 +61,8 @@ export default async function handler(req, res) {
     return res.status(200).json({ ...out, drafts })
   } catch (error) {
     console.error('[API /support/sync]', error)
+    // Only the cron's failures: a person's Refresh sees its own error.
+    if (cron) await alertCronFailure('support-sync', error)
     return res.status(500).json({ error: 'The mailbox sync failed. Try again in a minute.' })
   }
 }

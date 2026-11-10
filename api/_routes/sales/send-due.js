@@ -6,6 +6,7 @@
  * the reason when the deal moved since. See server/domain/sales/scheduled.js.
  */
 import { isCronRequest } from '../../_lib/auth.js'
+import { alertCronFailure } from '../../_lib/alerts.js'
 import { sendDue } from '../../../server/domain/sales/scheduled.js'
 
 export default async function handler(req, res) {
@@ -16,6 +17,7 @@ export default async function handler(req, res) {
     return res.status(200).json(out)
   } catch (error) {
     console.error('[API /sales/send-due]', error)
+    await alertCronFailure('send-due', error)
     return res.status(500).json({ error: 'Send later run failed' })
   }
 }

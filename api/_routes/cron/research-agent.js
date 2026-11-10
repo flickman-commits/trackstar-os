@@ -5,6 +5,7 @@
  * Cron only.
  */
 import { isCronRequest } from '../../_lib/auth.js'
+import { alertCronFailure } from '../../_lib/alerts.js'
 import { runResearchAgent } from '../../../server/domain/research/researchAgent.js'
 
 export default async function handler(req, res) {
@@ -15,6 +16,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ summary: out.summary, cleared: out.cleared.length, suggested: out.suggested.length, person: out.person.length })
   } catch (error) {
     console.error('[cron/research-agent]', error)
+    await alertCronFailure('research-agent', error)
     return res.status(500).json({ error: 'Research agent failed' })
   }
 }
