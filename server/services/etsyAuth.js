@@ -141,13 +141,3 @@ export function clearTokenCache() {
   cachedToken = null
   tokenExpiry = null
 }
-
-/**
- * Disconnect the internal Prisma client
- */
-export async function disconnectEtsyAuth() {
-  if (prismaInstance) {
-    await prismaInstance.$disconnect()
-    prismaInstance = null
-  }
-}

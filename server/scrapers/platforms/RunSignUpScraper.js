@@ -1,3 +1,5 @@
+// The Puppeteer fallback's page.evaluate callback runs in the browser, where these exist.
+/* global document, window */
 /**
  * RunSignUp Platform Scraper
  * Consolidates all races hosted on RunSignUp (Kiawah Island, Louisiana, etc.)
