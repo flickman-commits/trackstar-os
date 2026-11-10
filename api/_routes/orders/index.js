@@ -2,7 +2,8 @@ import { isTriathlon } from '../../../server/domain/orders/triathlon.js'
 import prisma from '../../_lib/prisma.js'
 import { seesMoney } from '../../_lib/money.js'
 import { setCors, requireAdmin } from '../../_lib/auth.js'
-import { hasScraperForRace } from '../../../server/scrapers/index.js'
+import { hasScraperForRace, getCanonicalRaceName } from '../../../server/scrapers/index.js'
+import { pickResearch } from '../../../server/domain/research/pickResearch.js'
 import { isExpeditedShipping, getShippingMethod } from '../../../server/lib/shipping.js'
 import { getOrderTotalUsd, isBigSpender, BIG_SPENDER_THRESHOLD_USD } from '../../../server/lib/orderValue.js'
 import { getProductInfo, loadProductCatalog } from '../../../server/lib/productCatalog.js'
@@ -266,8 +267,8 @@ export default async function handler(req, res) {
     // Transform orders to include flattened research data
     const transformedOrders = orders.map(order => {
       // Get the best research record: prefer 'found', then most recent
-      const foundResearch = order.runnerResearch?.find(r => r.researchStatus === 'found')
-      const research = foundResearch || order.runnerResearch?.[0]
+      // Only research for the order's own race and year: a row left from before the race was corrected is not its result (pickResearch.js).
+      const research = pickResearch(order.runnerResearch, order.raceNameOverride ?? order.raceName, order.yearOverride ?? order.raceYear, getCanonicalRaceName) || undefined
       // Compute effective values (override if present, else original)
       const effectiveRaceYear = order.yearOverride ?? order.raceYear
       const effectiveRaceName = order.raceNameOverride ?? order.raceName
@@ -515,7 +516,7 @@ export default async function handler(req, res) {
     for (const t of transformedOrders) {
       const o = byId.get(t.id)
       if (!o || o.trackstarOrderType !== 'standard') continue
-      const research = o.runnerResearch?.find(r => r.researchStatus === 'found') || o.runnerResearch?.[0] || null
+      const research = pickResearch(o.runnerResearch, o.raceNameOverride ?? o.raceName, o.yearOverride ?? o.raceYear, getCanonicalRaceName)
       const race = research?.race || raceFor(o.raceNameOverride ?? o.raceName, o.yearOverride ?? o.raceYear)
       t.pipeline = pipelineFor({ order: o, research, race, render: o.renderJobs?.find(j => !j.spec?.altSize) || null, hasScraper: t.hasScraperAvailable, templates: templateKeys, noTimeGaps: gaps, photoUnpaid: t.photoUnpaid, workerOnline, waitingOnCustomer: t.waitingOnCustomerSince || null, emailBounced: t.emailBouncedAt || null })
     }

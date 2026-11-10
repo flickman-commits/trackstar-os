@@ -14,6 +14,7 @@ import { unpaidPhotoRows } from '../orders/photoPayment.js'
 import { awaitingLaterPhoto } from '../orders/photoLaterState.js'
 import { printBlockers } from '../races/verification.js'
 import { isMainEvent, getCanonicalRaceName, namedEventsFor } from '../../scrapers/index.js'
+import { pickResearch } from '../research/pickResearch.js'
 
 export const SIZES = ['8x10', '12x18', '16x24']
 
@@ -92,7 +93,7 @@ export const SPEC_SELECT = {
   runnerName: true, runnerNameOverride: true, productSize: true, hadNoTime: true,
   photoPath: true, photoAddedManually: true, photoFree: true, photoLater: true, photoLaterClosedAt: true, shopifyOrderData: true, arteloOrderData: true,
   bulkOrder: { select: { number: true, paidAt: true, printKind: true } },
-  runnerResearch: { orderBy: { id: 'desc' }, select: { researchStatus: true, bibNumber: true, officialTime: true, officialPace: true, eventType: true, race: { select: { id: true, raceDate: true, raceDateSource: true, raceDateSourceUrl: true, raceDateEvidence: true, raceDateVerifiedAt: true, raceDateConfirmedByPerson: true, location: true, weatherCondition: true, weatherTemp: true, weatherFetchedAt: true, weatherConfirmedAt: true, firstPrintedAt: true } } } },
+  runnerResearch: { orderBy: { id: 'desc' }, select: { researchStatus: true, bibNumber: true, officialTime: true, officialPace: true, eventType: true, race: { select: { id: true, raceName: true, year: true, raceDate: true, raceDateSource: true, raceDateSourceUrl: true, raceDateEvidence: true, raceDateVerifiedAt: true, raceDateConfirmedByPerson: true, location: true, weatherCondition: true, weatherTemp: true, weatherFetchedAt: true, weatherConfirmedAt: true, firstPrintedAt: true } } } },
 }
 
 /**
@@ -118,13 +119,14 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
   if (!['standard', 'sample'].includes(order.trackstarOrderType) && !bulkStandard) reasons.push('Only standard race prints are rendered')
   if (!SIZES.includes(order.productSize)) reasons.push(`No artboard for size "${order.productSize}"`)
   const edition = editionOf(order)
-  const research0 = order.runnerResearch?.find(r => r.researchStatus === 'found') || order.runnerResearch?.[0]
+  // Only research for the order's own race and year: a row left from before the race was corrected never prints.
+  const research0 = pickResearch(order.runnerResearch, raceName, raceYear, getCanonicalRaceName)
   const template = resolveTemplate(order, raceName, research0?.eventType, k => templates.includes(k))
   const eventTag = template.includes(' / ') && !edition && !isBulkCobranded(order) ? eventLabel(research0?.eventType) : null
   if (!templates.includes(template)) reasons.push(isBulkCobranded(order) ? `No checked co-branded production file for ${order.bulkOrder.number} yet` : `No prepared template for ${template}`)
   if (!name) reasons.push('No runner name')
 
-  const research = order.runnerResearch?.find(r => r.researchStatus === 'found') || order.runnerResearch?.[0]
+  const research = research0
   const race = research?.race || raceRow
   // The research record is the only source of a result (customerResults.js).
   const bib = research?.bibNumber || null

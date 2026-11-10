@@ -11,6 +11,7 @@ import { unpaidPhotoRows } from './photoPayment.js'
 import { noTimeGaps, onlineWorkers } from '../render/templates.js'
 import { getCanonicalRaceName, hasScraperForRace } from '../../scrapers/index.js'
 import { ensureOverridesLoaded } from '../../scrapers/scraperOverrides.js'
+import { pickResearch } from '../research/pickResearch.js'
 
 /** Race rows, checked production files, NO TIME gaps, and whether a render worker is on. */
 export async function loadPipelineContext() {
@@ -73,7 +74,8 @@ export async function pipelinesFor(ids) {
   const bounced = await bouncedCustomers(openEmails).catch(() => new Map())
 
   for (const o of orders) {
-    const research = o.runnerResearch?.find(r => r.researchStatus === 'found') || o.runnerResearch?.[0] || null
+    // Only research for the order's own race and year (pickResearch.js), as the render does.
+    const research = pickResearch(o.runnerResearch, o.raceNameOverride ?? o.raceName, o.yearOverride ?? o.raceYear, getCanonicalRaceName)
     const race = research?.race || ctx.raceFor(o.raceNameOverride ?? o.raceName, o.yearOverride ?? o.raceYear)
     out.set(o.id, pipelineFor({
       order: o, research, race, render: o.renderJobs?.[0] || null,
