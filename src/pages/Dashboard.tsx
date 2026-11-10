@@ -577,25 +577,67 @@ export default function Dashboard() {
     }
   }
 
-  // Orders come in on their own now (the auto-import cron, every 10 minutes).
-  // Check the stamp each minute and reload the list when it moves.
+  // Reload just these orders (from /api/orders/changes) and merge them into
+  // the list: changed ones replaced, finished or moved ones dropped, new ones added.
+  const refreshOrders = useCallback(async (ids: string[]) => {
+    const view = activeView
+    const r = await apiFetch(`/api/orders?type=${view}${view === 'standard' ? '&scope=open' : ''}&ids=${ids.map(encodeURIComponent).join(',')}`)
+    if (!r.ok) throw new Error('reload failed')
+    const data = await r.json()
+    if (activeViewRef.current !== view) return
+    const fresh: Order[] = (data.orders || []).map(mapOrder)
+    const byId = new Map(fresh.map(o => [o.id, o]))
+    const asked = new Set(ids)
+    setOrders(prev => {
+      const known = new Set(prev.map(o => o.id))
+      const merged = [...fresh.filter(o => !known.has(o.id)), ...prev.filter(o => !asked.has(o.id) || byId.has(o.id)).map(o => byId.get(o.id) || o)]
+      const cached = viewCache.get(view)
+      viewCache.set(view, { orders: merged, completedCount: cached?.completedCount ?? null })
+      return merged
+    })
+    setSelectedOrder(prev => {
+      const f = prev && byId.get(prev.id)
+      if (!prev || !f) return prev
+      const pipelineMoved = JSON.stringify(f.pipeline || null) !== JSON.stringify(prev.pipeline || null)
+      return f.designStatus !== prev.designStatus || f.status !== prev.status || pipelineMoved
+        || f.weatherConfirmedAt !== prev.weatherConfirmedAt || f.raceDateVerified !== prev.raceDateVerified ? { ...prev, ...f } : prev
+    })
+    loadTeam()
+  }, [activeView, loadTeam])
+
+  // One check a minute while the tab is visible, instead of reloading the
+  // whole list every two minutes and reading the import stamp every minute:
+  // /api/orders/changes says what changed since the last check. Nothing: no
+  // reload. A few orders: only those. A race or production file, or a lot:
+  // the whole list. And the whole list every 15 minutes regardless, in case
+  // something moved that the check cannot see (a render worker going offline).
   useEffect(() => {
-    let last: string | null = null
-    const check = async () => {
+    let since: string | null = null
+    let lastFull = Date.now()
+    let stopped = false
+    let busy = false
+    const tick = async () => {
+      if (busy || document.visibilityState !== 'visible') return
+      busy = true
       try {
-        const r = await apiFetch('/api/orders/import')
-        if (!r.ok) return
-        const { lastImportedAt: at } = await r.json()
-        setLastImportedAt(at)
-        if (last && at && at !== last) fetchOrders()
-        last = at
-      } catch { /* next tick */ }
+        const r = await apiFetch(`/api/orders/changes?type=${activeView}${since ? `&since=${encodeURIComponent(since)}` : ''}`)
+        if (!r.ok || stopped) return
+        const d = await r.json()
+        setLastImportedAt(d.lastImportedAt ?? null)
+        const first = since === null
+        since = d.now
+        if (first) return // the view's own load just read the list
+        if (d.full || Date.now() - lastFull > 15 * 60_000) { lastFull = Date.now(); await fetchOrders(); return }
+        if (d.ids?.length) await refreshOrders(d.ids).catch(() => { since = null })
+      } catch { /* next tick */ } finally { busy = false }
     }
-    check()
-    const t = setInterval(() => { if (document.visibilityState === 'visible') check() }, 60_000)
-    return () => clearInterval(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    tick()
+    const t = setInterval(tick, 60_000)
+    // Back to the tab: catch up at once (a long absence comes back as a full reload).
+    const onVisible = () => { if (document.visibilityState === 'visible') void tick() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { stopped = true; clearInterval(t); document.removeEventListener('visibilitychange', onVisible) }
+  }, [activeView, fetchOrders, refreshOrders])
 
   // Old links with ?settings=1 land on the Settings page.
   useEffect(() => {
@@ -769,18 +811,7 @@ export default function Dashboard() {
       setIsLoading(true)
     }
     fetchOrders().finally(() => setIsRefreshing(false))
-
-    // Poll to pick up external changes (customer approvals, etc.), but only
-    // while someone is looking: a background tab polling all day was most of
-    // our Supabase egress. Coming back to the tab refreshes right away, and
-    // new imports reload the list through the stamp check above, so this can
-    // be slow.
-    const poll = setInterval(() => {
-      if (document.visibilityState === 'visible') { fetchOrders() }
-    }, 120_000)
-    const onVisible = () => { if (document.visibilityState === 'visible') { fetchOrders() } }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => { clearInterval(poll); document.removeEventListener('visibilitychange', onVisible) }
+    // Changes after this load come through the one-a-minute check above (/api/orders/changes).
   }, [fetchOrders, loadTeam, activeView])
 
   // Fetch race shorthands from scraper configs + user overrides (once on mount).

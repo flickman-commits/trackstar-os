@@ -32,6 +32,8 @@ model Order {
   // The last research attempt by a bulk pass (bulk/bulkOrders.js researchPending), found or not, so a pass moves down the list
   researchAttemptedAt DateTime?
   createdAt          DateTime  @default(now())
+  // Any change to the row: the dashboard asks for orders changed since its last load.
+  updatedAt DateTime @default(now()) @updatedAt
 
   // Trackstar order classification
   trackstarOrderType String    @default("standard") // "standard" | "custom" | "race_partner" | "bulk" | "sample" (overseas sample design)
@@ -192,6 +194,7 @@ model Order {
   shippingAddress  Json?      // { line1, line2, city, state, zip, country }
   productionFileUrl String?   // Public URL of the finished print file, for the Artelo sheet
 
+  @@index([updatedAt])
   @@unique([parentOrderNumber, lineItemIndex]) // Each line item is unique within an order
   @@index([orderNumber])
   @@index([parentOrderNumber]) // For grouping items from same order
@@ -244,10 +247,13 @@ model Race {
   weatherConfirmedAt DateTime?
   weatherConfirmedBy String?
   createdAt        DateTime  @default(now())
+  // Any change to the row: the dashboard asks for orders changed since its last load.
+  updatedAt DateTime @default(now()) @updatedAt
 
   // Relations
   runnerResearch   RunnerResearch[]
 
+  @@index([updatedAt])
   @@unique([raceName, year])
   @@index([raceName])
   @@index([year])
@@ -287,11 +293,14 @@ model RunnerResearch {
   // The dashboard renders these as Accept-button rows so the user can pick.
   possibleMatches Json?
   createdAt      DateTime @default(now())
+  // Any change to the row: the dashboard asks for orders changed since its last load.
+  updatedAt DateTime @default(now()) @updatedAt
 
   // Relations
   order          Order    @relation(fields: [orderId], references: [id])
   race           Race     @relation(fields: [raceId], references: [id])
 
+  @@index([updatedAt])
   @@index([orderId])
   @@index([raceId])
   @@index([researchStatus])
@@ -1132,7 +1141,10 @@ model RenderJob {
   // What the worker measured in the PDF it made: { trimIn, bleedIn: {left,right,top,bottom}, color } (worker/lib/inspectPdf.mjs)
   output        Json?
   createdAt     DateTime  @default(now())
+  // Any change to the row: the dashboard asks for orders changed since its last load.
+  updatedAt DateTime @default(now()) @updatedAt
 
+  @@index([updatedAt])
   @@index([orderId, createdAt])
   @@index([status, createdAt])
   @@index([sendAfter])

@@ -18,6 +18,7 @@ export default {
   'orders/auto-import': () => import('../../_routes/orders/auto-import.js'),
   'orders/cancel-creator-sample': () => import('../../_routes/orders/cancel-creator-sample.js'),
   'orders/change-frame': () => import('../../_routes/orders/change-frame.js'),
+  'orders/changes': () => import('../../_routes/orders/changes.js'),
   'orders/comments': () => import('../../_routes/orders/comments.js'),
   'orders/convert-to-custom': () => import('../../_routes/orders/convert-to-custom.js'),
   'orders/excluded-products': () => import('../../_routes/orders/excluded-products.js'),

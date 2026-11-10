@@ -186,9 +186,16 @@ export default async function handler(req, res) {
         { shopifyOrderData: { path: ['name'], equals: `#${number}` } },
       ]
     }
+    // ?ids=a,b,c: just these orders, for the dashboard's "changed since" reload
+    // (/api/orders/changes). With scope=open a completed one is left out, so the
+    // page drops it from the open list.
+    const ids = number ? [] : String(req.query.ids || '').split(',').map(s => s.trim()).filter(s => /^[A-Za-z0-9_-]{5,40}$/.test(s)).slice(0, 150)
+    if (ids.length) whereClause.id = { in: ids }
     const openOnly = req.query.scope === 'open' && !number
     let completedCount = null
-    if (openOnly) {
+    if (openOnly && ids.length) {
+      whereClause.status = { not: 'completed' }
+    } else if (openOnly) {
       completedCount = await prisma.order.count({ where: { ...whereClause, status: 'completed' } })
       whereClause.status = { not: 'completed' }
     }

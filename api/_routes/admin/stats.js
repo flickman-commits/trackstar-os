@@ -13,6 +13,7 @@ import { computeFulfillmentTime, sentToProductionToday } from '../../../server/d
 import { computeOnTime } from '../../../server/domain/orders/onTime.js'
 import { requireCapability, requireAdminRole } from '../../_lib/users.js'
 import { sendPublicError } from '../../../server/lib/publicError.js'
+import { sharedCache } from '../../../server/lib/sharedCache.js'
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, OPTIONS' })) return
@@ -29,9 +30,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: `Unknown range "${range}"`, ranges: Object.keys(RANGES) })
     }
     // ?only=fulfillment: just our handling time (the header stat), without the slow Shopify read.
+    // Worked out once every five minutes for everyone (sharedCache), not on every page load.
     if (req.query?.only === 'fulfillment') {
-      const [fulfillment, sentToday, onTime] = await Promise.all([computeFulfillmentTime(rangeWindow(range)), sentToProductionToday(), computeOnTime({ days: 7 })])
-      return res.status(200).json({ fulfillment, sentToday, onTime })
+      const out = await sharedCache(`header-stats:${range}`, {}, async () => {
+        const [fulfillment, sentToday, onTime] = await Promise.all([computeFulfillmentTime(rangeWindow(range)), sentToProductionToday(), computeOnTime({ days: 7 })])
+        return { fulfillment, sentToday, onTime }
+      })
+      return res.status(200).json(out)
     }
     // Our own handling time sits beside the Shopify numbers; a failure there does not blank the page.
     const [stats, fulfillment] = await Promise.all([computeStats(range), computeFulfillmentTime(rangeWindow(range)).catch(e => { console.error('[stats] fulfillment time', e); return null })])
