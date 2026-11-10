@@ -5,6 +5,7 @@
 import sharedPrisma from '../db.js'
 import { fetchWithTimeout } from '../lib/fetchWithTimeout.js'
 import { requireConnection } from '../lib/connections.js'
+import { alertCronFailure } from '../../api/_lib/alerts.js'
 
 let cachedToken = null
 let tokenExpiry = null
@@ -25,22 +26,41 @@ async function getStoredRefreshToken() {
 }
 
 /**
- * Persist the latest refresh token to DB
- * Etsy may rotate the refresh token on each use — always save the newest one
+ * Persist the newest refresh token, but only over the one this refresh used.
+ * Every warm server instance refreshes on its own; when two do at once, the
+ * one that saves second must not put back a token the first has already
+ * replaced (last writer wins stored a dead token, and Etsy orders then
+ * imported without their personalization until someone reconnected).
+ * Returns false when another instance had already saved a newer one.
  */
-async function storeRefreshToken(token) {
+async function storeRefreshToken(token, usedToken) {
   const prisma = getPrisma()
-  await prisma.systemConfig.upsert({
-    where: { key: 'etsy_refresh_token' },
-    update: { value: token },
-    create: { key: 'etsy_refresh_token', value: token }
-  })
+  const { count } = await prisma.systemConfig.updateMany({ where: { key: 'etsy_refresh_token', value: usedToken }, data: { value: token } })
+  if (count) return true
+  const row = await prisma.systemConfig.findUnique({ where: { key: 'etsy_refresh_token' } })
+  if (row) return false
+  await prisma.systemConfig.create({ data: { key: 'etsy_refresh_token', value: token } }).catch(() => {})
+  return true
 }
 
 /**
- * Refresh the Etsy access token using the stored refresh token
+ * Refresh the Etsy access token. A refresh token that Etsy refuses is
+ * re-read once (another instance may have rotated it a moment ago) before
+ * giving up, and a failure is posted to #admin-alerts at most hourly.
  */
 async function refreshAccessToken() {
+  try {
+    return await refreshOnce()
+  } catch (err) {
+    if (err.refused) {
+      try { return await refreshOnce({ unless: err.used }) } catch (again) { err = again }
+    }
+    await alertCronFailure('etsy-token-refresh', err, { fix: 'If it keeps failing, reconnect Etsy in Settings > Connections.' })
+    throw err
+  }
+}
+
+async function refreshOnce({ unless = null } = {}) {
   const apiKey = process.env.ETSY_API_KEY
   const sharedSecret = process.env.ETSY_SHARED_SECRET
 
@@ -52,6 +72,8 @@ async function refreshAccessToken() {
   if (!refreshToken) {
     throw new Error('No Etsy refresh token available. Run the OAuth setup flow first.')
   }
+  // The retry after a refusal: only worth it if another instance has saved a different token since.
+  if (unless && refreshToken === unless) throw Object.assign(new Error('Etsy refused the stored refresh token, and no newer one has been saved'), { refused: true })
 
   console.log('[etsyAuth] Refreshing Etsy access token...')
 
@@ -67,7 +89,9 @@ async function refreshAccessToken() {
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`Etsy token refresh failed (${response.status}): ${errorText}`)
+    // 400/401 with invalid_grant: this token is no longer good (used, rotated, or revoked).
+    const refused = (response.status === 400 || response.status === 401) && /invalid_grant|invalid|expired/i.test(errorText)
+    throw Object.assign(new Error(`Etsy token refresh failed (${response.status}): ${errorText.slice(0, 300)}`), { refused, used: refreshToken })
   }
 
   const data = await response.json()
@@ -76,10 +100,10 @@ async function refreshAccessToken() {
     throw new Error('No access_token in Etsy refresh response')
   }
 
-  // Etsy may issue a new refresh token — always persist the latest
-  if (data.refresh_token) {
-    await storeRefreshToken(data.refresh_token)
-    console.log('[etsyAuth] New refresh token persisted to DB')
+  // Etsy may issue a new refresh token — persist it over the one we used (storeRefreshToken)
+  if (data.refresh_token && data.refresh_token !== refreshToken) {
+    const saved = await storeRefreshToken(data.refresh_token, refreshToken)
+    console.log(saved ? '[etsyAuth] New refresh token persisted to DB' : '[etsyAuth] Another instance saved a newer refresh token first; kept theirs')
   }
 
   cachedToken = data.access_token

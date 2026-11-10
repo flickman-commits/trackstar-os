@@ -40,6 +40,7 @@ import { requireAdminRole, requireAdminOnly, requireCapability, recordAudit } fr
 import { alertError } from '../../_lib/alerts.js'
 import { getCustomersServedInfo, syncCustomersServedToShopify, setCustomersServedCount } from '../../../server/services/customersServed.js'
 import { shopifyFetch, shopifyGraphQL } from '../../../server/services/shopifyAuth.js'
+import { etsyFetch, getEtsyToken } from '../../../server/services/etsyAuth.js'
 import { getRaceShorthands } from '../../../server/scrapers/index.js'
 import WeatherService from '../../../server/services/WeatherService.js'
 import { slackTo, slackApi, slackText, slackLink } from '../../../server/lib/slack.js'
@@ -1273,31 +1274,10 @@ async function handleTestConnections(res) {
     if (!etsyRefreshTokenRow?.value || !process.env.ETSY_API_KEY) {
       return { status: 'error', message: 'Skipped (missing key or refresh token)' }
     }
-    const resp = await fetch('https://api.etsy.com/v3/public/oauth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: process.env.ETSY_API_KEY,
-        refresh_token: etsyRefreshTokenRow.value
-      }).toString()
-    })
-    if (!resp.ok) {
-      const body = await resp.text()
-      return { status: 'error', message: `Refresh failed (HTTP ${resp.status}) - visit /api/etsy/auth to re-authenticate`, detail: body.slice(0, 300) }
-    }
-    const data = await resp.json()
-    etsyAccessToken = data.access_token
-    // Persist rotated refresh token if Etsy issued a new one
-    if (data.refresh_token && data.refresh_token !== etsyRefreshTokenRow.value) {
-      await prisma.systemConfig.upsert({
-        where: { key: 'etsy_refresh_token' },
-        update: { value: data.refresh_token },
-        create: { key: 'etsy_refresh_token', value: data.refresh_token }
-      })
-      return { status: 'ok', message: `Access token issued (expires in ${data.expires_in}s). Refresh token rotated and saved.` }
-    }
-    return { status: 'ok', message: `Access token issued (expires in ${data.expires_in}s)` }
+    // The shared client (etsyAuth.js) refreshes and saves the rotated token
+    // safely; a second refresh of its own here is how a superseded token got saved.
+    etsyAccessToken = await getEtsyToken()
+    return { status: 'ok', message: 'Access token available (refreshed if it was due)' }
   })
 
   await runStep('etsy', 'GET /shops/{shopId}', async () => {
@@ -1379,39 +1359,13 @@ async function handleHealthCheck(res, { sendSlack = false } = {}) {
       // A refresh rotates the one stored token that production also uses.
       if (forcedOff().has('etsy')) return { status: 'error', detail: 'Skipped: Etsy is forced off on this server (CONNECTIONS_FORCE_OFF)' }
 
-      const tokenRow = await prisma.systemConfig.findUnique({ where: { key: 'etsy_refresh_token' } })
-      if (!tokenRow?.value) return { status: 'error', detail: 'No Etsy refresh token in database' }
+      // Through the shared client (etsyAuth.js), not a refresh of its own: two
+      // code paths each rotating and saving the one stored token was how a
+      // superseded token got saved.
+      const res = await etsyFetch(`/shops/${process.env.ETSY_SHOP_ID}`).then(() => null).catch(e => e)
+      if (res) return { status: 'error', detail: res.message, latency: `${Date.now() - start}ms` }
 
-      const refreshResp = await fetch('https://api.etsy.com/v3/public/oauth/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ grant_type: 'refresh_token', client_id: apiKey, refresh_token: tokenRow.value }).toString()
-      })
-      if (!refreshResp.ok) {
-        const errText = await refreshResp.text()
-        return { status: 'error', detail: `Token refresh failed (${refreshResp.status}): ${errText}`, latency: `${Date.now() - start}ms` }
-      }
-      const tokenData = await refreshResp.json()
-
-      // Persist rotated refresh token
-      if (tokenData.refresh_token && tokenData.refresh_token !== tokenRow.value) {
-        await prisma.systemConfig.upsert({
-          where: { key: 'etsy_refresh_token' },
-          update: { value: tokenData.refresh_token },
-          create: { key: 'etsy_refresh_token', value: tokenData.refresh_token }
-        })
-      }
-
-      // Quick API test
-      const shopId = process.env.ETSY_SHOP_ID
-      if (shopId && tokenData.access_token) {
-        const testResp = await fetch(`https://openapi.etsy.com/v3/application/shops/${shopId}`, {
-          headers: { 'Authorization': `Bearer ${tokenData.access_token}`, 'x-api-key': `${apiKey}:${sharedSecret}` }
-        })
-        if (!testResp.ok) return { status: 'error', detail: `Shop API returned ${testResp.status}`, latency: `${Date.now() - start}ms` }
-      }
-
-      return { status: 'ok', detail: 'Token refresh + API call succeeded', latency: `${Date.now() - start}ms` }
+      return { status: 'ok', detail: 'Token and shop API call succeeded', latency: `${Date.now() - start}ms` }
     } catch (err) {
       return { status: 'error', detail: err.message, latency: `${Date.now() - start}ms` }
     }
