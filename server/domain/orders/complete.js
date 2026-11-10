@@ -69,12 +69,15 @@ export async function completeOrder({ orderId, orderNumber, actor = null, via = 
   // design, it placed the photo and a person approved the result with the
   // photo on it: that approval is the confirmation, so no checkbox.
   let photoByRender = false
-  if (existing.photoPath && !existing.photoPlacedAt) {
+  // via 'artelo': the import saw Artelo fulfil it. It is made already, so the
+  // photo checks for a person completing by hand do not apply.
+  const fromArtelo = via === 'artelo'
+  if (existing.photoPath && !existing.photoPlacedAt && !fromArtelo) {
     const approved = (await prisma.renderJob.findMany({ where: { orderId: existing.id, review: 'approved', status: 'done' }, orderBy: { version: 'desc' }, take: 10, select: { spec: true } })).find(j => !j.spec?.altSize)
     photoByRender = via === 'approve' || (approved?.spec?.photoPath && approved.spec.photoPath === existing.photoPath)
     if (!photoByRender) throw new CompleteError('photo_not_confirmed', 'This print includes a customer photo and was not made by the script. Confirm the photo is placed before completing the order.')
   }
-  if (existing.photoAddedManually) {
+  if (existing.photoAddedManually && !fromArtelo) {
     const siblings = await prisma.order.findMany({ where: { parentOrderNumber: existing.parentOrderNumber }, select: { id: true, photoPath: true, photoAddedManually: true, photoFree: true, trackstarOrderType: true } })
     if (unpaidPhotoRows(siblings, existing.shopifyOrderData).has(existing.id)) {
       throw new CompleteError('photo_not_paid', 'The customer has not paid for the photo yet. Wait for the Shopify order to read paid before completing.')
@@ -88,12 +91,12 @@ export async function completeOrder({ orderId, orderNumber, actor = null, via = 
   // A render still waiting for review is moot now.
   const closed = await prisma.renderJob.updateMany({
     where: { orderId: existing.id, review: 'pending', ...(renderJobId ? { id: { not: renderJobId } } : {}) },
-    data: { review: 'closed', reviewNote: via === 'approve' ? 'Another version was approved' : 'Order completed by hand', reviewedAt: new Date() },
+    data: { review: 'closed', reviewNote: via === 'approve' ? 'Another version was approved' : fromArtelo ? 'Artelo fulfilled the order' : 'Order completed by hand', reviewedAt: new Date() },
   })
 
   await recordAudit({
     action: 'order.complete',
-    summary: `Completed ${describeOrder(existing)}${via === 'approve' ? ' (design approved)' : ''}`,
+    summary: `Completed ${describeOrder(existing)}${via === 'approve' ? ' (design approved)' : fromArtelo ? ' (fulfilled in Artelo)' : ''}`,
     detail: { orderNumber: existing.orderNumber, orderType: existing.trackstarOrderType, runnerName: existing.runnerName, raceName: existing.raceName, via, closedRenders: closed.count },
     actor,
   })

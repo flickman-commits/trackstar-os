@@ -33,6 +33,7 @@ import { alertArteloHolds } from './domain/orders/arteloMismatch.js'
 import { arteloOrderUrl } from './lib/links.js'
 import { yearUnknown } from './domain/orders/yearUnknown.js'
 import { isStoredPhotoPath } from './lib/photoPath.js'
+import { completeOrder } from './domain/orders/complete.js'
 
 // Artelo API configuration
 // artelo.com, not artelo.io: the old host now redirects across domains and
@@ -826,12 +827,13 @@ export async function processOrders(options = {}) {
         select: { id: true, orderNumber: true },
       }) : []
       if (stillOpen.length) {
-        for (const o of stillOpen) log(`[processOrders] Marking order ${o.orderNumber} as completed (fulfilled in Artelo)`)
-        const { count } = await prisma.order.updateMany({
-          where: { id: { in: stillOpen.map(o => o.id) } },
-          data: { status: 'completed', researchedAt: new Date() },
-        })
-        results.updated += count
+        // Through completeOrder, like every other completion: the Activity Log
+        // line, and any render still waiting for review closed.
+        for (const o of stillOpen) {
+          log(`[processOrders] Marking order ${o.orderNumber} as completed (fulfilled in Artelo)`)
+          const done = await completeOrder({ orderId: o.id, via: 'artelo' }).catch(e => { log(`[processOrders] Could not complete ${o.orderNumber}: ${e.message}`); return null })
+          if (done && !done.already) results.updated++
+        }
       }
     } catch (error) {
       log(`[processOrders] Error marking fulfilled orders completed: ${error.message}`)
@@ -870,11 +872,8 @@ export async function processOrders(options = {}) {
       } else {
         for (const dbOrder of agedOut) {
           log(`[processOrders] Order ${dbOrder.orderNumber} not in Artelo and >3 days old - marking completed`)
-          await prisma.order.update({
-            where: { id: dbOrder.id },
-            data: { status: 'completed', researchedAt: new Date() }
-          })
-          results.updated++
+          const done = await completeOrder({ orderId: dbOrder.id, via: 'artelo' }).catch(e => { log(`[processOrders] Could not complete ${dbOrder.orderNumber}: ${e.message}`); return null })
+          if (done && !done.already) results.updated++
         }
       }
     }
@@ -1033,9 +1032,9 @@ export async function processOrders(options = {}) {
               const wasActionable = existing.status !== 'completed'
               const isNowFulfilled = !ACTIONABLE_STATUSES.includes(order.status)
 
-              if (wasActionable && isNowFulfilled) {
-                updateData.status = 'completed'
-                updateData.researchedAt = new Date()
+              // Completed through completeOrder once the rest of the update is saved (below).
+              const fulfilledNow = wasActionable && isNowFulfilled
+              if (fulfilledNow) {
                 needsUpdate = true
                 log(`[processOrders] Marking order ${existing.orderNumber} as completed (fulfilled in Artelo)`)
               }
@@ -1238,10 +1237,13 @@ export async function processOrders(options = {}) {
                     updateData.assigneeId = await assigneeForNewOrder(newType)
                   }
                 }
-                await prisma.order.update({
-                  where: { id: existing.id },
-                  data: updateData
-                })
+                if (Object.keys(updateData).length) {
+                  await prisma.order.update({
+                    where: { id: existing.id },
+                    data: updateData
+                  })
+                }
+                if (fulfilledNow) await completeOrder({ orderId: existing.id, via: 'artelo' }).catch(e => log(`[processOrders] Could not complete ${existing.orderNumber}: ${e.message}`))
 
                 results.updated++
                 orderResult.action = 'updated'
