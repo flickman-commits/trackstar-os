@@ -16,6 +16,7 @@ import prisma from '../../db.js'
 import { researchService } from '../../services/ResearchService.js'
 import { hasScraperForRace, getCanonicalRaceName } from '../../scrapers/index.js'
 import { ensureOverridesLoaded } from '../../scrapers/scraperOverrides.js'
+import { KNOWN_YEAR } from '../orders/yearUnknown.js'
 
 const DAY = 24 * 60 * 60 * 1000
 // Results are looked for this long after race day, and no longer: older
@@ -47,6 +48,7 @@ export async function autoResearchNew({ since, limit = 20 } = {}) {
       status: { notIn: ['completed', 'flagged'] },
       runnerResearch: { none: {} },
       createdAt: { gte: since },
+      ...KNOWN_YEAR,
     },
     orderBy: { createdAt: 'desc' },
     take: limit * 6,
@@ -105,7 +107,7 @@ export async function autoResearchAfterRace({ limit = 10 } = {}) {
       status: { notIn: ['completed', 'flagged'] },
       hadNoTime: false,
       OR: [{ raceYear: { in: years } }, { yearOverride: { in: years } }],
-      AND: [{ OR: [
+      AND: [KNOWN_YEAR, { OR: [
         { runnerResearch: { none: {} } },
         { runnerResearch: { some: { researchStatus: 'race_not_run' } } },
         { runnerResearch: { some: { researchStatus: 'found', officialTime: null } } },

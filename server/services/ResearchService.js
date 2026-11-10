@@ -14,6 +14,7 @@ import prisma from '../db.js'
 import { getScraperForRace, hasScraperForRace, getCanonicalRaceName, namedEventsFor, isRacePublicSafe, onlyEventFor } from '../scrapers/index.js'
 import { ensureOverridesLoaded } from '../scrapers/scraperOverrides.js'
 import WeatherService from './WeatherService.js'
+import { yearUnknown, YearUnknownError } from '../domain/orders/yearUnknown.js'
 
 /** The runner's own results page from their bib, or null when the race's scraper has no such page. */
 function runnerPage(raceName, year, bib) {
@@ -210,6 +211,8 @@ export class ResearchService {
     if (!order) {
       throw new Error(`Order not found: ${orderNumber}`)
     }
+    // No year from the customer: raceYear is the import's placeholder (yearUnknown.js).
+    if (yearUnknown(order)) throw new YearUnknownError(orderNumber)
 
     // Use effective values (override if present, else original)
     const effectiveRaceName = order.raceNameOverride ?? order.raceName
@@ -325,6 +328,7 @@ export class ResearchService {
   async applyVerifiedResult(orderNumber, { verified = true } = {}) {
     const order = await prisma.order.findFirst({ where: { orderNumber } })
     if (!order) throw new Error(`Order not found: ${orderNumber}`)
+    if (yearUnknown(order)) throw new YearUnknownError(orderNumber)
 
     const effectiveRaceName = order.raceNameOverride ?? order.raceName
     const effectiveRaceYear = order.yearOverride ?? order.raceYear
@@ -1096,6 +1100,10 @@ export class ResearchService {
 
         if (!order) {
           results.push({ orderNumber, error: 'Order not found' })
+          continue
+        }
+        if (yearUnknown(order)) {
+          results.push({ orderNumber, error: new YearUnknownError(orderNumber).message })
           continue
         }
 

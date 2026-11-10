@@ -83,6 +83,7 @@ export default async function handler(req, res) {
     console.error('[API] Error researching runner:', error)
 
     // Provide helpful error messages
+    if (error.name === 'YearUnknownError') return res.status(409).json({ error: error.message })
     if (error.message.includes('No scraper available')) {
       return res.status(400).json({
         error: error.message,

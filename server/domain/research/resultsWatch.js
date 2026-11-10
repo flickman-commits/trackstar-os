@@ -19,6 +19,7 @@ import { researchService } from '../../services/ResearchService.js'
 import { getScraperForRace, getCanonicalRaceName } from '../../scrapers/index.js'
 import { ensureOverridesLoaded } from '../../scrapers/scraperOverrides.js'
 import { slackTo, slackText } from '../../lib/slack.js'
+import { KNOWN_YEAR } from '../orders/yearUnknown.js'
 
 const DAY = 24 * 60 * 60 * 1000
 const WATCH_DAYS = 14
@@ -102,6 +103,7 @@ function openWithoutResult(year) {
       hadNoTime: false,
       OR: [{ raceYear: year, yearOverride: null }, { yearOverride: year }],
       NOT: { runnerResearch: { some: { researchStatus: 'found', officialTime: { not: null } } } },
+      AND: [KNOWN_YEAR],
     },
     select: { orderNumber: true, raceName: true, raceNameOverride: true, researchedAt: true },
     orderBy: { createdAt: 'asc' },

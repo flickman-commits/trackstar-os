@@ -34,6 +34,7 @@ import { fetchTimingPage } from '../../lib/scraperTrace.js'
 import { complete, canSearch, isLlmConfigured } from '../../lib/llm.js'
 import { recordAudit } from '../../../api/_lib/users.js'
 import { RESEARCH_REASONS, planFor, nameVariants, sameName, fold, isSeveralRunners, checkRowOnPage } from './agentRules.js'
+import { KNOWN_YEAR } from '../orders/yearUnknown.js'
 
 export const AGENT_NAME = 'Research agent'
 const DAY = 24 * 60 * 60 * 1000
@@ -55,7 +56,7 @@ const effective = o => ({
 export async function researchQueue() {
   await ensureOverridesLoaded()
   const rows = await prisma.order.findMany({
-    where: { trackstarOrderType: 'standard', status: { not: 'completed' } },
+    where: { trackstarOrderType: 'standard', status: { not: 'completed' }, ...KNOWN_YEAR },
     select: {
       id: true, orderNumber: true, parentOrderNumber: true, lineItemIndex: true, runnerName: true, runnerNameOverride: true,
       raceName: true, raceNameOverride: true, raceYear: true, yearOverride: true, customerBib: true, hadNoTime: true,

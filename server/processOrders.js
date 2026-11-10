@@ -31,6 +31,7 @@ import { requireConnection } from './lib/connections.js'
 import { listExcluded, isExcludedLine } from './domain/orders/excludedProducts.js'
 import { alertArteloHolds } from './domain/orders/arteloMismatch.js'
 import { arteloOrderUrl } from './lib/links.js'
+import { yearUnknown } from './domain/orders/yearUnknown.js'
 
 // Artelo API configuration
 // artelo.com, not artelo.io: the old host now redirects across domains and
@@ -1514,7 +1515,12 @@ export async function processOrders(options = {}) {
                 // scrape.
                 const customerSupplied = Boolean(dbOrder.customerFinishTime || dbOrder.customerBib)
 
-                if (dbOrder.lookupVerified === true) {
+                if (yearUnknown(dbOrder)) {
+                  // No year from the customer: raceYear is a placeholder, and
+                  // research would find this year's runner of the same name.
+                  orderResult.researchStatus = 'missing_year'
+                  log(`[processOrders] ⏸️  ${dbOrder.orderNumber} has no race year - not researched until a person sets it`)
+                } else if (dbOrder.lookupVerified === true) {
                   log(`[processOrders] ✅ Customer-verified result for ${dbOrder.orderNumber} - skipping runner scrape`)
                   try {
                     await researchService.applyVerifiedResult(dbOrder.orderNumber)

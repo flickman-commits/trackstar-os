@@ -58,6 +58,7 @@ export const researchTools = [
       let out
       try { out = await researchService.researchOrder(o.orderNumber) }
       catch (err) {
+        if (err?.name === 'YearUnknownError') throw new ToolError(err.message)
         if (/No scraper available/.test(String(err?.message))) throw new ToolError(`There is no scraper for ${o.raceNameOverride || o.raceName}. A developer adds one, or research the runner by hand.`)
         throw err
       }
