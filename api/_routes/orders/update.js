@@ -11,6 +11,7 @@ import { getCanonicalRaceName } from '../../../server/scrapers/index.js'
 import { setRaceDate, noteWeatherChange } from '../../../server/domain/races/verification.js'
 import { recordAudit } from '../../_lib/users.js'
 import { resultsLinkForBib } from '../../../server/domain/research/resultsLink.js'
+import { closeOutdatedDesigns } from '../../../server/domain/render/jobs.js'
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'POST, OPTIONS' })) return
@@ -341,6 +342,15 @@ export default async function handler(req, res) {
     })
 
     console.log(`[API /orders/update] Order ${orderNumber} updated with overrides:`, updateData)
+
+    // A new name, race or result means an open design was made from the old
+    // one: close it now rather than leave it to be approved or sent.
+    const printChanged = 'runnerNameOverride' in updateData || 'raceNameOverride' in updateData
+      || bibNumber !== undefined || officialTime !== undefined || officialPace !== undefined || Boolean(eventType)
+    if (printChanged && existingOrder.trackstarOrderType !== 'custom') {
+      const closed = await closeOutdatedDesigns(existingOrder.id, 'The order was edited after this design was made; a new design replaces it').catch(e => { console.error('[API /orders/update] closing old designs', e.message); return 0 })
+      if (closed) await recordAudit({ action: 'render.closed_outdated', summary: `Order ${existingOrder.orderNumber}: ${closed} design${closed === 1 ? '' : 's'} closed after an edit changed what prints`, detail: { orderNumber: existingOrder.orderNumber, closed }, actor })
+    }
 
     return res.status(200).json({
       success: true,

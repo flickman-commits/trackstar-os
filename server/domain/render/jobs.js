@@ -281,6 +281,27 @@ export async function autoQueueRenders({ limit = 25 } = {}) {
 export { printedDiffers }
 
 /**
+ * After an edit to what prints (the runner's name, the race, the result):
+ * close the designs that no longer match the order, waiting for review or
+ * approved and still waiting to go to Artelo, so an old design is neither
+ * approved nor sent. The import's re-render (rerenderChanged) brings a new
+ * one. A design that still matches stays open. If the order cannot be
+ * checked now, nothing is closed here; the sender checks again before it
+ * sends (arteloSend.js). Returns how many were closed.
+ */
+export async function closeOutdatedDesigns(orderId, note) {
+  const open = (await prisma.renderJob.findMany({ where: { orderId: String(orderId), status: 'done', review: { in: ['pending', 'approved'] }, arteloSentAt: null } }))
+    .filter(j => j.spec?.template && !j.spec?.altSize)
+  if (!open.length) return 0
+  const { ok, spec } = await checkOrder(orderId, { allowUnpaidPhoto: true }).catch(() => ({ ok: false }))
+  if (!ok) return 0
+  const stale = open.filter(j => printedDiffers(spec, j.spec))
+  if (!stale.length) return 0
+  await prisma.renderJob.updateMany({ where: { id: { in: stale.map(j => j.id) }, arteloSentAt: null }, data: { review: 'closed', reviewNote: note, reviewedAt: new Date(), sendAfter: null } })
+  return stale.length
+}
+
+/**
  * A rejected or failed design renders again on its own once the data it was
  * made from has changed (a corrected name, a new time, a fixed race date),
  * and not before: the same data would only make the same print. This is the

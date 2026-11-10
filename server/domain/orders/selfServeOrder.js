@@ -173,7 +173,11 @@ export async function manageInfo(shopifyOrderId, signature) {
 
 /** A design made with the old details is closed; a new one renders when the print can. */
 async function rerender(row, note) {
+  // Every caller changes what prints (the name, a photo), so a design waiting
+  // for review is closed, and so is an approved one still waiting out its
+  // hold: otherwise the old design goes to Artelo when the hold ends.
   await prisma.renderJob.updateMany({ where: { orderId: row.id, status: 'done', review: 'pending' }, data: { review: 'closed', reviewNote: note, reviewedAt: new Date() } })
+  await prisma.renderJob.updateMany({ where: { orderId: row.id, status: 'done', review: 'approved', arteloSentAt: null }, data: { review: 'closed', reviewNote: note, reviewedAt: new Date(), sendAfter: null } })
   try {
     const { ok, spec } = await checkOrder(row.id)
     if (!ok) return
