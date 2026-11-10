@@ -13,6 +13,7 @@
  */
 import { distanceForEventType } from '../../services/ResearchService.js'
 import { SCRAPER_MIN_YEAR } from '../orders/pipeline.js'
+import { clockSeconds, typedTime, sameClock } from './timeReading.js'
 
 /** The Action queue reasons that are a runner result to look up. */
 export const RESEARCH_REASONS = new Set([
@@ -90,12 +91,7 @@ export function nameVariants(name) {
 }
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1)
 
-/** "03:12:07" and "3:12:07" are the same clock reading; seconds, or null. */
-export function clockSeconds(t) {
-  const m = String(t || '').trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/)
-  if (!m) return null
-  return m[3] != null ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) : Number(m[1]) * 60 + Number(m[2])
-}
+export { clockSeconds, typedTime, sameClock }
 
 const TIME_TOKEN = /\b\d{1,2}:\d{2}:\d{2}(?:\.\d+)?\b/g
 // The page has to say its time is chip or net time. Older results often have

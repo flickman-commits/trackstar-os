@@ -33,7 +33,7 @@ import { checkRateLimitDurable } from '../../lib/publicRateLimit.js'
 import { fetchTimingPage } from '../../lib/scraperTrace.js'
 import { complete, canSearch, isLlmConfigured } from '../../lib/llm.js'
 import { recordAudit } from '../../../api/_lib/users.js'
-import { RESEARCH_REASONS, planFor, nameVariants, sameName, fold, isSeveralRunners, checkRowOnPage, notesDoubt } from './agentRules.js'
+import { RESEARCH_REASONS, planFor, nameVariants, sameName, fold, isSeveralRunners, checkRowOnPage, notesDoubt, typedTime, sameClock } from './agentRules.js'
 import { KNOWN_YEAR } from '../orders/yearUnknown.js'
 
 export const AGENT_NAME = 'Research agent'
@@ -257,6 +257,12 @@ async function checkClaim(item, claim, { dryRun = false, by = 'Finder' } = {}) {
   if (!page.ok) return handOff(`our server could not read that page (${page.error || `HTTP ${page.status}`}).`)
   const check = checkRowOnPage({ text: page.body, url: page.finalUrl || claim.resultsUrl, runner: item.runner, raceName: item.race, year: item.year, time: claim.chipTime, pace: claim.pace, bib: claim.bib, eventType: claim.eventType })
   if (!check.ok) return handOff(`${check.why.replace(/\.$/, '')}.${check.row ? ` The row: "${check.row.slice(0, 200)}"` : ''}`)
+
+  // The customer's own time on the order prints as typed (agentRules.typedTime).
+  // The page agreeing is fine; the page disagreeing is a person's call.
+  const latest = await prisma.runnerResearch.findFirst({ where: { orderId: item.id }, orderBy: { id: 'desc' }, select: { source: true, officialTime: true } })
+  const typed = typedTime(latest)
+  if (typed && !sameClock(typed, claim.chipTime)) return handOff(`the customer typed ${typed} for this order and the page shows ${claim.chipTime}. The customer's time prints as typed unless a person decides otherwise.`)
 
   if (!dryRun) await writeVerified(item, { bib: claim.bib, time: claim.chipTime, pace: claim.pace, eventType: claim.eventType, url: page.finalUrl || claim.resultsUrl, row: check.row })
   return { outcome: 'cleared', detail: `read off ${page.finalUrl || claim.resultsUrl}: ${said}`, url: page.finalUrl || claim.resultsUrl }

@@ -5,6 +5,7 @@
  */
 import prisma from '../../db.js'
 import { resultsLinkForBib } from './resultsLink.js'
+import { typedTime, sameClock } from './timeReading.js'
 
 /** Wrong input or nothing found; `status` is the HTTP status the API answers with. */
 export class AcceptMatchError extends Error {
@@ -84,18 +85,25 @@ export async function acceptMatch({ orderNumber, match }) {
     enrichedResultsUrl = await resultsLinkForBib({ raceName: order.raceNameOverride || order.raceName, raceYear: order.yearOverride || order.raceYear, bib: match.bib })
   }
 
+  // A time the customer typed prints as typed (agentRules.typedTime): the
+  // accepted finisher confirms who they are and fills in the bib, event and
+  // link, never a different time. The same reading is fine.
+  const typed = typedTime(research)
+  const keepTyped = Boolean(typed && enrichedTime && !sameClock(typed, enrichedTime))
+  if (keepTyped) console.log(`[accept-match] ${orderNumber}: kept the customer's typed time ${typed}; the accepted result shows ${enrichedTime}`)
+
   const updatedResearch = await prisma.runnerResearch.update({
     where: { id: research.id },
     data: {
       bibNumber: match.bib || null,
-      officialTime: enrichedTime,
-      officialPace: enrichedPace,
+      officialTime: keepTyped ? research.officialTime : enrichedTime,
+      officialPace: keepTyped ? research.officialPace : enrichedPace,
       eventType: enrichedEventType || research.eventType || null,
       resultsUrl: enrichedResultsUrl || research.resultsUrl || null,
       researchStatus: 'found',
       // Keep the order's runnerName as the customer's original — don't change it.
       // The match name only goes in researchNotes for the audit trail.
-      researchNotes: `Accepted match: "${match.name}" (original search: "${order.runnerName}")`,
+      researchNotes: `Accepted match: "${match.name}" (original search: "${order.runnerName}")${keepTyped ? `. Kept the customer's typed time ${typed}; the official result shows ${enrichedTime}` : ''}`,
       // Clear the persisted candidate list so the picker stops showing on this order
       possibleMatches: null,
     }

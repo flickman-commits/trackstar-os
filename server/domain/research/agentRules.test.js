@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { planFor, nameVariants, sameName, isSeveralRunners, checkRowOnPage, clockSeconds, notesDoubt } from './agentRules.js'
+import { planFor, nameVariants, sameName, isSeveralRunners, checkRowOnPage, clockSeconds, notesDoubt, typedTime, sameClock } from './agentRules.js'
 
 test('pre-2020 years are researched on the web, never through a scraper', () => {
   assert.equal(planFor({ reason: 'Research by hand', year: 2019, runner: 'Jo Smith', hasScraper: true }).action, 'web')
@@ -109,4 +109,14 @@ test('a finder that says it was not sure is a no', () => {
   assert.ok(notesDoubt('Probably the same person, same city.'))
   assert.ok(!notesDoubt('Chip time from the official results page, bib matches.'))
   assert.ok(!notesDoubt(''))
+})
+
+test('a time the customer typed is recognised, and the same reading however written', () => {
+  assert.equal(typedTime({ source: 'customer_supplied', officialTime: '3:58:40' }), '3:58:40')
+  assert.equal(typedTime({ source: 'customer_verified', officialTime: '3:58:40' }), '3:58:40')
+  assert.equal(typedTime({ source: 'scraper', officialTime: '3:58:40' }), null)
+  assert.equal(typedTime({ source: 'customer_supplied', officialTime: null }), null)
+  assert.ok(sameClock('03:58:40', '3:58:40'))
+  assert.ok(sameClock('03:58.40', '3:58:40'))
+  assert.ok(!sameClock('3:58:40', '3:59:02'))
 })
