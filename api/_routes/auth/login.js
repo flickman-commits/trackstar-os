@@ -23,6 +23,7 @@ import {
   readSessionToken,
   SESSION_COOKIE,
   viewAsTarget,
+  bumpSessionVersion,
 } from '../../_lib/auth.js'
 import { verifyPassword, hashPassword, normalizeEmail, isValidEmail, touchLastSeen } from '../../_lib/users.js'
 import { capsFor } from '../../_lib/roles.js'
@@ -73,6 +74,11 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
+    // Signing out ends the session itself, not only this browser's copy of
+    // it: a copied cookie stops working too. Sessions are versioned per
+    // person, so this signs them out on every device.
+    const signedIn = readSessionToken(parseCookies(req)[SESSION_COOKIE])
+    if (signedIn?.id) await bumpSessionVersion(signedIn.id).catch(e => console.error('[auth/login] sign out', e.message))
     res.setHeader('Set-Cookie', buildSessionCookie(req, { clear: true }))
     return res.status(200).json({ ok: true })
   }
