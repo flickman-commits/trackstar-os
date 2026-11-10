@@ -131,7 +131,7 @@ export const renderTools = [
     input: { orderNumber: z.string().max(40), item: ITEM },
     async handler({ orderNumber, item }, { principal }) {
       const { o, n } = await itemAndJob(orderNumber, item)
-      const { ok, reasons } = await checkOrder(o.id)
+      const { ok, reasons } = await checkOrder(o.id, { allowUnpaidPhoto: true })
       if (!ok) throw new ToolError(`${n} cannot render: ${reasons.join('. ')}.`)
       const job = await createJob({ orderId: o.id, requestedBy: 'admin', requestedById: principal.user.id })
       return { summary: `Queued a render of ${job.spec?.file || n} (v${job.version})`, orderNumber: n, version: job.version, status: job.status }

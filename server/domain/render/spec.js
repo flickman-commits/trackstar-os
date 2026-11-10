@@ -104,7 +104,7 @@ export const SPEC_SELECT = {
  *                 research record to reach the race through
  * @returns {{ ok: boolean, reasons: string[], spec: object|null }}
  */
-export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = new Set()) {
+export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = new Set(), { allowUnpaidPhoto = false } = {}) {
   const reasons = []
   const raceName = order.raceNameOverride ?? order.raceName
   const raceYear = order.yearOverride ?? order.raceYear
@@ -144,7 +144,10 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
   // Paid at checkout for a photo they upload after the race (orders/photoLater.js).
   if (awaitingLaterPhoto(order)) reasons.push('Waiting for the customer to upload their photo')
 
-  if (order.photoPath && order.shopifyOrderData) {
+  // A person may render it anyway, to show the customer before they pay
+  // (6783): the send to Artelo still waits for the payment (arteloSend.js).
+  // Automatic renders wait for it.
+  if (order.photoPath && order.shopifyOrderData && !allowUnpaidPhoto) {
     const unpaid = unpaidPhotoRows([order], order.shopifyOrderData)
     if (unpaid.size) reasons.push('Photo add-on is not paid yet')
   }

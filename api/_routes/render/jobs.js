@@ -28,7 +28,7 @@ export default async function handler(req, res) {
       if (!(await loadActiveUser(actor))) return res.status(401).json({ error: 'Your account is no longer active. Sign in again.' })
       const orderId = String(req.query?.orderId || '')
       if (!orderId) return res.status(400).json({ error: 'orderId is required' })
-      let [{ ok, reasons }, job, workers, autoSend] = await Promise.all([checkOrder(orderId), latestJob(orderId), onlineWorkers(), autoSendOn()])
+      let [{ ok, reasons }, job, workers, autoSend] = await Promise.all([checkOrder(orderId, { allowUnpaidPhoto: true }), latestJob(orderId), onlineWorkers(), autoSendOn()])
       // An approved render that did not reach Drive or Artelo is retried on
       // sight, in the background so opening the order never waits on it. The
       // first two minutes after an approval belong to that approval's own

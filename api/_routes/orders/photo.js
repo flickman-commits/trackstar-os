@@ -60,7 +60,7 @@ async function startRender(orderId, note) {
   const o = await prisma.order.findUnique({ where: { id: orderId }, select: { trackstarOrderType: true, status: true } })
   if (!o || o.trackstarOrderType === 'custom' || o.status === 'completed') return { rendering: null, reasons: [] }
   await prisma.renderJob.updateMany({ where: { orderId, status: 'done', review: 'pending' }, data: { review: 'closed', reviewNote: note, reviewedAt: new Date() } })
-  const { ok, reasons } = await checkOrder(orderId)
+  const { ok, reasons } = await checkOrder(orderId, { allowUnpaidPhoto: true })
   if (!ok) return { rendering: null, reasons }
   return { rendering: (await createJob({ orderId, requestedBy: 'admin' })).version, reasons: [] }
 }

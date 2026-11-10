@@ -51,7 +51,7 @@ export async function checkOrder(orderId, ctx = {}) {
   const order = ctx.order || await prisma.order.findUnique({ where: { id: String(orderId) }, select: SPEC_SELECT })
   if (!order) throw new Error('Order not found')
   const templates = ctx.templates || await availableTemplates()
-  const result = buildSpec(order, templates, await raceRowFor(order, ctx.raceCache), ctx.gaps || await noTimeGaps())
+  const result = buildSpec(order, templates, await raceRowFor(order, ctx.raceCache), ctx.gaps || await noTimeGaps(), { allowUnpaidPhoto: Boolean(ctx.allowUnpaidPhoto) })
   if (!result.ok && !templates.length) result.reasons.unshift('No render worker has checked in for 30 days')
   return { order, ...result }
 }
@@ -83,14 +83,15 @@ async function raceRowLookup(name, year) {
  * (support/arteloOrder.js).
  */
 export async function createJob({ orderId, requestedBy = 'admin', requestedById = null, size = null }) {
-  let ctx = {}
+  // A person's render may go ahead of an unpaid photo add-on; the send to Artelo waits for it.
+  let ctx = { allowUnpaidPhoto: requestedBy === 'admin' }
   if (size) {
     if (!SIZES.includes(size)) throw new Error(`No artboard for size "${size}"`)
     const order = await prisma.order.findUnique({ where: { id: String(orderId) }, select: SPEC_SELECT })
     if (!order) throw new Error('Order not found')
     if (order.trackstarOrderType !== 'standard') throw new Error('Another size is for standard prints')
     if (order.productSize === size) throw new Error(`This order is already ${size}. Use Re-render for the same size.`)
-    ctx = { order: { ...order, productSize: size } }
+    ctx = { ...ctx, order: { ...order, productSize: size } }
   }
   const { ok, reasons, spec: built } = await checkOrder(orderId, ctx)
   if (!ok) throw new Error(reasons.join('. '))

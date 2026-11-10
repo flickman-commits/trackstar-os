@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     // The design waiting for review was made the other way: close it and render again.
     const note = noTime ? 'Converted to NO TIME; a new design replaces it' : 'Time put back; a new design replaces it'
     await prisma.renderJob.updateMany({ where: { orderId: o.id, status: 'done', review: 'pending' }, data: { review: 'closed', reviewNote: note, reviewedAt: new Date() } })
-    const { ok, reasons, spec } = await checkOrder(o.id)
+    const { ok, reasons, spec } = await checkOrder(o.id, { allowUnpaidPhoto: true })
     if (!ok) return res.status(200).json({ ok: true, noTime, rendering: null, reasons })
     // A render already waiting would print the old way: give it the new spec.
     await prisma.renderJob.updateMany({ where: { orderId: o.id, status: 'queued' }, data: { spec } })
