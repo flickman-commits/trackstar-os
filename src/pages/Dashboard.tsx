@@ -1,4 +1,5 @@
 import { Fragment, useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { shortcutsPaused } from '@/lib/shortcuts'
 import Toast, { type ToastMessage } from '@/components/orders/Toast'
 import { Search, Plus, Loader2, ChevronDown as ChevronDownIcon, ImagePlus, MessageSquareText, SlidersHorizontal, Clock } from 'lucide-react'
 import { openHours } from '@/lib/openHours'
@@ -1117,6 +1118,8 @@ export default function Dashboard() {
         if (target.isContentEditable) return
       }
       if (isEditing) return
+      // Not while a dialog is open: its keys are its own, and Escape closes it (lib/shortcuts.ts).
+      if (shortcutsPaused()) return
       // F: Mark as complete (after A approved the design and A attached it in Artelo).
       if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.repeat && (e.key === 'f' || e.key === 'F')) {
         if (selectedOrder.status === 'completed' || selectedOrder.status === 'flagged') return

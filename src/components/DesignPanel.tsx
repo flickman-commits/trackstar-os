@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Loader2, Sparkles, Download, Check, X, RefreshCw, ArrowUpRight, Send, Pause } from 'lucide-react'
 import type { Design } from '@/lib/useDesign'
+import { shortcutsPaused, previewShown } from '@/lib/shortcuts'
 import { btnPrimary, btnGhost, inputBase } from '@/lib/ui'
 
 /**
@@ -45,7 +46,7 @@ export function DesignCard({ d }: { d: Design }) {
     return (
       <div className="self-start w-full md:w-auto flex flex-col items-center gap-2">
         <button onClick={() => setLightbox(true)} style={{ aspectRatio: ratio }} className="relative self-start w-full md:w-[347px] md:max-w-full rounded-md border border-border-gray bg-subtle-gray overflow-hidden" title="Open larger">
-          <img src={job.previewUrl} alt={`Render of ${job.spec.file}`} className="w-full h-full object-contain block" />
+          <img src={job.previewUrl} data-render-preview={job.id} alt={`Render of ${job.spec.file}`} className="w-full h-full object-contain block" />
           {job.review !== 'pending' && (
             <span className={`absolute top-2 left-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold ${job.review === 'approved' ? 'bg-green-100 text-green-800' : job.review === 'closed' ? 'bg-off-black/10 text-off-black/70' : 'bg-red-100 text-red-800'}`}>
               {job.review === 'approved' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
@@ -118,15 +119,6 @@ function looksLikeFileProblem(note: string) {
   return FILE_WORDS.test(note) && !DATA_WORDS.test(note)
 }
 
-// For the first week Approve sends things to production, the first approval
-// of the day in this browser asks once. Storage can be unavailable; then it asks every visit.
-const CONFIRM_UNTIL = '2026-10-31'
-const confirmKey = () => `trackstar:send-confirmed:${new Date().toLocaleDateString('en-CA')}`
-function needsConfirm() {
-  if (new Date().toLocaleDateString('en-CA') > CONFIRM_UNTIL) return false
-  try { return localStorage.getItem(confirmKey()) !== '1' } catch { return true }
-}
-function rememberConfirm() { try { localStorage.setItem(confirmKey(), '1') } catch { /* asks again next visit */ } }
 
 const clock = (t?: string | null) => t ? new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : ''
 // "Thu 3:15 PM": a print in hold goes up to two days out.
@@ -177,8 +169,10 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
   const [rejecting, setRejecting] = useState(false)
   const [note, setNote] = useState('')
   const [fileProblem, setFileProblem] = useState<boolean | null>(null)
-  const [confirming, setConfirming] = useState(false)
   const job = d.job
+  // The handler below is bound once per review state; it reads the current job through this.
+  const jobIdRef = useRef<string | null>(null)
+  jobIdRef.current = job?.id ?? null
   const [opened, setOpened] = useState(false)
   useEffect(() => { setOpened(job ? readOpened(job.id) : false) }, [job?.id])  // eslint-disable-line react-hooks/exhaustive-deps
   // A approves, R starts a rejection, while a design waits for review. The card
@@ -194,8 +188,10 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
       if (t && (['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName) || t.isContentEditable)) return
       if (window.matchMedia('(min-width: 768px)').matches === compact) return
       if (d.busy) return
+      // Not from behind a dialog, and A only once the design is on screen (lib/shortcuts.ts).
+      if (shortcutsPaused()) return
       const k = e.key.toLowerCase()
-      if (k === 'a') { e.preventDefault(); approveRef.current() }
+      if (k === 'a') { if (!jobIdRef.current || !previewShown(jobIdRef.current)) return; e.preventDefault(); approveRef.current() }
       else if (k === 'r') { e.preventDefault(); setRejecting(true) }
     }
     window.addEventListener('keydown', onKey)
@@ -300,25 +296,8 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
   // Approve records the decision; the Drive and Artelo uploads run after it on
   // the server, and a few minutes later the print goes to production (Hold
   // stops it). Approve only leaves it at Attach, for an order that needs work by hand.
-  const approveAndSend = () => {
-    if (d.autoSend && needsConfirm()) { setConfirming(true); return }
-    void d.review('approved')
-  }
-  approveRef.current = confirming ? () => { rememberConfirm(); setConfirming(false); void d.review('approved') } : approveAndSend
-  if (confirming) {
-    return (
-      <div className="rounded-md border-2 border-green-600/30 bg-green-50 p-4 space-y-3">
-        <p className="text-sm text-green-900"><span className="font-semibold">New: Approve sends this print to production.</span> It is attached to the Artelo order and sent in a few minutes, and the order completes. You can Hold it until then.</p>
-        <div className="flex flex-wrap gap-2">
-          <button autoFocus onClick={() => { rememberConfirm(); setConfirming(false); void d.review('approved') }} disabled={d.busy} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-50">
-            <Send className="w-4 h-4" /> Approve &amp; send
-          </button>
-          <button onClick={() => { setConfirming(false); void d.review('approved', undefined, false, false) }} disabled={d.busy} className={btnGhost}>Approve only, don't send</button>
-          <button onClick={() => setConfirming(false)} className={btnGhost}>Cancel</button>
-        </div>
-      </div>
-    )
-  }
+  const approveAndSend = () => { void d.review('approved') }
+  approveRef.current = approveAndSend
   const approve = (
     <button key="a" onClick={approveAndSend} disabled={d.busy} className={`inline-flex items-center justify-center gap-2 ${pad} rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors`}>
       {d.busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />} {d.autoSend ? (compact ? 'Approve & send' : 'Approve & send to production') : 'Approve'}
