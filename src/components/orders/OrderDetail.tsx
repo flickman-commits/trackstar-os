@@ -586,7 +586,7 @@ export default function OrderDetail({
       setDelayDialogOpen(false)
       // Update local state immediately so the badge shows up without a refetch
       const sentAt = new Date().toISOString()
-      setSelectedOrder(prev => prev ? { ...prev, delayNoticeSentAt: sentAt, delayNoticeDaysLate: days } : prev)
+      setSelectedOrder(prev => prev && prev.orderNumber === orderNumber ? { ...prev, delayNoticeSentAt: sentAt, delayNoticeDaysLate: days } : prev)
       setOrders(prev => prev.map(o => o.orderNumber === orderNumber ? { ...o, delayNoticeSentAt: sentAt, delayNoticeDaysLate: days } : o))
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Failed to send delay notice'
@@ -703,7 +703,7 @@ export default function OrderDetail({
       const refreshed = await apiFetch(`/api/orders?type=${activeView}`).then(r => r.json())
       const updated = refreshed.orders?.find((o: { orderNumber: string }) => o.orderNumber === order.orderNumber)
       if (updated) {
-        setSelectedOrder({ ...selectedOrder!, ...updated, displayOrderNumber: updated.displayOrderNumber || updated.orderNumber })
+        setSelectedOrder(prev => prev && prev.orderNumber === order.orderNumber ? { ...prev, ...updated, displayOrderNumber: updated.displayOrderNumber || updated.orderNumber } : prev)
       }
       await fetchOrders()
     } catch {
@@ -796,11 +796,11 @@ export default function OrderDetail({
       const updatedOrders = await apiFetch(`/api/orders?type=${activeView}`).then(r => r.json())
       const updated = updatedOrders.orders?.find((o: { orderNumber: string }) => o.orderNumber === order.orderNumber)
       if (updated) {
-        setSelectedOrder({
-          ...selectedOrder!,
+        setSelectedOrder(prev => prev && prev.orderNumber === order.orderNumber ? {
+          ...prev,
           ...updated,
           displayOrderNumber: updated.displayOrderNumber || updated.orderNumber
-        })
+        } : prev)
       }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error saving race data:', error)
@@ -863,6 +863,9 @@ export default function OrderDetail({
 
   // The inline order view scrolls on its own; each order starts at the top.
   const detailScrollRef = useRef<HTMLDivElement | null>(null)
+  // The order on screen now, for answers that arrive after the person has moved on.
+  const openIdRef = useRef<string | undefined>(selectedOrder?.id)
+  openIdRef.current = selectedOrder?.id
   useEffect(() => { detailScrollRef.current?.scrollTo(0, 0) }, [selectedOrder?.id])
 
   // A new race year: the server clears the old year's results and closes
@@ -880,7 +883,7 @@ export default function OrderDetail({
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d.error || 'Could not change the year')
       setYearDraft(null)
-      setSelectedOrder(prev => prev ? { ...prev, effectiveRaceYear: year, status: prev.status === 'completed' ? prev.status : 'pending', bibNumber: undefined, officialTime: undefined, officialPace: undefined, researchStatus: undefined } : prev)
+      setSelectedOrder(prev => prev && prev.orderNumber === selectedOrder.orderNumber ? { ...prev, effectiveRaceYear: year, status: prev.status === 'completed' ? prev.status : 'pending', bibNumber: undefined, officialTime: undefined, officialPace: undefined, researchStatus: undefined } : prev)
       setToast({ message: `Year set to ${year}. Researching ${year}…`, type: 'success' })
       await fetchOrders()
       await researchOrder(selectedOrder.orderNumber)
@@ -913,7 +916,7 @@ export default function OrderDetail({
 
       if (data.found) {
         // Optimiztically update the selected order so the modal shows results immediately
-        setSelectedOrder(prev => prev ? {
+        setSelectedOrder(prev => prev && prev.orderNumber === orderNumber ? {
           ...prev,
           bibNumber: data.results.bibNumber,
           officialTime: data.results.officialTime,
@@ -986,7 +989,7 @@ export default function OrderDetail({
       if (import.meta.env.DEV) console.error('Error updating design status:', error)
       // Roll back optimiztic update on failure
       if (selectedOrder?.orderNumber === orderNumber && previousStatus) {
-        setSelectedOrder(prev => prev ? { ...prev, designStatus: previousStatus } : null)
+        setSelectedOrder(prev => prev && prev.orderNumber === orderNumber ? { ...prev, designStatus: previousStatus } : prev)
       }
       setOrders(prev => prev.map(o => o.orderNumber === orderNumber ? { ...o, designStatus: previousStatus || o.designStatus } : o))
       const message = error instanceof Error ? error.message : 'Failed to update design status'
@@ -1026,6 +1029,7 @@ export default function OrderDetail({
 
   const submitComment = async () => {
     if (!selectedOrder || (!newCommentText.trim() && !commentImageFile)) return
+    const commentOrderId = selectedOrder.id
     setIsSubmittingComment(true)
     try {
       let imageData: string | null = null
@@ -1041,7 +1045,7 @@ export default function OrderDetail({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          orderId: selectedOrder.id,
+          orderId: commentOrderId,
           text: newCommentText.trim() || null,
           imageData,
           imageName
@@ -1053,14 +1057,15 @@ export default function OrderDetail({
         throw new Error(err.error || (response.status === 413 ? 'That image is too big. Try a smaller one or a screenshot of it.' : 'Failed to add comment'))
       }
       const data = await response.json()
-      setOrderComments(prev => [data.comment, ...prev])
+      // Still on the same order? Otherwise the comment is saved and shows when that order is opened again.
+      if (openIdRef.current === commentOrderId) setOrderComments(prev => [data.comment, ...prev])
       setNewCommentText('')
       setCommentImageFile(null)
       if (commentImagePreview) URL.revokeObjectURL(commentImagePreview)
       setCommentImagePreview(null)
       // Update commentCount on the order in the list so the icon shows
-      setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, commentCount: (o.commentCount || 0) + 1 } : o))
-      setSelectedOrder(prev => prev ? { ...prev, commentCount: (prev.commentCount || 0) + 1 } : prev)
+      setOrders(prev => prev.map(o => o.id === commentOrderId ? { ...o, commentCount: (o.commentCount || 0) + 1 } : o))
+      setSelectedOrder(prev => prev && prev.id === commentOrderId ? { ...prev, commentCount: (prev.commentCount || 0) + 1 } : prev)
       setShowCommentBox(false)
       setToast({ message: 'Comment added', type: 'success' })
     } catch (error) {
@@ -1083,7 +1088,7 @@ export default function OrderDetail({
       // Update commentCount on the order in the list
       if (selectedOrder) {
         setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, commentCount: Math.max((o.commentCount || 0) - 1, 0) } : o))
-        setSelectedOrder(prev => prev ? { ...prev, commentCount: Math.max((prev.commentCount || 0) - 1, 0) } : prev)
+        setSelectedOrder(prev => prev && prev.id === selectedOrder.id ? { ...prev, commentCount: Math.max((prev.commentCount || 0) - 1, 0) } : prev)
       }
       setToast({ message: 'Comment deleted', type: 'success' })
     } catch (error) {
@@ -1107,7 +1112,7 @@ export default function OrderDetail({
       }
       setToast({ message: 'Follow-up email sent', type: 'success' })
       // Update proofSentAt locally
-      setSelectedOrder(prev => prev ? { ...prev, proofSentAt: new Date().toISOString() } : prev)
+      setSelectedOrder(prev => prev && prev.id === orderId ? { ...prev, proofSentAt: new Date().toISOString() } : prev)
     } catch {
       setToast({ message: 'Failed to send follow-up', type: 'error' })
     } finally {
@@ -1159,6 +1164,25 @@ export default function OrderDetail({
 
   // Admin only: move a custom order to rush by hand, so it cuts the line.
   const [rushEditing, setRushEditing] = useState<string | null>(null)
+
+  // Moving to another order (S/D, the list) leaves this panel mounted, so edit
+  // state from the last order would otherwise carry over: saving race data
+  // after moving wrote one order's date and weather onto the next order's race.
+  useEffect(() => {
+    setIsEditingWeather(false)
+    setWeatherEditValues({ raceDate: '', weatherCondition: '', weatherTemp: '' })
+    setShowWeatherCalc(false)
+    setWeatherCalcCity('')
+    setWeatherCalcDate('')
+    setConfirmingWeather(false)
+    setConfirmingDate(false)
+    setDelayDialogOpen(false)
+    setDelayDaysInput('3')
+    setRushEditing(null)
+    setAltSizeOpen(false)
+    setShowCommentBox(false)
+    setPhotoConfirming(false)
+  }, [selectedOrder?.id])
   const setRush = async (orderId: string, rush: boolean, dueDate?: string) => {
     try {
       const res = await apiFetch('/api/orders/rush', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId, rush, dueDate }) })
@@ -1819,6 +1843,7 @@ Thank you!`
                   {ds !== 'sent_to_production' && (
                     <div>
                       <ProofManager
+                        key={selectedOrder.id}
                         heading={
                           <h4 className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider">
                             Proofs &amp; Approval{selectedOrder.proofCount ? <span className="ml-1 text-off-black/30">({selectedOrder.proofCount})</span> : null}
@@ -1852,7 +1877,7 @@ Thank you!`
                               await fetchOrders()
                               const refreshed = await apiFetch('/api/orders?type=race_partner').then(r => r.json())
                               const updated = refreshed.orders?.find((o: { orderNumber: string }) => o.orderNumber === selectedOrder.orderNumber)
-                              if (updated) setSelectedOrder(prev => prev ? { ...prev, ...updated } : prev)
+                              if (updated) setSelectedOrder(prev => prev && prev.orderNumber === updated.orderNumber ? { ...prev, ...updated } : prev)
                             }}
                           />
                         ) : (
@@ -1864,7 +1889,7 @@ Thank you!`
                               await fetchOrders()
                               const refreshed = await apiFetch(`/api/orders?number=${encodeURIComponent(selectedOrder.parentOrderNumber)}`).then(r => r.json())
                               const updated = refreshed.orders?.find((o: { orderNumber: string }) => o.orderNumber === selectedOrder.orderNumber)
-                              if (updated) setSelectedOrder(prev => prev ? mapOrder(updated) : prev)
+                              if (updated) setSelectedOrder(prev => prev && prev.orderNumber === updated.orderNumber ? mapOrder(updated) : prev)
                             }}
                           />
                         )}

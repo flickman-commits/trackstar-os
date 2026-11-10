@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 
 /** State for the open order's automated print. Read by the pieces in components/DesignPanel.tsx. */
@@ -68,6 +69,15 @@ export function useDesign(orderId: string | null, canManage: boolean) {
     return () => clearInterval(t)
   }, [sending, load])
 
+  // A failure that comes back after the person moved to another order is about
+  // the order they left: it is not shown under the new one, and it is not
+  // silent either.
+  const failed = (forOrder: string | null, e: unknown, what: string) => {
+    const msg = e instanceof Error ? e.message : 'Could not save'
+    if (current.current === forOrder) setErr(msg)
+    else toast.error(`Could not ${what} the design on the order you just left: ${msg}`)
+  }
+
   const create = async () => {
     setBusy(true); setCreating(true); setErr(null)
     // Straight to the loading state; the next poll brings the real job.
@@ -78,20 +88,22 @@ export function useDesign(orderId: string | null, canManage: boolean) {
   // send: false is Approve only (it waits at Attach); otherwise an approval goes to production after the hold.
   const review = async (decision: 'approved' | 'rejected', note?: string, designNeed = false, send = true) => {
     if (!state?.job) return false
+    const forOrder = orderId
     setBusy(true); setErr(null)
     try { await post({ action: 'review', jobId: state.job.id, decision, note, designNeed, send }); await load(); return true }
-    catch (e) { setErr(e instanceof Error ? e.message : 'Could not save'); return false } finally { setBusy(false) }
+    catch (e) { failed(forOrder, e, decision === 'approved' ? 'approve' : 'reject'); return false } finally { setBusy(false) }
   }
   // Hold an approved print from production, or send it now.
   const sendAction = async (action: 'hold' | 'send-now') => {
     if (!orderId) return false
+    const forOrder = orderId
     setBusy(true); setErr(null)
     try {
       const res = await apiFetch('/api/orders/artelo-send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, orderId }) })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Request failed')
       await load(); return true
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Could not save'); return false } finally { setBusy(false) }
+    } catch (e) { failed(forOrder, e, action === 'hold' ? 'hold' : 'send'); return false } finally { setBusy(false) }
   }
 
   const job = state?.job || null
