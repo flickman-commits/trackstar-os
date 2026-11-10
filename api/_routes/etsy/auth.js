@@ -14,7 +14,7 @@
  */
 
 import prisma from '../../_lib/prisma.js'
-import { setCors } from '../../_lib/auth.js'
+import { setCors, safeEqual } from '../../_lib/auth.js'
 import { requireAdminOnly, recordAudit } from '../../_lib/users.js'
 import { fetchWithTimeout } from '../../../server/lib/fetchWithTimeout.js'
 import crypto from 'crypto'
@@ -64,7 +64,8 @@ export default async function handler(req, res) {
       }
 
       // Validate the OAuth state parameter to prevent CSRF attacks
-      if (!savedState || !state || savedState !== state) {
+      // Constant time, like every secret compare here (CLAUDE.md).
+      if (!savedState || !state || !safeEqual(savedState, String(state))) {
         return res.status(403).json({
           error: 'OAuth state mismatch - possible CSRF attack. Please restart the OAuth flow.'
         })
@@ -121,8 +122,8 @@ export default async function handler(req, res) {
 
       // Clear the cookies
       res.setHeader('Set-Cookie', [
-        'etsy_code_verifier=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
-        'etsy_oauth_state=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax'
+        `etsy_code_verifier=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secureFlag(req)}`,
+        `etsy_oauth_state=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secureFlag(req)}`
       ])
 
       return res.status(200).json({
@@ -153,8 +154,8 @@ export default async function handler(req, res) {
 
       // Store code_verifier and state in cookies (survive the redirect)
       res.setHeader('Set-Cookie', [
-        `etsy_code_verifier=${codeVerifier}; Path=/; Max-Age=600; HttpOnly; SameSite=Lax`,
-        `etsy_oauth_state=${oauthState}; Path=/; Max-Age=600; HttpOnly; SameSite=Lax`
+        `etsy_code_verifier=${codeVerifier}; Path=/; Max-Age=600; HttpOnly; SameSite=Lax${secureFlag(req)}`,
+        `etsy_oauth_state=${oauthState}; Path=/; Max-Age=600; HttpOnly; SameSite=Lax${secureFlag(req)}`
       ])
 
       const authUrl = new URL('https://www.etsy.com/oauth/connect')
@@ -174,6 +175,14 @@ export default async function handler(req, res) {
     console.error('[etsy/auth] Error:', error)
     return res.status(500).json({ error: 'The Etsy connection failed. Start again from Settings.' })
   }
+}
+
+/** "; Secure" except on localhost over plain http, the way the Gmail and Instagram flows do it (support/oauthState.js). */
+function secureFlag(req) {
+  const proto = req.headers?.['x-forwarded-proto'] || ''
+  const host = req.headers?.['x-forwarded-host'] || req.headers?.host || ''
+  const local = host.startsWith('localhost') || host.startsWith('127.0.0.1')
+  return !local && proto !== 'http' ? '; Secure' : ''
 }
 
 function parseCookies(cookieHeader) {
