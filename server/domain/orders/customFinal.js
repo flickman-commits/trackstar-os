@@ -74,23 +74,31 @@ export async function recordFinalPdf({ orderId, path, fileName, actor = null, se
   const magic = head?.ok ? Buffer.from(await head.arrayBuffer()).toString('latin1') : ''
   if (!magic.startsWith('%PDF')) throw new FinalPdfError('That file is not a PDF. Export the final design as a PDF and upload it again.')
 
-  const last = await prisma.renderJob.findFirst({ where: { orderId: order.id }, orderBy: { version: 'desc' }, select: { version: true } })
   const now = new Date()
-  let job = await prisma.renderJob.create({
-    data: {
-      orderId: order.id,
-      version: (last?.version || 0) + 1,
-      status: 'done',
-      requestedBy: 'admin',
-      requestedById: actor?.id || null,
-      spec: { kind: 'custom_final', file: baseName(order, fileName) },
-      pdfPath: p,
-      finishedAt: now,
-      review: 'approved',
-      reviewedById: actor?.id || null,
-      reviewedAt: now,
-    },
-  })
+  // The next version number; if a render took it a moment ago (unique orderId + version), take the one after.
+  let job
+  for (let attempt = 1; !job; attempt++) {
+    const last = await prisma.renderJob.findFirst({ where: { orderId: order.id }, orderBy: { version: 'desc' }, select: { version: true } })
+    try {
+      job = await prisma.renderJob.create({
+        data: {
+          orderId: order.id,
+          version: (last?.version || 0) + 1,
+          status: 'done',
+          requestedBy: 'admin',
+          requestedById: actor?.id || null,
+          spec: { kind: 'custom_final', file: baseName(order, fileName) },
+          pdfPath: p,
+          finishedAt: now,
+          review: 'approved',
+          reviewedById: actor?.id || null,
+          reviewedAt: now,
+        },
+      })
+    } catch (e) {
+      if (e.code !== 'P2002' || attempt >= 3) throw e
+    }
+  }
   if (order.designStatus !== 'final_pdf_uploaded') await setDesignStatus(order, 'final_pdf_uploaded', null, actor)
 
   await deliverEverywhere(job)

@@ -102,10 +102,18 @@ export async function createJob({ orderId, requestedBy = 'admin', requestedById 
   const open = (await prisma.renderJob.findMany({ where: { orderId: String(orderId), status: { in: ['queued', 'rendering'] } } }))
     .find(j => (j.spec?.altSize ? j.spec.size : null) === (size || null))
   if (open) return open
-  const last = await prisma.renderJob.findFirst({ where: { orderId: String(orderId) }, orderBy: { version: 'desc' }, select: { version: true } })
-  return prisma.renderJob.create({
-    data: { orderId: String(orderId), version: (last?.version || 0) + 1, spec, requestedBy, requestedById },
-  })
+  // The next version number; if another render took it a moment ago (unique
+  // orderId + version), take the one after.
+  for (let attempt = 1; ; attempt++) {
+    const last = await prisma.renderJob.findFirst({ where: { orderId: String(orderId) }, orderBy: { version: 'desc' }, select: { version: true } })
+    try {
+      return await prisma.renderJob.create({
+        data: { orderId: String(orderId), version: (last?.version || 0) + 1, spec, requestedBy, requestedById },
+      })
+    } catch (e) {
+      if (e.code !== 'P2002' || attempt >= 3) throw e
+    }
+  }
 }
 
 /**

@@ -304,6 +304,10 @@ model RunnerResearch {
   @@index([orderId])
   @@index([raceId])
   @@index([researchStatus])
+  // One research row per order and race: every writer finds the row and then
+  // creates it if missing, so two at once made two, and readers disagreed on
+  // which one was the result.
+  @@unique([orderId, raceId])
 }
 
 // A partner's bulk order of prints for one race: who pays and the invoice, the runner list,
@@ -1148,6 +1152,9 @@ model RenderJob {
   @@index([orderId, createdAt])
   @@index([status, createdAt])
   @@index([sendAfter])
+  // One version number per order: two renders created at once used to share a
+  // number and the same storage path, so one file overwrote the other.
+  @@unique([orderId, version])
 }
 
 /** A render worker that has checked in. Online means seen in the last minute. */
