@@ -17,6 +17,8 @@ type Connection = {
   id: string; label: string; what: string; on: boolean; configured: boolean; missing: string[]
   connected: boolean; needsConnect: boolean; connectUrl: string | null; connectedAs: string | null
   critical: boolean; lastUsedAt: string | null; note: string | null
+  // Forced off by this server's own CONNECTIONS_FORCE_OFF (a laptop session), not by the shared switch.
+  forced?: boolean
 }
 type TestResult = { ok: boolean; detail: string; ms?: number }
 
@@ -32,7 +34,7 @@ function ago(iso: string | null) {
 }
 
 function StateChip({ c }: { c: Connection }) {
-  if (!c.on) return <span className={`${chip} ${chipTone.rose}`}><CircleOff className="w-3 h-3" />Off</span>
+  if (!c.on) return <span className={`${chip} ${chipTone.rose}`}><CircleOff className="w-3 h-3" />{c.forced ? 'Off on this server' : 'Off'}</span>
   if (!c.configured) return <span className={`${chip} ${chipTone.amber}`}><AlertTriangle className="w-3 h-3" />Not set up</span>
   if (c.needsConnect) return <span className={`${chip} ${chipTone.amber}`}><AlertTriangle className="w-3 h-3" />Needs connecting</span>
   if (!c.connected) return <span className={`${chip} ${chipTone.amber}`}><AlertTriangle className="w-3 h-3" />Offline</span>
@@ -179,7 +181,8 @@ export default function ConnectionsPanel() {
                   role="switch"
                   aria-checked={c.on}
                   aria-label={`${c.label} ${c.on ? 'on' : 'off'}`}
-                  disabled={busy !== null}
+                  title={c.forced ? 'Forced off by CONNECTIONS_FORCE_OFF on this server; the shared switch is not changed from here' : undefined}
+                  disabled={busy !== null || Boolean(c.forced)}
                   onClick={() => flip(c)}
                   className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${c.on ? 'bg-dark-fill' : 'bg-off-black/20'}`}
                 >

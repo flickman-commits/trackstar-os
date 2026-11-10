@@ -77,18 +77,51 @@ const BY_ID = new Map(CONNECTIONS.map(c => [c.id, c]))
 
 /** A call to a service someone switched off. The message is fit to show. */
 export class ConnectionOffError extends Error {
-  constructor(id) {
-    super(`${BY_ID.get(id)?.label || id} is switched off in Settings > Connections.`)
+  constructor(id, { forced = false } = {}) {
+    const label = BY_ID.get(id)?.label || id
+    super(forced
+      ? `${label} is switched off for this server by CONNECTIONS_FORCE_OFF.`
+      : `${label} is switched off in Settings > Connections.`)
     this.name = 'ConnectionOffError'
     this.connection = id
+    this.forced = forced
     this.status = 503
     this.expose = true
   }
 }
 
+/**
+ * Services switched off by this process's own environment, never by the
+ * shared row: CONNECTIONS_FORCE_OFF, a comma list of ids, or "all". It is
+ * for a laptop whose .env points at the production database, so a local
+ * session cannot send a print, an email or a Slack post, and switching it
+ * here never switches anything off in production. Read on every call, so a
+ * test can set and clear it.
+ */
+const warnedUnknown = new Set()
+export function forcedOff(raw = process.env.CONNECTIONS_FORCE_OFF) {
+  const words = String(raw || '').split(',').map(s => s.trim()).filter(Boolean)
+  if (words.includes('all')) return new Set(BY_ID.keys())
+  for (const w of words) {
+    if (!BY_ID.has(w) && !warnedUnknown.has(w)) {
+      warnedUnknown.add(w)
+      console.warn(`[connections] CONNECTIONS_FORCE_OFF names "${w}", which is not a connection id`)
+    }
+  }
+  return new Set(words.filter(w => BY_ID.has(w)))
+}
+
 let offCache = { at: 0, value: new Set() }
 
-async function offSet({ fresh = false } = {}) {
+/** Off for any reason: switched off in Settings, or forced off by this process's environment. */
+async function offSet(opts) {
+  const forced = forcedOff()
+  const stored = await storedOff(opts)
+  return forced.size ? new Set([...stored, ...forced]) : stored
+}
+
+/** The shared switch row: what Settings > Connections turned off, for every instance. */
+async function storedOff({ fresh = false } = {}) {
   if (!fresh && Date.now() - offCache.at < CACHE_MS) return offCache.value
   try {
     const row = await prisma.systemConfig.findUnique({ where: { key: OFF_KEY } })
@@ -113,7 +146,8 @@ export async function isConnectionOn(id) {
  */
 export async function requireConnection(id) {
   if (!BY_ID.has(id)) throw new Error(`Unknown connection "${id}"`)
-  if ((await offSet()).has(id)) throw new ConnectionOffError(id)
+  if (forcedOff().has(id)) throw new ConnectionOffError(id, { forced: true })
+  if ((await storedOff()).has(id)) throw new ConnectionOffError(id)
   touch(id)
 }
 
@@ -129,7 +163,12 @@ function touch(id) {
 /** Switch a service on or off. Returns the new list of ids that are off. */
 export async function setConnectionOn(id, on) {
   if (!BY_ID.has(id)) throw new Error(`Unknown connection "${id}"`)
-  const off = new Set(await offSet({ fresh: true }))
+  // The row is shared with production: a session that forces this service
+  // off is not where it gets switched.
+  if (forcedOff().has(id)) {
+    throw Object.assign(new Error(`${BY_ID.get(id).label} is forced off on this server by CONNECTIONS_FORCE_OFF, so its switch cannot be changed here.`), { status: 409, expose: true })
+  }
+  const off = new Set(await storedOff({ fresh: true }))
   if (on) off.delete(id); else off.add(id)
   const value = JSON.stringify([...off].sort())
   await prisma.systemConfig.upsert({ where: { key: OFF_KEY }, update: { value }, create: { key: OFF_KEY, value } })
@@ -143,6 +182,8 @@ export async function setConnectionOn(id, on) {
  */
 export async function connectionStatus() {
   const off = await offSet({ fresh: true })
+  const forced = forcedOff()
+  const FORCED_NOTE = 'Off on this server only (CONNECTIONS_FORCE_OFF)'
   const keys = CONNECTIONS.flatMap(c => [c.token, c.asKey].filter(Boolean)).concat(CONNECTIONS.map(c => USED_PREFIX + c.id))
   const rows = await prisma.systemConfig.findMany({ where: { key: { in: keys } }, select: { key: true, value: true } })
   const cfg = Object.fromEntries(rows.map(r => [r.key, r.value]))
@@ -156,7 +197,8 @@ export async function connectionStatus() {
       return {
         id: c.id, label: c.label, what: c.what, on: !off.has(c.id), configured: true, missing: [],
         connected: Boolean(l.connected), needsConnect: false, connectUrl: null,
-        connectedAs: l.connectedAs || null, critical: Boolean(c.critical), lastUsedAt: l.lastUsedAt || null, note: l.note || null,
+        connectedAs: l.connectedAs || null, critical: Boolean(c.critical), lastUsedAt: l.lastUsedAt || null,
+        forced: forced.has(c.id), note: forced.has(c.id) ? FORCED_NOTE : l.note || null,
       }
     }
     const missing = (c.env || []).filter(k => !env(k))
@@ -178,7 +220,8 @@ export async function connectionStatus() {
       connectedAs,
       critical: Boolean(c.critical),
       lastUsedAt: cfg[USED_PREFIX + c.id] || null,
-      note: null,
+      forced: forced.has(c.id),
+      note: forced.has(c.id) ? FORCED_NOTE : null,
     }
   })
 }

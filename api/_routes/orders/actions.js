@@ -45,6 +45,7 @@ import WeatherService from '../../../server/services/WeatherService.js'
 import { slackTo, slackApi, slackText, slackLink } from '../../../server/lib/slack.js'
 import { orderAppUrl } from '../../../server/lib/links.js'
 import { sendPublicError } from '../../../server/lib/publicError.js'
+import { forcedOff } from '../../../server/lib/connections.js'
 import { sendEmail } from '../../../server/lib/email.js'
 import { sendOrderEmail, customerMailReady } from '../../../server/domain/support/customerMail.js'
 import { renderCustomerEmail, escapeHtml } from '../../../server/lib/customerEmail.js'
@@ -1242,6 +1243,8 @@ async function handleTestConnections(res) {
 
   let etsyAccessToken = null
   await runStep('etsy', 'Refresh access token', async () => {
+    // A refresh rotates the one stored token that production also uses.
+    if (forcedOff().has('etsy')) return { status: 'error', message: 'Skipped: Etsy is forced off on this server (CONNECTIONS_FORCE_OFF)' }
     if (!etsyRefreshTokenRow?.value || !process.env.ETSY_API_KEY) {
       return { status: 'error', message: 'Skipped (missing key or refresh token)' }
     }
@@ -1348,6 +1351,8 @@ async function handleHealthCheck(res, { sendSlack = false } = {}) {
       const apiKey = process.env.ETSY_API_KEY
       const sharedSecret = process.env.ETSY_SHARED_SECRET
       if (!apiKey || !sharedSecret) return { status: 'error', detail: 'Missing ETSY_API_KEY or ETSY_SHARED_SECRET' }
+      // A refresh rotates the one stored token that production also uses.
+      if (forcedOff().has('etsy')) return { status: 'error', detail: 'Skipped: Etsy is forced off on this server (CONNECTIONS_FORCE_OFF)' }
 
       const tokenRow = await prisma.systemConfig.findUnique({ where: { key: 'etsy_refresh_token' } })
       if (!tokenRow?.value) return { status: 'error', detail: 'No Etsy refresh token in database' }
