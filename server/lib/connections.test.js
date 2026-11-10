@@ -31,7 +31,7 @@ test('CONNECTIONS_FORCE_OFF lists ids, "all" means every one, and unknown words 
   assert.equal(forcedOff('all').size, CONNECTIONS.length)
   assert.deepEqual([...forcedOff('artelo,nope')], ['artelo'])
   assert.equal(forcedOff('').size, 0)
-  assert.equal(forcedOff(undefined).size, 0)
+  assert.equal(forcedOff(null).size, 0)
 })
 
 test('a service forced off by this process is off whatever the shared switch says, and on again once cleared', async () => {
