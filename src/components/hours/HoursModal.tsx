@@ -116,7 +116,7 @@ function HoursBody({ onClose }: { onClose: () => void }) {
   void tick
 
   return (
-    <ActionModal icon={Clock} title={<>Hours Tracker{me && <span className="ml-2 font-semibold text-[#4600D6]">{me}</span>}</>} sub={ts ? <>week of {dayLabel(ts.weekStart)}<span className="ml-3 inline-flex items-center px-2 py-0.5 rounded-md bg-off-black/[0.06] text-off-black text-base font-semibold tabular-nums align-middle" title="Total for this week">{minutesText(ts.totalMinutes)}</span></> : undefined} onClose={onClose} size="xl" bare draggable
+    <ActionModal icon={Clock} title={<>Hours Tracker{me && <span className="ml-2 font-semibold text-[#4600D6]">{me}</span>}</>} sub={ts ? <>week of {dayLabel(ts.weekStart)}<span className="ml-3 inline-flex items-center px-2 py-0.5 rounded-md bg-off-black/[0.06] text-off-black text-base font-semibold tabular-nums align-middle" title="Total for this week">{minutesText(ts.totalMinutes)}</span></> : undefined} onClose={onClose} size="xl" bare
       actions={<div className="flex items-center gap-1 mr-2">
         <button onClick={() => setWeek(w => addDays(w, -7))} className={btnGhost} aria-label="Previous week"><ChevronLeft className="w-4 h-4" /></button>
         <button onClick={() => setWeek(w => addDays(w, 7))} disabled={week >= thisMonday} className={btnGhost} aria-label="Next week"><ChevronRight className="w-4 h-4" /></button>
