@@ -50,6 +50,7 @@ import { sendEmail } from '../../../server/lib/email.js'
 import { sendOrderEmail, customerMailReady } from '../../../server/domain/support/customerMail.js'
 import { renderCustomerEmail, escapeHtml } from '../../../server/lib/customerEmail.js'
 import { designDueDate } from '../../../server/domain/orders/designDue.js'
+import { DISCOUNT_LIMIT_PERCENT } from '../../../server/domain/support/actions.js'
 
 // Build the customer-facing approval/portal URL. Prod uses the Vercel
 // production URL; falls back to APP_BASE_URL for other environments.
@@ -260,7 +261,7 @@ async function dispatch(action, body, res, actor) {
       case 'message-customer':
         return await handleMessageCustomer(body, res, actor)
       case 'create-discount':
-        return await handleCreateDiscount(body, res)
+        return await handleCreateDiscount(body, res, actor)
       case 'calculate-weather':
         return await handleCalculateWeather(body, res, actor)
       case 'customers-served-info':
@@ -653,7 +654,12 @@ function generateDiscountCode() {
   return `TS-${suffix}`
 }
 
-async function handleCreateDiscount({ valueType, value, code, expiresInDays, usageLimit, oncePerCustomer }, res) {
+// Anyone with tools.discounts may make a code; past these it is an admin's.
+// The same line Support's discount action draws (support/actions.js).
+const DISCOUNT_FIXED_LIMIT = 25
+const DISCOUNT_DAYS_LIMIT = 30
+
+async function handleCreateDiscount({ valueType, value, code, expiresInDays, usageLimit, oncePerCustomer }, res, actor) {
   if (!['percentage', 'fixed_amount'].includes(valueType)) {
     return res.status(400).json({ error: "valueType must be 'percentage' or 'fixed_amount'" })
   }
@@ -686,6 +692,19 @@ async function handleCreateDiscount({ valueType, value, code, expiresInDays, usa
     ? code.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '')
     : generateDiscountCode()
   if (!finalCode) return res.status(400).json({ error: 'Invalid code' })
+
+  // A code is money off the live store. Without the admin role: at most
+  // DISCOUNT_LIMIT_PERCENT percent or DISCOUNT_FIXED_LIMIT dollars, one use,
+  // and expiring within DISCOUNT_DAYS_LIMIT days. One phished account cannot
+  // make a 100%-off code anyone can use forever.
+  const admin = actor?.role === 'admin'
+  const overCap = valueType === 'percentage' ? amount > DISCOUNT_LIMIT_PERCENT : amount > DISCOUNT_FIXED_LIMIT
+  if (!admin) {
+    const cap = valueType === 'percentage' ? `${DISCOUNT_LIMIT_PERCENT}%` : `$${DISCOUNT_FIXED_LIMIT}`
+    if (overCap) return res.status(403).json({ error: `Codes over ${cap} are Matt's call. Slack Matt with the details, or make it smaller.` })
+    if (uses !== 1) return res.status(403).json({ error: 'A code you make is good for one use. Matt makes codes for more than one.' })
+    if (!days || days > DISCOUNT_DAYS_LIMIT) return res.status(403).json({ error: `A code you make expires within ${DISCOUNT_DAYS_LIMIT} days. Matt makes longer ones.` })
+  }
 
   const startsAt = new Date().toISOString()
   const endsAt = days ? new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString() : null
@@ -728,6 +747,12 @@ async function handleCreateDiscount({ valueType, value, code, expiresInDays, usa
     }
 
     const label = valueType === 'percentage' ? `${amount}% off` : `$${amount.toFixed(2)} off`
+    // A big code, unlimited, or never expiring: Matt hears about it even when an admin made it.
+    if (overCap || uses !== 1 || !days) {
+      const usesText = uses ? `${uses} use${uses === 1 ? '' : 's'}` : 'unlimited uses'
+      const endText = endsAt ? `expires ${endsAt.slice(0, 10)}` : 'never expires'
+      await slackTo('admin', `:ticket: ${slackText(actor?.email || 'Someone')} created discount code *${slackText(finalCode)}*: ${label}, ${usesText}, ${endText}.`).catch(() => {})
+    }
     console.log(`[actions/create-discount] Created ${finalCode} (${label}, ${uses ? `${uses} use${uses === 1 ? '' : 's'}` : 'unlimited uses'}, ${endsAt ? `expires ${endsAt}` : 'no expiry'})`)
     return res.status(200).json({
       success: true,
