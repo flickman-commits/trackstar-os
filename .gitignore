@@ -53,3 +53,8 @@ worker/local-out/
 worker/illustrator/check-input.json
 worker/illustrator/check-result.json
 worker/template-cache/
+
+# Exports and reports dropped in the repo root (order audits, CEO reports):
+# business data, never source. Stage files by name, never `git add -A`.
+/*.csv
+/*.txt
