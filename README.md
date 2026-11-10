@@ -29,14 +29,16 @@ cp .env.example .env.local   # then fill in values
 npm run dev                  # starts the API on :3001 and Vite on :5173
 ```
 
-`.env.local` points at whatever database you put in `DATABASE_URL`. Be careful: if that is the production database, local writes are live.
+`.env.local` points at whatever database you put in `DATABASE_URL`. Be careful: if that is the production database, local writes are live. While it is, put `CONNECTIONS_FORCE_OFF=all` in `.env.local` so a local session cannot send a print, an email or a Slack post (`server/lib/connections.js`).
 
 ## Useful commands
 
 | Command | What it does |
 |---|---|
-| `npm run build` | Lints scraper fixtures, generates Prisma client, typechecks `src/`, builds the site |
+| `npm run build` | Checks the route table and auth awaits, lints everything, lints scraper fixtures, generates the Prisma client, runs the tests, typechecks `src/`, builds the site |
+| `npm test` | The server tests, against an offline database address (never the real one) |
 | `npm run lint` | ESLint over `src/` |
+| `npm run lint:server` | ESLint over `server/`, `api/`, `scripts/` and `worker/` for undefined names, duplicate keys and unreachable code |
 | `npm run lint:scrapers` | Every scraper platform must ship a chip-time fixture |
 | `npm run test:scrapers` | Verifies chip times against live results pages |
 | `npx prisma db push` | Applies schema changes (interactive migrate does not work in this terminal) |
@@ -44,6 +46,17 @@ npm run dev                  # starts the API on :3001 and Vite on :5173
 ## Deploying
 
 Push to `main`. Vercel builds and deploys. Cron schedules live in `vercel.json`.
+
+A schema change goes to the database before the code that uses it: `npx prisma db push`, then push to `main`. Code that reaches production first fails every query on the changed table (the tool says so: `server/lib/systemProblem.js`).
+
+## When production is broken
+
+- **A deploy broke something.** In Vercel, Deployments, pick the last good one and Promote to Production (Instant Rollback). Then `git revert` the bad commit on `main` and push, so the next deploy does not bring it back.
+- **What happened.** Vercel, the project, Logs (filter by the function: `app`, `cron`, `public`, `support`, `sales`, `admin`, `mcp`). #admin-alerts has the failures the tool reports itself; the hourly watchdog there says when a scheduled job is late or stopped finishing.
+- **Stop one outside service** (a vendor having a bad day, a leaked key): Settings > Connections, switch it off. Every part of the tool that calls it stops within 30 seconds. Sending approved prints to Artelo has its own switch under Artelo.
+- **Etsy orders arrive without personalization.** The Etsy token stopped working (#admin-alerts says so). Settings > Connections, Etsy, Reconnect, sign in as the shop.
+- **The support mailbox or Instagram stopped.** Settings > Connections, Reconnect on that service.
+- **Database backups.** (Matt: which Supabase backup tier the project is on, and how a restore is done.)
 
 ## Where to look
 
