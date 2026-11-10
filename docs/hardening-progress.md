@@ -35,7 +35,7 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 - [x] 4.5 Refuse cross-site requests that change things (Sec-Fetch-Site / Origin, in requireAdmin). Reads are left open (OAuth callbacks). The four state-changing GETs refuse cross-site links. Not done: requiring application/json.
 - [x] 4.6 Clarity on public pages only (Matt, 2026-11-10): Creator landing and Monopoly page, as an allowlist in index.html and monopoly.html.
 - [x] 4.7 Smaller items: Slack escaping (4 posts), Etsy OAuth constant-time state and Secure cookies (not the full oauthState.js double check), bulk tokens uuid and runner-link cap, gallery fetch only from our storage, worker relay redirects only to relay hosts.
-- [!] 4.8 Retire `MCP_TOKEN` / `MCP_WRITE_TOKEN`. Waiting on Matt: does the nightly routine use a per-person API key now?
+- [!] 4.8 Retire `MCP_TOKEN` / `MCP_WRITE_TOKEN`. Matt is not sure the nightly routine has moved off them (2026-11-10), so they stay. To check: search the Activity Log for "MCP_WRITE_TOKEN" (calls with it are logged as key:Nightly routine (MCP_WRITE_TOKEN)); none in the last few weeks means it is safe to retire.
 
 ## Phase 5: Reliability and alerting
 - [ ] 5.1 Alert when a cron fails
@@ -76,10 +76,13 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 - [ ] 8.5 Dead code
 - [ ] 8.6 List of unused public files
 
+## Checked by Matt
+- 2026-11-10, Supabase: RLS is off on every public table, but the Data API is disabled for them ("cannot be accessed via the Data API"), so the anon key cannot read them. Nothing to do; enabling RLS too is optional.
+- 2026-11-10, Supabase Storage: personalization-photos is private (25 MB, image types only). order-proofs and order-comments are PUBLIC with no size or type limit. Making them private needs signed links in code first (proof links are stored and already emailed), so it stays on the later list. Do not flip them private in the dashboard.
+
 ## Waiting on Matt
 - Phase 1: add `CONNECTIONS_FORCE_OFF=all` (or the explicit list in `.env.example`) to `.env.local`. Never in Vercel.
 - Phases 1 to 4: commits are local, not pushed.
 - Phase 4: after deploying, delete ADMIN_SECRET from Vercel.
-- Phase 4, 4.8: does the nightly routine use a per-person API key?
-- Phase 4: Supabase row-level security / Data API for the `public` schema, and whether the order-proofs and order-comments buckets are public (dashboard settings).
+- Phase 4, 4.8: check the Activity Log for MCP_WRITE_TOKEN use (see 4.8).
 - Phase 2: click through in the app after deploy (listed in the Phase 2 report).
