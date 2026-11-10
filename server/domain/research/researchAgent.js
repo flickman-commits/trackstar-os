@@ -33,7 +33,7 @@ import { checkRateLimitDurable } from '../../lib/publicRateLimit.js'
 import { fetchTimingPage } from '../../lib/scraperTrace.js'
 import { complete, canSearch, isLlmConfigured } from '../../lib/llm.js'
 import { recordAudit } from '../../../api/_lib/users.js'
-import { RESEARCH_REASONS, planFor, nameVariants, sameName, fold, isSeveralRunners, checkRowOnPage } from './agentRules.js'
+import { RESEARCH_REASONS, planFor, nameVariants, sameName, fold, isSeveralRunners, checkRowOnPage, notesDoubt } from './agentRules.js'
 import { KNOWN_YEAR } from '../orders/yearUnknown.js'
 
 export const AGENT_NAME = 'Research agent'
@@ -250,6 +250,8 @@ async function checkClaim(item, claim, { dryRun = false, by = 'Finder' } = {}) {
   if (isSeveralRunners(item.runner)) return handOff(`"${item.runner}" is more than one runner, and a person decides whose result prints.`)
   if (!sameName(claim.nameOnPage || '', item.runner)) return handOff(`the page lists "${claim.nameOnPage}", not "${item.runner}".`)
   if (!claim.chipTime) return handOff('it has no chip time.')
+  // The finder said it was not sure (gun or chip, same person, the page): a person looks.
+  if (notesDoubt(claim.notes)) return handOff('the finder was not sure of it (see its note).')
 
   const page = await fetchTimingPage({ url: claim.resultsUrl, limit: 400_000 })
   if (!page.ok) return handOff(`our server could not read that page (${page.error || `HTTP ${page.status}`}).`)

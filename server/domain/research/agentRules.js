@@ -98,6 +98,27 @@ export function clockSeconds(t) {
 }
 
 const TIME_TOKEN = /\b\d{1,2}:\d{2}:\d{2}(?:\.\d+)?\b/g
+// The page has to say its time is chip or net time. Older results often have
+// one column headed "Time", which is as likely to be gun time; that is a
+// person's call, never a print. "Net" counts only as a word on its own or as
+// "net time", so a domain like results.net does not.
+const CHIP_LABEL = /\bchip\b|\bnet\s*time\b|(^|[|\t,]|\s{2,})\s*net\s*([|\t,]|\s{2,}|$)/im
+
+/** The largest clock reading in a row: its finish time when the rest are splits. */
+function finishOf(row) {
+  const t = (row.match(TIME_TOKEN) || []).map(clockSeconds).filter(n => n != null)
+  return t.length ? Math.max(...t) : null
+}
+
+/**
+ * Words in the finder's own notes that say it was not sure: about gun and
+ * chip, about the person, about the page. The finder is told to say so
+ * (researchAgent.js SYSTEM); this makes that a "no" instead of a footnote.
+ */
+const DOUBT = /\b(gun|clock|not sure|unsure|unclear|uncertain|ambiguous|cannot tell|can'?t tell|could ?n[o']t (confirm|verify|tell)|does ?n[o']t (say|specify|label|indicate|show which)|unlabell?ed|only one time|may be|might be|possibly|probably)\b/i
+export function notesDoubt(notes) {
+  return DOUBT.test(String(notes || ''))
+}
 const PACE_TOKEN = /(?<![:\d])\d{1,2}:\d{2}(?![:\d])/g
 
 /** The lines of page text where the order's runner appears, with what is next to them. */
@@ -137,13 +158,23 @@ export function checkRowOnPage({ text, url, runner, raceName, year, time, pace, 
   const rows = rowsFor(text, runner)
   if (!rows.length) return { ok: false, why: `"${runner}" is not on the page as our server read it (the site may draw its results with JavaScript).` }
   const hay = `${url || ''}\n${text}`
-  if (!new RegExp(`\\b${year}\\b`).test(hay)) return { ok: false, why: `The page does not mention ${year}, so it may be another year's results.` }
+  // The year where it describes these results: the address, the page heading,
+  // or the runner's own row. A year in a footer or a link to another year's
+  // results is not evidence.
+  const yearRe = new RegExp(`\\b${year}\\b`)
+  if (![String(url || ''), String(text).slice(0, 600), ...rows].some(s => yearRe.test(s))) return { ok: false, why: `The page does not say these are the ${year} results (not in the address, the heading or the runner's row), so it may be another year's.` }
   const raceWords = fold(raceName).split(' ').filter(w => w.length > 2 && !/^(marathon|half|the|and|race|run|runs|international|annual)$/.test(w))
   if (raceWords.length && !raceWords.some(w => fold(hay).split(' ').includes(w))) return { ok: false, why: `The page does not mention ${raceName}.` }
   if (/\b(gun|clock)\s*(time)?\b/i.test(text)) return { ok: false, why: 'The page lists gun or clock times as well as chip times. A person checks which column is chip.' }
 
   const timeS = clockSeconds(time)
   if (timeS == null) return { ok: false, why: `"${time}" is not a finish time.` }
+  // Two finishers with this name and different times: without a bib, whichever
+  // the finder picked is a guess.
+  if (!bib) {
+    const finishes = new Set(rows.map(finishOf).filter(n => n != null))
+    if (finishes.size > 1) return { ok: false, why: `${finishes.size} finishers named ${runner} with different times are on the page, and the order has no bib. A person picks the right one.`, row: rows[0].slice(0, 300) }
+  }
   const withTime = rows.filter(r => (r.match(TIME_TOKEN) || []).some(t => clockSeconds(t) === timeS))
   if (!withTime.length) return { ok: false, why: `The page has ${runner}, but not with the time ${time}.`, row: rows[0].slice(0, 300) }
   if (withTime.length > 1) return { ok: false, why: `${runner} appears more than once on the page with that time. A person checks which one.`, row: withTime[0].slice(0, 300) }
@@ -157,6 +188,8 @@ export function checkRowOnPage({ text, url, runner, raceName, year, time, pace, 
   if (times.filter(t => Math.abs(t - timeS) < 15 * 60 && t !== timeS).length) return { ok: false, why: 'The row has another time close to the finish (a gun time under another label?). A person checks.', row: clean }
 
   if (bib && !new RegExp(`(^|[^\\d])${String(bib).replace(/\D/g, '')}([^\\d]|$)`).test(row)) return { ok: false, why: `Bib ${bib} is not in the runner's row.`, row: clean }
+
+  if (!CHIP_LABEL.test(text)) return { ok: false, why: 'The page does not label its time as chip or net time, so it may be gun time. A person checks which time it is.', row: clean }
 
   const miles = distanceForEventType(eventType)
   if (!miles) return { ok: false, why: `"${eventType || 'no event'}" is not a distance the tool knows, so the pace cannot be checked.`, row: clean }

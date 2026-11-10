@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { planFor, nameVariants, sameName, isSeveralRunners, checkRowOnPage, clockSeconds } from './agentRules.js'
+import { planFor, nameVariants, sameName, isSeveralRunners, checkRowOnPage, clockSeconds, notesDoubt } from './agentRules.js'
 
 test('pre-2020 years are researched on the web, never through a scraper', () => {
   assert.equal(planFor({ reason: 'Research by hand', year: 2019, runner: 'Jo Smith', hasScraper: true }).action, 'web')
@@ -71,4 +71,42 @@ test('a split is not the finish, and two close times are refused', () => {
   const two = PAGE.replace('| 4:00:00 | 9:10', '| 4:02:10 | 4:00:00 | 9:10')
   assert.equal(checkRowOnPage({ ...base, text: two, time: '4:02:10', pace: '9:15', bib: '2231' }).ok, false)
   assert.equal(checkRowOnPage({ ...base, text: two, time: '4:00:00', pace: '9:10', bib: '2231' }).ok, false)
+})
+
+test('one unlabelled Time column is not proof of chip time, so it goes to a person', () => {
+  const plain = PAGE.replace('Chip Time', 'Time')
+  const r = checkRowOnPage({ ...base, text: plain, time: '4:00:00', pace: '9:10', bib: '2231' })
+  assert.equal(r.ok, false)
+  assert.match(r.why, /chip or net/)
+  const net = PAGE.replace('Chip Time', 'Net')
+  assert.equal(checkRowOnPage({ ...base, text: net, time: '4:00:00', pace: '9:10', bib: '2231' }).ok, true)
+  const netTime = PAGE.replace('Chip Time', 'Net Time')
+  assert.equal(checkRowOnPage({ ...base, text: netTime, time: '4:00:00', pace: '9:10', bib: '2231' }).ok, true)
+  // A .net address is not a label.
+  const domain = plain.replace('Results', 'Results from racetimers.net')
+  assert.equal(checkRowOnPage({ ...base, text: domain, time: '4:00:00', pace: '9:10', bib: '2231' }).ok, false)
+})
+
+test('two finishers with the order name and different times need a bib', () => {
+  const twins = `${PAGE}\n | 377 | Jaime Eyster | 5120 | 4:41:13 | 10:44`
+  const r = checkRowOnPage({ ...base, text: twins, time: '4:00:00', pace: '9:10', bib: null })
+  assert.equal(r.ok, false)
+  assert.match(r.why, /2 finishers named Jaime Eyster/)
+  assert.equal(checkRowOnPage({ ...base, text: twins, time: '4:00:00', pace: '9:10', bib: '2231' }).ok, true)
+})
+
+test('the year has to describe these results, not sit in a footer', () => {
+  const lastYear = PAGE.replace('Palm Beaches Marathon 2025 Results', 'Palm Beaches Marathon 2024 Results') + '\n' + 'x '.repeat(400) + '\nSee also: 2025 results'
+  const r = checkRowOnPage({ ...base, url: 'https://results.example-timer.com/palm-beaches', text: lastYear, time: '4:00:00', pace: '9:10', bib: '2231' })
+  assert.equal(r.ok, false)
+  assert.match(r.why, /2025 results/)
+  // In the address is enough.
+  assert.equal(checkRowOnPage({ ...base, url: 'https://results.example-timer.com/palm-beaches-2025', text: lastYear, time: '4:00:00', pace: '9:10', bib: '2231' }).ok, true)
+})
+
+test('a finder that says it was not sure is a no', () => {
+  assert.ok(notesDoubt('The page shows only one time and does not say whether it is chip or gun.'))
+  assert.ok(notesDoubt('Probably the same person, same city.'))
+  assert.ok(!notesDoubt('Chip time from the official results page, bib matches.'))
+  assert.ok(!notesDoubt(''))
 })
