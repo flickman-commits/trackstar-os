@@ -6,7 +6,9 @@ import prisma from '../db.js'
 
 const LAST_KEY = 'orders_last_import'
 const LOCK_KEY = 'orders_import_lock'
-const LOCK_MS = 10 * 60 * 1000
+// Longer than a run can last (300 seconds), shorter than the ten minutes between
+// runs: a lock left by a killed run never costs the next run.
+const LOCK_MS = 6 * 60 * 1000
 
 export async function getLastImport() {
   const row = await prisma.systemConfig.findUnique({ where: { key: LAST_KEY } })
