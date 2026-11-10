@@ -238,7 +238,9 @@ export async function checkFinding(item, claim, opts = {}) {
   // Not entered, but a person should only have to look and click: the
   // finding goes on the order as a candidate with Accept beside the note.
   if (res.outcome === 'person' && claim.chipTime && claim.nameOnPage) {
-    await saveSuggestions(item, [{ name: claim.nameOnPage, bib: claim.bib || null, time: claim.chipTime, pace: claim.pace || null, eventType: claim.eventType || null, resultsUrl: claim.resultsUrl }], opts.dryRun)
+    // from: 'finder' marks a claim that failed the page check: a person may
+    // Accept it in the order view, an agent may not (mcp accept_match).
+    await saveSuggestions(item, [{ name: claim.nameOnPage, bib: claim.bib || null, time: claim.chipTime, pace: claim.pace || null, eventType: claim.eventType || null, resultsUrl: claim.resultsUrl, from: 'finder' }], opts.dryRun)
     return { ...res, outcome: 'suggested', text: `${res.text} It is on the order as a suggestion to Accept once checked.` }
   }
   return res

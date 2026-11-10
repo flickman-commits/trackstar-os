@@ -126,7 +126,7 @@ partial sweep is not a clean one.
     | Timing site down | `rerun_research`. Still down: leave it, it is not a bug. |
     | Needs a scraper (a year from 2020 on) | Step 4 (`save_event_id`), then `rerun_research` its orders. |
     | Needs race date, Needs race data, Confirm race date | Step 6 (`verify_race_date` with a source). |
-    | Runner not found | Once a night per order: `rerun_research`. Still not found: `trace_scraper` the name. If the results show exactly one finisher whose full name matches (a spelling or a middle name the customer left out) in that year, and nothing on the order contradicts it, `accept_match` it. Anything less certain stays. |
+    | Runner not found | Once a night per order: `rerun_research`. Still not found: `trace_scraper` the name. If the results show exactly one finisher whose full name matches (a spelling or a middle name the customer left out) in that year, and nothing on the order contradicts it, `accept_match` it as a `match` with the `resultsUrl` of the page showing that runner and the time as the page shows it. The server fetches that page and enters the result only if the row is plainly there; otherwise it goes on the order for a person. A candidate that is a finding which failed that check cannot be accepted by number. Anything less certain stays. |
     | Pick a match | `accept_match` only when the customer gave a bib or a time and exactly one candidate matches it. Otherwise it stays. |
     | Render failed | Read the error. If it was data you have since fixed, `rerender_order`. Otherwise it stays. |
     | Needs a scraper (no scraper at all) | Step 9. |

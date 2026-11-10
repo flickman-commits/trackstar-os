@@ -78,7 +78,7 @@ export const researchTools = [
   {
     name: 'accept_match',
     title: 'Accept match',
-    description: 'Save one of the finishers research suggested as the order\'s result: a candidate number from rerun_research, or the match itself.',
+    description: 'Save one of the finishers research suggested as the order\'s result, by its candidate number from rerun_research. A finisher that is not a candidate (match) is not saved on your word: the server fetches its resultsUrl and enters it only if the row is plainly there (chip time, the page\'s own pace), the same check as submit_research_finding; otherwise it goes on the order for a person.',
     scope: 'write',
     readOnly: false,
     openWorld: true,
@@ -93,11 +93,20 @@ export const researchTools = [
         pace: z.string().max(20).optional(),
         eventType: z.string().max(60).optional(),
         resultsUrl: z.string().url().max(500).optional(),
-      }).optional().describe('The finisher, when it is not one of the candidates.'),
+      }).optional().describe('The finisher, when it is not one of the candidates: checked against its resultsUrl, which it must have, before anything is saved.'),
     },
     async handler({ orderNumber, item, candidate, match }) {
       if (!candidate === !match) throw new ToolError('Give either a candidate number or a match, not both.')
       const { o, n } = await standardItem(orderNumber, item)
+      // A finisher research did not suggest is a claim, not a result: it goes
+      // through the same page check as submit_research_finding (researchAgent.js).
+      if (match) {
+        if (!match.resultsUrl || !match.time) throw new ToolError('A match that is not a candidate needs the resultsUrl of the official page showing the runner and the time as that page shows it. Or use submit_research_finding.')
+        await raceBudget(o)
+        const r = await submitFinding(o.orderNumber, { resultsUrl: match.resultsUrl, nameOnPage: match.name, bib: match.bib, chipTime: match.time, pace: match.pace, eventType: match.eventType }, { by: 'Finder' })
+        if (!r) throw new ToolError(`${n} is not in the research queue, so a match that is not a candidate cannot be checked here. Pick a candidate number, or a person accepts it in the order view.`)
+        return { summary: `Checked ${match.name} for ${n}: ${r.outcome === 'cleared' ? 'entered' : 'left for a person'}`, orderNumber: n, outcome: r.outcome, detail: r.detail, status: r.outcome === 'cleared' ? 'ready' : undefined }
+      }
       let pick = match
       if (candidate) {
         const latest = await prisma.runnerResearch.findFirst({ where: { orderId: o.id }, orderBy: { createdAt: 'desc' }, select: { possibleMatches: true } })
@@ -105,6 +114,8 @@ export const researchTools = [
         if (!list.length) throw new ToolError(`${n} has no candidates on file. Run rerun_research first.`)
         pick = list[candidate - 1]
         if (!pick) throw new ToolError(`${n} has ${list.length} candidate(s); there is no number ${candidate}.`)
+        // A finding that failed the page check was put on the order for a person to look at, not for an agent to accept.
+        if (pick.from === 'finder') throw new ToolError(`Candidate ${candidate} on ${n} is a finding that did not pass the check against its results page. A person accepts it in the order view after looking.`)
       }
       await raceBudget(o)
       let r

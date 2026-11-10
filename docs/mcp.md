@@ -68,6 +68,11 @@ admin or as someone whose role has `orders.render`. Any other key gets
 - `verify_race_date` is for admins only, whatever the key's scopes.
 - `rerun_research` and `accept_match` share a budget of 10 calls per race per
   hour, across every key, so an agent cannot hammer a timing site.
+- `accept_match` saves a candidate research suggested, by number. A finisher
+  that is not a candidate (`match`) needs its `resultsUrl` and time, and goes
+  through the same page check as `submit_research_finding`: entered only if
+  the row is plainly on that page, otherwise left for a person. A candidate
+  that is a finding which failed that check cannot be accepted by an agent.
 - `draft_reply` never sends; the draft carries the key holder's name.
 
 **Admin** (6): `add_help_shift`, `end_help_shift`, `spread_order_list`,
