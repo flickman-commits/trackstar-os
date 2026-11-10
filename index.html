@@ -24,10 +24,18 @@
     <meta property="og:type" content="website" />
     <title>TrackstarOS</title>
     <script type="text/javascript">
-      // Clarity records URLs and page content. The customer and partner
-      // portals carry their access token in the URL and show names and
-      // addresses, so it never loads there (or on an invite link).
-      if (!/^\/(approve|intake|runner|vote|creator)\//.test(location.pathname) && !/[?&]invite=/.test(location.search))
+      // Microsoft Clarity records the screen and the address. It runs only on
+      // the public pages that show nothing private: the Creator Program landing
+      // page and the Marathon Monopoly page. Never the signed-in app (orders,
+      // Support, Settings), and never a page with an access token in its address
+      // (approval, Manage your order, photo upload, intake, a creator invite).
+      // An allowlist, so a new page is left out until someone adds it here.
+      // The same rule is in index.html and monopoly.html.
+      var clarityHost = location.hostname, clarityPath = location.pathname.replace(/\/+$/, '') || '/'
+      var clarityOn = ((clarityHost === 'creator.trackstar.art' && (clarityPath === '/' || clarityPath === '/apply'))
+        || (clarityHost === 'monopoly.trackstar.art' && (clarityPath === '/' || clarityPath === '/monopoly')))
+        && !/[?&]invite=/.test(location.search)
+      if (clarityOn)
       (function(c,l,a,r,i,t,y){
           c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
           t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;

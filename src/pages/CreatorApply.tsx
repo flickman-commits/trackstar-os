@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Loader2, Check, ArrowRight } from 'lucide-react'
 import SiteFooter from '@/components/SiteFooter'
 
@@ -25,7 +24,6 @@ const WORDMARK = 'https://www.trackstar.art/cdn/shop/files/Trackstar_Logo_Croppe
 const STORE = 'https://www.trackstar.art/collections/marathons?utm_source=creator-program&utm_medium=referral'
 
 export default function CreatorApply() {
-  const navigate = useNavigate()
   const [isStarting, setIsStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => { document.title = 'Trackstar Creator Program' }, [])
@@ -45,7 +43,9 @@ export default function CreatorApply() {
       }
       const { inviteToken } = await res.json()
       if (!inviteToken) throw new Error('No invite token returned')
-      navigate(`/creator/${inviteToken}`)
+      // A full page load, not an in-app move: session recording runs on this
+      // page and must not carry on onto the invite page, whose address is the token.
+      window.location.assign(`/creator/${inviteToken}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to start application')
       setIsStarting(false)
