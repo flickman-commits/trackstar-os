@@ -316,7 +316,15 @@ export default async function handler(req, res) {
           return res.status(404).json({ error: 'Proof not found' })
         }
 
+        // One answer per proof. A second device or a tab left open would
+        // otherwise approve a second design, or move an approved one back to
+        // revision. The answer is claimed on the pending row, so two taps at
+        // once cannot both count.
+        const answered = 'This design was already answered. Reload the page to see where it stands, or reply to your email and we will help.'
+        if (proof.status !== 'pending') return res.status(409).json({ error: answered, code: 'already_answered' })
         const newStatus = approval === 'approve' ? 'approved' : 'revision_requested'
+        const claimed = await prisma.proof.updateMany({ where: { id: proof.id, status: 'pending' }, data: { status: newStatus, customerFeedback: feedback || null } })
+        if (!claimed.count) return res.status(409).json({ error: answered, code: 'already_answered' })
 
         // Answering one proof only settles the others it competes with.
         //
@@ -337,24 +345,9 @@ export default async function handler(req, res) {
           groupLabel: proof.groupLabel ?? null,
         }
 
-        if (approval === 'request_revision') {
-          await prisma.proof.updateMany({ where: sameGroup, data: { status: 'rejected' } })
-          await prisma.proof.update({
-            where: { id: proofId },
-            data: { status: 'revision_requested', customerFeedback: feedback || null }
-          })
-        }
-
-        if (approval === 'approve') {
-          await prisma.proof.updateMany({ where: sameGroup, data: { status: 'rejected' } })
-        }
-
-        const updatedProof = approval === 'approve'
-          ? await prisma.proof.update({
-              where: { id: proofId },
-              data: { status: newStatus, customerFeedback: feedback || null }
-            })
-          : await prisma.proof.findUnique({ where: { id: proofId } })
+        // This proof is answered (claimed above); the others it competes with are settled.
+        await prisma.proof.updateMany({ where: sameGroup, data: { status: 'rejected' } })
+        const updatedProof = await prisma.proof.findUnique({ where: { id: proofId } })
 
         // The order moves on only once every group has been answered. With a
         // single unnamed group that is the first answer, as before; with four

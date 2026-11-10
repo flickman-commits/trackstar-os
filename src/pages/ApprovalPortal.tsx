@@ -176,6 +176,10 @@ export default function ApprovalPortal() {
   // first", so a single-product order needs no state at all.
   const [activeGroup, setActiveGroup] = useState<string | null>(null)
   const carouselRef = useRef<HTMLDivElement>(null)
+  // Once the page has loaded, a reload that fails (after an answer was saved)
+  // keeps what is on screen instead of replacing it with an error page, which
+  // reads as "it did not work" and invites a second answer.
+  const loaded = useRef(false)
 
   const fetchData = useCallback(async () => {
     if (!token) return
@@ -186,7 +190,8 @@ export default function ApprovalPortal() {
         return
       }
       if (!res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
+        if (loaded.current) { toast.error('Could not refresh the page. Your answer was saved; reload to see it.'); return }
         setErrorMessage(data.error || 'Something went wrong')
         setState('error')
         return
@@ -195,6 +200,7 @@ export default function ApprovalPortal() {
       setOrder(data.order)
       setProofs(data.proofs)
       setMessages(data.messages || [])
+      loaded.current = true
 
       // Show approved screen only if designStatus confirms it AND a proof is approved
       // (prevents stuck "approved" screen after internal unapprove)
@@ -206,6 +212,7 @@ export default function ApprovalPortal() {
         setState('ready')
       }
     } catch {
+      if (loaded.current) { toast.error('Could not refresh the page. Check your connection and reload.'); return }
       setErrorMessage('Unable to load. Please check your connection and try again.')
       setState('error')
     }
@@ -225,8 +232,10 @@ export default function ApprovalPortal() {
         body: JSON.stringify({ action: 'approve', token, proofId, approval: 'approve' })
       })
       if (!res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         toast.error(data.error || 'Something went wrong')
+        // Answered already (another device, an earlier tap): show where it stands.
+        if (res.status === 409) { setConfirmApproveProofId(null); setRevisingProofId(null); await fetchData() }
         return
       }
       setConfirmApproveProofId(null)
@@ -299,8 +308,10 @@ export default function ApprovalPortal() {
         })
       })
       if (!res.ok) {
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         toast.error(data.error || 'Something went wrong')
+        // Answered already (another device, an earlier tap): show where it stands.
+        if (res.status === 409) { setConfirmApproveProofId(null); setRevisingProofId(null); await fetchData() }
         return
       }
       setFeedback('')
