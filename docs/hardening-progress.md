@@ -10,15 +10,15 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 - [x] 1.5 Pin the Node version. `engines` 22.x, `.nvmrc`, CI on 22. Vercel follows `engines`.
 
 ## Phase 2: Stop a wrong print reaching production
-- [ ] 2.1 Re-check an approved design against the order when it is sent
-- [ ] 2.2 Close stale approved designs when the order is edited
-- [ ] 2.3 Only a design waiting for review can be approved
-- [ ] 2.4 No research under a guessed year (`missing_year`)
-- [ ] 2.5 A result found for a different race must not print
-- [ ] 2.6 Hold or Reject stops an attached print on a multi-print order
-- [ ] 2.7 Customer approval page refuses a second answer
-- [ ] 2.8 The "A" shortcut does not approve from behind a dialog
-- [ ] 2.9 State from one order does not carry into the next
+- [x] 2.1 Re-check an approved design against the order when it is sent. `server/domain/render/printed.js` decides; stale designs are closed, re-rendered, and posted to #alerts with old and new values. If the order cannot be checked (template, date evidence), it is held and #alerts told once. Custom final PDFs are not compared.
+- [x] 2.2 Close stale approved designs when the order is edited. Manage-your-order name and photo changes; staff edits to runner, race, bib, time, pace, event (`closeOutdatedDesigns`). Race-wide date and weather corrections are left to the 2.1 send check, which closes them at send time.
+- [x] 2.3 Only a design waiting for review can be approved (or rejected); claimed on the pending row.
+- [x] 2.4 No research under a guessed year (`server/domain/orders/yearUnknown.js`). Every research path. Orders already flipped to ready by this bug before the fix are not detectable from the data and were not looked for.
+- [~] 2.5 A result found for a different race must not print. Done for race and year (`pickResearch.js`, used by the render, pipeline status and order list). Not done for a changed runner name: research rows store the order's name at research time, but invalidating them on every name change would strip valid results when a customer only fixes spelling. Needs Matt's call.
+- [x] 2.6 Hold or Reject stops an attached print on a multi-print order (`siblingGate.js`). The code has no Artelo call that detaches a design; whether the API has one was not checked against Artelo's docs.
+- [x] 2.7 Customer approval page refuses a second answer (409), and keeps the loaded page when a reload fails.
+- [x] 2.8 The "A" shortcut does not approve from behind a dialog (`src/lib/shortcuts.ts`); A waits for the preview image; expired confirm removed.
+- [x] 2.9 State from one order does not carry into the next. Reset effect, ProofManager keyed by order, late answers guarded by order id, useDesign failures kept on their order.
 
 ## Phase 3: Tighten the research gate
 - [ ] 3.1 A single unlabelled time is not proof of chip time
@@ -78,5 +78,6 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 
 ## Waiting on Matt
 - Phase 1: add `CONNECTIONS_FORCE_OFF=all` (or the explicit list in `.env.example`) to `.env.local`. Never in Vercel.
-- Phase 1: check the Node version in Vercel project settings. `engines` now picks 22; if Vercel was on 24, say so and it moves to `24.x`.
-- Phase 1: Phase 1 commits are local, not pushed.
+- Phases 1 and 2: commits are local, not pushed.
+- Phase 2, 2.5: decide whether a runner name change should clear that order's research.
+- Phase 2: click through in the app after deploy (listed in the Phase 2 report).
