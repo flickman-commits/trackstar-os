@@ -25,7 +25,7 @@ const JOBS = {
   '/api/cron/retention': { name: 'Log cleanup', what: 'Deletes old rows from the log tables.' },
   '/api/orders/actions?action=daily-design-update': { name: 'Daily design update', what: 'Posts the custom and standard design standup to #all-hands.' },
   '/api/cron/bulk-runs': { name: 'Bulk runs', what: 'Researches runners for bulk runs whose race is over and posts runs within a week of their race.' },
-  '/api/cron/artelo-completed-check': { name: 'Artelo completed check', what: 'Flags orders complete here that Artelo never sent to production, in #trackstar-alerts.' },
+  '/api/cron/artelo-completed-check': { name: 'Artelo completed check', what: 'Flags orders complete here that Artelo never sent to production, in #trackstar-alerts, and paid shop orders from the last two days that never reached TrackstarOS, in #admin-alerts.' },
   '/api/cron/research-agent': { name: 'Research agent', what: 'Works the research queue: fills in results read off the official page, leaves a note on the rest.' },
   '/api/orders/actions?action=health-check': { name: 'Health check', what: 'Tests every connection and scraper fixture and reports to Slack.' },
   '/api/cron/support-playbook': { name: 'Support playbook review', what: 'Revises the drafting playbook from the week\'s replies and posts the changes.' },
