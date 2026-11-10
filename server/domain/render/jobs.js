@@ -219,7 +219,18 @@ export async function reviewJob({ jobId, decision, note, reviewerId }) {
   if (!job) throw new Error('Job not found')
   if (job.status !== 'done') throw new Error('Only a finished render can be reviewed')
   if (decision === 'rejected' && !String(note || '').trim()) throw new Error('Say what is wrong, so the designer knows')
-  return prisma.renderJob.update({ where: { id: job.id }, data: { review: decision, reviewNote: note ? String(note).slice(0, 2000) : null, reviewedById: reviewerId || null, reviewedAt: new Date() } })
+  // Only a design waiting for review. A tab left open can still show one that
+  // was closed because the order changed, or one someone else already answered;
+  // approving that would send an outdated design and close the right one.
+  if (job.review !== 'pending') throw new Error(reviewedAlready(job.review))
+  const answered = await prisma.renderJob.updateMany({ where: { id: job.id, review: 'pending' }, data: { review: decision, reviewNote: note ? String(note).slice(0, 2000) : null, reviewedById: reviewerId || null, reviewedAt: new Date() } })
+  if (!answered.count) throw new Error(reviewedAlready('answered'))
+  return prisma.renderJob.findUnique({ where: { id: job.id } })
+}
+
+function reviewedAlready(review) {
+  if (review === 'closed') return 'This design was replaced (the order changed since it was made). Reload the order to see the current design.'
+  return `This design was already ${review === 'answered' ? 'reviewed' : review}. Reload the order to see where it stands.`
 }
 
 
