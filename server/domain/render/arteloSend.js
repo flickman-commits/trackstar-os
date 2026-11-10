@@ -44,6 +44,7 @@ import { windowEndsAt } from '../orders/changeWindow.js'
 import { openConversationFor, supportOpenError, sentAnywayAt, sentAnywayMark } from '../support/holdsPrint.js'
 import { checkOrder, createJob } from './jobs.js'
 import { sendDecision, describeFields } from './printed.js'
+import { siblingBlock } from './siblingGate.js'
 
 export const SEND_TYPES = ['standard', 'custom']
 const OFF_KEY = 'artelo_auto_send_off'
@@ -263,6 +264,17 @@ async function closeStale(job, order, fields, spec) {
   ].join('\n')).catch(() => {})
 }
 
+/** The other prints on this print's Artelo order, each with its render jobs newest first. */
+async function otherPrints(order) {
+  const rows = await prisma.order.findMany({
+    where: { parentOrderNumber: order.parentOrderNumber, id: { not: order.id }, status: { not: 'completed' }, trackstarOrderType: { in: SEND_TYPES } },
+    select: { id: true, lineItemIndex: true, runnerName: true, arteloOrderData: true, renderJobs: { orderBy: { version: 'desc' }, take: 10, select: { id: true, status: true, review: true, spec: true, arteloAttachedAt: true, arteloItemId: true, arteloSentAt: true, sendHeldAt: true, sendHeldBy: true } } },
+  })
+  return rows
+    .filter(r => r.arteloOrderData?.id === order.arteloOrderData?.id)
+    .map(r => ({ label: `Print ${(r.lineItemIndex || 0) + 1}${r.runnerName ? ` (${r.runnerName})` : ''}`, jobs: r.renderJobs.filter(j => !j.spec?.altSize) }))
+}
+
 /**
  * One job, as far as it can go now. Never throws; the outcome is saved on the job.
  */
@@ -355,6 +367,12 @@ export async function sendOne(job) {
       return outcome(job, { error: `${WAITING} on this order`, retryIn: minutes > 60 ? 30 : 5 })
     }
     if (status && status !== 'Pending Approval') return outcome(job, { error: `Artelo: ${status}`, retryIn: 30, notify: true })
+
+    // The order goes as one. A held or rejected print keeps whatever design was
+    // attached for it at Artelo, so the order waits until each other print's
+    // attached design is its approved one (siblingGate.js).
+    const block = siblingBlock(await otherPrints(order))
+    if (block) return outcome(job, { error: `Not sent: ${block}`, retryIn: 15, notify: true })
 
     try {
       await call('orders/send-to-production', { method: 'POST', body: { orderId: arteloId } })
