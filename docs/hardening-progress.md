@@ -29,7 +29,7 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 
 ## Phase 4: Security
 - [x] 4.1 Remove the legacy `x-admin-secret` door; `SESSION_SECRET` required. Matt confirmed SESSION_SECRET is set (2026-11-10). ADMIN_SECRET (set 2026-05-22, the value in the public bundle until 2026-06-10) is no longer read: delete it in Vercel. First tests for auth.js in `server/auth.test.js`.
-- [~] 4.2 Validate the cart photo path. Shape checked at import, refresh and every signing point (`server/lib/photoPath.js`); a refused path imports with no photo and a note. Not done: recording which paths photo-verify checked, so a shopper who skips verify can still attach unchecked bytes of the right name (needs a table). `scripts/check-photo-paths.mjs` for Matt.
+- [~] 4.2 Validate the cart photo path. Shape checked at import, refresh and every signing point (`server/lib/photoPath.js`); a refused path imports with no photo and a note. Not done: recording which paths photo-verify checked, so a shopper who skips verify can still attach unchecked bytes of the right name (needs a table). `scripts/check-photo-paths.mjs`: Matt ran it 2026-11-10, 209 open orders with a photo, 0 refused.
 - [x] 4.3 Cap discount codes non-admins can create: 25% or $25, one use, 30 days (Support's existing 25% line; $25 and 30 days are my defaults, Matt can change them). Codes over the line, unlimited or never expiring post to #admin-alerts.
 - [x] 4.4 Signing out ends the session. It signs that person out on every device (sessions are versioned per person).
 - [x] 4.5 Refuse cross-site requests that change things (Sec-Fetch-Site / Origin, in requireAdmin). Reads are left open (OAuth callbacks). The four state-changing GETs refuse cross-site links. Not done: requiring application/json.
@@ -80,7 +80,6 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 - Phase 1: add `CONNECTIONS_FORCE_OFF=all` (or the explicit list in `.env.example`) to `.env.local`. Never in Vercel.
 - Phases 1 to 4: commits are local, not pushed.
 - Phase 4: after deploying, delete ADMIN_SECRET from Vercel.
-- Phase 4: run `node --env-file=.env.local scripts/check-photo-paths.mjs` once (read only).
 - Phase 4, 4.8: does the nightly routine use a per-person API key?
 - Phase 4: Supabase row-level security / Data API for the `public` schema, and whether the order-proofs and order-comments buckets are public (dashboard settings).
 - Phase 2: click through in the app after deploy (listed in the Phase 2 report).
