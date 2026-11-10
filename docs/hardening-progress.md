@@ -21,11 +21,11 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 - [x] 2.9 State from one order does not carry into the next. Reset effect, ProofManager keyed by order, late answers guarded by order id, useDesign failures kept on their order.
 
 ## Phase 3: Tighten the research gate
-- [ ] 3.1 A single unlabelled time is not proof of chip time
-- [ ] 3.2 Same-name finishers and the wrong year
-- [ ] 3.3 Never overwrite a customer-typed time on the web path
-- [ ] 3.4 MCP `accept_match` does not accept an unchecked result
-- [ ] 3.5 Scraper health probe compares the time, not only the bib
+- [x] 3.1 A single unlabelled time is not proof of chip time. The page must say chip or net; a finder note that shows doubt goes to a person. Both leave a suggestion to Accept.
+- [x] 3.2 Same-name finishers and the wrong year. Two same-name rows with different times need a bib; the year must be in the address, page heading or the runner's row. Race-word check left as it was.
+- [x] 3.3 Never overwrite a customer-typed time on the web path (`timeReading.js`). Web step hands off when times differ; Accept match keeps the typed time and pace and fills bib, event, link.
+- [x] 3.4 MCP `accept_match` does not accept an unchecked result. Free-form match goes through the page check; findings that failed the check are marked and cannot be accepted by an agent. Skill and docs updated.
+- [x] 3.5 Scraper health probe compares the time, not only the bib. `npm run test:scrapers` was not run (it calls live timing sites); the first nightly probe after deploy may flag fixtures whose stored time is written differently from what the scraper returns now.
 
 ## Phase 4: Security
 - [ ] 4.1 Remove the legacy `x-admin-secret` door; `SESSION_SECRET` required
@@ -78,5 +78,5 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 
 ## Waiting on Matt
 - Phase 1: add `CONNECTIONS_FORCE_OFF=all` (or the explicit list in `.env.example`) to `.env.local`. Never in Vercel.
-- Phases 1 and 2: commits are local, not pushed.
+- Phases 1 to 3: commits are local, not pushed.
 - Phase 2: click through in the app after deploy (listed in the Phase 2 report).
