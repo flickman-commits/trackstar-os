@@ -157,6 +157,27 @@ async function sendRunner(order) {
     total: 0,
     instructions: `${bulk.partnerName} bulk order ${bulk.number}: ${order.runnerNameOverride || order.runnerName}`.slice(0, 1000),
   }
+  // An earlier try may have created this order at Artelo and lost the answer
+  // (a timeout after Artelo accepted it, or a failed save here): that would
+  // make a second order, a second print and a second charge. The marker below
+  // is written before every create, so a retry looks first, by our order
+  // number, and carries on with the order it finds.
+  if (order.arteloOrderData?.creatingAt && !order.arteloOrderData?.createdByTool) {
+    let found = null
+    try {
+      const list = await call('orders/get', { query: { limit: '5', allOrders: 'true', name: order.orderNumber } })
+      found = (Array.isArray(list) ? list : []).find(r => String(r.orderId || '') === order.orderNumber) || null
+    } catch (e) {
+      throw new BulkSendError(`An earlier send may already have made ${order.orderNumber} at Artelo, and Artelo could not be asked (${e.message}). Check Artelo for ${order.orderNumber} before pressing Send now.`)
+    }
+    if (found?.id) {
+      const arteloOrderData = { ...(order.arteloOrderData || {}), ...found, id: found.id, orderId: order.orderNumber, customerAddress, createdByTool: true }
+      await prisma.order.update({ where: { id: order.id }, data: { arteloOrderData } })
+      console.log(`[bulk.send] ${order.orderNumber} was already at Artelo (${found.id}); carrying on with that order`)
+      return resumeSend({ ...order, arteloOrderData })
+    }
+  }
+  await prisma.order.update({ where: { id: order.id }, data: { arteloOrderData: { ...(order.arteloOrderData || {}), creatingAt: new Date().toISOString() } } })
   const created = await call('orders/create', { method: 'POST', body })
   const arteloId = created?.id
   if (!arteloId) throw new Error('Artelo did not return an order id')
