@@ -108,6 +108,12 @@ export default async function handler(req, res) {
       if (!namesOnly && !addressComplete(address)) { rejected.push({ row: rows.length + rejected.length + 1, reason: 'address', name: `${first} ${last}` }); continue }
       rows.push({ runnerName: `${first} ${last}`, email, address })
     }
+    // The runner link is shared widely: once the order is invoiced it takes no
+    // more runners than were paid for. The partner link can still add more.
+    if (kind === 'runner' && bulk.quantity > 0 && rows.length) {
+      const entered = await prisma.order.count({ where: { bulkOrderId: bulk.id } })
+      if (entered >= bulk.quantity) return res.status(409).json({ error: 'full' })
+    }
     const created = await addRunners(bulk, rows)
     // Who entered what is otherwise invisible: a partner's whole list arrives in one request.
     if (created.length) {

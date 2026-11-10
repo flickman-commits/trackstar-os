@@ -41,6 +41,7 @@ export default function RunnerClaim() {
         body: JSON.stringify({ token, kind: 'runner', runners: [{ firstName: f.firstName, lastName: f.lastName, address: { line1: f.line1, line2: f.line2, city: f.city, state: f.state, zip: f.zip, country: f.country } }] }),
       })
       const data = await res.json()
+      if (res.status === 409 && data.error === 'full') { setErr('This order already has every runner it was placed for. Ask your organizer to add you.'); return }
       if (!res.ok) throw new Error()
       if (data.rejected?.length) { setErr('Please check the address. Street, city and zip are required.'); return }
       setState(data.added === 0 ? 'duplicate' : 'sent')

@@ -322,8 +322,8 @@ model BulkOrder {
   dueDate           DateTime? // raceDate + 3 days unless set by hand
   status            String    @default("collecting") // collecting | fulfillment | submitted
   submittedAt       DateTime?
-  intakeToken       String    @unique @default(cuid()) // /intake/<token> for the partner
-  runnerToken       String    @unique @default(cuid()) // /runner/<token>: each runner submits their own name and address
+  intakeToken       String    @unique @default(uuid()) // /intake/<token> for the partner. uuid, not cuid: random, so a runner link says nothing about the partner link
+  runnerToken       String    @unique @default(uuid()) // /runner/<token>: each runner submits their own name and address
   intakeNote        String?   // Shown to the partner on the intake page
   notes             String?
   partnerOrderId    String?   // The race_partner design order this belongs to, if any
