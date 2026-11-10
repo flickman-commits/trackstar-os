@@ -245,21 +245,32 @@ function withNumbersChecked(row) {
 }
 
 /**
- * Does this candidate match the fixture?
+ * How this candidate differs from the fixture, or null when it matches.
  *
- * Bib when we have one, finish time otherwise. Mika-timed races (Berlin)
- * return finishers with an EMPTY bib field and a valid time, so a bib-only
- * assertion could never pass there — the race would report drifted forever
- * while being perfectly healthy.
+ * The bib proves the right runner came back; the time proves the right column
+ * was read. A bib alone passed a scraper that had moved from chip time to gun
+ * time, so when the fixture has both, a candidate that carries a time must
+ * carry the fixture's. A candidate with no time (some sites list finishers
+ * without one) is judged on its bib. Mika-timed races (Berlin) return an EMPTY
+ * bib and a valid time, so a fixture with no bib is judged on its time alone.
  */
+export function fixtureMismatch(fixture, candidate) {
+  if (fixture.bib) {
+    if (!sameBib(fixture.bib, candidate.bib)) return `bib was ${candidate.bib ?? 'null'}`
+    if (fixture.time && candidate.time && !sameTime(fixture.time, candidate.time)) return `bib ${fixture.bib} matched but the time was ${candidate.time}`
+    return null
+  }
+  if (fixture.time) return sameTime(fixture.time, candidate.time) ? null : `time was ${candidate.time ?? 'null'}`
+  return 'the fixture has neither a bib nor a time'
+}
+
 function matchesFixture(fixture, candidate) {
-  if (fixture.bib) return sameBib(fixture.bib, candidate.bib)
-  if (fixture.time) return sameTime(fixture.time, candidate.time)
-  return false
+  return fixtureMismatch(fixture, candidate) === null
 }
 
 /** What we asserted on, for the panel's detail line. */
 function fixtureIdentity(fixture) {
+  if (fixture.bib && fixture.time) return `bib ${fixture.bib} and time ${fixture.time}`
   return fixture.bib ? `bib ${fixture.bib}` : `time ${fixture.time}`
 }
 
@@ -302,7 +313,7 @@ export async function probeOne(race, year, fixture) {
         status: STATUS.DRIFTED,
         actualBib: actual.bib,
         ms,
-        detail: `Found "${fixture.name}" but ${fixture.bib ? `bib was ${actual.bib ?? 'null'}` : `time was ${actual.time ?? 'null'}`}, expected ${fixtureIdentity(fixture)}`,
+        detail: `Found "${fixture.name}" but ${fixtureMismatch(fixture, actual)}, expected ${fixtureIdentity(fixture)}`,
       }
     }
 

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { numbersProblem } from './scraperHealth.js'
+import { numbersProblem, fixtureMismatch } from './scraperHealth.js'
 
 const row = fields => ({ race: 'Tokyo Marathon', year: 2025, status: 'live', actualEventType: 'Marathon', ...fields })
 
@@ -25,4 +25,22 @@ test('a shorter race under a marathon label is caught even when its pace fits', 
 
 test('no time means nothing to judge', () => {
   assert.equal(numbersProblem(row({ actualTime: null })), null)
+})
+
+test('a scraper that returns the right runner with another time has drifted', () => {
+  const fixture = { name: 'Jo Smith', bib: '1234', time: '3:58:33' }
+  assert.equal(fixtureMismatch(fixture, { bib: '1234', time: '3:58:33' }), null)
+  assert.equal(fixtureMismatch(fixture, { bib: '01234', time: '03:58:33' }), null)
+  // Gun time instead of chip time: the bib still matches.
+  assert.match(fixtureMismatch(fixture, { bib: '1234', time: '4:01:02' }), /time was 4:01:02/)
+  assert.match(fixtureMismatch(fixture, { bib: '9999', time: '3:58:33' }), /bib was 9999/)
+})
+
+test('a candidate listed without a time is judged on its bib', () => {
+  assert.equal(fixtureMismatch({ bib: '1234', time: '3:58:33' }, { bib: '1234', time: null }), null)
+})
+
+test('a fixture with no bib is judged on its time, as before', () => {
+  assert.equal(fixtureMismatch({ time: '2:23:01' }, { bib: '', time: '02:23:01' }), null)
+  assert.match(fixtureMismatch({ time: '2:23:01' }, { bib: '', time: '2:25:00' }), /time was/)
 })
