@@ -210,8 +210,32 @@ async function raceDays(rows) {
   }
 }
 
+/**
+ * Prints closed without a photo (the deadline, or the customer chose none)
+ * whose refund never ran: the run was stopped between closing them and
+ * refunding. Nothing else looks for that state, so the customer would keep
+ * paying for an add-on they did not get. This does not refund (a person
+ * checks Shopify first: the refund may have gone through after all); it
+ * marks the rows and tells #admin-alerts once.
+ */
+async function interruptedRefunds(now, log) {
+  const rows = await prisma.order.findMany({
+    where: { photoLaterOutcome: { in: ['deadline', 'skipped'] }, photoLaterRefund: null, photoLaterClosedAt: { lt: new Date(now - 30 * 60_000) } },
+    select: { id: true, orderNumber: true, parentOrderNumber: true, lineItemIndex: true, shopifyOrderData: true },
+  })
+  if (!rows.length) return 0
+  const result = 'failed: stopped before the refund ran; check Shopify'
+  await prisma.order.updateMany({ where: { id: { in: rows.map(r => r.id) }, photoLaterRefund: null }, data: { photoLaterRefund: result } })
+  await prisma.orderComment.createMany({ data: rows.map(r => ({ orderId: r.id, authorId: null, authorName: 'TrackstarOS', text: 'Photo Add-On refund did not run (the run was stopped after the print was closed without a photo). Check Shopify and refund it by hand if it is not there.' })) })
+  const list = [...new Set(rows.map(numberOf))].slice(0, 15)
+  await slackTo('admin', `⚠️ Photo after the race: the Photo Add-On refund never ran on ${list.map(n => `*${slackLink(orderAppUrl(n), n)}*`).join(', ')}. Check each in Shopify and refund by hand if it is not there.`, { or: 'alerts' }).catch(() => {})
+  log(`${rows.length} print(s) closed without a photo had no refund; flagged for a person`)
+  return rows.length
+}
+
 export async function runPhotoLater({ now = Date.now(), log = () => {} } = {}) {
   const out = { requested: 0, reminded: 0, closed: 0, unpaid: 0, failed: 0 }
+  out.flagged = await interruptedRefunds(now, log).catch(err => { log(`refund check failed: ${err.message}`); return 0 })
   const rows = await prisma.order.findMany({
     where: { photoLater: true, photoPath: null, photoLaterClosedAt: null, status: { not: 'completed' } },
     select: ROW,
@@ -243,10 +267,20 @@ export async function runPhotoLater({ now = Date.now(), log = () => {} } = {}) {
       if (due === 'request' || due === 'remind') {
         await ensureTokens(group)
         const deadline = due === 'request' ? new Date(now + DEADLINE_AFTER_MS) : photoLaterDeadline(o)
-        await send(group, compose(due, group, { deadline }), due === 'request'
-          ? `Emailed the customer a link to add their photo after the race (deadline ${longDay(deadline)})`
-          : 'Reminded the customer to add their photo after the race')
-        await prisma.order.updateMany({ where: { id: { in: group.map(r => r.id) } }, data: due === 'request' ? { photoLaterEmailedAt: new Date(now) } : { photoLaterRemindedAt: new Date(now) } })
+        // Stamped before it is sent and cleared if the send fails: stamped
+        // after, a run that timed out between the two emailed the customer
+        // again on the next run.
+        const stamp = due === 'request' ? 'photoLaterEmailedAt' : 'photoLaterRemindedAt'
+        const ids = group.map(r => r.id)
+        await prisma.order.updateMany({ where: { id: { in: ids } }, data: { [stamp]: new Date(now) } })
+        try {
+          await send(group, compose(due, group, { deadline }), due === 'request'
+            ? `Emailed the customer a link to add their photo after the race (deadline ${longDay(deadline)})`
+            : 'Reminded the customer to add their photo after the race')
+        } catch (err) {
+          await prisma.order.updateMany({ where: { id: { in: ids } }, data: { [stamp]: null } }).catch(() => {})
+          throw err
+        }
         if (due === 'request') out.requested += group.length
         else out.reminded += group.length
         log(`${numberOf(o)}: ${due === 'request' ? 'photo link emailed' : 'photo reminder emailed'}`)
