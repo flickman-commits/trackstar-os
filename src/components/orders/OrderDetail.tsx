@@ -720,6 +720,7 @@ export default function OrderDetail({
       bibNumber: order.bibNumber || '',
       officialTime: order.officialTime || '',
       officialPace: order.officialPace || '',
+      eventType: order.eventType || '',
       ...(order.isTriathlon ? {
         swimTime: order.swimTime || '', swimDistance: order.swimDistance || '',
         bikeTime: order.bikeTime || '', bikeDistance: order.bikeDistance || '',
@@ -831,6 +832,9 @@ export default function OrderDetail({
       }
       if (editValues.officialPace !== (originalOrder.officialPace || '')) {
         updates.officialPace = editValues.officialPace || null
+      }
+      if (editValues.eventType && editValues.eventType !== (originalOrder.eventType || '')) {
+        updates.eventType = editValues.eventType
       }
       if (originalOrder.isTriathlon) {
         for (const k of ['swimTime', 'swimDistance', 'bikeTime', 'bikeDistance', 'runTime', 'runDistance'] as const) {
@@ -2692,6 +2696,19 @@ Thank you!`
                               placeholder="8:29"
                               className="text-body-sm font-medium text-off-black bg-white border border-border-gray rounded px-2 py-1 w-40 text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
+                          </div>
+                          )}
+                          {!selectedOrder.isTriathlon && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-body-sm text-off-black/60" title="Which design the print uses. Change it only when the print should not follow the result, like a full-marathon DNF who wants the half.">Event</span>
+                            <select
+                              value={editValues.eventType ?? ''}
+                              onChange={(e) => setEditValues({ ...editValues, eventType: e.target.value })}
+                              className="text-body-sm font-medium text-off-black bg-white border border-border-gray rounded px-2 py-1 w-40 text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              {!editValues.eventType && <option value="">Not set</option>}
+                              {[...new Set([editValues.eventType, 'Marathon', 'Half Marathon', '10K', '5K', '8K', '10 Miler'].filter(Boolean))].map(ev => <option key={ev} value={ev}>{ev}</option>)}
+                            </select>
                           </div>
                           )}
                         </>

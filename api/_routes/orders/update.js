@@ -27,6 +27,9 @@ export default async function handler(req, res) {
       // Manual corrections to the result itself. Elí sometimes needs to use the
       // runner's own watch time rather than the official one we scraped.
       bibNumber, officialTime, officialPace,
+      // The event the print is for, set by hand when it should not follow the
+      // result (a full-marathon DNF who wants the half print). Picks the production file.
+      eventType,
       // Triathlon legs (time and distance each), entered by hand.
       swimTime, swimDistance, bikeTime, bikeDistance, runTime, runDistance,
       // Partner details. Partner rows have no columns of their own: the
@@ -261,12 +264,15 @@ export default async function handler(req, res) {
     // source as manual_entry so the provenance stays honest.
     const legs = { swimTime, swimDistance, bikeTime, bikeDistance, runTime, runDistance }
     const legEdited = Object.values(legs).some(v => v !== undefined)
-    if (bibNumber !== undefined || officialTime !== undefined || officialPace !== undefined || legEdited) {
+    const EVENTS = ['Marathon', 'Half Marathon', '10K', '5K', '8K', '10 Miler']
+    if (eventType !== undefined && eventType !== null && !EVENTS.includes(eventType)) return res.status(400).json({ error: 'Unknown event' })
+    if (bibNumber !== undefined || officialTime !== undefined || officialPace !== undefined || legEdited || eventType) {
       const researchData = {}
       for (const [k, v] of Object.entries(legs)) if (v !== undefined) researchData[k] = v ? String(v).trim().slice(0, 20) : null
       if (bibNumber !== undefined) researchData.bibNumber = bibNumber || null
       if (officialTime !== undefined) researchData.officialTime = officialTime || null
       if (officialPace !== undefined) researchData.officialPace = officialPace || null
+      if (eventType) researchData.eventType = eventType
       // A bib typed by hand gets the runner's own results page where the platform keys one by bib.
       if (bibNumber) {
         const link = await resultsLinkForBib({ raceName: existingOrder.raceNameOverride ?? existingOrder.raceName, raceYear: existingOrder.yearOverride ?? existingOrder.raceYear, bib: bibNumber })

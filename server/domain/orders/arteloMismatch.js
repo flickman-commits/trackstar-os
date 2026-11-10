@@ -17,6 +17,7 @@ import prisma from '../../db.js'
 import { call } from '../render/artelo.js'
 import { slackTo, slackText } from '../../lib/slack.js'
 import { arteloHoldText } from '../../lib/arteloHolds.js'
+import { listExcluded, isExcludedLine } from './excludedProducts.js'
 
 const DONE_AT_ARTELO = ['Received', 'InProduction', 'Shipped', 'Delivered', 'Canceled', 'Ignored']
 const STATE_KEY = 'artelo_completed_not_sent'
@@ -94,10 +95,14 @@ export async function completedButNotSent({ days = 90, budgetMs = 240_000 } = {}
  * nothing would ever move it. Reopened, it shows in the Action queue under
  * its Artelo hold until someone sends it (or clears the hold) in Artelo.
  */
-async function reopenStuck(o) {
+async function reopenStuck(o, excluded = []) {
   for (const c of o.completed) {
-    const row = await prisma.order.findFirst({ where: { orderNumber: c.orderNumber }, select: { id: true, status: true, runnerResearch: { orderBy: { id: 'desc' }, take: 1, select: { researchStatus: true } } } })
+    const row = await prisma.order.findFirst({ where: { orderNumber: c.orderNumber }, select: { id: true, status: true, raceName: true, shopifyOrderData: true, runnerResearch: { orderBy: { id: 'desc' }, take: 1, select: { researchStatus: true } } } })
     if (!row || row.status !== 'completed') continue
+    // A skipped product (Settings > Skipped Products) has nothing to do here:
+    // Artelo prints it from its own library. The hold still goes to Slack,
+    // but reopening it only put an "Unknown Runner" back in the queue (5859).
+    if ((row.shopifyOrderData?.line_items || []).some(l => isExcludedLine(l, excluded) && String(l.title || '').trim().toLowerCase() === String(row.raceName || '').trim().toLowerCase())) continue
     await prisma.order.update({ where: { id: row.id }, data: { status: row.runnerResearch[0]?.researchStatus === 'found' ? 'ready' : 'pending' } })
     await prisma.orderComment.create({ data: { orderId: row.id, authorName: 'Trackstar', text: `Reopened: this was marked complete, but Artelo still has the order as "${o.artelo}", so it never went to production. Sort it out in Artelo (attach the design, check the address), then complete it.` } })
   }
@@ -107,7 +112,8 @@ async function reopenStuck(o) {
 export async function checkCompletedNotSent() {
   const out = await completedButNotSent()
   const stuck = out.orders.filter(o => o.kind === 'stuck')
-  for (const o of stuck) await reopenStuck(o)
+  const excluded = await listExcluded().catch(() => [])
+  for (const o of stuck) await reopenStuck(o, excluded)
   const row = await prisma.systemConfig.findUnique({ where: { key: STATE_KEY } })
   let told = []
   try { told = JSON.parse(row?.value || '[]') } catch { told = [] }

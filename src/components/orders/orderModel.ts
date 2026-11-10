@@ -400,6 +400,9 @@ export type EditValues = {
   bibNumber: string
   officialTime: string
   officialPace: string
+  // The event the print is for. Set by hand when it is not what the runner ran
+  // (a full-marathon DNF who wants the half print): it picks the production file.
+  eventType?: string
   // Triathlon legs; absent on every other order.
   swimTime?: string; swimDistance?: string; bikeTime?: string; bikeDistance?: string; runTime?: string; runDistance?: string
 }
