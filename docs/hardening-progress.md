@@ -14,7 +14,7 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 - [x] 2.2 Close stale approved designs when the order is edited. Manage-your-order name and photo changes; staff edits to runner, race, bib, time, pace, event (`closeOutdatedDesigns`). Race-wide date and weather corrections are left to the 2.1 send check, which closes them at send time.
 - [x] 2.3 Only a design waiting for review can be approved (or rejected); claimed on the pending row.
 - [x] 2.4 No research under a guessed year (`server/domain/orders/yearUnknown.js`). Every research path. Orders already flipped to ready by this bug before the fix are not detectable from the data and were not looked for.
-- [~] 2.5 A result found for a different race must not print. Done for race and year (`pickResearch.js`, used by the render, pipeline status and order list). Not done for a changed runner name: research rows store the order's name at research time, but invalidating them on every name change would strip valid results when a customer only fixes spelling. Needs Matt's call.
+- [~] 2.5 A result found for a different race must not print. Done for race and year (`pickResearch.js`, used by the render, pipeline status and order list). Not done for a changed runner name: research rows store the order's name at research time, but invalidating them on every name change would strip valid results when a customer only fixes spelling. Matt, 2026-11-10: leave the runner-name half as it is for now.
 - [x] 2.6 Hold or Reject stops an attached print on a multi-print order (`siblingGate.js`). The code has no Artelo call that detaches a design; whether the API has one was not checked against Artelo's docs.
 - [x] 2.7 Customer approval page refuses a second answer (409), and keeps the loaded page when a reload fails.
 - [x] 2.8 The "A" shortcut does not approve from behind a dialog (`src/lib/shortcuts.ts`); A waits for the preview image; expired confirm removed.
@@ -79,5 +79,4 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 ## Waiting on Matt
 - Phase 1: add `CONNECTIONS_FORCE_OFF=all` (or the explicit list in `.env.example`) to `.env.local`. Never in Vercel.
 - Phases 1 and 2: commits are local, not pushed.
-- Phase 2, 2.5: decide whether a runner name change should clear that order's research.
 - Phase 2: click through in the app after deploy (listed in the Phase 2 report).
