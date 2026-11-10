@@ -36,8 +36,8 @@ import { recordAudit } from '../../../api/_lib/users.js'
 import { completeOrder, describeOrder } from '../orders/complete.js'
 import { setDesignStatus } from '../orders/designStatus.js'
 import { unpaidPhotoRows } from '../orders/photoPayment.js'
-import { slackTo, slackText } from '../../lib/slack.js'
-import { arteloOrderUrl } from '../../lib/links.js'
+import { slackTo, slackText, slackLink } from '../../lib/slack.js'
+import { arteloOrderUrl, orderAppUrl } from '../../lib/links.js'
 import { sendStateOf, WAITING, EXPEDITED } from './sendState.js'
 import { isExpeditedShipping } from '../../lib/shipping.js'
 import { windowEndsAt } from '../orders/changeWindow.js'
@@ -196,7 +196,7 @@ async function pingStuck(job, error) {
   const link = arteloOrderUrl(order.arteloOrderData?.id)
   // Billing and unpaid are Matt's (#admin-alerts); anything else the team sorts in Artelo.
   await slackTo(/unpaid|billing|payment/i.test(String(error || '')) ? 'admin' : 'alerts', [
-    `⚠️ Approved order *${slackText(displayNumber(order))}*${order.runnerName ? ` (${slackText(order.runnerName)})` : ''} did not go to production: ${slackText(error, 300)}`,
+    `⚠️ Approved order *${slackLink(orderAppUrl(`${displayNumber(order)}${order.lineItemIndex ? `-${order.lineItemIndex + 1}` : ''}`), displayNumber(order))}*${order.runnerName ? ` (${slackText(order.runnerName)})` : ''} did not go to production: ${slackText(error, 300)}`,
     link ? `<${link}|Open the Artelo order>; once it is sorted, Send now on the order in the tool.` : null,
   ].filter(Boolean).join('\n')).catch(() => {})
 }

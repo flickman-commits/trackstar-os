@@ -18,8 +18,8 @@ import { BUCKET } from '../render/jobs.js'
 import { deliverEverywhere } from '../render/review.js'
 import { setDesignStatus } from './designStatus.js'
 import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js'
-import { slackTo, slackText } from '../../lib/slack.js'
-import { arteloOrderUrl } from '../../lib/links.js'
+import { slackTo, slackText, slackLink } from '../../lib/slack.js'
+import { arteloOrderUrl, orderAppUrl } from '../../lib/links.js'
 import { queueSend, sendState } from '../render/arteloSend.js'
 
 export class FinalPdfError extends Error {
@@ -111,7 +111,7 @@ async function pingToAttach(order, fp, actor) {
   const who = person?.firstName ? ` ${slackText(person.firstName)} uploaded the` : ' The'
   const artelo = arteloOrderUrl(order.arteloOrderData?.id)
   const lines = [
-    `📎 <@${ATTACHER_SLACK_ID}>${who} final PDF for custom order *${slackText(num)}*${order.runnerName ? ` (${slackText(order.runnerName)})` : ''}. Attach \`${slackText(fp.fileName)}\` in Artelo, send it to production, then mark it complete in the tool.`,
+    `📎 <@${ATTACHER_SLACK_ID}>${who} final PDF for custom order *${slackLink(orderAppUrl(num), num)}*${order.runnerName ? ` (${slackText(order.runnerName)})` : ''}. Attach \`${slackText(fp.fileName)}\` in Artelo, send it to production, then mark it complete in the tool.`,
     fp.inArtelo ? '• In the Artelo library (Orders folder)' : `• ⚠️ Not in the Artelo library yet${fp.arteloError ? `: ${slackText(fp.arteloError, 200)}` : ''}`,
     fp.driveUrl ? `• <${fp.driveUrl}|Saved to Drive>` : `• ⚠️ Not in Drive yet${fp.driveError ? `: ${slackText(fp.driveError, 200)}` : ''}`,
     artelo ? `• <${artelo}|Open the Artelo order>` : null,

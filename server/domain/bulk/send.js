@@ -20,8 +20,8 @@ import { call, uploadPdfToLibrary, uploadApprovedToArtelo } from '../render/arte
 import { standardProduct, checkDesignFits } from '../support/arteloOrder.js'
 import { completeOrder } from '../orders/complete.js'
 import { recordAudit } from '../../../api/_lib/users.js'
-import { slackTo, slackText } from '../../lib/slack.js'
-import { arteloOrderUrl } from '../../lib/links.js'
+import { slackTo, slackText, slackLink } from '../../lib/slack.js'
+import { arteloOrderUrl, orderAppUrl } from '../../lib/links.js'
 import { addressComplete, normalizeZip, usZipProblem } from './bulkOrders.js'
 
 const MIN = 60_000
@@ -239,7 +239,7 @@ export async function sendBulkDue({ limit = 20, budgetMs = 60_000 } = {}) {
       await prisma.order.update({ where: { id: o.id }, data: { bulkSendError: message, bulkSendAfter: retryIn == null ? null : new Date(Date.now() + retryIn * MIN) } }).catch(() => {})
       console.error('[bulk.send]', o.orderNumber, message)
       if (retryIn == null) {
-        await slackTo('alerts', `⚠️ Bulk runner *${slackText(o.orderNumber)}* (${slackText(o.runnerNameOverride || o.runnerName || '')}, ${slackText(o.bulkOrder?.partnerName || '')}) did not go to Artelo: ${slackText(message, 300)}. Fix it on the bulk order and press Send now.`).catch(() => {})
+        await slackTo('alerts', `⚠️ Bulk runner *${slackLink(orderAppUrl(o.orderNumber), o.orderNumber)}* (${slackText(o.runnerNameOverride || o.runnerName || '')}, ${slackText(o.bulkOrder?.partnerName || '')}) did not go to Artelo: ${slackText(message, 300)}. Fix it on the bulk order and press Send now.`).catch(() => {})
       }
     }
   }

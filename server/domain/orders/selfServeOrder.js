@@ -35,8 +35,14 @@ import { shippingAddress, cancellable, cancelAndRefund } from '../support/action
 import { frameChoices, changeItem } from '../support/changeItem.js'
 import { checkOrder, createJob } from '../render/jobs.js'
 import { getCanonicalRaceName } from '../../scrapers/index.js'
-import { slackTo, slackText } from '../../lib/slack.js'
-import { shopifyAdminUrl } from '../../lib/links.js'
+import { slackTo, slackText, slackLink } from '../../lib/slack.js'
+import { shopifyAdminUrl, orderAppUrl } from '../../lib/links.js'
+
+/** The print's number as a link to it in TrackstarOS, for Slack. */
+const slackPrint = row => {
+  const n = numberOf(row) || row.orderNumber
+  return slackLink(orderAppUrl(`${n}${row.lineItemIndex ? `-${row.lineItemIndex + 1}` : ''}`), `#${n}`)
+}
 import { storage } from '../../lib/storage.js'
 import { addVariantToOrder, PHOTO_ADDON_VARIANT_ID } from '../../services/shopifyOrderEdit.js'
 import { PHOTO_ADDON_PRICE } from '../../services/pricing.js'
@@ -239,7 +245,7 @@ export async function manageChange(shopifyOrderId, signature, body = {}) {
     }
     await comment(row, `The customer added a photo from Manage your order. A $${PHOTO_ADDON_PRICE} Photo Add-On is on the Shopify order and Shopify emailed them the invoice; the print renders with the photo once it is paid.`)
     await rerender(row, 'The customer added a photo; a new design with it replaces this one')
-    await slackTo('alerts', `:frame_with_picture: Customer added a photo to *#${slackText(numberOf(row) || row.orderNumber)}* from Manage your order; $${PHOTO_ADDON_PRICE} invoice sent by Shopify.`).catch(() => {})
+    await slackTo('alerts', `:frame_with_picture: Customer added a photo to *${slackPrint(row)}* from Manage your order; $${PHOTO_ADDON_PRICE} invoice sent by Shopify.`).catch(() => {})
     return { ok: true, invoiced: true, price: PHOTO_ADDON_PRICE, print: printView({ ...row, photoPath: path }, { photoUrl: await photoUrlOf(path) }) }
   }
 
@@ -260,7 +266,7 @@ export async function manageChange(shopifyOrderId, signature, body = {}) {
     await prisma.renderJob.updateMany({ where: { orderId: row.id, status: 'done', review: 'approved', arteloSentAt: null }, data: { review: 'closed', reviewNote: 'The customer replaced the photo; a new design with it replaces this one', reviewedAt: new Date() } })
     await comment(row, 'The customer replaced the photo from Manage your order (no charge). A new design with the new photo replaces the old one.')
     await rerender(row, 'The customer replaced the photo; a new design with it replaces this one')
-    await slackTo('alerts', `:frame_with_picture: Customer replaced the photo on *#${slackText(numberOf(row) || row.orderNumber)}* from Manage your order; it renders again with the new one.`).catch(() => {})
+    await slackTo('alerts', `:frame_with_picture: Customer replaced the photo on *${slackPrint(row)}* from Manage your order; it renders again with the new one.`).catch(() => {})
     return { ok: true, print: printView({ ...row, photoPath: path }, { photoUrl: await photoUrlOf(path) }) }
   }
 
@@ -275,7 +281,7 @@ export async function manageChange(shopifyOrderId, signature, body = {}) {
       if (e?.expose || e?.name === 'UserError') throw new ManageError('bad_address', 400, String(e.message || '').replace(/^Shopify would not take that address: /, ''))
       throw e
     }
-    await slackTo('alerts', `:round_pushpin: Customer changed the ship-to on *#${slackText(out.number)}* from Manage your order: ${slackText(out.pasted.replace(/\n/g, ', '), 300)}${out.taxNote ? `\n${slackText(out.taxNote, 300)}` : ''}`).catch(() => {})
+    await slackTo('alerts', `:round_pushpin: Customer changed the ship-to on *${slackLink(orderAppUrl(out.number), `#${out.number}`)}* from Manage your order: ${slackText(out.pasted.replace(/\n/g, ', '), 300)}${out.taxNote ? `\n${slackText(out.taxNote, 300)}` : ''}`).catch(() => {})
     return { ok: true, shipTo: out.address, invoiced: Boolean(out.invoiced), taxOwed: out.owedCents > 0 ? out.owedCents / 100 : 0 }
   }
 
@@ -285,7 +291,7 @@ export async function manageChange(shopifyOrderId, signature, body = {}) {
     try { o = await cancellable(ctx.id) } catch (e) { throw new ManageError('unavailable', 409, friendly(e)) }
     const out = await cancelAndRefund({ order: o, why: 'the customer cancelled from Manage your order', by: 'Cancelled by the customer from Manage your order' })
     // The Shopify cancel carries over to Artelo on its own; this is for the record.
-    await slackTo('alerts', `:x: Customer cancelled *#${slackText(out.number)}* from Manage your order; ${slackText(out.display)} refunded in Shopify${shopifyAdminUrl(ctx.id) ? ` (${shopifyAdminUrl(ctx.id)})` : ''}`, { timeoutMs: 8000 }).catch(() => {})
+    await slackTo('alerts', `:x: Customer cancelled *${slackLink(orderAppUrl(out.number), `#${out.number}`)}* from Manage your order; ${slackText(out.display)} refunded in Shopify${shopifyAdminUrl(ctx.id) ? ` (${shopifyAdminUrl(ctx.id)})` : ''}`, { timeoutMs: 8000 }).catch(() => {})
     return { ok: true, refunded: out.display }
   }
 

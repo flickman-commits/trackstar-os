@@ -22,8 +22,8 @@ import { refundable } from '../support/actions.js'
 import { sendOrderEmail, customerMailReady } from '../support/customerMail.js'
 import { sendEmail } from '../../lib/email.js'
 import { renderCustomerEmail, escapeHtml } from '../../lib/customerEmail.js'
-import { photoLaterUrl } from '../../lib/links.js'
-import { slackTo, slackText } from '../../lib/slack.js'
+import { photoLaterUrl, orderAppUrl } from '../../lib/links.js'
+import { slackTo, slackText, slackLink } from '../../lib/slack.js'
 import { storage } from '../../lib/storage.js'
 import { isPhotoAddonLineItem, isRemovedLineItem } from '../../lib/lineItemMatching.js'
 import { getCanonicalRaceName } from '../../scrapers/index.js'
@@ -101,7 +101,7 @@ async function refundAddons(rows, why) {
     result = 'refunded'
   } catch (err) {
     result = `failed: ${String(err.message || err).slice(0, 160)}`
-    await slackTo('admin', `⚠️ Photo after the race: could not refund the Photo Add-On on order *${slackText(numberOf(o))}* (${rows.length} print${rows.length === 1 ? '' : 's'}, ${why}). ${slackText(result)}. Refund it in Shopify by hand.`, { or: 'alerts' }).catch(() => {})
+    await slackTo('admin', `⚠️ Photo after the race: could not refund the Photo Add-On on order *${slackLink(orderAppUrl(numberOf(o)), numberOf(o))}* (${rows.length} print${rows.length === 1 ? '' : 's'}, ${why}). ${slackText(result)}. Refund it in Shopify by hand.`, { or: 'alerts' }).catch(() => {})
   }
   await prisma.order.updateMany({ where: { id: { in: rows.map(r => r.id) } }, data: { photoLaterRefund: result } })
   await prisma.orderComment.createMany({

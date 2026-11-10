@@ -15,7 +15,8 @@
  */
 import prisma from '../../db.js'
 import { call } from '../render/artelo.js'
-import { slackTo, slackText } from '../../lib/slack.js'
+import { slackTo, slackText, slackLink } from '../../lib/slack.js'
+import { orderAppUrl } from '../../lib/links.js'
 import { arteloHoldText } from '../../lib/arteloHolds.js'
 import { listExcluded, isExcludedLine } from './excludedProducts.js'
 
@@ -119,7 +120,7 @@ export async function checkCompletedNotSent() {
   try { told = JSON.parse(row?.value || '[]') } catch { told = [] }
   const fresh = stuck.filter(o => !told.includes(o.arteloId))
   if (fresh.length) {
-    const lines = fresh.slice(0, 20).map(o => `• #${slackText(o.number)} (${slackText(o.artelo)}, ordered ${o.ordered}): ${slackText(o.completed.map(c => `${c.race} / ${c.runner}`).join('; '))}`)
+    const lines = fresh.slice(0, 20).map(o => `• ${slackLink(orderAppUrl(o.number), `#${o.number}`)} (${slackText(o.artelo)}, ordered ${o.ordered}): ${slackText(o.completed.map(c => `${c.race} / ${c.runner}`).join('; '))}`)
     if (fresh.length > 20) lines.push(`• and ${fresh.length - 20} more`)
     await slackTo('alerts', `:rotating_light: *${fresh.length === 1 ? 'An order was' : `${fresh.length} orders were`} marked complete in TrackstarOS but never sent to production in Artelo.* The customer is waiting. ${fresh.length === 1 ? 'It is' : 'They are'} back in the Action queue:\n${lines.join('\n')}\nSort it out in Artelo (attach the design, check the address), then complete it.`)
   }
@@ -163,7 +164,7 @@ export async function alertArteloHolds(arteloOrders, { link } = {}) {
       const name = r ? String(r.shopifyOrderData?.name || o.orderId).replace('#', '') : o.orderId
       const url = link ? link(o.id) : null
       const h = arteloHoldText(o.productionStatus)
-      return `• *${slackText(h.label)}*: #${slackText(name)}${r ? ` (${slackText(r.raceName || '')}${r.runnerName ? ` / ${slackText(r.runnerName)}` : ''})` : ''}${url ? ` <${url}|Open in Artelo>` : ''}\n    _${slackText(h.why)}._`
+      return `• *${slackText(h.label)}*: ${r ? slackLink(orderAppUrl(name), `#${name}`) : `#${slackText(name)}`}${r ? ` (${slackText(r.raceName || '')}${r.runnerName ? ` / ${slackText(r.runnerName)}` : ''})` : ''}${url ? ` <${url}|Open in Artelo>` : ''}\n    _${slackText(h.why)}._`
     })
     // Billing and unpaid holds are Matt's (#admin-alerts); address and design holds are the team's.
     const money = fresh.map((o, i) => /unpaid|billing|payment/i.test(arteloHoldText(o.productionStatus).label) ? i : -1).filter(i => i >= 0)

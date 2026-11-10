@@ -150,6 +150,12 @@ export function slackText(value, max = 500) {
   return String(value ?? '').slice(0, max).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+/** `text` as a Slack link to `url`, or plain text when there is no url. */
+export function slackLink(url, text, max = 500) {
+  const t = slackText(text, max).replace(/\|/g, '/')
+  return url ? `<${url}|${t}>` : t
+}
+
 /**
  * Post `text` to a webhook URL. Never throws; returns whether Slack accepted
  * it. For a URL that is not one of DESTINATIONS (a webhook someone pasted

@@ -11,6 +11,16 @@ export function appBaseUrl() {
   return base.replace(/\/$/, '')
 }
 
+/**
+ * The order in TrackstarOS, from the number the team knows it by (8793, #8793,
+ * 8793-2 for the second print, BULK-0001-17): the Dashboard opens it from
+ * /orders/<ref>. For the order numbers in Slack alerts.
+ */
+export function orderAppUrl(ref) {
+  const r = String(ref ?? '').replace(/^#/, '').trim()
+  return /^[A-Za-z0-9-]+$/.test(r) ? `${appBaseUrl()}/orders/${r}` : null
+}
+
 /** The approval portal for an order's proofs, from its ApprovalToken. */
 export function approvalUrl(token) {
   return token ? `${appBaseUrl()}/approve/${token}` : null

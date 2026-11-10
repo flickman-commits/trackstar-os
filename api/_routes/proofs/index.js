@@ -22,7 +22,8 @@ import { setCors, requireAdmin } from '../../_lib/auth.js'
 import { alertError } from '../../_lib/alerts.js'
 import { recordAudit, requireAdminRole } from '../../_lib/users.js'
 import { checkRateLimitDurable } from '../../../server/lib/publicRateLimit.js'
-import { slackTo, slackText } from '../../../server/lib/slack.js'
+import { slackTo, slackText, slackLink } from '../../../server/lib/slack.js'
+import { orderAppUrl } from '../../../server/lib/links.js'
 import crypto from 'crypto'
 import formidable from 'formidable'
 import fs from 'fs'
@@ -417,7 +418,7 @@ export default async function handler(req, res) {
         const suffix = approval === 'approve' ? ' - the file is ready to upload to orders.' : ''
         // #proof-approvals is for approvals only; a revision request goes to #trackstar-alerts.
         await slackTo(approval === 'approve' ? 'proofs' : 'alerts',
-          `${emoji} <@U04KBDJH5C3> *${slackText(customerName)}* ${action_text} for order *${slackText(displayNum)}*${suffix}${feedback ? `\n> _"${slackText(feedback)}"_` : ''}`)
+          `${emoji} <@U04KBDJH5C3> *${slackText(customerName)}* ${action_text} for order *${slackLink(orderAppUrl(displayNum), displayNum)}*${suffix}${feedback ? `\n> _"${slackText(feedback)}"_` : ''}`)
 
         // The customer's answer, in the Support conversation that sent the proofs.
         await mirrorPortalReply({ orderId: approvalToken.orderId, kind: approval === 'approve' ? 'approve' : 'revision', text: feedback })
@@ -464,7 +465,7 @@ export default async function handler(req, res) {
         ? String(shopifyData.name) : `#${approvalToken.order.parentOrderNumber}`
       const customerName = approvalToken.order.customerName || 'Customer'
       await slackTo('alerts',
-        `💬 <@U04KBDJH5C3> *${slackText(customerName)}* replied to your question on order *${slackText(displayNum)}*:\n> _"${slackText(text)}"_`)
+        `💬 <@U04KBDJH5C3> *${slackText(customerName)}* replied to your question on order *${slackLink(orderAppUrl(displayNum), displayNum)}*:\n> _"${slackText(text)}"_`)
 
       // Their answer, in the Support conversation that asked the question.
       await mirrorPortalReply({ orderId: approvalToken.orderId, kind: 'reply', text })
@@ -599,7 +600,7 @@ export default async function handler(req, res) {
       await recordAudit({ action: 'proof.send', summary: `Emailed proofs for ${order.orderNumber} to the customer`, detail: { orderId, orderNumber: order.orderNumber, proofs: order.proofs.length }, actor })
 
       // Slack notification (fire and forget)
-      await slackTo('alerts', `📧 Proofs sent to *${slackText(order.customerName || 'customer')}* for order *${slackText(displayNum)}*`)
+      await slackTo('alerts', `📧 Proofs sent to *${slackText(order.customerName || 'customer')}* for order *${slackLink(orderAppUrl(displayNum), displayNum)}*`)
 
       return res.status(200).json({ success: true, approvalUrl })
     }
