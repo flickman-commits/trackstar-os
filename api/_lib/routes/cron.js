@@ -12,4 +12,5 @@ export default {
   'cron/retention': () => import('../../_routes/cron/retention.js'),
   'cron/support-playbook': () => import('../../_routes/cron/support-playbook.js'),
   'cron/support-triage': () => import('../../_routes/cron/support-triage.js'),
+  'cron/watchdog': () => import('../../_routes/cron/watchdog.js'),
 }

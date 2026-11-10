@@ -30,6 +30,7 @@ const JOBS = {
   '/api/orders/actions?action=health-check': { name: 'Health check', what: 'Tests every connection and scraper fixture and reports to Slack.' },
   '/api/cron/support-playbook': { name: 'Support playbook review', what: 'Revises the drafting playbook from the week\'s replies and posts the changes.' },
   '/api/orders/actions?action=monday-pipeline': { name: 'Monday design pipeline', what: 'Posts the custom design pipeline, with what is due soon, to #all-hands.' },
+  '/api/cron/watchdog': { name: 'Watchdog', what: 'Posts to #admin-alerts when another job is late, the order import has stopped finishing, or a frequent job keeps starting without finishing.' },
 }
 
 /** The key a run is stamped under: the path, plus ?action= for the shared actions handler. */
@@ -92,6 +93,17 @@ export function previousRun(c, from = new Date()) {
   const d = new Date(Math.floor(from.getTime() / 60000) * 60000)
   for (let i = 0; i < 62 * 1440; i++, d.setTime(d.getTime() - 60000)) if (matches(c, d)) return new Date(d)
   return null
+}
+
+/**
+ * Stamp a run that finished. The start stamp alone cannot tell a job that
+ * works from one killed at its time limit every run; the watchdog
+ * (cronWatchdog.js) compares the two. Never throws.
+ */
+export function recordCronSuccess(url) {
+  const key = `cron_ok:${cronKey(url)}`
+  const value = new Date().toISOString()
+  return prisma.systemConfig.upsert({ where: { key }, create: { key, value }, update: { value } }).catch(() => {})
 }
 
 const etTime = d => d.toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' })

@@ -11,6 +11,7 @@
  * runs nothing.
  */
 import { setCors, isCronRequest } from '../../_lib/auth.js'
+import { recordCronSuccess } from '../../../server/lib/cronJobs.js'
 import { alertCronFailure } from '../../_lib/alerts.js'
 import { requireCapability } from '../../_lib/users.js'
 import { sync, isConnected, alertMailboxDown, clearMailboxDownAlert } from '../../../server/domain/support/mailbox.js'
@@ -41,6 +42,7 @@ export default async function handler(req, res) {
     if (!(await isConnected())) {
       // Every five minutes, so the quiet inbox is noticed within the hour, not next Monday.
       if (cron) await alertMailboxDown('The support mailbox is not connected: no new email comes in and nothing goes out from fast@ (proofs, designer questions, Support replies) until an admin presses Connect on the Support page.')
+      if (cron) await recordCronSuccess(req.url)  // a disconnected mailbox is alerted on its own (alertMailboxDown)
       return res.status(200).json({ skipped: 'not_connected' })
     }
     const out = await sync()
@@ -58,6 +60,7 @@ export default async function handler(req, res) {
     } catch (err) {
       console.warn(`[support.draft] ${err.message}`)
     }
+    if (cron) await recordCronSuccess(req.url)
     return res.status(200).json({ ...out, drafts })
   } catch (error) {
     console.error('[API /support/sync]', error)

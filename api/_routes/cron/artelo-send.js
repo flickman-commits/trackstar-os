@@ -11,6 +11,7 @@
  */
 import { sendBulkDue } from '../../../server/domain/bulk/send.js'
 import { isCronRequest } from '../../_lib/auth.js'
+import { recordCronSuccess } from '../../../server/lib/cronJobs.js'
 import { alertCronFailure } from '../../_lib/alerts.js'
 import { sendDue } from '../../../server/domain/render/arteloSend.js'
 
@@ -21,6 +22,7 @@ export default async function handler(req, res) {
     // Bulk runners, each their own Artelo order (server/domain/bulk/send.js), in what is left of the run.
     const bulk = await sendBulkDue({ limit: 20, budgetMs: 40_000 })
     if (out.tried || bulk.tried) console.log(`[cron/artelo-send] ${JSON.stringify({ ...out, bulk })}`)
+    await recordCronSuccess(req.url)
     return res.status(200).json({ ...out, bulk })
   } catch (error) {
     console.error('[cron/artelo-send]', error)
