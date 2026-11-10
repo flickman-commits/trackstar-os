@@ -137,6 +137,14 @@ function printView(r, extra = {}) {
   }
 }
 
+/** Units of the Photo Add-On on a Shopify order now (current quantity, so refunded ones do not count). */
+async function addonUnits(shopifyOrderId) {
+  const o = (await shopifyFetch(`/orders/${shopifyOrderId}.json?fields=line_items`))?.order
+  return (o?.line_items || [])
+    .filter(li => String(li.variant_id) === String(PHOTO_ADDON_VARIANT_ID))
+    .reduce((n, li) => n + Number(li.current_quantity ?? li.quantity ?? 0), 0)
+}
+
 /** A short-lived link to the customer's own photo, so the page can show it. */
 async function photoUrlOf(path) {
   if (!path) return null
@@ -240,13 +248,21 @@ export async function manageChange(shopifyOrderId, signature, body = {}) {
     // Claim the print first, so a double tap cannot bill twice.
     const { count } = await prisma.order.updateMany({ where: { id: row.id, photoPath: null }, data: { photoPath: path, photoAddedManually: true, photoFree: false, photoPlacedAt: null } })
     if (!count) throw new ManageError('unavailable', 409, 'has_photo')
+    // How many add-on lines the order has now, to tell afterwards whether the edit went through.
+    const before = await addonUnits(ctx.id).catch(() => null)
     try {
       await addVariantToOrder(ctx.id, PHOTO_ADDON_VARIANT_ID, 1, 'Photo Add-On added by the customer from Manage your order (TrackstarOS)')
     } catch (e) {
-      // No charge, no photo: give the print back as it was.
-      await prisma.order.update({ where: { id: row.id }, data: { photoPath: null, photoAddedManually: false } })
-      console.error('[manage-order] photo add-on order edit failed', row.orderNumber, e.message)
-      throw new ManageError('photo_failed')
+      // An error can come after Shopify committed the edit (a timeout on the
+      // answer): the customer is invoiced, so the photo stays. Only when the
+      // order has no new add-on line is the print given back as it was.
+      const after = before == null ? null : await addonUnits(ctx.id).catch(() => null)
+      if (after == null || after <= before) {
+        await prisma.order.update({ where: { id: row.id }, data: { photoPath: null, photoAddedManually: false } })
+        console.error('[manage-order] photo add-on order edit failed', row.orderNumber, e.message)
+        throw new ManageError('photo_failed')
+      }
+      console.warn('[manage-order] photo add-on edit answered with an error but the line is on the order; keeping the photo', row.orderNumber, e.message)
     }
     await comment(row, `The customer added a photo from Manage your order. A $${PHOTO_ADDON_PRICE} Photo Add-On is on the Shopify order and Shopify emailed them the invoice; the print renders with the photo once it is paid.`)
     await rerender(row, 'The customer added a photo; a new design with it replaces this one')
