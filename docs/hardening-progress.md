@@ -38,17 +38,17 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 - [!] 4.8 Retire `MCP_TOKEN` / `MCP_WRITE_TOKEN`. Matt is not sure the nightly routine has moved off them (2026-11-10), so they stay. To check: search the Activity Log for "MCP_WRITE_TOKEN" (calls with it are logged as key:Nightly routine (MCP_WRITE_TOKEN)); none in the last few weeks means it is safe to retire.
 
 ## Phase 5: Reliability and alerting
-- [ ] 5.1 Alert when a cron fails
-- [ ] 5.2 Watchdog for crons that stop
-- [ ] 5.3 Import paging and a daily Shopify/Etsy reconciliation
-- [ ] 5.4 Auto-import time budget
-- [ ] 5.5 Bulk-runner order creation cannot double-create (suspected)
-- [ ] 5.6 Photo-later emails and refunds
-- [ ] 5.7 Etsy token refresh
-- [ ] 5.8 Unique (orderId, version) and (orderId, raceId)
-- [ ] 5.9 Import-side completion goes through `completeOrder`
-- [ ] 5.10 Photo add-on charge without a photo (suspected)
-- [ ] 5.11 "When production is broken" notes in the README
+- [x] 5.1 Alert when a cron fails: auto-import (and its 14 steps in one message), artelo-send, sales send-due, support sync, research agent, retention. `alertCronFailure` posts at most hourly per job, timed in SystemConfig.
+- [x] 5.2 Watchdog for crons that stop: `/api/cron/watchdog` hourly at :20 (`server/lib/cronWatchdog.js`). Late jobs, import not finished in 30 min, artelo-send / send-due / support sync starting without finishing (new `cron_ok:` stamps). Posts once per problem and once when it clears. Not done: moving the per-instance 10-minute dedupe in `server/db.js` and `server/lib/systemProblem.js` to SystemConfig.
+- [~] 5.3 Daily Shopify reconciliation done (`server/domain/orders/missingOrders.js`, run by the daily artelo-completed-check): paid online-store orders from the last 2 days missing here go to #admin-alerts once. Not done: paging Artelo's list (no paging parameter in the code to go on), and Etsy. The first run may flag orders made outside Artelo; it lists the products so they are easy to tell apart.
+- [x] 5.4 Auto-import time budget: 240 s deadline between steps, cancellations first, lock 6 min. A step that starts just before the deadline can still run past it (its own budgets are unchanged).
+- [x] 5.5 Bulk-runner order creation cannot double-create: a `creatingAt` mark before the create, and a lookup by order number at Artelo on retry (relies on `orders/get`'s `name` filter, used the same way in support/replacements.js). Not verified against Artelo.
+- [x] 5.6 Photo-later emails stamped before sending, cleared on failure; refunds interrupted after closing are flagged to #admin-alerts (not refunded automatically).
+- [x] 5.7 Etsy token refresh: compare-and-swap save, one re-read after a refusal, failures to #admin-alerts hourly; health check and Test connections use the shared client.
+- [~] 5.8 Unique (orderId, version) on RenderJob and (orderId, raceId) on RunnerResearch are in the schema, and render creation retries a taken number. NOT applied to the database: Matt runs `scripts/check-duplicate-rows.mjs`, then `npx prisma db push`. Research writes were not converted to upsert (a rare race now errors instead of duplicating). Order.orderNumber unique not added.
+- [~] 5.9 Import-side completion goes through `completeOrder` (via 'artelo'). Not done: setting a custom order's design status to sent_to_production on the way, which changes what counts for designer pay. Matt's call.
+- [x] 5.10 Photo add-on: the photo is kept when Shopify added the paid line despite an error answer.
+- [x] 5.11 "When production is broken" in the README. Backup line left for Matt.
 
 ## Phase 6: AI and outbound email
 - [ ] 6.1 Weekly playbook review proposes, does not publish
@@ -82,7 +82,10 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 
 ## Waiting on Matt
 - Phase 1: add `CONNECTIONS_FORCE_OFF=all` (or the explicit list in `.env.example`) to `.env.local`. Never in Vercel.
-- Phases 1 to 4: commits are local, not pushed.
+- Phases 1 to 5: commits are local, not pushed.
+- Phase 5, 5.8: run `node --env-file=.env.local scripts/check-duplicate-rows.mjs`; if both counts are 0, `npx prisma db push` (the code works before and after).
+- Phase 5, 5.9: should a custom order completed by the import (fulfilled in Artelo) also be marked sent_to_production, which counts it for designer pay?
+- Phase 5, 5.11: fill in the README's backup line (Supabase backup tier, how to restore).
 - Phase 4: after deploying, delete ADMIN_SECRET from Vercel.
 - Phase 4, 4.8: check the Activity Log for MCP_WRITE_TOKEN use (see 4.8).
 - Phase 2: click through in the app after deploy (listed in the Phase 2 report).
