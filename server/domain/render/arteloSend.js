@@ -42,6 +42,8 @@ import { sendStateOf, WAITING, EXPEDITED } from './sendState.js'
 import { isExpeditedShipping } from '../../lib/shipping.js'
 import { windowEndsAt } from '../orders/changeWindow.js'
 import { openConversationFor, supportOpenError, sentAnywayAt, sentAnywayMark } from '../support/holdsPrint.js'
+import { checkOrder, createJob } from './jobs.js'
+import { sendDecision, describeFields } from './printed.js'
 
 export const SEND_TYPES = ['standard', 'custom']
 const OFF_KEY = 'artelo_auto_send_off'
@@ -233,6 +235,35 @@ async function markSent(job, order, actorId) {
 }
 
 /**
+ * The order now prints differently from the approved design: the design is
+ * closed, never sent, and a new one is queued for review. The customer's
+ * change wins; the old file never reaches Artelo.
+ */
+async function closeStale(job, order, fields, spec) {
+  const what = describeFields(fields)
+  const note = `Not sent: the order changed after this design was approved (${what}). A new design replaces it.`
+  const now = new Date()
+  await prisma.renderJob.update({ where: { id: job.id }, data: { review: 'closed', reviewNote: note, reviewedAt: now, sendAfter: null, sendError: note, sendCheckedAt: now } })
+  // If it cannot render now (a worker offline, a photo still unpaid), the import's re-render picks it up (jobs.rerenderChanged).
+  let queued = false
+  try { await createJob({ orderId: order.id, requestedBy: 'system' }); queued = true }
+  catch (e) { console.error('[artelo.send] stale: new render did not start', job.id, e.message) }
+  const changes = fields.map(f => `${describeFields([f])}: ${job.spec?.[f] ?? '(none)'} → ${spec?.[f] ?? '(none)'}`)
+  await recordAudit({
+    action: 'artelo.stale',
+    summary: `Did not send ${describeOrder(order)} to production: the order changed after the design was approved (${what})`,
+    detail: { jobId: job.id, orderId: order.id, orderNumber: order.orderNumber, changes, newRenderQueued: queued },
+    actor: null,
+  })
+  const number = `${displayNumber(order)}${order.lineItemIndex ? `-${order.lineItemIndex + 1}` : ''}`
+  await slackTo('alerts', [
+    `:no_entry: *${slackLink(orderAppUrl(number), number)}*${order.runnerName ? ` (${slackText(order.runnerName)})` : ''} was not sent to production: the order changed after its design was approved.`,
+    ...changes.map(c => `• ${slackText(c, 200)}`),
+    queued ? 'A new design is waiting for review.' : 'A new design will render on the next import.',
+  ].join('\n')).catch(() => {})
+}
+
+/**
  * One job, as far as it can go now. Never throws; the outcome is saved on the job.
  */
 export async function sendOne(job) {
@@ -243,6 +274,18 @@ export async function sendOne(job) {
     const newest = await sendableJob(order.id)
     if (newest && newest.id !== job.id) return outcome(job, {})
     if (order.status === 'completed') return outcome(job, { error: 'The order was marked done by hand, so it was not sent' })
+
+    // The order may have changed since this design was approved: the customer
+    // fixed the name in the change window, a person corrected the time or the
+    // race date. The file is checked against the order as it is now (printed.js).
+    let check = null
+    if (job.spec?.template) {
+      try { check = await checkOrder(order.id, { allowUnpaidPhoto: true }) }
+      catch (e) { return outcome(job, { error: `Could not check the design against the order yet: ${String(e.message).slice(0, 200)}`, retryIn: 2 }) }
+    }
+    const decision = sendDecision(job, check)
+    if (decision.action === 'stale') { await closeStale(job, order, decision.fields, check.spec); return }
+    if (decision.action === 'wait') return outcome(job, { error: `Not sent: the design could not be checked against the order (${decision.reasons.join('; ')})`, retryIn: 30, notify: true })
 
     // An open Support conversation about this order holds it (support/holdsPrint.js).
     // Looked at again every 15 minutes, so closing the conversation releases it.

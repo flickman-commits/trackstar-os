@@ -12,6 +12,7 @@ import { availableTemplateKeys, noTimeGaps, onlineWorkers as onlineWorkersList }
 import { getCanonicalRaceName } from '../../scrapers/index.js'
 import { storage as sharedStorage, storedSince } from '../../lib/storage.js'
 import { isConnectionOn } from '../../lib/connections.js'
+import { printedDiffers } from './printed.js'
 
 export const BUCKET = 'production-files'
 const ONLINE_MS = 90_000
@@ -276,11 +277,8 @@ export async function autoQueueRenders({ limit = 25 } = {}) {
   return { queued, skipped, rerendered: again.queued }
 }
 
-// What a print is made from. Two specs that agree on these would print the same.
-const PRINTED = ['template', 'size', 'name', 'bib', 'time', 'pace', 'noTime', 'date', 'condition', 'temp', 'photoPath']
-export function printedDiffers(a, b) {
-  return PRINTED.some(k => (a?.[k] ?? null) !== (b?.[k] ?? null))
-}
+// What a print is made from (printed.js): two specs that agree on those fields print the same.
+export { printedDiffers }
 
 /**
  * A rejected or failed design renders again on its own once the data it was
