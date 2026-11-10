@@ -3,11 +3,11 @@
 The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per session. Marks: `[x]` done, `[~]` partly done, `[!]` not done (reason given), `[ ]` not started. Commits stay local until Matt pushes.
 
 ## Phase 1: Make the build itself safe
-- [ ] 1.1 Run tests against an offline database address
-- [ ] 1.2 `CONNECTIONS_FORCE_OFF` switch for local sessions
-- [ ] 1.3 Lint server code; lint in the build
-- [ ] 1.4 Keep stray business files out of git
-- [ ] 1.5 Pin the Node version
+- [x] 1.1 Run tests against an offline database address. `npm test` sets the address itself; a throwaway Prisma query was shown to fail to connect. Run the build locally with the same two variables in front.
+- [x] 1.2 `CONNECTIONS_FORCE_OFF` switch for local sessions. Also blocks switching a forced service from Settings, and skips the two Etsy token refreshes in the health check and Test connections. Not gated: read-only pings to Artelo, Shopify and Resend in those two diagnostic flows in `orders/actions.js` (they write nothing).
+- [x] 1.3 Lint server code; lint in the build. `npm run lint:server`. Fixed: duplicate `lineItemIndex` in `SPEC_SELECT`, dead `disconnectEtsyAuth`. `server/lib/cronJobs.js` is ignored until ESLint 9 (import attribute). Frontend lint is at its cap (5 of 5 warnings) and now in the build, so one new warning fails a deploy.
+- [x] 1.4 Keep stray business files out of git. Root `*.csv` and `*.txt` ignored.
+- [x] 1.5 Pin the Node version. `engines` 22.x, `.nvmrc`, CI on 22. Vercel follows `engines`.
 
 ## Phase 2: Stop a wrong print reaching production
 - [ ] 2.1 Re-check an approved design against the order when it is sent
@@ -77,4 +77,6 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 - [ ] 8.6 List of unused public files
 
 ## Waiting on Matt
-(nothing yet)
+- Phase 1: add `CONNECTIONS_FORCE_OFF=all` (or the explicit list in `.env.example`) to `.env.local`. Never in Vercel.
+- Phase 1: check the Node version in Vercel project settings. `engines` now picks 22; if Vercel was on 24, say so and it moves to `24.x`.
+- Phase 1: Phase 1 commits are local, not pushed.
