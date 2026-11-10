@@ -13,6 +13,7 @@ import { getCanonicalRaceName } from '../../scrapers/index.js'
 import { storage as sharedStorage, storedSince } from '../../lib/storage.js'
 import { isConnectionOn } from '../../lib/connections.js'
 import { printedDiffers } from './printed.js'
+import { isStoredPhotoPath } from '../../lib/photoPath.js'
 
 export const BUCKET = 'production-files'
 const ONLINE_MS = 90_000
@@ -154,6 +155,8 @@ export async function uploadSlots(job) {
   if (pdf.error || preview.error) throw new Error(`Could not open upload slots: ${(pdf.error || preview.error).message}`)
   let photoUrl = null
   if (job.spec?.photoPath) {
+    // Only an upload's own path shape is ever signed (lib/photoPath.js).
+    if (!isStoredPhotoPath(job.spec.photoPath)) throw new Error('The photo on this order is not an uploaded photo path')
     const { data, error } = await sb.storage.from('personalization-photos').createSignedUrl(job.spec.photoPath, 600)
     if (error) throw new Error(`Could not read the customer photo: ${error.message}`)
     photoUrl = data.signedUrl

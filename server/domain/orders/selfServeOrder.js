@@ -48,10 +48,10 @@ import { addVariantToOrder, PHOTO_ADDON_VARIANT_ID } from '../../services/shopif
 import { PHOTO_ADDON_PRICE } from '../../services/pricing.js'
 import { loadProductCatalog, getProductInfo } from '../../lib/productCatalog.js'
 import { shopifyFetch } from '../../services/shopifyAuth.js'
+import { VERIFIED_PATH, isStoredPhotoPath } from '../../lib/photoPath.js'
 
 const PHOTO_BUCKET = 'personalization-photos'
 // What photo-verify hands back: a sanitized JPEG, PNG or WEBP.
-const VERIFIED_PATH = /^\d{4}-\d{2}-\d{2}\/[0-9a-f-]{36}\.(jpg|png|webp)$/
 
 export const SUPPORT_EMAIL = process.env.PROOF_REPLY_TO_EMAIL || 'fast@trackstar.art'
 // Who the order comments and the Shopify notes name.
@@ -141,6 +141,7 @@ function printView(r, extra = {}) {
 async function photoUrlOf(path) {
   if (!path) return null
   try {
+    if (!isStoredPhotoPath(path)) return null
     const { data } = await storage().storage.from(PHOTO_BUCKET).createSignedUrl(String(path), 3600)
     return data?.signedUrl || null
   } catch { return null }

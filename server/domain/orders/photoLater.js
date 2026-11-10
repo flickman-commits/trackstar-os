@@ -28,10 +28,10 @@ import { storage } from '../../lib/storage.js'
 import { isPhotoAddonLineItem, isRemovedLineItem } from '../../lib/lineItemMatching.js'
 import { getCanonicalRaceName } from '../../scrapers/index.js'
 import { awaitingLaterPhoto, photoLaterDeadline, photoLaterDue, DEADLINE_AFTER_MS } from './photoLaterState.js'
+import { VERIFIED_PATH, isStoredPhotoPath } from '../../lib/photoPath.js'
 
 const BUCKET = 'personalization-photos'
 // What photo-verify hands back: a sanitized JPEG, PNG or WEBP.
-const VERIFIED_PATH = /^\d{4}-\d{2}-\d{2}\/[0-9a-f-]{36}\.(jpg|png|webp)$/
 const TOKEN = /^[A-Za-z0-9_-]{20,64}$/
 const BOT = { id: null, firstName: 'TrackstarOS' }
 

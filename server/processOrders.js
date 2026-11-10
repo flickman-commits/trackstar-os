@@ -32,6 +32,7 @@ import { listExcluded, isExcludedLine } from './domain/orders/excludedProducts.j
 import { alertArteloHolds } from './domain/orders/arteloMismatch.js'
 import { arteloOrderUrl } from './lib/links.js'
 import { yearUnknown } from './domain/orders/yearUnknown.js'
+import { isStoredPhotoPath } from './lib/photoPath.js'
 
 // Artelo API configuration
 // artelo.com, not artelo.io: the old host now redirects across domains and
@@ -324,7 +325,11 @@ function extractShopifyPersonalization(lineItem) {
       // Blank string means the wizard ran but they declined a photo, which is
       // not the same as the property being absent — both land as null here.
       else if (name === '_photo_path' || name === 'photo_path') {
-        result.photoPath = value || null
+        // Set by the cart, so by whoever is shopping: only an upload's own path shape (lib/photoPath.js).
+        if (value && !isStoredPhotoPath(value)) {
+          result.photoPath = null
+          result.photoPathRejected = String(value).slice(0, 200)
+        } else result.photoPath = value || null
       }
       // Personalization wizard, pre-orders only: the customer paid for the
       // photo but will upload it after the race (domain/orders/photoLater.js).
@@ -1282,6 +1287,7 @@ export async function processOrders(options = {}) {
               let lookupOutcome = null
               let lookupMatchedName = null
               let photoPath = null
+              let photoPathRejected = null
               let photoLater = false
 
               if (isShopify && shopifyData) {
@@ -1320,6 +1326,7 @@ export async function processOrders(options = {}) {
                   lookupOutcome = extracted.lookupOutcome
                   lookupMatchedName = extracted.lookupMatchedName
                   photoPath = extracted.photoPath
+                  photoPathRejected = extracted.photoPathRejected || null
                   photoLater = extracted.photoLater
                   // Gift flag applies to ALL orders (Easify + widget both set it).
                   // hadNoTime is already captured above.
@@ -1405,7 +1412,7 @@ export async function processOrders(options = {}) {
                 }
               }
 
-              await prisma.order.create({
+              const createdOrder = await prisma.order.create({
                 data: {
                   orderNumber: `${order.orderId}-${lineItemIndex}`,
                   parentOrderNumber: order.orderId,
@@ -1447,6 +1454,12 @@ export async function processOrders(options = {}) {
                   photoLater
                 }
               })
+
+              if (photoPathRejected) {
+                // Never silent: the print imports without a photo, and the order says why.
+                log(`[processOrders] ⚠️  ${order.orderId}-${lineItemIndex}: photo path "${photoPathRejected}" is not an uploaded photo; imported without a photo`)
+                await prisma.orderComment.create({ data: { orderId: createdOrder.id, text: 'The order came in with a photo reference that is not a photo uploaded through our site, so it was imported without a photo. Ask the customer to upload it from Manage your order if they meant to add one.', authorName: 'Trackstar' } }).catch(() => {})
+              }
 
               results.imported++
               orderResult.action = 'imported'

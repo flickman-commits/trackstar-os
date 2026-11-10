@@ -21,6 +21,7 @@ import { setCors, requireAdmin } from '../../_lib/auth.js'
 import { shopifyFetch } from '../../../server/services/shopifyAuth.js'
 import { parseRaceNameFromTitle } from '../../../server/scrapers/raceNameNormalization.js'
 import { resolveShopifyLineIndex, normalizeShopifyLines } from '../../../server/lib/lineItemMatching.js'
+import { isStoredPhotoPath } from '../../../server/lib/photoPath.js'
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'POST, OPTIONS' })) return
@@ -238,7 +239,8 @@ function extractShopifyData(lineItems) {
         result.lookupMatchedName = value || null
       }
       else if (name === '_photo_path' || name === 'photo_path') {
-        result.photoPath = value || null
+        // Set by the cart: only an upload's own path shape (server/lib/photoPath.js).
+        result.photoPath = value && isStoredPhotoPath(value) ? value : null
       }
     }
   }
