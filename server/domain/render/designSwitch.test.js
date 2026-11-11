@@ -10,9 +10,9 @@ const after = at('2026-11-11T11:01:00-05:00')
 test('bought before 11 AM ET gets the old design, after gets the new one', () => {
   assert.equal(originalKeyFor(before, 'Philadelphia Marathon'), 'Philadelphia Marathon / Original')
   assert.equal(originalKeyFor(after, 'Philadelphia Marathon'), null)
-  // NYC and Chicago: the note only until their OLD files are in.
-  assert.equal(originalKeyFor(before, 'NYC Marathon'), null)
-  assert.equal(originalKeyFor(before, 'Chicago Marathon'), null)
+  assert.equal(originalKeyFor(before, 'NYC Marathon'), 'NYC Marathon / Original')
+  assert.equal(originalKeyFor(before, 'Chicago Marathon'), 'Chicago Marathon / Original')
+  assert.equal(originalKeyFor(after, 'NYC Marathon'), null)
   assert.equal(originalKeyFor(before, 'Philadelphia Marathon / Half Marathon'), 'Philadelphia Marathon / Half Marathon / Original')
 })
 
@@ -44,6 +44,12 @@ test('the banner flag follows the race, standard prints only', () => {
 test('a design made before the main file became the new design is the old design: it still sends', () => {
   assert.equal(sameDesign('Philadelphia Marathon / Original', 'Philadelphia Marathon', '2026-11-08T20:00:00Z'), true)
   assert.deepEqual(changedPrintedFields({ template: 'Philadelphia Marathon / Original', size: '12x18' }, { template: 'Philadelphia Marathon', size: '12x18' }, { renderedAt: '2026-11-09T12:00:00Z' }), [])
+})
+
+test('NYC and Chicago: designs made before 11 AM ET are the old design', () => {
+  assert.equal(sameDesign('NYC Marathon / Original', 'NYC Marathon', '2026-11-10T20:00:00Z'), true)
+  assert.equal(sameDesign('Chicago Marathon / Original', 'Chicago Marathon', '2026-11-11T15:30:00Z'), true)
+  assert.equal(sameDesign('NYC Marathon / Original', 'NYC Marathon', '2026-11-11T16:05:00Z'), false)
 })
 
 test('a design made from the main file once it was the new design is not the old design', () => {

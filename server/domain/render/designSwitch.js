@@ -47,9 +47,9 @@ export const DESIGN_SWITCHES = [
     // The OLD copies were made Nov 9 at 4:14 PM ET; the main files have been the new design since.
     newFileAt: '2026-11-09T21:14:00.000Z',
   },
-  // The main files are still the old design: no OLD file in these folders yet.
-  { race: 'NYC Marathon', keys: [], at: '2026-11-11T16:00:00.000Z' },
-  { race: 'Chicago Marathon', keys: [], at: '2026-11-11T16:00:00.000Z' },
+  // The main files were the old design until the switch: their OLD copies were renamed in at 11:00.
+  { race: 'NYC Marathon', keys: ['NYC Marathon'], at: '2026-11-11T16:00:00.000Z' },
+  { race: 'Chicago Marathon', keys: ['Chicago Marathon'], at: '2026-11-11T16:00:00.000Z' },
 ]
 
 export const OLD_DESIGN_NOTE = 'USE OLD DESIGN - THEY BOUGHT BEFORE WE SWITCHED'
