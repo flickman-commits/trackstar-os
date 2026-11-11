@@ -46,7 +46,7 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 - [x] 5.6 Photo-later emails stamped before sending, cleared on failure; refunds interrupted after closing are flagged to #admin-alerts (not refunded automatically).
 - [x] 5.7 Etsy token refresh: compare-and-swap save, one re-read after a refusal, failures to #admin-alerts hourly; health check and Test connections use the shared client.
 - [x] 5.8 Unique (orderId, version) on RenderJob and (orderId, raceId) on RunnerResearch are in the schema, and render creation retries a taken number. Applied to the database by Matt on 2026-11-10 (duplicate check 0 and 0, then `npx prisma db push`). Research writes were not converted to upsert (a rare race now errors instead of duplicating). Order.orderNumber unique not added.
-- [~] 5.9 Import-side completion goes through `completeOrder` (via 'artelo'). Not done: setting a custom order's design status to sent_to_production on the way, which changes what counts for designer pay. Matt's call.
+- [x] 5.9 Import-side completion goes through `completeOrder` (via 'artelo'). Matt, 2026-11-10: Artelo fulfils customs too, so a custom completed via 'artelo' is now marked sent_to_production (counts for designer pay), and choosing Sent to production on a custom sends it through Artelo.
 - [x] 5.10 Photo add-on: the photo is kept when Shopify added the paid line despite an error answer.
 - [x] 5.11 "When production is broken" in the README. Backup line left for Matt.
 
@@ -130,8 +130,7 @@ Tracked under public/ and referenced nowhere in src, api, server, the HTML entri
 - Phase 8: decide on the unused public files below, and on xlsx.
 - Phase 7: click through the customer pages and order screen after deploy (listed in the Phase 7 report).
 - Phase 6, 6.4: suppression list and opt-out wording.
-- Phase 6, 6.7: add the GitHub secret SLACK_SENSITIVE_WEBHOOK_URL; delete the stale remote branches (15 sweep/*, 5 claude/*, listed in the Phase 6 report); check the nightly routine's API key scopes.
-- Phase 5, 5.9: should a custom order completed by the import (fulfilled in Artelo) also be marked sent_to_production, which counts it for designer pay?
+- Phase 6, 6.7: add the GitHub secret SLACK_SENSITIVE_WEBHOOK_URL; check the nightly routine's API key scopes. (Stale remote branches deleted 2026-11-10; the four with unmerged commits are kept locally as archive/*.)
 - Phase 5, 5.11: fill in the README's backup line (Supabase backup tier, how to restore).
 - Phase 4: after deploying, delete ADMIN_SECRET from Vercel.
 - Phase 4, 4.8: check the Activity Log for MCP_WRITE_TOKEN use (see 4.8).
