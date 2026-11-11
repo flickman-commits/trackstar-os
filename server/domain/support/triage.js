@@ -16,7 +16,7 @@
  */
 import { SUPPORT_OPEN } from './holdsPrint.js'
 import prisma from '../../db.js'
-import { complete, isLlmConfigured } from '../../lib/llm.js'
+import { complete, isLlmConfigured, llmInfo } from '../../lib/llm.js'
 import { slackTo, slackText } from '../../lib/slack.js'
 import { appBaseUrl } from '../../lib/links.js'
 import { customerContext, linkedOrderNumbers, orderNumberWhere } from './threads.js'
@@ -114,7 +114,8 @@ export async function triageThread(t) {
     json: true,
     maxTokens: 2000,
     effort: 'low',
-    model: MODEL,
+    // A Claude model name only means something to an Anthropic backend; anything else uses LLM_MODEL.
+    model: llmInfo().provider === 'anthropic' ? MODEL : undefined,
     cacheSystem: true,
     purpose: 'support.triage',
   })

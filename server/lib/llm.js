@@ -157,6 +157,9 @@ export function anthropicSystem(parts, cache) {
  * @param {string}  [opts.purpose]    Short label for logs, e.g. "sales.draft".
  * @param {boolean} [opts.webSearch]   Let the model search the live web (Anthropic only).
  * @param {number}  [opts.maxSearches] Cap on searches per call. Default 5.
+ * @param {number} [opts.timeoutMs] How long one model call may take (default 2 minutes). Every caller runs
+ *   inside a 300-second serverless function; the SDK's own default (10 minutes, retried twice) ran past it,
+ *   so the function was killed with nothing logged. A call longer than 150 seconds is not retried.
  * @param {boolean|'1h'} [opts.cacheSystem] Cache the system prompt (Anthropic only): for one that is the same on every call.
  *   Prompts under 512 tokens are never cached. '1h' keeps it an hour (a write costs 2x input instead of 1.25x,
  *   a hit 0.05x): for calls spread minutes apart, where a 5-minute entry would expire unread and every
@@ -177,6 +180,7 @@ export async function complete({
   webSearch = false,
   maxSearches = 5,
   cacheSystem = false,
+  timeoutMs = 120_000,
 }) {
   await requireConnection('claude')
   const provider = pickProvider()
@@ -192,6 +196,7 @@ export async function complete({
   let text = ''
   let usage = { input: 0, output: 0, searches: 0 }
   let usedModel = model
+  let truncated = false
   const sources = []
 
   if (provider === 'anthropic') {
@@ -211,7 +216,7 @@ export async function complete({
         output_config: { effort },
         ...(tools ? { tools } : {}),
         messages,
-      })
+      }, { timeout: timeoutMs, maxRetries: timeoutMs > 150_000 ? 0 : 1 })
       // Cached tokens are billed apart from input_tokens; counted in so usage is the whole prompt.
       usage.input += (response.usage?.input_tokens || 0) + (response.usage?.cache_read_input_tokens || 0) + (response.usage?.cache_creation_input_tokens || 0)
       usage.cached = (usage.cached || 0) + (response.usage?.cache_read_input_tokens || 0)
@@ -238,6 +243,13 @@ export async function complete({
       if (response.stop_reason !== 'pause_turn' || attempt >= MAX_RESUMES) break
       messages.push({ role: 'assistant', content: response.content })
     }
+    // Cut off at maxTokens: half an answer. As JSON it would fail to parse with
+    // an error that hides why, so say what happened instead.
+    if (response.stop_reason === 'max_tokens') {
+      if (json) throw new Error(`The model's answer was cut off at ${maxTokens} tokens (${purpose}); raise maxTokens for this call`)
+      console.warn(`[llm] ${purpose}: answer cut off at ${maxTokens} tokens`)
+      truncated = true
+    }
   } else {
     if (webSearch) {
       throw new Error('This model cannot search the web. Web search needs the Anthropic backend; set ANTHROPIC_API_KEY or turn the feature off.')
@@ -246,6 +258,7 @@ export async function complete({
     const apiKey = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY || 'local'
     usedModel = model || process.env.LLM_MODEL || DEFAULT_OPENAI_MODEL
     const res = await fetch(`${baseUrl}/chat/completions`, {
+      signal: AbortSignal.timeout(timeoutMs),
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
@@ -270,7 +283,7 @@ export async function complete({
   const ms = Date.now() - startedAt
   console.log(`[llm] ${purpose} provider=${provider} model=${usedModel} in=${usage.input} cacheRead=${usage.cached || 0} cacheWrite=${usage.cacheWrite || 0} out=${usage.output} searches=${usage.searches} ${ms}ms`)
 
-  const result = { text, provider, model: usedModel, usage, ms, sources: [...new Set(sources)] }
+  const result = { text, provider, model: usedModel, usage, ms, sources: [...new Set(sources)], ...(truncated ? { truncated } : {}) }
   if (json) result.json = extractJson(text)
   return result
 }

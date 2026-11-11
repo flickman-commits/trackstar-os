@@ -212,7 +212,7 @@ Runner: ${item.runner}${item.customerBib || item.research?.bib ? `\nBib the cust
 Return JSON: { "found": boolean, "resultsUrl": string|null, "nameOnPage": string|null, "bib": string|null, "chipTime": string|null, "pace": string|null, "eventType": "Marathon"|"Half Marathon"|"10K"|"5K"|null, "timingCompany": string|null, "notes": string }`
   let claim, sources = []
   try {
-    const res = await complete({ system: SYSTEM, prompt, json: true, webSearch: true, maxSearches: 6, effort: 'medium', maxTokens: 3000, purpose: 'research.agent', cacheSystem: true })
+    const res = await complete({ system: SYSTEM, prompt, json: true, webSearch: true, maxSearches: 6, effort: 'medium', maxTokens: 3000, purpose: 'research.agent', cacheSystem: true, timeoutMs: 240_000 })
     claim = res.json || {}
     sources = res.sources || []
   } catch (e) {

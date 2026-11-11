@@ -23,7 +23,7 @@
  * playbook > Review (reviewWarnings). Everything else still goes live on its own.
  */
 import prisma from '../../db.js'
-import { complete, isLlmConfigured } from '../../lib/llm.js'
+import { complete, isLlmConfigured, llmInfo } from '../../lib/llm.js'
 import { slackTo, slackText } from '../../lib/slack.js'
 import { stripQuoted } from './mailbox.js'
 import { getPlaybook, savePlaybook } from './playbook.js'
@@ -151,8 +151,11 @@ export async function reviewPlaybook({ days = 7, dryRun = false } = {}) {
     json: true,
     maxTokens: 16000,
     effort: 'medium',
-    model: MODEL,
+    // A Claude model name only means something to an Anthropic backend; anything else uses LLM_MODEL.
+    model: llmInfo().provider === 'anthropic' ? MODEL : undefined,
     purpose: 'support.playbook_review',
+    // Up to 16,000 tokens of playbook: longer than the 2-minute default, inside the cron's 300 seconds.
+    timeoutMs: 280_000,
   })
   const changes = (Array.isArray(out.json?.changes) ? out.json.changes : [])
     .map(c => ({ what: noDash(c?.what).slice(0, 300), why: noDash(c?.why).slice(0, 300) }))

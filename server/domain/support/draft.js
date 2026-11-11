@@ -420,15 +420,35 @@ export async function draftPending({ limit = 6, concurrency = 1, budgetMs = Infi
     const forId = d.data?.forMessageId
     return Boolean(forId && t.messages[0] && forId !== t.messages[0].id)
   })
+  // A thread whose draft keeps failing (a refusal, an answer that will not
+  // parse) was retried every five minutes for three days, and oldest-first
+  // let a few such threads hold back every newer draft. Failures are counted
+  // in SystemConfig (draft_fail:<thread>, no schema change): after one, the
+  // thread waits 15 minutes, then 1 hour, then 4, then 12, and goes to the
+  // back of the queue.
+  const failRows = due.length ? await prisma.systemConfig.findMany({ where: { key: { in: due.map(t => `draft_fail:${t.id}`) } } }) : []
+  const fails = new Map(failRows.map(r => { try { return [r.key.slice('draft_fail:'.length), JSON.parse(r.value)] } catch { return [r.key, null] } }))
+  const ready = due.filter(t => { const f = fails.get(t.id); return !f || Date.now() >= new Date(f.retryAt).getTime() })
+  const ordered = [...ready.filter(t => !fails.has(t.id)), ...ready.filter(t => fails.has(t.id))]
   let drafted = 0, next = 0
   const failed = []
   const started = Date.now()
-  const todo = due.slice(0, limit)
+  const todo = ordered.slice(0, limit)
   // A few at a time: one draft is 15 to 30 seconds of model time, and a busy
   // inbox (56 waiting, 2026-11-03) took an hour and a half at one per turn.
   async function draftOne(t) {
-    try { await draftThread(t.id); drafted++ }
-    catch (err) { failed.push(t.id); console.warn(`[support.draft] ${t.id}: ${err.message}`) }
+    const key = `draft_fail:${t.id}`
+    try {
+      await draftThread(t.id); drafted++
+      if (fails.has(t.id)) await prisma.systemConfig.deleteMany({ where: { key } }).catch(() => {})
+    } catch (err) {
+      failed.push(t.id)
+      console.warn(`[support.draft] ${t.id}: ${err.message}`)
+      const n = (fails.get(t.id)?.n || 0) + 1
+      const waitMin = [15, 60, 240, 720][Math.min(n, 4) - 1]
+      const value = JSON.stringify({ n, retryAt: new Date(Date.now() + waitMin * 60_000).toISOString(), error: String(err.message).slice(0, 200) })
+      await prisma.systemConfig.upsert({ where: { key }, update: { value }, create: { key, value } }).catch(() => {})
+    }
   }
   async function worker() {
     while (next < todo.length && Date.now() - started < budgetMs) await draftOne(todo[next++])
