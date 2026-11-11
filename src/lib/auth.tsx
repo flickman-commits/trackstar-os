@@ -72,7 +72,12 @@ export function AuthProvider({ user, setUser, children }: {
   const refresh = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/auth/login`, { credentials: 'include' })
-      const data = res.ok ? await res.json() : null
+      // Only a real "not signed in" signs them out here. A server error or a
+      // rate limit (500, 502, 429) used to unmount the whole app to the sign-in
+      // form mid-task; now the current user stays until the next check.
+      if (res.status === 401) { setUser(null); return }
+      if (!res.ok) return
+      const data = await res.json()
       setUser(data?.user || null)
     } catch {
       // A network blip should not sign anyone out; leave the current user be.
