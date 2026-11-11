@@ -28,6 +28,8 @@ export default async function handler(req, res) {
       // Manual corrections to the result itself. Elí sometimes needs to use the
       // runner's own watch time rather than the official one we scraped.
       bibNumber, officialTime, officialPace,
+      // The customer wants no bib on the print: the bib frame renders empty.
+      noBib,
       // The event the print is for, set by hand when it should not follow the
       // result (a full-marathon DNF who wants the half print). Picks the production file.
       eventType,
@@ -329,6 +331,11 @@ export default async function handler(req, res) {
       updateData.researchedAt = new Date()
     }
 
+    if (typeof noBib === 'boolean' && noBib !== existingOrder.noBib) {
+      updateData.noBib = noBib
+      await recordAudit({ action: 'order.no-bib', summary: `Order ${existingOrder.orderNumber}: ${noBib ? 'no bib on the print' : 'bib back on the print'}`, detail: { orderNumber: existingOrder.orderNumber, noBib }, actor })
+    }
+
     // Update the order
     if (existingOrder.trackstarOrderType === 'custom') {
       const LABEL = { runnerNameOverride: 'runner', raceNameOverride: 'race', yearOverride: 'year', bibNumberCustomer: 'bib', timeCustomer: 'time', creativeDirection: 'creative direction' }
@@ -345,7 +352,7 @@ export default async function handler(req, res) {
 
     // A new name, race or result means an open design was made from the old
     // one: close it now rather than leave it to be approved or sent.
-    const printChanged = 'runnerNameOverride' in updateData || 'raceNameOverride' in updateData
+    const printChanged = 'runnerNameOverride' in updateData || 'raceNameOverride' in updateData || 'noBib' in updateData
       || bibNumber !== undefined || officialTime !== undefined || officialPace !== undefined || Boolean(eventType)
     if (printChanged && existingOrder.trackstarOrderType !== 'custom') {
       const closed = await closeOutdatedDesigns(existingOrder.id, 'The order was edited after this design was made; a new design replaces it').catch(e => { console.error('[API /orders/update] closing old designs', e.message); return 0 })

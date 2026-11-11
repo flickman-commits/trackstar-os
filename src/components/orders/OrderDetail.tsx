@@ -727,6 +727,7 @@ export default function OrderDetail({
       officialTime: order.officialTime || '',
       officialPace: order.officialPace || '',
       eventType: order.eventType || '',
+      noBib: !!order.noBib,
       ...(order.isTriathlon ? {
         swimTime: order.swimTime || '', swimDistance: order.swimDistance || '',
         bikeTime: order.bikeTime || '', bikeDistance: order.bikeDistance || '',
@@ -829,6 +830,9 @@ export default function OrderDetail({
       }
       if (editValues.officialPace !== (originalOrder.officialPace || '')) {
         updates.officialPace = editValues.officialPace || null
+      }
+      if (!!editValues.noBib !== !!originalOrder.noBib) {
+        (updates as Record<string, unknown>).noBib = !!editValues.noBib
       }
       if (editValues.eventType && editValues.eventType !== (originalOrder.eventType || '')) {
         updates.eventType = editValues.eventType
@@ -2691,13 +2695,20 @@ Thank you!`
                           </div>
                           <div className="flex justify-between items-center">
                             <span className="text-body-sm text-off-black/60">Bib</span>
-                            <input
-                              type="text"
-                              value={editValues.bibNumber}
-                              onChange={(e) => setEditValues({ ...editValues, bibNumber: e.target.value })}
-                              placeholder="1234"
-                              className="text-body-sm font-medium text-off-black bg-white border border-border-gray rounded px-2 py-1 w-40 text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
+                            <span className="inline-flex items-center gap-2">
+                              <label className="inline-flex items-center gap-1 text-xs text-off-black/60 cursor-pointer" title="The customer doesn't want a bib on the print. The bib renders empty.">
+                                <input type="checkbox" checked={!!editValues.noBib} onChange={(e) => setEditValues({ ...editValues, noBib: e.target.checked })} className="accent-off-black" />
+                                No bib
+                              </label>
+                              <input
+                                type="text"
+                                value={editValues.noBib ? '' : editValues.bibNumber}
+                                disabled={!!editValues.noBib}
+                                onChange={(e) => setEditValues({ ...editValues, bibNumber: e.target.value })}
+                                placeholder={editValues.noBib ? 'Left blank' : '1234'}
+                                className="text-body-sm font-medium text-off-black bg-white border border-border-gray rounded px-2 py-1 w-28 text-right focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-off-black/[0.04] disabled:text-off-black/40"
+                              />
+                            </span>
                           </div>
                           <div className="flex justify-between items-center">
                             <span className="text-body-sm text-off-black/60">Time</span>
@@ -2755,7 +2766,12 @@ Thank you!`
                           ) : (
                             <PendingField label="Name" />
                           )}
-                          {selectedOrder.bibNumber ? (
+                          {selectedOrder.noBib ? (
+                            <div className="flex justify-between items-center">
+                              <span className="text-body-sm text-off-black/60">Bib</span>
+                              <span className="text-body-sm font-medium text-off-black/50" title="The customer doesn't want a bib on the print. Edit the runner to put it back.">No bib (left blank on the print)</span>
+                            </div>
+                          ) : selectedOrder.bibNumber ? (
                             <CopyableField label="Bib" value={selectedOrder.bibNumber} />
                           ) : selectedOrder.hasScraperAvailable ? (
                             <PendingField label="Bib" />

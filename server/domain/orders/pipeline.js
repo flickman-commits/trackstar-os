@@ -149,7 +149,7 @@ export function pipelineFor({ order, research, race, render, hasScraper, templat
   if (rs === 'not_found' && /has not posted the official/.test(research?.researchNotes || '')) return stage('waiting', 'Results not posted yet', { fix: `The official ${raceName} ${year} results are not posted yet. The tool finds this runner's result on its own once they are.` })
   if (rs === 'not_found') return stage('action', 'Runner not found', { kind: 'data', fix: 'The runner was not in the results. Check the name and year, research again, or look it up by hand.' })
   if (!RESULT_STATES.has(rs)) return stage('needs_research', 'Needs research', { fix: 'The lookup has not finished.' })
-  if (!research.bibNumber) return stage('action', 'No bib', { kind: 'data', fix: 'The result has no bib number. Add it by hand.' })
+  if (!research.bibNumber && !order.noBib) return stage('action', 'No bib', { kind: 'data', fix: 'The result has no bib number. Add it by hand.' })
   if (!order.hadNoTime && (!research.officialTime || !research.officialPace)) return stage('action', 'No time', { kind: 'data', fix: 'The result has no finish time or pace. Add them, or mark the order as no time.' })
 
   // Everything a design needs is here. What stops the render?

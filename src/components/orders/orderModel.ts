@@ -179,6 +179,7 @@ export interface Order {
   // Big-spender flag — true if order total > $300 (configurable on backend)
   orderTotalUsd?: number | null
   isBigSpender?: boolean
+  noBib?: boolean
   // Bought before the race's design changed (Philadelphia, NYC, Chicago, 2026-11-11): print the old design.
   oldDesign?: boolean
   isSample?: boolean
@@ -351,6 +352,7 @@ export function mapOrder(order: Record<string, unknown>): Order {
     // Big-spender (>= $300) badge + prioritize callout
     orderTotalUsd: order.orderTotalUsd as number | null | undefined,
     isBigSpender: order.isBigSpender as boolean | undefined,
+    noBib: order.noBib as boolean | undefined,
     oldDesign: order.oldDesign as boolean | undefined,
     isSample: order.isSample as boolean | undefined,
     bigSpenderThresholdUsd: order.bigSpenderThresholdUsd as number | undefined,
@@ -403,6 +405,8 @@ export type EditValues = {
   bibNumber: string
   officialTime: string
   officialPace: string
+  // The customer wants no bib on the print: the bib frame renders empty.
+  noBib?: boolean
   // The event the print is for. Set by hand when it is not what the runner ran
   // (a full-marathon DNF who wants the half print): it picks the production file.
   eventType?: string

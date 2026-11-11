@@ -100,7 +100,7 @@ export const SPEC_SELECT = {
   // When they bought decides the design for a race whose design changed (designSwitch.js).
   source: true, createdAt: true,
   raceName: true, raceNameOverride: true, raceYear: true, yearOverride: true,
-  runnerName: true, runnerNameOverride: true, productSize: true, hadNoTime: true,
+  runnerName: true, runnerNameOverride: true, productSize: true, hadNoTime: true, noBib: true,
   photoPath: true, photoAddedManually: true, photoFree: true, photoLater: true, photoLaterClosedAt: true, shopifyOrderData: true, arteloOrderData: true,
   bulkOrder: { select: { number: true, paidAt: true, printKind: true } },
   runnerResearch: { orderBy: { id: 'desc' }, select: { researchStatus: true, bibNumber: true, officialTime: true, officialPace: true, eventType: true, race: { select: { id: true, raceName: true, year: true, raceDate: true, raceDateSource: true, raceDateSourceUrl: true, raceDateEvidence: true, raceDateVerifiedAt: true, raceDateConfirmedByPerson: true, location: true, weatherCondition: true, weatherTemp: true, weatherFetchedAt: true, weatherConfirmedAt: true, firstPrintedAt: true } } } },
@@ -142,7 +142,8 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
   const bib = research?.bibNumber || null
   const time = formatTime(research?.officialTime)
   const pace = formatPace(research?.officialPace)
-  if (!bib) reasons.push('No bib number yet')
+  // No bib by choice: the bib frame prints empty.
+  if (!bib && !order.noBib) reasons.push('No bib number yet')
   if (!order.hadNoTime && (!time || !pace)) reasons.push('No finish time and pace yet')
   if (order.photoPath && noTimeGaps.has(`photo|${template}|${order.productSize}`)) reasons.push(`The ${order.productSize} design has no photo window, so a print with a customer photo is made by hand`)
   if (order.hadNoTime && noTimeGaps.has(`${template}|${order.productSize}`)) reasons.push(`This ${order.productSize} design has details to the right of pace, so a no-time print needs a NO TIME layer in the file first`)
@@ -178,7 +179,8 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
       raceYear,
       size: order.productSize,
       name,
-      bib,
+      bib: order.noBib ? '' : bib,
+      noBib: Boolean(order.noBib),
       time: order.hadNoTime ? null : time,
       pace: order.hadNoTime ? null : pace,
       noTime: Boolean(order.hadNoTime),
