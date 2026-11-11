@@ -83,7 +83,7 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 ## Waiting on Matt
 - Phase 1: add `CONNECTIONS_FORCE_OFF=all` (or the explicit list in `.env.example`) to `.env.local`. Never in Vercel.
 - Phases 1 to 5: commits are local, not pushed.
-- Phase 5, 5.8: run `node --env-file=.env.local scripts/check-duplicate-rows.mjs`; if both counts are 0, `npx prisma db push` (the code works before and after).
+- Phase 5, 5.8: duplicate check run 2026-11-10, 0 and 0. Next: `npx prisma db push` (the code works before and after).
 - Phase 5, 5.9: should a custom order completed by the import (fulfilled in Artelo) also be marked sent_to_production, which counts it for designer pay?
 - Phase 5, 5.11: fill in the README's backup line (Supabase backup tier, how to restore).
 - Phase 4: after deploying, delete ADMIN_SECRET from Vercel.
