@@ -1398,6 +1398,12 @@ model SupportMessage {
   bodyHtml        String?
   // [{ filename, mimeType, size, attachmentId }]. The bytes stay in Gmail.
   attachments     Json?
+  // Inbound email only: did the sender pass Gmail's check that the From
+  // address is really theirs (DMARC, or DKIM signed by the From domain)?
+  // "pass" | "fail" | "none". Null for outbound, Instagram and older rows.
+  // A conversation whose latest message did not pass gets no order details or
+  // one-click actions in its draft (support/draft.js).
+  senderCheck     String?
   sentAt          DateTime
   // Who pressed Send here. Null for inbound mail, for anything sent in Gmail
   // itself, and for everything the backfill found.

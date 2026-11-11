@@ -123,7 +123,9 @@ export default function DraftCard({ n, latest, answered = false, verifiedNumbers
   const unverified = !!foundBy && !(foundBy.orderNumbers || []).some(num => verifiedNumbers.includes(num))
   const unverifiedText = foundBy?.by === 'name'
     ? 'Matched by their name, not their email. Verify before sharing details.'
-    : 'Matched by the order number they quoted, not their email. Verify before sharing details.'
+    : foundBy?.by === 'unauthenticated'
+      ? 'This email did not pass the sender check, so it may not really be from this address. Verify before sharing details or changing the order.'
+      : 'Matched by the order number they quoted, not their email. Verify before sharing details.'
 
   if (!open) {
     // Closed by default, so the customer's message stays the thing you read first.

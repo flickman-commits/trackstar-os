@@ -355,6 +355,26 @@ function collectParts(payload, out) {
   for (const p of payload.parts || []) collectParts(p, out)
 }
 
+/**
+ * Gmail's verdict on whether the From address is really the sender's, from
+ * the Authentication-Results header Google's own servers add. Pure.
+ *   pass  DMARC passed, or DKIM passed for the From address's own domain
+ *   fail  DMARC failed
+ *   none  no verdict either way (no header, or no check covered the From domain)
+ */
+export function senderCheck(headers, fromEmail) {
+  const all = (headers || []).filter(x => String(x?.name).toLowerCase() === 'authentication-results').map(x => String(x.value || ''))
+  const ar = all.find(v => /^\s*mx\.google\.com\b/i.test(v)) || ''
+  if (!ar) return 'none'
+  const dmarc = ar.match(/\bdmarc=(\w+)/i)?.[1]?.toLowerCase()
+  if (dmarc === 'pass') return 'pass'
+  if (dmarc === 'fail') return 'fail'
+  const domain = String(fromEmail || '').toLowerCase().split('@')[1] || ''
+  const signed = [...ar.matchAll(/\bdkim=pass\b[^;]*?header\.(?:i|d)=@?([a-z0-9.-]+)/gi)].map(m => m[1].toLowerCase())
+  if (domain && signed.some(d => d === domain || domain.endsWith(`.${d}`))) return 'pass'
+  return 'none'
+}
+
 /** One Gmail message (format=full) as the row it becomes. */
 export function parseMessage(msg, mailbox) {
   const h = Object.fromEntries((msg.payload?.headers || []).map(x => [String(x.name).toLowerCase(), x.value]))
@@ -380,10 +400,12 @@ export function parseMessage(msg, mailbox) {
     attachments: parts.attachments,
     sentAt: msg.internalDate ? new Date(Number(msg.internalDate)) : (h.date ? new Date(h.date) : new Date()),
     labels,
+    senderCheck: direction === 'in' ? senderCheck(msg.payload?.headers, from.email) : null,
   }
   // A teammate forwarding a customer's email to fast@: it becomes the customer's message (forwards.js).
   const fwd = unwrapForward(parsed, { isOurs: e => isOurs(e, mailbox || mailboxEmail()) })
-  return fwd ? { ...fwd.message, forward: { note: fwd.note, by: fwd.forwardedBy } } : parsed
+  // A forward is vouched for by the teammate who sent it: their message's check stands for it.
+  return fwd ? { ...fwd.message, senderCheck: parsed.senderCheck, forward: { note: fwd.note, by: fwd.forwardedBy } } : parsed
 }
 
 /**
@@ -490,6 +512,7 @@ export async function importMessage(parsed, { sentById = null, backfill = false,
     bodyHtml: parsed.bodyHtml,
     attachments: parsed.attachments,
     sentAt: parsed.sentAt,
+    senderCheck: parsed.senderCheck ?? null,
   }
   const existed = await prisma.supportMessage.findUnique({ where: { gmailMessageId: parsed.gmailMessageId }, select: { id: true, direction: true, fromEmail: true } })
   // A forward already unwrapped into the customer's message stays unwrapped: a later read

@@ -234,6 +234,13 @@ export async function gatherFacts(threadId) {
       if (context.orders.length) foundBy = { by: 'name', label: 'their name, under a different email' }
     }
   }
+  // Found by the address they wrote from, but Gmail could not confirm that
+  // address is really theirs: anyone can type someone else's address in
+  // From. Treated like an order number they quoted: a lead, not a fact.
+  const lastIn = [...t.messages].reverse().find(m => m.direction === 'in')
+  if (!foundBy && t.channel === 'email' && context.orders.length && ['fail', 'none'].includes(lastIn?.senderCheck)) {
+    foundBy = { by: 'unauthenticated', label: 'their email address, but the message did not pass the email sender check, so it may not be from them' }
+  }
   if (foundBy) foundBy.orderNumbers = context.orders.slice(0, 5).map(o => String(o.number))
   const past = t.customerEmail ? await prisma.supportThread.findMany({
     where: { customerEmail: t.customerEmail, id: { not: t.id } }, orderBy: { lastMessageAt: 'desc' }, take: 3, select: { subject: true, status: true, lastMessageAt: true },
