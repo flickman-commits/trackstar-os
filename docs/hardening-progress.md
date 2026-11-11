@@ -69,12 +69,51 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 - [x] 7.7 Weather and race-data saves reload one order; copy tick only on success; Attio links http(s) only.
 
 ## Phase 8: Housekeeping
-- [ ] 8.1 Dependencies
-- [ ] 8.2 Environment file drift
-- [ ] 8.3 One Shopify API version
-- [ ] 8.4 Stale documentation
-- [ ] 8.5 Dead code
-- [ ] 8.6 List of unused public files
+- [x] 8.1 Dependencies: npm audit fix (51 to 28 known vulnerabilities, 0 critical; shipped code 34 to 18), puppeteer moved to devDependencies. Left: majors (puppeteer 25, vite 8, zod 4, react-router 7) and xlsx (no npm fix; Matt to choose SheetJS's own build or CSV only).
+- [x] 8.2 .env.example lists the Slack fallback webhooks and the local API port and host; unused VITE_SUPABASE_* removed; worker example asks for a worker-scope key and lists RELAY_HOSTS.
+- [x] 8.3 One Shopify API version, SHOPIFY_API_VERSION = 2026-01 (what Shopify already answered every retired version with, per its versioning docs). Move it forward, with testing, before January 2027.
+- [x] 8.4 README counts and port, docs/mcp.md tools, the two plan docs, worker README, scripts README.
+- [x] 8.5 Removed StatsPanel, SupportClosesPanel, src/config/links.ts, components.json.
+- [x] 8.6 Unused public files listed below for Matt; none deleted (they may be linked from emails, Shopify or old pages).
+
+## Unused public files (2026-11-10)
+Tracked under public/ and referenced nowhere in src, api, server, the HTML entries, shopify, docs or worker. 41.3 MB in all. Not deleted.
+
+```
+15629.9 KB  public/turbo-typing-beige.gif
+12670.6 KB  public/turbo-tying-transparent.gif
+ 3067.1 KB  public/monopoly/new/Marathon Monopoly Image (1).jpeg
+ 2696.2 KB  public/monopoly/new/Family Playing Board Game.jpeg
+ 2200.3 KB  public/monopoly/new/Marathon Monopoly Image (3).jpeg
+ 2164.2 KB  public/monopoly/new/Marathon Monopoly Product Photography.jpeg
+ 2103.7 KB  public/monopoly/new/Marathon Monopoly Image (4).jpeg
+  625.9 KB  public/monopoly/new/Marathon Monopoly Image (5).jpeg
+  580.3 KB  public/Terez_UGC.png
+  105.4 KB  public/spotify-logo.png
+   46.5 KB  public/slack-logo.png
+   44.9 KB  public/fm-turbo-logo.png
+   43.6 KB  public/turbo-header.png
+   35.0 KB  public/times-logo.png
+   34.7 KB  public/fm-favicon.png
+   32.7 KB  public/fm-logo.png
+   27.5 KB  public/dropbox-logo.png
+   24.5 KB  public/turbo-favicon.png
+   22.8 KB  public/squarespace-logo.png
+   20.7 KB  public/lightroom-logo.png
+   20.1 KB  public/Trackstar Instant Lookup.png
+   19.2 KB  public/gmail-icon.png
+   16.8 KB  public/profile-pic-1.jpg
+   15.5 KB  public/turbo-logo.png
+   14.4 KB  public/profile-pic-3.jpg
+   13.2 KB  public/honeybook-logo.png
+   11.3 KB  public/notion-tile.png
+   11.2 KB  public/profile-pic-2.jpg
+    3.5 KB  public/netflix-logo.png
+    2.5 KB  public/vimeo-icon.png
+    1.6 KB  public/notion.svg
+    1.5 KB  public/vite.svg
+    1.0 KB  public/board-guide.html
+```
 
 ## Checked by Matt
 - 2026-11-10, Supabase: RLS is off on every public table, but the Data API is disabled for them ("cannot be accessed via the Data API"), so the anon key cannot read them. Nothing to do; enabling RLS too is optional.
@@ -83,9 +122,12 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 ## Also done in this build
 - 2026-11-10: default model switched to claude-opus-5-5 (Matt's call), with server-side refusal fallbacks (LLM_FALLBACKS=off turns them off).
 
+## Deployed
+- 2026-11-10: Phases 1 to 8 pushed to main at Matt's request (Vercel deploys main).
+
 ## Waiting on Matt
 - Phase 1: add `CONNECTIONS_FORCE_OFF=all` (or the explicit list in `.env.example`) to `.env.local`. Never in Vercel.
-- Phases 1 to 7: commits are local, not pushed.
+- Phase 8: decide on the unused public files below, and on xlsx.
 - Phase 7: click through the customer pages and order screen after deploy (listed in the Phase 7 report).
 - Phase 6, 6.4: suppression list and opt-out wording.
 - Phase 6, 6.7: add the GitHub secret SLACK_SENSITIVE_WEBHOOK_URL; delete the stale remote branches (15 sweep/*, 5 claude/*, listed in the Phase 6 report); check the nightly routine's API key scopes.
