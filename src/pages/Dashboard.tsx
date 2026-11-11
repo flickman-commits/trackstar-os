@@ -667,7 +667,8 @@ export default function Dashboard() {
         // otherwise the button just appears to do nothing.
         const body = await response.json().catch(() => ({}))
         // A 500 carries its reason in `error`; show it rather than a blank "failed".
-        throw new Error(body.message || (typeof body.error === 'string' && body.error.length > 24 ? body.error : '') || `Failed to mark as completed (${response.status})`)
+        // The server's own sentence, whichever field it is in ("Order not found" was hidden as too short).
+        throw new Error(body.message || (typeof body.error === 'string' && body.error ? body.error : '') || `Failed to mark as completed (${response.status})`)
       }
 
       setToast({ message: 'Order marked as completed!', type: 'success' })

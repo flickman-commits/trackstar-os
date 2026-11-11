@@ -203,7 +203,7 @@ export default function OrderDetail({
       .then(async (r) => {
         if (!r.ok) {
           const body = await r.json().catch(() => ({}))
-          throw new Error(body.message || `HTTP ${r.status}`)
+          throw new Error(body.message || body.error || `HTTP ${r.status}`)
         }
         return r.json()
       })
@@ -247,7 +247,7 @@ export default function OrderDetail({
       })
       if (!r.ok) {
         const body = await r.json().catch(() => ({}))
-        throw new Error(body.message || `HTTP ${r.status}`)
+        throw new Error(body.message || body.error || `HTTP ${r.status}`)
       }
       const { order } = await r.json()
       const placedAt = order?.photoPlacedAt ?? null
@@ -848,14 +848,15 @@ export default function OrderDetail({
         body: JSON.stringify({ orderNumber, raceId: originalOrder.raceId, ...updates })
       })
 
-      if (!response.ok) throw new Error('Failed to save changes')
+      // The server says why (a year out of range, an order already in production): show it.
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || 'Failed to save changes')
 
       setToast({ message: 'Changes saved!', type: 'success' })
       setIsEditing(false)
       await reloadOrder(orderNumber)
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error saving overrides:', error)
-      setToast({ message: 'Failed to save changes', type: 'error' })
+      setToast({ message: (error as Error)?.message || 'Failed to save changes', type: 'error' })
     } finally {
       setIsSaving(false)
     }

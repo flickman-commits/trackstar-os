@@ -205,6 +205,8 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
         // Expose latest customer feedback for revision banner
         const revisionProof = [...data.proofs].reverse().find((p: Proof) => p.status === 'revision_requested' && p.customerFeedback)
         onLatestFeedbackRef.current?.(revisionProof?.customerFeedback || null)
+      } else if (proofsRes.status !== 401) {
+        toast.error((await proofsRes.json().catch(() => null))?.error || 'Could not load the proofs for this order. Reload to try again.')
       }
 
       if (tokenRes.ok) {
@@ -215,6 +217,8 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
       }
     } catch (err) {
       console.error('[ProofManager] Fetch error:', err)
+      // Not only the console: an empty proofs panel otherwise reads as "no proofs yet".
+      toast.error('Could not load the proofs for this order. Reload to try again.')
     } finally {
       setIsLoading(false)
     }
@@ -405,6 +409,8 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
         setApprovalToken(data.approvalToken)
         setApprovalUrl(`${window.location.origin}/approve/${data.approvalToken.token}`)
         toast.success('Approval link generated')
+      } else {
+        toast.error((await res.json().catch(() => null))?.error || 'Could not make an approval link')
       }
     } catch {
       toast.error('Failed to generate link')
