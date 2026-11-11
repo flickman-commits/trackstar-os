@@ -48,3 +48,10 @@ export async function claimOnce(scope, rawKey, { ttlMs = IDEMPOTENCY_TTL_MS, now
     await prisma.systemConfig.update({ where: { key: id }, data: { value: new Date(now).toISOString() } })
   }
 }
+
+/** Give a claim back when the thing it guarded did not happen, so a retry is not refused. */
+export async function releaseClaim(scope, rawKey) {
+  const key = cleanIdempotencyKey(rawKey)
+  if (!key) return
+  await prisma.systemConfig.deleteMany({ where: { key: `${PREFIX}${scope}:${key}` } }).catch(() => {})
+}
