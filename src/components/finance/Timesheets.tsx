@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Plus, Trash2, Undo2, X } from 'lucide-react'
 import ActionModal from '@/components/ActionModal'
+import { useConfirm } from '@/components/useConfirm'
 import { Avatar } from '@/components/AssigneePicker'
 import { btnPrimary, btnSecondary, btnGhost, modalInput, modalPrimary, modalCancel, segment, segmentGroup } from '@/lib/ui'
 import { financeApi, usd, hoursText, dayLabel, addDays, mondayOf, todayET } from '@/lib/financeApi'
@@ -34,6 +35,7 @@ export default function Timesheets() {
   const [data, setData] = useState<{ timesheets: Timesheet[]; people: Person[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState<Set<string>>(new Set())
+  const { confirm, modal: confirmModal } = useConfirm()
   const [reject, setReject] = useState<Timesheet | null>(null)
   const [adding, setAdding] = useState<Timesheet | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -77,7 +79,8 @@ export default function Timesheets() {
     catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
   }
   const removeEntry = async (t: Timesheet, entryId: string, minutes: number) => {
-    if (!window.confirm(`Remove ${hoursText(minutes)} from ${t.user?.firstName}'s week?`)) return
+    // In the page, not window.confirm: Arc blocks that and silently answers no.
+    if (!(await confirm({ title: `Remove ${hoursText(minutes)} from ${t.user?.firstName}'s week?`, action: 'Remove', danger: true }))) return
     setBusy(t.id)
     try { await financeApi.removeHoursFor(t.userId, entryId); toast.success('Entry removed'); await load() }
     catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
@@ -87,6 +90,7 @@ export default function Timesheets() {
 
   return (
     <div className="space-y-4">
+      {confirmModal}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1">

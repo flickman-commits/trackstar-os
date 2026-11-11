@@ -653,7 +653,11 @@ export default function Dashboard() {
   // and the optimiztic status flip swaps the button to "Re-Open Order" so
   // he can immediately un-do if he hit it by mistake.
   const markAsCompletedRef = useRef<(orderNumber: string) => void>(() => {})
+  // A double click or F pressed twice used to send two completions.
+  const completingRef = useRef<string | null>(null)
   const markAsCompleted = async (orderNumber: string) => {
+    if (completingRef.current === orderNumber) return
+    completingRef.current = orderNumber
     try {
       const response = await apiFetch(`/api/orders/actions`, {
         method: 'POST',
@@ -682,6 +686,8 @@ export default function Dashboard() {
         message: error instanceof Error ? error.message : 'Failed to complete order',
         type: 'error',
       })
+    } finally {
+      completingRef.current = null
     }
   }
   markAsCompletedRef.current = markAsCompleted

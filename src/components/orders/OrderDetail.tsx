@@ -459,6 +459,15 @@ export default function OrderDetail({
   const [commentImageFile, setCommentImageFile] = useState<File | null>(null)
   const [commentImagePreview, setCommentImagePreview] = useState<string | null>(null)
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
+  // One action at a time on the buttons that act at once (render, accept,
+  // comment): a ref, so two clicks in the same instant cannot both start one.
+  const pendingRef = useRef<string | null>(null)
+  const [pending, setPending] = useState<string | null>(null)
+  const once = async (key: string, fn: () => Promise<unknown>) => {
+    if (pendingRef.current) return
+    pendingRef.current = key; setPending(key)
+    try { await fn() } finally { pendingRef.current = null; setPending(null) }
+  }
   const [latestFeedback, setLatestFeedback] = useState<string | null>(null)
   const [isSendingFollowUp, setIsSendingFollowUp] = useState(false)
   const commentFileInputRef = useRef<HTMLInputElement>(null)
@@ -1078,6 +1087,7 @@ export default function OrderDetail({
   }
 
   const deleteComment = async (commentId: string) => {
+    if (!(await confirm({ title: 'Delete this note?', body: 'It is removed from the order for everyone. This cannot be undone.', action: 'Delete note', danger: true }))) return
     try {
       const response = await apiFetch('/api/orders/comments', {
         method: 'DELETE',
@@ -1301,7 +1311,7 @@ Thank you!`
           hint="Paste an image straight into the box."
           footer={<>
             <button onClick={() => { setShowCommentBox(false); setNewCommentText(''); clearCommentImage() }} disabled={isSubmittingComment} className={modalCancel}>Cancel</button>
-            <button onClick={submitComment} disabled={isSubmittingComment || (!newCommentText.trim() && !commentImageFile)} className={modalPrimary}>
+            <button onClick={() => once('comment', submitComment)} disabled={isSubmittingComment || pending !== null || (!newCommentText.trim() && !commentImageFile)} className={modalPrimary}>
               {isSubmittingComment && <Loader2 className="w-4 h-4 animate-spin" />}Add comment
             </button>
           </>}>
@@ -1309,7 +1319,7 @@ Thank you!`
             value={newCommentText}
             onChange={(e) => setNewCommentText(e.target.value)}
             onPaste={handleCommentPaste}
-            onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submitComment() } }}
+            onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void once('comment', submitComment) } }}
             placeholder="Add a comment or paste an image..."
             className={`${modalInput} resize-none`}
             rows={4}
@@ -1680,7 +1690,10 @@ Thank you!`
                         </button>
                       )}
                       {ds === 'sent_to_production' && (
-                        <button onClick={() => updateDesignStatus(selectedOrder.orderNumber, 'not_started')} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2">
+                        <button onClick={async () => {
+                            if (!(await confirm({ title: 'Reopen this order?', body: 'It has gone to production. Reopening moves the design back to Not started; the print already at Artelo is not stopped.', action: 'Reopen order' }))) return
+                            updateDesignStatus(selectedOrder.orderNumber, 'not_started')
+                          }} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2">
                           <RotateCcw className="w-3.5 h-3.5" /> Reopen order
                         </button>
                       )}
@@ -2242,7 +2255,7 @@ Thank you!`
                         <div className="self-start flex flex-wrap items-center gap-1.5 text-xs">
                           <span className="text-off-black/60">Render at</span>
                           {['8x10', '12x18', '16x24'].filter(s => s !== String(selectedOrder.productSize || '').replace(/^x/, '')).map(size => (
-                            <button key={size} onClick={async () => {
+                            <button key={size} disabled={pending !== null} onClick={() => once(`render:${size}`, async () => {
                                 try {
                                   const res = await apiFetch('/api/render/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', orderId: selectedOrder.id, size }) })
                                   const data = await res.json().catch(() => ({}))
@@ -2251,8 +2264,8 @@ Thank you!`
                                   await design.reload()
                                   setToast({ message: `Rendering a ${size}. Approve it, then make the order in Support with New Artelo order at ${size}.`, type: 'success' })
                                 } catch (e) { setToast({ message: e instanceof Error ? e.message : 'Could not queue the render', type: 'error' }) }
-                              }}
-                              className="px-2 py-0.5 rounded border border-border-gray bg-white font-medium hover:border-[#4600D6] hover:text-[#4600D6]">{size}</button>
+                              })}
+                              className="px-2 py-0.5 rounded border border-border-gray bg-white font-medium hover:border-[#4600D6] hover:text-[#4600D6] disabled:opacity-50">{pending === `render:${size}` ? '…' : size}</button>
                           ))}
                           <button onClick={() => setAltSizeOpen(false)} className="text-off-black/45 hover:text-off-black">Cancel</button>
                         </div>
@@ -2555,8 +2568,9 @@ Thank you!`
                               </p>
                             </div>
                             <button
-                              onClick={() => acceptMatch(selectedOrder.orderNumber, match)}
-                              className="ml-3 flex items-center gap-1.5 px-3 py-1.5 bg-success-green/10 text-success-green border border-success-green/30 rounded-md hover:bg-success-green/20 transition-colors text-xs font-medium"
+                              onClick={() => once('accept', () => acceptMatch(selectedOrder.orderNumber, match))}
+                              disabled={pending !== null}
+                              className="ml-3 flex items-center gap-1.5 px-3 py-1.5 bg-success-green/10 text-success-green border border-success-green/30 rounded-md hover:bg-success-green/20 transition-colors text-xs font-medium disabled:opacity-50"
                             >
                               <Check className="w-3.5 h-3.5" />
                               Accept
