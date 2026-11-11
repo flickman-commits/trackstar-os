@@ -1,0 +1,64 @@
+name: Sensitive paths changed
+
+# Posts to Slack when a push to main touches the files that decide how the app
+# is built, authenticated and deployed, or how its AI agents behave. Commits go
+# straight to main with no review (CLAUDE.md), including the nightly routine's,
+# so this is how a person hears about a change there the same day.
+#
+# Needs one repository secret: SLACK_SENSITIVE_WEBHOOK_URL, a Slack incoming
+# webhook for the channel to post in (Settings > Secrets and variables >
+# Actions). Without it the job prints the list and posts nothing.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**'
+      - 'api/_lib/**'
+      - '.github/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vercel.json'
+      - 'middleware.js'
+      - 'prisma/schema.prisma'
+      - 'CLAUDE.md'
+      - '.claude/skills/**'
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: List the sensitive files this push changed
+        id: files
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          base="$BEFORE"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then base="$AFTER~1"; fi
+          git diff --name-only "$base" "$AFTER" \
+            | grep -E '^(scripts/|api/_lib/|\.github/|package(-lock)?\.json$|vercel\.json$|middleware\.js$|prisma/schema\.prisma$|CLAUDE\.md$|\.claude/skills/)' \
+            > changed.txt || true
+          cat changed.txt
+          {
+            echo 'list<<EOF'
+            head -20 changed.txt | sed 's/^/• /'
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - name: Post to Slack
+        if: steps.files.outputs.list != ''
+        env:
+          WEBHOOK: ${{ secrets.SLACK_SENSITIVE_WEBHOOK_URL }}
+          LIST: ${{ steps.files.outputs.list }}
+          AUTHOR: ${{ github.event.head_commit.author.name }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+          URL: ${{ github.event.compare }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then echo "SLACK_SENSITIVE_WEBHOOK_URL is not set; not posting."; exit 0; fi
+          first_line="$(printf '%s' "$MESSAGE" | head -1 | cut -c1-200)"
+          text="$(printf ':warning: *A push to main changed build, auth or agent files* (by %s)\n%s\n%s\n<%s|See the changes>' "$AUTHOR" "$first_line" "$LIST" "$URL")"
+          payload="$(jq -n --arg text "$text" '{text: $text}')"
+          curl -sS -X POST -H 'Content-Type: application/json' --data "$payload" "$WEBHOOK"

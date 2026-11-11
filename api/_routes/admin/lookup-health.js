@@ -146,7 +146,8 @@ export default async function handler(req, res) {
       const { race, year, searchName } = req.body || {}
       if (!race || !year) return res.status(400).json({ error: 'race and year are required' })
       const result = await captureFixture({ race, year: Number(year), searchName: searchName || null })
-      return res.status(200).json({ success: result.ok, ...result })
+      // A finisher already on file is not overwritten from here (scraperRepair.captureFixture): say why.
+      return res.status(200).json({ success: result.ok, ...result, ...(result.refused ? { error: result.why } : {}) })
     }
 
     if (action === 'repair-plan') {

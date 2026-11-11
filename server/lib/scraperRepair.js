@@ -181,7 +181,7 @@ export async function saveOverride({ race, year, eventIds, platform = null, prob
 
   // Prove it. Without a name to search we can still confirm the scraper builds
   // and the event resolves, which catches the common failure (wrong id shape).
-  const verification = await captureFixture({ race, year, searchName: probeName, save: false })
+  const verification = await captureFixture({ race, year, searchName: probeName, save: false, realOnly: true })
   if (verification.ok) {
     await prisma.scraperOverride.update({
       where: { race_year: { race, year } },
@@ -243,14 +243,32 @@ async function orderNamesFor(race, year) {
  * an exception, an empty result and a result with no bib all need different
  * fixes, and only the attempts can tell them apart.
  */
-export async function captureFixture({ race, year, searchName = null, save = true }) {
+export async function captureFixture({ race, year, searchName = null, save = true, replace = false, reason = null, realOnly = false }) {
   await ensureOverridesLoaded()
+  // A known finisher already on file is the ground truth the probe checks the
+  // scraper against. Overwriting it with what the scraper returns now makes a
+  // scraper that drifted (gun time instead of chip, say) its own proof. It is
+  // replaced only on purpose, with the reason recorded, and a run that does it
+  // cannot then claim that race as fixed (mcpRepairTools verifyFixes).
+  if (save) {
+    const { default: prisma } = await import('../../api/_lib/prisma.js')
+    const existing = await prisma.scraperFixture.findUnique({ where: { race_year: { race, year } } })
+    if (existing && !replace) {
+      return { ok: false, refused: true, race, year, existing: { runnerName: existing.runnerName, bib: existing.bib, officialTime: existing.officialTime, source: existing.source },
+        why: `${race} ${year} already has a known finisher on file. Capturing again would overwrite it with whatever the scraper returns now. Probe against it instead; replace it only after checking the official results page, with replace: true and the reason.` }
+    }
+    if (existing && String(reason || '').trim().length < 15) {
+      return { ok: false, refused: true, race, year, why: 'Replacing a known finisher needs a reason (what the official results page shows, and why the stored one is wrong).' }
+    }
+  }
   let names
   if (searchName) {
     names = [searchName]
   } else {
     const real = await orderNamesFor(race, year).catch(() => [])
-    names = [...real, ...PROBE_NAMES.slice(0, real.length ? 2 : PROBE_NAMES.length)]
+    // realOnly: proving a new event id. With customers in that race-year, it has
+    // to find one of them; a generic surname proves only that the event has people.
+    names = realOnly && real.length ? real : [...real, ...PROBE_NAMES.slice(0, real.length ? 2 : PROBE_NAMES.length)]
   }
 
   const attempts = []
@@ -306,11 +324,18 @@ export async function captureFixture({ race, year, searchName = null, save = tru
 
     if (save) {
       const { default: prisma } = await import('../../api/_lib/prisma.js')
+      const previous = replace ? await prisma.scraperFixture.findUnique({ where: { race_year: { race, year } } }) : null
       await prisma.scraperFixture.upsert({
         where: { race_year: { race, year } },
         create: fixture,
-        update: fixture,
+        update: { ...fixture, capturedAt: new Date() },
       })
+      if (previous) {
+        // The night's report reads this: a replaced finisher is never proof of a fix.
+        const key = `fixture_replaced:${race}|${year}`
+        const value = JSON.stringify({ at: new Date().toISOString(), reason: String(reason).trim().slice(0, 500), previous: { runnerName: previous.runnerName, bib: previous.bib, officialTime: previous.officialTime } })
+        await prisma.systemConfig.upsert({ where: { key }, update: { value }, create: { key, value } })
+      }
     }
     attempts.push({ name, outcome: 'captured' })
     return { ok: true, ...fixture, attempts }
