@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Sparkles, Download, Check, X, RefreshCw, ArrowUpRight, Send, Pause } from 'lucide-react'
+import { Loader2, Sparkles, Download, Check, X, RefreshCw, ArrowUpRight, Send, Pause, Undo2 } from 'lucide-react'
 import type { Design } from '@/lib/useDesign'
 import { shortcutsPaused, previewShown } from '@/lib/shortcuts'
 import { btnPrimary, btnGhost, inputBase } from '@/lib/ui'
@@ -143,7 +143,7 @@ function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; o
       {/* Send right away: skip the rest of the hold; the sender takes it within a minute. */}
       {s.state === 'queued' && d.canManage && (
         <button onClick={() => { void d.sendAction('send-now') }} disabled={d.busy} title="Skip the wait: it goes to Artelo now" className={`inline-flex items-center gap-1.5 px-4 ${pad} rounded-md bg-[#4600D6] border-2 border-[#4600D6] text-white font-semibold hover:bg-[#3a00b3] disabled:opacity-50`}>
-          {d.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Send right away
+          {d.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} {s.inHold ? 'Skip hold, send now' : 'Send right away'}
         </button>
       )}
       {/* Its design is on the Artelo item, so it can be done here while the others catch up.
@@ -157,6 +157,12 @@ function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; o
       {s.state === 'queued' && d.canManage && (
         <button onClick={() => { void d.sendAction('hold') }} disabled={d.busy} className={`inline-flex items-center gap-1.5 px-4 ${pad} rounded-md bg-white border-2 border-[#4600D6]/30 text-[#4600D6] font-semibold hover:bg-[#4600D6]/[0.04] disabled:opacity-50`}>
           {d.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pause className="w-4 h-4" />} Hold
+        </button>
+      )}
+      {/* Approved by mistake: undo it. The design waits for review again. */}
+      {(s.state === 'queued' || s.state === 'waiting') && d.canManage && (
+        <button onClick={() => { void d.sendAction('back-to-review') }} disabled={d.busy} title="Undo the approval: the design goes back to waiting for review and nothing sends" className={`inline-flex items-center gap-1.5 px-4 ${pad} rounded-md bg-white border-2 border-off-black/15 text-off-black font-semibold hover:bg-off-black/[0.04] disabled:opacity-50`}>
+          <Undo2 className="w-4 h-4" /> Back to review
         </button>
       )}
     </div>
@@ -252,7 +258,11 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
             </div>
           )}
           <button onClick={() => { void d.sendAction('send-now') }} disabled={d.busy} className={`w-full inline-flex items-center justify-center gap-2 ${pad} rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors`}>
-            {d.busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} {job.send?.state === 'blocked' ? 'Try sending again' : talking ? 'Send anyway' : 'Send to production'}
+            {d.busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} {job.send?.state === 'blocked' ? 'Try sending again' : talking ? 'Send anyway' : 'Skip hold period, send to production now'}
+          </button>
+          {/* Approved by mistake: undo it. The design waits for review again and nothing sends. */}
+          <button onClick={() => { void d.sendAction('back-to-review') }} disabled={d.busy} className={`w-full inline-flex items-center justify-center gap-2 ${pad} rounded-md bg-white border-2 border-off-black/15 text-off-black font-semibold hover:bg-off-black/[0.04] disabled:opacity-50 transition-colors`}>
+            <Undo2 className="w-5 h-5" /> Send back to review
           </button>
         </>
       )}

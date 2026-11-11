@@ -124,6 +124,25 @@ export async function holdSend({ orderId, actor }) {
 }
 
 /**
+ * Send back to review: undo an approval (approved by mistake). The design goes
+ * back to waiting for review, as if never answered, and nothing sends until
+ * someone approves it again. Only before it has gone to production.
+ */
+export async function backToReview({ orderId, actor }) {
+  const job = await sendableJob(orderId)
+  if (!job) throw new SendError('This order has no approved print', 404)
+  if (job.arteloSentAt) throw new SendError('This order was already sent to production, so it cannot go back to review')
+  const undone = await prisma.renderJob.updateMany({
+    where: { id: job.id, review: 'approved', arteloSentAt: null },
+    data: { review: 'pending', reviewNote: null, reviewedById: null, reviewedAt: null, sendAfter: null, sendHeldAt: null, sendHeldBy: null, sendError: null, arteloAttachedAt: null },
+  })
+  if (!undone.count) throw new SendError('This order just went to production, so it cannot go back to review')
+  const order = await prisma.order.findUnique({ where: { id: job.orderId } })
+  await recordAudit({ action: 'render.back_to_review', summary: `Sent ${order ? describeOrder(order) : job.orderId} back to review (approval undone)`, detail: { jobId: job.id, orderId: job.orderId, orderNumber: order?.orderNumber || null }, actor })
+  return job
+}
+
+/**
  * The design went to the customer to approve ("Email customer", Approve
  * mockup): hold its newest print, approved or still waiting for review, so
  * nothing sends to production until they answer. Approving it keeps the hold

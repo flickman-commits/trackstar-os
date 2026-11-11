@@ -6,6 +6,7 @@
  *   POST { action: 'hold', orderId }    keep it from sending; it stays approved
  *   POST { action: 'send-now', orderId } send it now (held, approved
  *                                       only, or fixed after Artelo refused it)
+ *   POST { action: 'back-to-review', orderId } undo the approval: the design waits for review again
  *   POST { action: 'setting', on }      switch sending on or off (admins)
  *
  * Hold and Send now take what Approve takes: orders.render for a standard
@@ -15,7 +16,7 @@ import { setCors, requireAdmin } from '../../_lib/auth.js'
 import { loadActiveUser, requireAdminRole } from '../../_lib/users.js'
 import { can } from '../../_lib/roles.js'
 import prisma from '../../_lib/prisma.js'
-import { autoSendOn, setAutoSend, holdSend, sendNow } from '../../../server/domain/render/arteloSend.js'
+import { autoSendOn, setAutoSend, holdSend, sendNow, backToReview } from '../../../server/domain/render/arteloSend.js'
 import { sendPublicError } from '../../../server/lib/publicError.js'
 
 export default async function handler(req, res) {
@@ -44,6 +45,7 @@ export default async function handler(req, res) {
 
     if (body.action === 'hold') { await holdSend({ orderId: order.id, actor: user }); return res.status(200).json({ ok: true }) }
     if (body.action === 'send-now') { await sendNow({ orderId: order.id, actor: user }); return res.status(200).json({ ok: true }) }
+    if (body.action === 'back-to-review') { await backToReview({ orderId: order.id, actor: user }); return res.status(200).json({ ok: true }) }
     return res.status(400).json({ error: 'Unknown action' })
   } catch (error) {
     console.error('[API /orders/artelo-send]', error)

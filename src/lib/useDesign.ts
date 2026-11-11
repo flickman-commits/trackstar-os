@@ -93,8 +93,8 @@ export function useDesign(orderId: string | null, canManage: boolean) {
     try { await post({ action: 'review', jobId: state.job.id, decision, note, designNeed, send }); await load(); return true }
     catch (e) { failed(forOrder, e, decision === 'approved' ? 'approve' : 'reject'); return false } finally { setBusy(false) }
   }
-  // Hold an approved print from production, or send it now.
-  const sendAction = async (action: 'hold' | 'send-now') => {
+  // Hold an approved print from production, send it now, or undo the approval.
+  const sendAction = async (action: 'hold' | 'send-now' | 'back-to-review') => {
     if (!orderId) return false
     const forOrder = orderId
     setBusy(true); setErr(null)
@@ -103,7 +103,7 @@ export function useDesign(orderId: string | null, canManage: boolean) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Request failed')
       await load(); return true
-    } catch (e) { failed(forOrder, e, action === 'hold' ? 'hold' : 'send'); return false } finally { setBusy(false) }
+    } catch (e) { failed(forOrder, e, action === 'hold' ? 'hold' : action === 'back-to-review' ? 'send back' : 'send'); return false } finally { setBusy(false) }
   }
 
   const job = state?.job || null
