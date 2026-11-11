@@ -182,6 +182,8 @@ export interface Order {
   noBib?: boolean
   // Bought before the race's design changed (Philadelphia, NYC, Chicago, 2026-11-11): print the old design.
   oldDesign?: boolean
+  // Bought after it changed: print the new design.
+  newDesign?: boolean
   isSample?: boolean
   bigSpenderThresholdUsd?: number
   // Which Shopify/Etsy product was ordered — drives which design template
@@ -354,6 +356,7 @@ export function mapOrder(order: Record<string, unknown>): Order {
     isBigSpender: order.isBigSpender as boolean | undefined,
     noBib: order.noBib as boolean | undefined,
     oldDesign: order.oldDesign as boolean | undefined,
+    newDesign: order.newDesign as boolean | undefined,
     isSample: order.isSample as boolean | undefined,
     bigSpenderThresholdUsd: order.bigSpenderThresholdUsd as number | undefined,
     // Which product was ordered → drives design variant

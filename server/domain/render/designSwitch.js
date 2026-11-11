@@ -53,6 +53,7 @@ export const DESIGN_SWITCHES = [
 ]
 
 export const OLD_DESIGN_NOTE = 'USE OLD DESIGN - THEY BOUGHT BEFORE WE SWITCHED'
+export const NEW_DESIGN_NOTE = 'USE NEW DESIGN - THEY BOUGHT AFTER WE SWITCHED'
 
 const byKey = new Map(DESIGN_SWITCHES.flatMap(s => s.keys.map(k => [k, s])))
 const byRace = new Map(DESIGN_SWITCHES.map(s => [s.race, s]))
@@ -96,6 +97,13 @@ export function usesOldDesign(order, canonicalRace) {
   if (order?.trackstarOrderType && order.trackstarOrderType !== 'standard') return false
   const s = byRace.get(String(canonicalRace || ''))
   return Boolean(s && boughtBefore(order, s.at))
+}
+
+/** The other side: bought after the switch, so the new design (races whose files switched). */
+export function usesNewDesign(order, canonicalRace) {
+  if (order?.trackstarOrderType && order.trackstarOrderType !== 'standard') return false
+  const s = byRace.get(String(canonicalRace || ''))
+  return Boolean(s && s.keys.length && !boughtBefore(order, s.at))
 }
 
 /**

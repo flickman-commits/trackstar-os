@@ -2590,6 +2590,13 @@ Thank you!`
                     <p className="mt-0.5 text-[13px] leading-snug text-white/90">They ordered before the new {selectedOrder.effectiveRaceName || selectedOrder.raceName} design went live (11:00 AM ET, Nov 11), so their print keeps "Marathon". The script renders it from the old production file on its own. Anything made or fixed by hand uses the old file too.</p>
                   </div>
                 )}
+                {/* Bought after the design changed: the new design, without "Marathon". */}
+                {selectedOrder.newDesign && (
+                  <div className="rounded-md border-2 border-blue-600 bg-blue-600 px-4 py-3 text-white">
+                    <p className="text-base font-bold tracking-tight">USE NEW DESIGN - THEY BOUGHT AFTER WE SWITCHED</p>
+                    <p className="mt-0.5 text-[13px] leading-snug text-white/90">They ordered after the new {selectedOrder.effectiveRaceName || selectedOrder.raceName} design went live (11:00 AM ET, Nov 11), so their print has no "Marathon". The script renders it from the new production file on its own. Anything made or fixed by hand uses the new file too, not the OLD one.</p>
+                  </div>
+                )}
                 {/* The same runner's print ordered twice, as separate orders: check before both go out. */}
                 <SameRunnerAlert order={selectedOrder} canEmail={can('support')} onNotify={others => notifySameRunner(selectedOrder, others)} />
                 {/* Missing year. The tag says it, this says what to do. */}

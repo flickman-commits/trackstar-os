@@ -52,6 +52,7 @@ export interface TaggableOrder {
   waitingOnCustomerSince?: string | null
   isBigSpender?: boolean
   oldDesign?: boolean
+  newDesign?: boolean
   isSample?: boolean
   photoPath?: string | null
   photoPlacedAt?: string | null
@@ -127,6 +128,11 @@ export function getOrderTags(o: TaggableOrder): OrderTag[] {
   if (o.oldDesign) {
     tags.push({ key: 'old-design', label: '⚠️ USE OLD DESIGN', tone: 'red', weight: -3,
       title: 'USE OLD DESIGN - THEY BOUGHT BEFORE WE SWITCHED. This print still has "Marathon" on it, the design they bought. The script renders it from the old production file on its own; anything made by hand uses the old file too.' })
+  }
+
+  if (o.newDesign) {
+    tags.push({ key: 'new-design', label: '✨ USE NEW DESIGN', tone: 'blue', weight: -3,
+      title: 'USE NEW DESIGN - THEY BOUGHT AFTER WE SWITCHED. The print without "Marathon". The script renders it from the new production file on its own; anything made by hand uses the new file too.' })
   }
 
   // Priority handling first. These change what Eli works on next.

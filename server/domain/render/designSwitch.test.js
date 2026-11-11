@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { originalKeyFor, usesOldDesign, sameDesign, placedAt } from './designSwitch.js'
+import { originalKeyFor, usesOldDesign, usesNewDesign, sameDesign, placedAt } from './designSwitch.js'
 import { changedPrintedFields } from './printed.js'
 
 const at = (iso, extra = {}) => ({ source: 'shopify', trackstarOrderType: 'standard', shopifyOrderData: { created_at: iso }, ...extra })
@@ -31,6 +31,14 @@ test('the time that counts is when they bought, not when we imported it', () => 
 
 test('Etsy orders all predate the switch', () => {
   assert.equal(originalKeyFor({ source: 'etsy', createdAt: '2026-11-12T00:00:00Z' }, 'Philadelphia Marathon'), 'Philadelphia Marathon / Original')
+})
+
+test('the new-design flag: after the switch, on races that switched', () => {
+  assert.equal(usesNewDesign(after, 'NYC Marathon'), true)
+  assert.equal(usesNewDesign(after, 'Philadelphia Marathon'), true)
+  assert.equal(usesNewDesign(before, 'NYC Marathon'), false)
+  assert.equal(usesNewDesign(after, 'Chicago Marathon'), false)
+  assert.equal(usesNewDesign(after, 'Boston Marathon'), false)
 })
 
 test('the banner flag follows the race, standard prints only', () => {
