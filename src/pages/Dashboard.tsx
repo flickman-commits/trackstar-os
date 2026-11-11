@@ -3,7 +3,7 @@ import { shortcutsPaused } from '@/lib/shortcuts'
 import Toast, { type ToastMessage } from '@/components/orders/Toast'
 import { Search, Plus, Loader2, ChevronDown as ChevronDownIcon, ImagePlus, MessageSquareText, SlidersHorizontal, Clock } from 'lucide-react'
 import { openHours } from '@/lib/openHours'
-import { apiFetch } from '@/lib/api'
+import { apiFetch, lastWriteAt } from '@/lib/api'
 import { segment, segmentGroup } from '@/lib/ui'
 import BulkView from '@/components/bulk/BulkView'
 import { useDesign } from '@/lib/useDesign'
@@ -158,10 +158,13 @@ type ViewList = { orders: Order[]; completedCount: number | null }
 const searchCache = new Map<string, { at: number; orders: Order[] }>()
 const viewCache = new Map<ActiveView, ViewList>()
 // One request per view at a time: a prefetch and a switch to the same view share it.
-const inFlight = new Map<ActiveView, Promise<ViewList & { matches: Record<string, PossibleMatch[]> }>>()
+// A request that started before this tab's last save is not shared: it may come
+// back with the order as it was before the save and paint over the change.
+const inFlight = new Map<ActiveView, { startedAt: number; p: Promise<ViewList & { matches: Record<string, PossibleMatch[]> }> }>()
 function loadView(view: ActiveView) {
   const running = inFlight.get(view)
-  if (running) return running
+  if (running && running.startedAt > lastWriteAt) return running.p
+  const startedAt = Date.now()
   const p = (async () => {
     const response = await apiFetch(`/api/orders?type=${view}${view === 'standard' ? '&scope=open' : ''}`)
     // Say what the server said (a database out of date, unreachable or busy names itself), not a shrug.
@@ -177,8 +180,8 @@ function loadView(view: ActiveView) {
     const list = { orders: rows.map(mapOrder), completedCount: typeof data.completedCount === 'number' ? data.completedCount : null }
     viewCache.set(view, list)
     return { ...list, matches }
-  })().finally(() => inFlight.delete(view))
-  inFlight.set(view, p)
+  })().finally(() => { if (inFlight.get(view)?.p === p) inFlight.delete(view) })
+  inFlight.set(view, { startedAt, p })
   return p
 }
 
