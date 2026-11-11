@@ -232,8 +232,8 @@ export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, 
       {picker}
       <div className="rounded-md border border-[#4600D6]/30 bg-[#4600D6]/[0.04] px-3 py-2.5 text-[13px] leading-snug text-off-black space-y-2">
         <p>
-          <span className="font-semibold text-[#4600D6] mr-1.5">Attach in Artelo.</span>
-          Open the Artelo order and check it is order <span className="font-semibold">{orderNo}</span>. Attach <span className="font-mono">{finalPdf.fileName}</span> from the Orders folder of the library to the item, send it to production, then mark the order complete here.
+          <span className="font-semibold text-[#4600D6] mr-1.5">Send it through Artelo.</span>
+          Send to production attaches <span className="font-mono">{finalPdf.fileName}</span> to Artelo order <span className="font-semibold">{orderNo}</span> and sends it, like a standard print. Attach by hand in Artelo only when the order needs it (expedited shipping, a changed item), then mark it complete here.
         </p>
         {where}
       </div>
@@ -257,7 +257,7 @@ export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, 
         )}
         {(opened || !arteloOrderUrl) && (
           <button onClick={onComplete} className="inline-flex items-center justify-center gap-2 py-4 text-base rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors">
-            <Check className="w-5 h-5" /> Sent to production, mark complete
+            <Check className="w-5 h-5" /> Sent by hand in Artelo, mark complete
           </button>
         )}
       </div>

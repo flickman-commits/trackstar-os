@@ -88,6 +88,15 @@ export async function completeOrder({ orderId, orderNumber, actor = null, via = 
     where: { id: existing.id },
     data: { status: 'completed', researchedAt: new Date(), arteloHold: null, ...(photoByRender && !existing.photoPlacedAt ? { photoPlacedAt: new Date() } : {}) },
   })
+  // Artelo fulfilled a custom order (the import saw it): it was sent to
+  // production, so it reads that way and counts on the designer's payout
+  // counter, the same as one sent from the tool (Matt, 2026-11-10: Artelo
+  // fulfils every order, customs included).
+  if (fromArtelo && existing.trackstarOrderType === 'custom' && existing.designStatus !== 'sent_to_production') {
+    // Loaded here: designStatus.js imports this file.
+    const { setDesignStatus } = await import('./designStatus.js')
+    await setDesignStatus(existing, 'sent_to_production', null, actor, { checkArtelo: false })
+  }
   // A render still waiting for review is moot now.
   const closed = await prisma.renderJob.updateMany({
     where: { orderId: existing.id, review: 'pending', ...(renderJobId ? { id: { not: renderJobId } } : {}) },

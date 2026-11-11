@@ -119,7 +119,7 @@ async function pingToAttach(order, fp, actor) {
   const who = person?.firstName ? ` ${slackText(person.firstName)} uploaded the` : ' The'
   const artelo = arteloOrderUrl(order.arteloOrderData?.id)
   const lines = [
-    `📎 <@${ATTACHER_SLACK_ID}>${who} final PDF for custom order *${slackLink(orderAppUrl(num), num)}*${order.runnerName ? ` (${slackText(order.runnerName)})` : ''}. Attach \`${slackText(fp.fileName)}\` in Artelo, send it to production, then mark it complete in the tool.`,
+    `📎 <@${ATTACHER_SLACK_ID}>${who} final PDF for custom order *${slackLink(orderAppUrl(num), num)}*${order.runnerName ? ` (${slackText(order.runnerName)})` : ''}. Open it in TrackstarOS and press Send to production: it attaches \`${slackText(fp.fileName)}\` to the Artelo order and sends it. Attach by hand in Artelo only if the order needs it (expedited shipping, a changed item).`,
     fp.inArtelo ? '• In the Artelo library (Orders folder)' : `• ⚠️ Not in the Artelo library yet${fp.arteloError ? `: ${slackText(fp.arteloError, 200)}` : ''}`,
     fp.driveUrl ? `• <${fp.driveUrl}|Saved to Drive>` : `• ⚠️ Not in Drive yet${fp.driveError ? `: ${slackText(fp.driveError, 200)}` : ''}`,
     artelo ? `• <${artelo}|Open the Artelo order>` : null,
