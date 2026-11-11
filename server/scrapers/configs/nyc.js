@@ -20,7 +20,10 @@ export default {
     'New York City Marathon',
     'New York Marathon',
     'TCS New York City Marathon',
-    'NYRR NYC Marathon'
+    'NYRR NYC Marathon',
+    // The Shopify product dropped "Marathon" from its title on 2026-11-11.
+    'New York City',
+    'NYC'
   ],
   keywords: ['new york', 'nyc'],
   keywordRequiresMarathon: true,

@@ -88,7 +88,10 @@ export default {
   aliases: [
     'Philadelphia Marathon',
     'Philadelphia Marathon (Full)',
-    'Philly Marathon'
+    'Philly Marathon',
+    // The Shopify product dropped "Marathon" from its title on 2026-11-11.
+    'Philadelphia',
+    'Philly'
   ],
   keywords: ['philadelphia', 'philly'],
   keywordRequiresMarathon: true,
