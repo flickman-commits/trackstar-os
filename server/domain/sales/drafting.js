@@ -24,6 +24,7 @@ import { recordSend } from './attio.js'
 import { dealForWork, nextStepFor, pipelineOf } from './queue.js'
 import { draftProblems, basicProblems } from './guardrails.js'
 import { UserError } from './errors.js'
+import { replySinceLastTouch, replyHoldText } from './replies.js'
 
 const VARIANT_COUNT = 5
 
@@ -357,6 +358,11 @@ export async function sendDraft({ dealId, personId, subject, body, assetIds = []
 
   const problems = draftProblems({ subject, body }, { pipeline, touchNumber, companyName: deal.name })
   if (problems.length) throw new UserError(problems[0], { problems })
+  // A follow-up in the sequence waits if they have answered since our last email (replies.js).
+  if (touchNumber > 1 && !adhoc) {
+    const reply = await replySinceLastTouch(deal.id)
+    if (reply) throw new UserError(replyHoldText(reply))
+  }
   const ids = libraryIds(assetIds)
   // The cap is on starting conversations, as on the Sales page: the day's
   // sends fill it, but only a first touch is held back by it. Follow-ups and

@@ -446,9 +446,12 @@ export async function recordSend(deal, { sentAt, touchNumber, nextAction, nextAc
   if (isPrId(deal.id)) return recordPrSend(deal, { sentAt, touchNumber, subject, body, toEmail, sentBy })
   try {
     const values = { touch_count: touchNumber }
-    if (nextActionDate) values.next_action_date = day(nextActionDate)
-    // A next action a person typed is theirs. Only the tool's own are replaced.
-    if (nextAction && (!deal.nextAction || /^\[auto\]/i.test(deal.nextAction))) values.next_action = `[auto] ${nextAction}`
+    // A next action a person typed is theirs, and so is its date: only the
+    // tool's own are replaced. Writing the date under a person's action
+    // moved their follow-up to the tool's schedule.
+    const toolOwnsNext = !deal.nextAction || /^\[auto\]/i.test(deal.nextAction)
+    if (nextActionDate && toolOwnsNext) values.next_action_date = day(nextActionDate)
+    if (nextAction && toolOwnsNext) values.next_action = `[auto] ${nextAction}`
     if (deal.stage === 'Not Contacted' || deal.stage === 'Needs Enrichment') values.stage = 'Reached Out'
     await patchDeal(deal.id, values)
     try {

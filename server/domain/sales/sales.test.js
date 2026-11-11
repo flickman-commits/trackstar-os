@@ -412,3 +412,13 @@ test('a model-written email gets the first-line blank after the greeting, so it 
   assert.equal(withOpenerBlank(out), out)
   assert.ok(withOpenerBlank('We make prints.').startsWith(NEEDS_OPENER))
 })
+
+test('a reply from them after our last touch holds the follow-up; our own messages do not', async () => {
+  const { replyAfter } = await import('./replies.js')
+  const lastTouch = new Date('2026-11-01T15:00:00Z')
+  const ours = { id: 'a', labelIds: ['SENT'], date: new Date('2026-11-01T15:00:00Z') }
+  const theirsBefore = { id: 'b', labelIds: ['INBOX'], date: new Date('2026-10-28T10:00:00Z') }
+  const theirsAfter = { id: 'c', labelIds: ['INBOX'], date: new Date('2026-11-03T09:00:00Z') }
+  assert.equal(replyAfter([ours, theirsBefore], lastTouch), null)
+  assert.equal(replyAfter([ours, theirsBefore, theirsAfter], lastTouch).id, 'c')
+})

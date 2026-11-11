@@ -24,6 +24,7 @@ import { listAssets, isAssetStorageConfigured } from './assets.js'
 import { gmailStatus } from './gmail.js'
 import { can } from '../../../api/_lib/roles.js'
 import { UserError, publicMessage } from './errors.js'
+import { replySinceLastTouch, replyHoldText } from './replies.js'
 
 const MAX_AHEAD_MS = 60 * 86400000
 // Two cron runs past its time with the row still "sending" means a run died.
@@ -129,6 +130,11 @@ async function holdReason(row) {
   const now = exhausted ? deal.touchCount + 1 : next
   if (!row.adhoc && row.touchNumber && now !== row.touchNumber) {
     return `Attio's touch count moved since this was scheduled (this was touch ${row.touchNumber}, the next is now ${now}).`
+  }
+  // They answered since our last email: the follow-up waits for a person (replies.js).
+  if (!row.adhoc && (row.touchNumber || 0) > 1) {
+    const reply = await replySinceLastTouch(deal.id)
+    if (reply) return replyHoldText(reply)
   }
   if (deal.lastSentAt && new Date(deal.lastSentAt) > row.createdAt) {
     return `There has been email with them since you scheduled this (${new Date(deal.lastSentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}). Check for a reply before sending.`
