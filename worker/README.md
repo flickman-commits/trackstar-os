@@ -11,7 +11,8 @@ and uploads the PDF and a preview for review.
 - The Google Drive folder `3_Trackstar/Product/Races` synced to this Mac.
 - Node 18 or newer.
 - `worker/.env`, copied from `worker/.env.example`, with an API key from
-  Settings > Admin > API Keys (scope: write).
+  Settings > Admin > API Keys (scope: worker; a person's write key also works,
+  but a worker key can do nothing else).
 
 ## Running it
 

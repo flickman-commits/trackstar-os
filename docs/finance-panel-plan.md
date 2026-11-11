@@ -1,6 +1,6 @@
 # Finance panel: plan
 
-An admin-only hub for everything money inside TrackstarOS: where the money goes each day, what the team is owed, hours from the team with approval, and forecasts. Written 2026-11-03 from Matt's brief, the Daily Tracker sheet, the Custom Counter, and a pass over the finance products worth copying. Nothing here is built yet.
+An admin-only hub for everything money inside TrackstarOS: where the money goes each day, what the team is owed, hours from the team with approval, and forecasts. Written 2026-11-03 from Matt's brief, the Daily Tracker sheet, the Custom Counter, and a pass over the finance products worth copying. (The plan as written then; most of it is built and live now, so check the code before taking this as current.)
 
 ## What we have today
 

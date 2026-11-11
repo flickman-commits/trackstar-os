@@ -17,6 +17,21 @@ that change data are dry-run by default and take `--apply`.
 | `seed-fake-order.mjs` | Creates a fake order for local testing. |
 | `setup-photo-bucket.mjs` | Creates the private Supabase bucket for customer photos. |
 | `check-storage.mjs` | Reports what is in the storage buckets. |
+| `check-photo-paths.mjs` | Read only. Open orders whose photo path is not an upload's shape (the 2026-11-10 photo path rule). |
+| `check-duplicate-rows.mjs` | Read only. Rows that would block the RenderJob and RunnerResearch unique rules; run before `npx prisma db push`. |
+| `gelato-orders.js` | Read only. The newest Gelato orders, and one in full, to see what a sample should copy. |
+| `research-agent.js` | Runs the research agent against the real queue. Dry run unless `--apply`. |
+| `seed-support-link-macros.mjs` | Adds the Support macros that drop in a link to a race's print. Dry run unless `--apply`. |
 
-One-off data fixes (the 2025 and 2026 Boston, Etsy and line-item repairs)
-were removed in October 2026 once they had run; their commits are the record.
+Build checks, run by `npm run build`, not by hand: `check-vercel-config.js`
+(the Vercel function and cron limits), `gen-routes.js` (the route table;
+`npm run routes` rewrites it after adding or moving a handler) and
+`check-auth-await.js` (every auth helper is awaited).
+
+One-off data fixes, kept until their run is confirmed and then removed
+(their commits are the record): `backfill-bounces.js`,
+`backfill-replacements.js`, `backfill-results-links.js`,
+`consolidate-agent-notes.js`, `extend-change-window.mjs` (2026-11-05),
+`fix-bulk-zips.js`, `reopen-unanswered-closes.js`. Each says at its top what
+it fixes, and is a dry run unless `--apply`. The earlier ones (the 2025 and
+2026 Boston, Etsy and line-item repairs) were removed in October 2026.

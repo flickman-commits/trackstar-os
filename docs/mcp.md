@@ -40,7 +40,7 @@ capability.
 
 ## Tools
 
-The server has 49 tools.
+The server has 59 tools (counted 2026-11-10).
 
 **Read** (16): `connection_check`, `orders_overview`, `list_orders`,
 `get_order`, `search_orders`, `backlog_by_reason`, `custom_orders_status`,
@@ -85,6 +85,18 @@ two-step: called without `confirm` it only returns a preview and a random
 exactly what the preview showed. It creates the order only when called again
 with the same details, `confirm: true` and that `previewId`; the id is used up
 by that call, so it cannot be replayed or used by another key.
+
+**Research, Support and Finance** (9, added after the lists above were
+written):
+- Research: `research_queue` (read) lists the Action queue items that are a
+  runner result to look up; `run_research_agent` (write) works that queue on
+  the server.
+- Support: `triage_support` (write, the `support` capability) stars the urgent
+  open conversations.
+- Finance: `finance_overview` and `payouts_owed` (read, admins only);
+  `timesheet_week` (read), `timesheet_log` and `timesheet_submit` (write), all
+  with the `hours` capability, for the key holder's own hours;
+  `timesheet_review` (admin scope, admins only) approves or rejects a week.
 
 **Repair** (11): `run_sweep`, `finish_sweep`, `probe_scrapers`,
 `capture_fixture`, `discover_event_ids`, `trace_scraper`, `fetch_timing_page`,

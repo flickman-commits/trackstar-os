@@ -4,7 +4,7 @@ Internal operations app for [Trackstar](https://trackstar.art), personalized rac
 
 ## What it does today
 
-- **Order fulfillment.** Imports orders from Artelo, enriches them from Shopify and Etsy, researches each runner's official chip time and pace across 19 timing platforms and 45 race configs, and tracks the order through proofing, approval, and shipping.
+- **Order fulfillment.** Imports orders from Artelo, enriches them from Shopify and Etsy, researches each runner's official chip time and pace across 26 timing platforms and 68 race configs (counted 2026-11-10), and tracks the order through proofing, approval, and shipping.
 - **Proof approval.** Designers upload proofs; customers approve them on a token-gated public page; the tool records the outcome and emails the customer.
 - **Instant Lookup.** A public results-lookup endpoint used by the storefront personalization widget, gated per race.
 - **Creator program.** Invites, briefs, sample orders, and a creator portal.
@@ -26,7 +26,7 @@ Internal operations app for [Trackstar](https://trackstar.art), personalized rac
 ```bash
 npm install
 cp .env.example .env.local   # then fill in values
-npm run dev                  # starts the API on :3001 and Vite on :5173
+npm run dev                  # starts the API on :3001 and Vite on :3000
 ```
 
 `.env.local` points at whatever database you put in `DATABASE_URL`. Be careful: if that is the production database, local writes are live. While it is, put `CONNECTIONS_FORCE_OFF=all` in `.env.local` so a local session cannot send a print, an email or a Slack post (`server/lib/connections.js`).
