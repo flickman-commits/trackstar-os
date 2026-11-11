@@ -2,7 +2,8 @@
  * Design switches: a race's print design changed on a date, and everyone who
  * bought before it gets the design they bought.
  *
- * 2026-11-11: "Marathon" comes off the Philadelphia, NYC and Chicago prints.
+ * 2026-11-11: "Marathon" comes off the Philadelphia and NYC prints. (Chicago
+ * keeps its design: it was planned, then dropped the same morning.)
  * Orders placed before 11:00 AM ET that day print the old design; orders
  * after print the new one.
  *
@@ -47,9 +48,8 @@ export const DESIGN_SWITCHES = [
     // The OLD copies were made Nov 9 at 4:14 PM ET; the main files have been the new design since.
     newFileAt: '2026-11-09T21:14:00.000Z',
   },
-  // The main files were the old design until the switch: their OLD copies were renamed in at 11:00.
+  // The main file was the old design until the switch: its OLD copy was renamed in at 11:00.
   { race: 'NYC Marathon', keys: ['NYC Marathon'], at: '2026-11-11T16:00:00.000Z' },
-  { race: 'Chicago Marathon', keys: ['Chicago Marathon'], at: '2026-11-11T16:00:00.000Z' },
 ]
 
 export const OLD_DESIGN_NOTE = 'USE OLD DESIGN - THEY BOUGHT BEFORE WE SWITCHED'
