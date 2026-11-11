@@ -18,10 +18,10 @@
  * carries the custom prices along with them.
  */
 
-import { getShopifyToken } from './shopifyAuth.js'
+import { getShopifyToken, SHOPIFY_API_VERSION } from './shopifyAuth.js'
 import { fetchWithTimeout } from '../lib/fetchWithTimeout.js'
 
-const API_VERSION = '2024-10'
+const API_VERSION = SHOPIFY_API_VERSION
 const NAMESPACE = 'trackstar'
 const KEY = 'custom_design_fee'
 // What the storefront has always said, used until the metafield is first set.

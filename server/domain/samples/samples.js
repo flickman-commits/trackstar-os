@@ -15,14 +15,14 @@
  */
 import { createHash } from 'crypto'
 import prisma from '../../db.js'
-import { shopifyGraphQL } from '../../services/shopifyAuth.js'
+import { shopifyGraphQL, SHOPIFY_API_VERSION } from '../../services/shopifyAuth.js'
 import { printCatalog } from '../catalog/printCatalog.js'
 import { arteloPriceCheck } from '../../services/arteloPriceCheck.js'
 import { recordSampleCostSafely } from './costs.js'
 
 const round = n => Math.round(n * 100) / 100
 // orderCreate needs 2024-07 or later; the rest of the app stays on 2024-01.
-const API = '2025-01'
+const API = SHOPIFY_API_VERSION
 
 /** The store's race prints (the shared catalog, server/domain/catalog/printCatalog.js). */
 export const sampleCatalog = () => printCatalog()

@@ -7,10 +7,10 @@
  * preview a change on a store that has never granted write access.
  */
 
-import { getShopifyToken } from './shopifyAuth.js'
+import { getShopifyToken, SHOPIFY_API_VERSION } from './shopifyAuth.js'
 import { fetchWithTimeout } from '../lib/fetchWithTimeout.js'
 
-const API_VERSION = '2024-10'
+const API_VERSION = SHOPIFY_API_VERSION
 
 export async function shopifyGraphql(query, variables) {
   const store = process.env.SHOPIFY_STORE

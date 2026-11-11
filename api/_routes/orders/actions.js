@@ -39,7 +39,7 @@ import { withoutRawOrderData } from '../../_lib/money.js'
 import { requireAdminRole, requireAdminOnly, requireCapability, recordAudit } from '../../_lib/users.js'
 import { alertError } from '../../_lib/alerts.js'
 import { getCustomersServedInfo, syncCustomersServedToShopify, setCustomersServedCount } from '../../../server/services/customersServed.js'
-import { shopifyFetch, shopifyGraphQL } from '../../../server/services/shopifyAuth.js'
+import { shopifyFetch, shopifyGraphQL, SHOPIFY_API_VERSION } from '../../../server/services/shopifyAuth.js'
 import { etsyFetch, getEtsyToken } from '../../../server/services/etsyAuth.js'
 import { getRaceShorthands } from '../../../server/scrapers/index.js'
 import WeatherService from '../../../server/services/WeatherService.js'
@@ -1221,7 +1221,7 @@ async function handleTestConnections(res) {
 
   await runStep('shopify', 'GET /shop.json', async () => {
     if (!shopifyToken) return { status: 'error', message: 'Skipped (no access token)' }
-    const resp = await fetch(`https://${process.env.SHOPIFY_STORE}/admin/api/2024-01/shop.json`, {
+    const resp = await fetch(`https://${process.env.SHOPIFY_STORE}/admin/api/${SHOPIFY_API_VERSION}/shop.json`, {
       headers: { 'X-Shopify-Access-Token': shopifyToken }
     })
     if (!resp.ok) {
@@ -1234,7 +1234,7 @@ async function handleTestConnections(res) {
 
   await runStep('shopify', 'GET /orders.json (verify read_orders scope)', async () => {
     if (!shopifyToken) return { status: 'error', message: 'Skipped (no access token)' }
-    const resp = await fetch(`https://${process.env.SHOPIFY_STORE}/admin/api/2024-01/orders.json?limit=1&status=any&fields=id,name,created_at`, {
+    const resp = await fetch(`https://${process.env.SHOPIFY_STORE}/admin/api/${SHOPIFY_API_VERSION}/orders.json?limit=1&status=any&fields=id,name,created_at`, {
       headers: { 'X-Shopify-Access-Token': shopifyToken }
     })
     if (!resp.ok) {
@@ -1388,7 +1388,7 @@ async function handleHealthCheck(res, { sendSlack = false } = {}) {
       if (!tokenResp.ok) return { status: 'error', detail: `OAuth failed (${tokenResp.status})`, latency: `${Date.now() - start}ms` }
 
       const { access_token } = await tokenResp.json()
-      const shopResp = await fetch(`https://${store}/admin/api/2024-01/shop.json`, {
+      const shopResp = await fetch(`https://${store}/admin/api/${SHOPIFY_API_VERSION}/shop.json`, {
         headers: { 'X-Shopify-Access-Token': access_token }
       })
       if (!shopResp.ok) return { status: 'error', detail: `Shop API returned ${shopResp.status}`, latency: `${Date.now() - start}ms` }

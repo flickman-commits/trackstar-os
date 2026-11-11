@@ -26,11 +26,11 @@
  * (with orderRowId, the print to change).
  */
 import prisma from '../../db.js'
-import { shopifyGraphQL } from '../../services/shopifyAuth.js'
+import { shopifyGraphQL, SHOPIFY_API_VERSION } from '../../services/shopifyAuth.js'
 import { UserError } from './errors.js'
 import { call as artelo } from '../render/artelo.js'
 
-const VERSION = '2025-01'
+const VERSION = SHOPIFY_API_VERSION
 const SEND_DELAY_MIN = 20
 
 const ORDER = `query($id: ID!) { order(id: $id) {

@@ -17,10 +17,10 @@
  * whichever is set.
  */
 import prisma from '../../db.js'
-import { shopifyGraphQL } from '../../services/shopifyAuth.js'
+import { shopifyGraphQL, SHOPIFY_API_VERSION } from '../../services/shopifyAuth.js'
 
 const TYPE = 'custom_gallery_item'
-const API = { version: '2025-01' }
+const API = { version: SHOPIFY_API_VERSION }
 export const SEGMENTS = ['marathon', 'ultra', 'other']
 
 /** Which tab a race belongs in, from its name: Ultras, Other (tri, bike), else Marathons. Changeable per design. */

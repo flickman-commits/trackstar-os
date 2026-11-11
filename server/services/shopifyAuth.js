@@ -64,12 +64,27 @@ export async function getShopifyToken() {
  * @param {string} endpoint - API endpoint (e.g., '/orders/12345.json')
  * @param {object} options - Additional fetch options
  */
+/**
+ * The Shopify Admin API version the app asks for, in one place.
+ *
+ * The code asked for 2024-01, 2024-07, 2024-10 and 2025-01 in different
+ * files. Shopify keeps a version for about a year; a request for a retired
+ * one is not refused but "falls forward" to the oldest version still
+ * available (shopify.dev/docs/api/usage/versioning). On 2026-11-10 that was
+ * 2026-01, so every one of those was already being answered as 2026-01, and
+ * naming it here changed nothing. 2026-01 is available until January 2027:
+ * move this forward (to a version that is current then) and test the order
+ * import, product edits and Support actions against it before then.
+ * Support's address and tax quote ask for 2026-10 on purpose (support/actions.js).
+ */
+export const SHOPIFY_API_VERSION = '2026-01'
+
 export async function shopifyFetch(endpoint, options = {}) {
   await requireConnection('shopify')
   const token = await getShopifyToken()
   const store = process.env.SHOPIFY_STORE
 
-  const url = `https://${store}/admin/api/2024-01${endpoint}`
+  const url = `https://${store}/admin/api/${SHOPIFY_API_VERSION}${endpoint}`
 
   // Retry what is temporary: a rate limit (429, Shopify's REST bucket refills
   // at 2 calls a second), a 5xx, or a timeout. Three tries, honoring
@@ -122,10 +137,10 @@ export async function shopifyFetch(endpoint, options = {}) {
  * Make an authenticated GraphQL request to the Shopify Admin API.
  * @param {string} query - GraphQL query/mutation
  * @param {object} variables - GraphQL variables
- * @param {{ version?: string }} [opts] - API version, default 2024-01
+ * @param {{ version?: string }} [opts] - API version, default SHOPIFY_API_VERSION
  * @returns {object} the `data` object from the response
  */
-export async function shopifyGraphQL(query, variables = {}, { version = '2024-01' } = {}) {
+export async function shopifyGraphQL(query, variables = {}, { version = SHOPIFY_API_VERSION } = {}) {
   await requireConnection('shopify')
   const token = await getShopifyToken()
   const store = process.env.SHOPIFY_STORE
