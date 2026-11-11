@@ -204,6 +204,13 @@ function MacroMenu({ macros, onPick, onClose }: { macros: Macro[]; onPick: (m: M
   )
 }
 
+/**
+ * Replies being written, by conversation, for this visit. Switching to another
+ * conversation and back used to start the reply over from the greeting.
+ * Cleared when the reply is sent.
+ */
+const unsent = new Map<string, string>()
+
 export default function Conversation({ thread, team, me, isAdmin, busy, macros, expectedHandle = 'trackstar_art', onAssign, onStatus, onSnooze, onMarkUnread, onReply, onNote, onDeleteNote, onRedraft, onMerge, merging = [], onUseMacro, onRefresh, replyRef, noteRef, insertRef, attachRef }: {
   thread: ThreadDetail
   /** The Instagram account replies go out as, without the @. */
@@ -238,7 +245,9 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
   const [mode, setMode] = useState<'reply' | 'note'>('reply')
   // Merging the customer's other conversations takes a second click, in the page (Arc blocks window.confirm).
   const { arm: armMerge, isArmed: mergeArmed } = useArmed()
-  const [text, setText] = useState(() => starter(thread, me))
+  const [text, setText] = useState(() => unsent.get(thread.id) ?? starter(thread, me))
+  // Kept as it is typed, so it is still here after a look at another conversation.
+  useEffect(() => { if (text && text !== starter(thread, me)) unsent.set(thread.id, text); else unsent.delete(thread.id) }, [text, thread.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const [note, setNote] = useState('')
   const [mentionIds, setMentionIds] = useState<string[]>([])
   const [mentionQ, setMentionQ] = useState<string | null>(null)
@@ -255,7 +264,7 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
   const close = usePopover()
   const macro = usePopover()
 
-  useEffect(() => { setText(starter(thread, me)); setNote(''); setMentionIds([]); setMode('reply'); setAttached([]) }, [thread.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setText(unsent.get(thread.id) ?? starter(thread, me)); setNote(''); setMentionIds([]); setMode('reply'); setAttached([]) }, [thread.id]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { bottom.current?.scrollIntoView({ block: 'end' }) }, [thread.id, thread.messages.length, thread.notes.length])
 
   const timeline = useMemo<Item[]>(() => {
@@ -280,7 +289,7 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
   const send = async (closeAfter = false) => {
     if (!canSend) return
     setSending(true)
-    try { if (await onReply(text.trim(), closeAfter, attached.map(m => m.ref))) { setText(starter(thread, me)); setAttached([]) } }
+    try { if (await onReply(text.trim(), closeAfter, attached.map(m => m.ref))) { unsent.delete(thread.id); setText(starter(thread, me)); setAttached([]) } }
     finally { setSending(false) }
   }
   const addNote = async () => {

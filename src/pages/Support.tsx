@@ -147,11 +147,19 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
   const loadMacros = useCallback(() => { supportApi.macros().then(r => setMacros(r.macros)).catch(() => {}) }, [])
   const [filters, setFilters] = useState<SenderFilter[]>([])
   const loadFilters = useCallback(() => { supportApi.filters().then(r => setFilters(r.filters)).catch(() => {}) }, [])
+  // Answers can come back out of order (a slow search, then a quick poll):
+  // only the newest request's answer is shown.
+  const inboxSeq = useRef(0)
   const loadInbox = useCallback(async (quiet = false) => {
+    const n = ++inboxSeq.current
     if (!quiet) setLoading(true)
-    try { setInbox(await supportApi.inbox(view, sort, query)); setInboxError(null) }
-    catch (e) { setInboxError((e as Error).message) }
-    finally { if (!quiet) setLoading(false) }
+    try {
+      const next = await supportApi.inbox(view, sort, query)
+      if (n !== inboxSeq.current) return
+      setInbox(next); setInboxError(null)
+    }
+    catch (e) { if (n === inboxSeq.current) setInboxError((e as Error).message) }
+    finally { if (!quiet && n === inboxSeq.current) setLoading(false) }
   }, [view, sort, query])
 
   useEffect(() => { loadStatus(); loadMacros(); loadFilters() }, [loadStatus, loadMacros, loadFilters])
@@ -181,24 +189,30 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
     if (row?.lastMessageAt && new Date(row.lastMessageAt).getTime() > newest) refreshThread(thread.id)
   }, [inbox]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The conversation last asked for. Clicking A then B used to leave A in the
+  // pane with B highlighted when A's answer came back second.
+  const openingRef = useRef<string | null>(null)
   const openThread = useCallback(async (id: string) => {
+    openingRef.current = id
     setSelectedId(id)
     setThreadLoading(true)
     try {
       const t = await supportApi.thread(id)
+      if (openingRef.current !== id) return
       setThread(t)
       // Opening it read it; the row loses its dot without a round trip.
       setInbox(prev => prev ? { ...prev, threads: prev.threads.map(r => (r.id === id ? { ...r, unread: false } : r)) } : prev)
     }
-    catch (e) { toast.error((e as Error).message); setThread(null) }
-    finally { setThreadLoading(false) }
+    catch (e) { if (openingRef.current === id) { toast.error((e as Error).message); setThread(null) } }
+    finally { if (openingRef.current === id) setThreadLoading(false) }
   }, [])
 
   const patchRow = (row: ThreadRow) => {
     setInbox(prev => prev ? { ...prev, threads: prev.threads.map(t => (t.id === row.id ? { ...t, ...row, unread: t.unread } : t)) } : prev)
     setThread(prev => (prev && prev.id === row.id ? { ...prev, ...row, unread: false } : prev))
   }
-  const refreshThread = async (id: string) => { try { setThread(await supportApi.thread(id)) } catch { /* the list refresh will catch up */ } }
+  // Only onto the same conversation: a refresh that lands after the person moved on is dropped.
+  const refreshThread = async (id: string) => { try { const t = await supportApi.thread(id); setThread(prev => (prev && prev.id === id ? t : prev)) } catch { /* the list refresh will catch up */ } }
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true)
@@ -285,7 +299,9 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
     try {
       const fresh = await supportApi.reply(thread.id, text, close, attachments)
       const prev = thread
-      if (close) putDown(); else setThread(fresh)
+      // The person may have opened another conversation while it sent: leave that one on screen.
+      const stillHere = openingRef.current === prev.id
+      if (stillHere) { if (close) putDown(); else setThread(fresh) }
       const to = fresh.channel === 'instagram' ? `@${fresh.igUsername || 'them'} on Instagram` : fresh.customerEmail
       // The reply is sent for good; undo reopens the conversation.
       if (close) remember('Closed after reply', async () => { await restoreState(prev); await openThread(prev.id) }, `Sent to ${to} and closed`)
