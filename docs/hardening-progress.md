@@ -60,13 +60,13 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 - [~] 6.7 Nightly: capture_fixture will not overwrite a known finisher without replace + reason, and a replaced one blocks a fixed claim; event ids proved against real customers' runners; timing-page output marked untrusted and the skill says so; GitHub Action for sensitive paths (needs SLACK_SENSITIVE_WEBHOOK_URL secret). Not done: save_event_id comparing the event's year and title (platform-specific); limiting the routine's key scopes (Matt's settings).
 
 ## Phase 7: Customer pages and the operator's screen
-- [ ] 7.1 A failed load is not a dead link
-- [ ] 7.2 Session handling does not throw away work
-- [ ] 7.3 A refresh after a save does not show old data
-- [ ] 7.4 Support inbox ordering and unsent drafts
-- [ ] 7.5 Errors people can read
-- [ ] 7.6 Confirm and pending guards
-- [ ] 7.7 Smaller items
+- [x] 7.1 A failed load is not a dead link (`src/lib/publicLoad.ts`): Manage your order, photo upload, runner and partner intake, survey. Manage your order polling backs off and stops after ~30 min. Network failures on buttons and uploads read as sentences.
+- [x] 7.2 A 401 shows one message with Reload instead of reloading; the session check signs out only on a real 401. Not done: a sign-in dialog over the page.
+- [x] 7.3 A list request started before this tab's last write is not shared (`lastWriteAt` in src/lib/api.ts). The open order is still a copy of a list row (not changed).
+- [x] 7.4 Support: only the latest inbox and thread answers land; Send and close no longer clears another conversation; unsent replies kept per conversation for the visit.
+- [x] 7.5 Order toast: errors 8 s, above dialogs, click to close; server reasons shown (Mark as completed, runner edit, photo calls); proof load and approval-link failures shown. Not done: one shared fetch wrapper and error shape.
+- [x] 7.6 One press at a time: render at size, Accept match, Add comment (and Cmd+Enter), Mark as completed. Confirm on deleting a note and reopening a custom in production. Timesheets uses the in-page confirm.
+- [x] 7.7 Weather and race-data saves reload one order; copy tick only on success; Attio links http(s) only.
 
 ## Phase 8: Housekeeping
 - [ ] 8.1 Dependencies
@@ -80,9 +80,13 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 - 2026-11-10, Supabase: RLS is off on every public table, but the Data API is disabled for them ("cannot be accessed via the Data API"), so the anon key cannot read them. Nothing to do; enabling RLS too is optional.
 - 2026-11-10, Supabase Storage: personalization-photos is private (25 MB, image types only). order-proofs and order-comments are PUBLIC with no size or type limit. Making them private needs signed links in code first (proof links are stored and already emailed), so it stays on the later list. Do not flip them private in the dashboard.
 
+## Also done in this build
+- 2026-11-10: default model switched to claude-opus-5-5 (Matt's call), with server-side refusal fallbacks (LLM_FALLBACKS=off turns them off).
+
 ## Waiting on Matt
 - Phase 1: add `CONNECTIONS_FORCE_OFF=all` (or the explicit list in `.env.example`) to `.env.local`. Never in Vercel.
-- Phases 1 to 6: commits are local, not pushed.
+- Phases 1 to 7: commits are local, not pushed.
+- Phase 7: click through the customer pages and order screen after deploy (listed in the Phase 7 report).
 - Phase 6, 6.4: suppression list and opt-out wording.
 - Phase 6, 6.7: add the GitHub secret SLACK_SENSITIVE_WEBHOOK_URL; delete the stale remote branches (15 sweep/*, 5 claude/*, listed in the Phase 6 report); check the nightly routine's API key scopes.
 - Phase 5, 5.9: should a custom order completed by the import (fulfilled in Artelo) also be marked sent_to_production, which counts it for designer pay?
