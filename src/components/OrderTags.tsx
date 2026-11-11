@@ -51,6 +51,7 @@ export interface TaggableOrder {
   isExpedited?: boolean
   waitingOnCustomerSince?: string | null
   isBigSpender?: boolean
+  oldDesign?: boolean
   isSample?: boolean
   photoPath?: string | null
   photoPlacedAt?: string | null
@@ -121,6 +122,12 @@ const TRUST_TAGS: Record<string, { label: string; sublabel?: string; tone: TagTo
  */
 export function getOrderTags(o: TaggableOrder): OrderTag[] {
   const tags: OrderTag[] = []
+
+  // Bought before the design changed: the one thing that must not be missed.
+  if (o.oldDesign) {
+    tags.push({ key: 'old-design', label: '⚠️ USE OLD DESIGN', tone: 'red', weight: -3,
+      title: 'USE OLD DESIGN - THEY BOUGHT BEFORE WE SWITCHED. This print still has "Marathon" on it, the design they bought. The script renders it from the old production file on its own; anything made by hand uses the old file too.' })
+  }
 
   // Priority handling first. These change what Eli works on next.
   if (o.isSample) {

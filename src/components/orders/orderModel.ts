@@ -179,6 +179,8 @@ export interface Order {
   // Big-spender flag — true if order total > $300 (configurable on backend)
   orderTotalUsd?: number | null
   isBigSpender?: boolean
+  // Bought before the race's design changed (Philadelphia, NYC, Chicago, 2026-11-11): print the old design.
+  oldDesign?: boolean
   isSample?: boolean
   bigSpenderThresholdUsd?: number
   // Which Shopify/Etsy product was ordered — drives which design template
@@ -349,6 +351,7 @@ export function mapOrder(order: Record<string, unknown>): Order {
     // Big-spender (>= $300) badge + prioritize callout
     orderTotalUsd: order.orderTotalUsd as number | null | undefined,
     isBigSpender: order.isBigSpender as boolean | undefined,
+    oldDesign: order.oldDesign as boolean | undefined,
     isSample: order.isSample as boolean | undefined,
     bigSpenderThresholdUsd: order.bigSpenderThresholdUsd as number | undefined,
     // Which product was ordered → drives design variant

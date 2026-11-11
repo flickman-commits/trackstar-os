@@ -2,17 +2,23 @@
  * What a print is made from, and the decision the sender makes with it.
  * Pure: no database, so the rules can be tested on their own.
  */
+import { sameDesign } from './designSwitch.js'
 
 // Two specs that agree on these would print the same.
 export const PRINTED = ['template', 'size', 'name', 'bib', 'time', 'pace', 'noTime', 'date', 'condition', 'temp', 'photoPath']
 
-/** The printed fields where two specs disagree, in PRINTED order. */
-export function changedPrintedFields(a, b) {
-  return PRINTED.filter(k => (a?.[k] ?? null) !== (b?.[k] ?? null))
+/**
+ * The printed fields where two specs disagree, in PRINTED order. `a` is what
+ * the order should print now, `b` what a design was made from; `renderedAt`
+ * (when that design was queued) lets a design made before a race's design
+ * switch count as the old design it is (designSwitch.js).
+ */
+export function changedPrintedFields(a, b, { renderedAt = null } = {}) {
+  return PRINTED.filter(k => k === 'template' ? !sameDesign(a?.template, b?.template, renderedAt) : (a?.[k] ?? null) !== (b?.[k] ?? null))
 }
 
-export function printedDiffers(a, b) {
-  return changedPrintedFields(a, b).length > 0
+export function printedDiffers(a, b, opts) {
+  return changedPrintedFields(a, b, opts).length > 0
 }
 
 /** Field names as a person reads them, for a note or a Slack line. */
@@ -42,6 +48,6 @@ export function sendDecision(job, check) {
   // PDF is made by hand and carries { kind: 'custom_final' }.
   if (!job?.spec?.template) return { action: 'send' }
   if (!check?.ok || !check.spec) return { action: 'wait', reasons: check?.reasons?.length ? check.reasons : ['the order could not be checked'] }
-  const fields = changedPrintedFields(check.spec, job.spec)
+  const fields = changedPrintedFields(check.spec, job.spec, { renderedAt: job.createdAt })
   return fields.length ? { action: 'stale', fields } : { action: 'send' }
 }

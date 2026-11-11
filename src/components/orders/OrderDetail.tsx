@@ -2579,6 +2579,13 @@ Thank you!`
                 )}
                 {/* The customer's open Support conversations, above the design: many are a request to change it. */}
                 <ConversationPanel orderId={selectedOrder.id} enabled={!!selectedOrder.customerEmail && can('support')} onChanged={() => { fetchOrders() }} />
+                {/* Bought before the race's design changed (designSwitch.js): it must go out with the old design. */}
+                {selectedOrder.oldDesign && (
+                  <div className="rounded-md border-2 border-red-600 bg-red-600 px-4 py-3 text-white">
+                    <p className="text-base font-bold tracking-tight">USE OLD DESIGN - THEY BOUGHT BEFORE WE SWITCHED</p>
+                    <p className="mt-0.5 text-[13px] leading-snug text-white/90">They ordered before the new {selectedOrder.effectiveRaceName || selectedOrder.raceName} design went live (11:00 AM ET, Nov 11), so their print keeps "Marathon". The script renders it from the old production file on its own. Anything made or fixed by hand uses the old file too.</p>
+                  </div>
+                )}
                 {/* The same runner's print ordered twice, as separate orders: check before both go out. */}
                 <SameRunnerAlert order={selectedOrder} canEmail={can('support')} onNotify={others => notifySameRunner(selectedOrder, others)} />
                 {/* Missing year. The tag says it, this says what to do. */}

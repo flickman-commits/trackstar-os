@@ -15,6 +15,7 @@ import { awaitingLaterPhoto } from '../orders/photoLaterState.js'
 import { printBlockers } from '../races/verification.js'
 import { isMainEvent, getCanonicalRaceName, namedEventsFor } from '../../scrapers/index.js'
 import { pickResearch } from '../research/pickResearch.js'
+import { originalKeyFor } from './designSwitch.js'
 
 export const SIZES = ['8x10', '12x18', '16x24']
 
@@ -66,6 +67,13 @@ export function eventLabel(eventType) {
  * keyed by its own spelling never moves.
  */
 export function resolveTemplate(order, raceName, eventType, has) {
+  const key = baseTemplate(order, raceName, eventType, has)
+  // Bought before the race's design changed: the old design, and never the
+  // new one in its place (designSwitch.js). No old file yet means it waits.
+  return originalKeyFor(order, key) || key
+}
+
+function baseTemplate(order, raceName, eventType, has) {
   const exact = templateFor(order, raceName, eventType)
   if (has(exact)) return exact
   const canonical = getCanonicalRaceName(raceName)
@@ -89,6 +97,8 @@ export function templateFor(order, raceName, eventType) {
 /** The order fields buildSpec reads. Use this select so callers cannot forget one. */
 export const SPEC_SELECT = {
   id: true, orderNumber: true, parentOrderNumber: true, lineItemIndex: true, trackstarOrderType: true, status: true,
+  // When they bought decides the design for a race whose design changed (designSwitch.js).
+  source: true, createdAt: true,
   raceName: true, raceNameOverride: true, raceYear: true, yearOverride: true,
   runnerName: true, runnerNameOverride: true, productSize: true, hadNoTime: true,
   photoPath: true, photoAddedManually: true, photoFree: true, photoLater: true, photoLaterClosedAt: true, shopifyOrderData: true, arteloOrderData: true,

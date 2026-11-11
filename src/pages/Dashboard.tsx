@@ -2027,6 +2027,9 @@ export default function Dashboard() {
                                 {(order.isRushOrder || order.isExpedited) && (
                                   <span className="px-1.5 py-0.5 bg-red-50 text-red-700 text-[10px] font-semibold rounded whitespace-nowrap" title={order.isExpedited ? `Customer paid for ${order.shippingMethod || 'expedited'} shipping` : 'Rush order'}>🚀 {order.isExpedited ? 'Expedited' : 'Rush'}</span>
                                 )}
+                                {order.oldDesign && (
+                                  <span className="px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded whitespace-nowrap" title="USE OLD DESIGN - THEY BOUGHT BEFORE WE SWITCHED">⚠️ Old design</span>
+                                )}
                                 {order.isBigSpender && (
                                   <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 text-[10px] font-semibold rounded whitespace-nowrap" title="High value order">💰 Big spender{order.orderTotalUsd ? ` $${Math.round(order.orderTotalUsd).toLocaleString()}` : ''}</span>
                                 )}

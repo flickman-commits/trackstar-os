@@ -317,7 +317,7 @@ export async function closeOutdatedDesigns(orderId, note) {
   if (!open.length) return 0
   const { ok, spec } = await checkOrder(orderId, { allowUnpaidPhoto: true }).catch(() => ({ ok: false }))
   if (!ok) return 0
-  const stale = open.filter(j => printedDiffers(spec, j.spec))
+  const stale = open.filter(j => printedDiffers(spec, j.spec, { renderedAt: j.createdAt }))
   if (!stale.length) return 0
   await prisma.renderJob.updateMany({ where: { id: { in: stale.map(j => j.id) }, arteloSentAt: null }, data: { review: 'closed', reviewNote: note, reviewedAt: new Date(), sendAfter: null } })
   return stale.length
@@ -333,7 +333,7 @@ export async function closeOutdatedDesigns(orderId, note) {
 export async function rerenderChanged({ limit = 10 } = {}) {
   const rows = await prisma.order.findMany({
     where: { trackstarOrderType: { in: ['standard', 'bulk'] }, status: { notIn: ['completed', 'flagged'] }, renderJobs: { some: {} } },
-    select: { id: true, renderJobs: { orderBy: { version: 'desc' }, take: 1, select: { status: true, review: true, spec: true } } },
+    select: { id: true, renderJobs: { orderBy: { version: 'desc' }, take: 1, select: { status: true, review: true, spec: true, createdAt: true } } },
   })
   let queued = 0
   for (const o of rows) {
@@ -343,7 +343,7 @@ export async function rerenderChanged({ limit = 10 } = {}) {
     // hand-completion never gets here: that order is completed).
     if (!last || last.spec?.altSize || !(last.status === 'failed' || (last.status === 'done' && (last.review === 'rejected' || last.review === 'closed')))) continue
     const { ok, spec } = await checkOrder(o.id).catch(() => ({ ok: false }))
-    if (!ok || !printedDiffers(spec, last.spec)) continue
+    if (!ok || !printedDiffers(spec, last.spec, { renderedAt: last.createdAt })) continue
     await createJob({ orderId: o.id, requestedBy: 'system' })
     queued++
   }

@@ -16,6 +16,7 @@ import { formatRaceDate, formatTemp, formatTime, formatPace } from '../../../ser
 import { resolveEvent } from '../../../server/lib/raceEvent.js'
 import { dateVerified } from '../../../server/domain/races/verification.js'
 import { pipelineFor } from '../../../server/domain/orders/pipeline.js'
+import { usesOldDesign } from '../../../server/domain/render/designSwitch.js'
 import { loadPipelineContext } from '../../../server/domain/orders/pipelineStatus.js'
 import { sendPublicError } from '../../../server/lib/publicError.js'
 import { waitingOnCustomers, bouncedCustomers } from '../../../server/domain/support/compose.js'
@@ -430,6 +431,8 @@ export default async function handler(req, res) {
         // Order total + big-spender flag — for the "💰 BIG SPENDER" prioritize callout
         orderTotalUsd: money ? getOrderTotalUsd(order) : null,
         isBigSpender: isBigSpender(order),
+        // Bought before the race's design changed: they get the old design (designSwitch.js).
+        oldDesign: usesOldDesign(order, getCanonicalRaceName(order.raceNameOverride ?? order.raceName) || (order.raceNameOverride ?? order.raceName)),
         // A sample: a creator's sample, or an order sent from Tools > Samples (Shopify tag "sample").
         isSample: order.source === 'creator_sample' || String(order.shopifyOrderData?.tags || '').split(',').some(t => t.trim().toLowerCase() === 'sample'),
         bigSpenderThresholdUsd: BIG_SPENDER_THRESHOLD_USD,
