@@ -9,10 +9,16 @@
  *
  * Two backends:
  *
- *   anthropic  The official SDK. Default model claude-opus-5. Thinking is on
- *              by default on that model, so the request does not set it; depth
- *              is controlled with output_config.effort, which callers pick per
- *              job (email drafting wants "low", a report wants "high").
+ *   anthropic  The official SDK. Default model claude-opus-5-5 (Matt,
+ *              2026-11-10; was claude-opus-5). Thinking is always on on that
+ *              model and cannot be switched off, so the request does not set
+ *              it; depth is controlled with output_config.effort, which every
+ *              caller sets per job (email drafting wants "low", a report wants
+ *              "high"). Opus 5.5's own default effort is medium, so a caller
+ *              that leaves effort out gets this file's default, also medium.
+ *              A request the model declines on a safety classifier is re-run
+ *              on a fallback model by the API itself (server-side fallbacks),
+ *              instead of failing.
  *
  *   openai     Any OpenAI-compatible chat endpoint: OpenAI itself, or Ollama,
  *              vLLM, LM Studio and llama.cpp on a local box. Plain fetch
@@ -41,7 +47,15 @@
 import { requireConnection } from './connections.js'
 
 
-const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5'
+const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-5-5'
+
+/**
+ * Models that take the server-side refusal fallback. The API routes a declined
+ * request by refusal category to another model and answers in the same call
+ * (beta server-side-fallback-2026-07-01, fallbacks "default"). Billing: the
+ * rescue is billed at the fallback model's rates.
+ */
+const FALLBACK_MODELS = /^claude-(opus-5-5|opus-5|fable-5-2|fable-5-1|sonnet-5-5)$/
 const DEFAULT_OPENAI_MODEL = 'gpt-4o'
 
 /**
@@ -209,14 +223,20 @@ export async function complete({
     const messages = [{ role: 'user', content: userMessage }]
     let response
     for (let attempt = 0; ; attempt++) {
-      response = await client.messages.create({
+      const params = {
         model: usedModel,
         max_tokens: maxTokens,
         system: anthropicSystem(systemParts, cacheSystem),
         output_config: { effort },
         ...(tools ? { tools } : {}),
         messages,
-      }, { timeout: timeoutMs, maxRetries: timeoutMs > 150_000 ? 0 : 1 })
+      }
+      const options = { timeout: timeoutMs, maxRetries: timeoutMs > 150_000 ? 0 : 1 }
+      // A declined request is re-run on a fallback model in the same call (FALLBACK_MODELS).
+      // LLM_FALLBACKS=off sends it the plain way.
+      response = FALLBACK_MODELS.test(usedModel) && process.env.LLM_FALLBACKS !== 'off'
+        ? await client.beta.messages.create({ ...params, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' }, options)
+        : await client.messages.create(params, options)
       // Cached tokens are billed apart from input_tokens; counted in so usage is the whole prompt.
       usage.input += (response.usage?.input_tokens || 0) + (response.usage?.cache_read_input_tokens || 0) + (response.usage?.cache_creation_input_tokens || 0)
       usage.cached = (usage.cached || 0) + (response.usage?.cache_read_input_tokens || 0)
