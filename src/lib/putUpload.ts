@@ -8,7 +8,10 @@
  * comes back unchanged.
  */
 export async function putUpload(url: string, init: RequestInit): Promise<Response> {
-  const res = await fetch(url, { ...init, method: 'PUT' })
+  let res: Response
+  // A dropped connection is a sentence a person can act on, not the browser's "Load failed".
+  try { res = await fetch(url, { ...init, method: 'PUT' }) }
+  catch { throw new Error('The upload did not get through. Check your connection and try again.') }
   if (res.status === 504) return new Response(null, { status: 200 })
   return res
 }

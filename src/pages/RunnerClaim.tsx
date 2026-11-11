@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Loader2, CheckCircle2 } from 'lucide-react'
+import { loadPublic, LoadError } from '@/lib/publicLoad'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -18,15 +19,15 @@ const inputStyle = { border: `1px solid ${T.line}`, backgroundColor: '#FFFFFF' }
 export default function RunnerClaim() {
   const { token } = useParams<{ token: string }>()
   const [info, setInfo] = useState<{ partnerName: string; raceName: string; raceYear: number; note: string | null; product: string } | null>(null)
-  const [state, setState] = useState<'loading' | 'ready' | 'gone' | 'sent' | 'duplicate'>('loading')
+  const [state, setState] = useState<'loading' | 'ready' | 'gone' | 'sent' | 'duplicate' | 'unavailable'>('loading')
   const [f, setF] = useState({ firstName: '', lastName: '', line1: '', line2: '', city: '', state: '', zip: '', country: 'United States' })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/public/bulk-intake?kind=runner&token=${encodeURIComponent(token || '')}`)
-      .then(async r => { if (!r.ok) throw new Error(); setInfo(await r.json()); setState('ready') })
-      .catch(() => setState('gone'))
+    loadPublic<NonNullable<typeof info>>(`${API_BASE}/api/public/bulk-intake?kind=runner&token=${encodeURIComponent(token || '')}`)
+      .then(d => { setInfo(d); setState('ready') })
+      .catch((e: LoadError) => setState(e.gone ? 'gone' : 'unavailable'))
   }, [token])
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF(v => ({ ...v, [k]: e.target.value }))
@@ -66,6 +67,7 @@ export default function RunnerClaim() {
   )
 
   if (state === 'loading') return shell(<div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#999' }} /></div>)
+  if (state === 'unavailable') return shell(<div className="rounded-2xl p-8 text-center" style={{ backgroundColor: T.card, border: `1px solid ${T.line}` }}><h1 className="text-lg font-bold mb-2">We couldn't load this just now</h1><p className="text-sm" style={{ color: '#666' }}>Check your connection and try again. Your link is fine.</p><button onClick={() => window.location.reload()} className="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-md text-sm font-semibold" style={{ backgroundColor: '#1A1A1A', color: '#fff' }}>Try again</button></div>)
   if (state === 'gone' || !info) return shell(<div className="rounded-2xl p-8 text-center" style={{ backgroundColor: T.card, border: `1px solid ${T.line}` }}><h1 className="text-lg font-bold mb-2">This link is no longer active</h1><p className="text-sm" style={{ color: '#666' }}>Check with your team for a fresh one.</p></div>)
 
   if (state === 'sent' || state === 'duplicate') return shell(

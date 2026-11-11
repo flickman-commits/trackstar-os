@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Loader2, Check, Maximize2 } from 'lucide-react'
 import ProofFullscreen from '@/components/ProofFullscreen'
+import { loadPublic, LoadError } from '@/lib/publicLoad'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -45,7 +46,7 @@ export default function SurveyVote() {
   const { token } = useParams<{ token: string }>()
   const voter = useMemo(voterId, [])
   const [survey, setSurvey] = useState<Survey | null>(null)
-  const [state, setState] = useState<'loading' | 'ready' | 'gone' | 'voted'>('loading')
+  const [state, setState] = useState<'loading' | 'ready' | 'gone' | 'voted' | 'unavailable'>('loading')
   const [index, setIndex] = useState(0)
   const [voted, setVoted] = useState<string | null>(null)
   const [comment, setComment] = useState('')
@@ -58,15 +59,14 @@ export default function SurveyVote() {
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [])
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/public/survey?token=${encodeURIComponent(token || '')}&voter=${encodeURIComponent(voter)}`)
-      .then(async r => { if (!r.ok) throw new Error(); return r.json() as Promise<Survey> })
+    loadPublic<Survey>(`${API_BASE}/api/public/survey?token=${encodeURIComponent(token || '')}&voter=${encodeURIComponent(voter)}`)
       .then(s => {
         setSurvey(s)
         if (s.myVote) {
           setVoted(s.myVote.optionId); setComment(s.myVote.comment || ''); setCommentSaved(!!s.myVote.comment); setState('voted')
         } else setState('ready')
       })
-      .catch(() => setState('gone'))
+      .catch((e: LoadError) => setState(e.gone ? 'gone' : 'unavailable'))
   }, [token, voter])
 
   // Keep the counter and dots in step with a swipe.
@@ -124,6 +124,13 @@ export default function SurveyVote() {
   )
 
   if (state === 'loading') return shell(<div className="flex justify-center py-24"><Loader2 className="w-6 h-6 animate-spin text-white/40" /></div>)
+  if (state === 'unavailable') return shell(
+    <div className="rounded-2xl p-8 text-center mt-10" style={{ backgroundColor: T.card }}>
+      <h1 className="text-lg font-bold mb-1">We couldn't load this just now</h1>
+      <p className="text-sm text-white/60">Check your connection and try again.</p>
+      <button onClick={() => window.location.reload()} className="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-md text-sm font-semibold bg-white text-black">Try again</button>
+    </div>
+  )
   if (state === 'gone' || !survey) return shell(
     <div className="rounded-2xl p-8 text-center mt-10" style={{ backgroundColor: T.card }}>
       <h1 className="text-lg font-bold mb-1">This link is not active</h1>

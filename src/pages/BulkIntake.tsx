@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Trash2, Loader2, CheckCircle2, Upload, Download, Copy, Link2, ChevronDown, ChevronUp } from 'lucide-react'
 import ProofFullscreen from '@/components/ProofFullscreen'
 import { useArmed } from '@/lib/useArmed'
+import { loadPublic, LoadError } from '@/lib/publicLoad'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -61,7 +62,7 @@ function parsePaste(text: string): Row[] {
 export default function BulkIntake() {
   const { token } = useParams<{ token: string }>()
   const [info, setInfo] = useState<{ partnerName: string; raceName: string; raceYear: number; quantity: number; entered: number; note: string | null; product: string; runnerLink: string | null; previewImageUrl: string | null; event?: string | null; namesOnly?: boolean; received: { id: string; name: string; city: string | null; at: string }[] | null } | null>(null)
-  const [state, setState] = useState<'loading' | 'ready' | 'gone' | 'sent'>('loading')
+  const [state, setState] = useState<'loading' | 'ready' | 'gone' | 'sent' | 'unavailable'>('loading')
   const [rows, setRows] = useState<Row[]>([blank()])
   const [mode, setMode] = useState<'paste' | 'link'>('paste')
   const [copied, setCopied] = useState(false)
@@ -73,9 +74,9 @@ export default function BulkIntake() {
   const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/public/bulk-intake?token=${encodeURIComponent(token || '')}`)
-      .then(async r => { if (!r.ok) throw new Error(); setInfo(await r.json()); setState('ready') })
-      .catch(() => setState('gone'))
+    loadPublic<NonNullable<typeof info>>(`${API_BASE}/api/public/bulk-intake?token=${encodeURIComponent(token || '')}`)
+      .then(d => { setInfo(d); setState('ready') })
+      .catch((e: LoadError) => setState(e.gone ? 'gone' : 'unavailable'))
   }, [token])
 
   const usable = rows.filter(r => r.firstName.trim() && r.lastName.trim())
@@ -115,6 +116,7 @@ export default function BulkIntake() {
   )
 
   if (state === 'loading') return shell(<div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#999' }} /></div>)
+  if (state === 'unavailable') return shell(<div className="rounded-2xl p-8 text-center" style={{ backgroundColor: T.card, border: `1px solid ${T.line}` }}><h1 className="text-lg font-bold mb-2">We couldn't load this just now</h1><p className="text-sm" style={{ color: '#666' }}>Check your connection and try again. Your link is fine.</p><button onClick={() => window.location.reload()} className="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-md text-sm font-semibold" style={{ backgroundColor: '#1A1A1A', color: '#fff' }}>Try again</button></div>)
   if (state === 'gone' || !info) return shell(<div className="rounded-2xl p-8 text-center" style={{ backgroundColor: T.card, border: `1px solid ${T.line}` }}><h1 className="text-lg font-bold mb-2">This link is no longer active</h1><p className="text-sm" style={{ color: '#666' }}>Ask your Trackstar contact for a fresh one.</p></div>)
 
   if (state === 'sent' && result) return shell(

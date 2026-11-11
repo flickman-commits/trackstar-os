@@ -4,6 +4,7 @@ import { Loader2, CheckCircle2, ImagePlus } from 'lucide-react'
 import PhotoCropper from '@/components/PhotoCropper'
 import SiteFooter from '@/components/SiteFooter'
 import { putUpload } from '../lib/putUpload'
+import { loadPublic, LoadError, OFFLINE } from '@/lib/publicLoad'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -35,7 +36,9 @@ type Info = {
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
 
 async function postJson(path: string, body: Record<string, unknown>) {
-  const res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  let res: Response
+  try { res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) }
+  catch { return { ok: false, status: 0, data: { error: OFFLINE } } }
   const data = await res.json().catch(() => ({}))
   return { ok: res.ok, status: res.status, data }
 }
@@ -44,6 +47,7 @@ export default function PhotoLater() {
   const { token } = useParams<{ token: string }>()
   const [info, setInfo] = useState<Info | null>(null)
   const [gone, setGone] = useState(false)
+  const [unavailable, setUnavailable] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const cropExport = useRef<(() => Promise<File>) | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -53,9 +57,9 @@ export default function PhotoLater() {
 
   useEffect(() => {
     document.title = 'Add your photo | Trackstar'
-    fetch(`${API_BASE}/api/public/photo-later?token=${encodeURIComponent(token || '')}`)
-      .then(async r => { if (!r.ok) throw new Error(); setInfo(await r.json()) })
-      .catch(() => setGone(true))
+    loadPublic<Info>(`${API_BASE}/api/public/photo-later?token=${encodeURIComponent(token || '')}`)
+      .then(setInfo)
+      .catch((e: LoadError) => (e.gone ? setGone(true) : setUnavailable(true)))
   }, [token])
 
   // Done, skipped or closed is a short card: bring it into view, or a phone
@@ -106,6 +110,7 @@ export default function PhotoLater() {
   )
   const card = (children: React.ReactNode, extra = '') => <div className={`p-6 ${extra}`} style={{ backgroundColor: T.card, borderRadius: 8 }}>{children}</div>
 
+  if (unavailable) return shell(card(<><h1 className="text-xl font-bold mb-2">We couldn't load this just now</h1><p style={{ color: T.muted }}>Check your connection and try again. Your link is fine.</p><button onClick={() => window.location.reload()} className="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-md text-sm font-semibold" style={{ backgroundColor: '#1A1A1A', color: '#fff' }}>Try again</button></>))
   if (gone) return shell(card(<><h1 className="text-xl font-bold mb-2">This link is no longer active</h1><p style={{ color: T.muted }}>Reply to your order email and we'll sort it out.</p></>))
   if (!info) return shell(<div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#999' }} /></div>)
 

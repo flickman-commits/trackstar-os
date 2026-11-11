@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { CheckCircle2, Clock, ImagePlus, Loader2, MapPin, Pencil } from 'lucide-react'
 import PhotoCropper from '@/components/PhotoCropper'
 import { putUpload } from '../lib/putUpload'
+import { loadPublic, LoadError, OFFLINE } from '@/lib/publicLoad'
 
 /**
  * /order/:order/:sig (and the older /ship link): Manage your order, from the
@@ -85,21 +86,27 @@ function fractionLeft(placedAt: string | null, closesAt: string, now: number) {
 export default function ManageOrder() {
   const { order, sig } = useParams<{ order: string; sig: string }>()
   const [info, setInfo] = useState<Info | null>(null)
-  const [state, setState] = useState<'loading' | 'ready' | 'bad' | 'cancelled' | 'not_ready'>('loading')
+  const [state, setState] = useState<'loading' | 'ready' | 'bad' | 'cancelled' | 'not_ready' | 'unavailable' | 'slow'>('loading')
   const [tries, setTries] = useState(0)
   const [refunded, setRefunded] = useState('')
   const [now, setNow] = useState(Date.now())
 
   useEffect(() => {
     document.title = 'Manage your order | Trackstar'
-    fetch(`${API_BASE}/api/public/manage-order?order=${encodeURIComponent(order || '')}&sig=${encodeURIComponent(sig || '')}`)
-      .then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) { setState(d.error === 'not_ready' ? 'not_ready' : 'bad'); return } setInfo(d); setState('ready') })
-      .catch(() => setState('bad'))
+    // Only a link that is really wrong is "not working" (lib/publicLoad.ts); a busy
+    // server or a dropped connection gets Try again.
+    loadPublic<Info>(`${API_BASE}/api/public/manage-order?order=${encodeURIComponent(order || '')}&sig=${encodeURIComponent(sig || '')}`)
+      .then(d => { setInfo(d); setState('ready') })
+      .catch((e: LoadError) => setState(e.code === 'not_ready' ? 'not_ready' : e.gone ? 'bad' : 'unavailable'))
   }, [order, sig, tries])
-  // A brand new order is still on its way in from Shopify: look again every 30 seconds.
+  // A brand new order is still on its way in from Shopify: look again, a little
+  // less often each time (30 s, 1, 2, then every 4 minutes), and stop after about
+  // half an hour. A page left open used to poll every 30 seconds, use up its own
+  // hourly limit, and then say the link was not working.
   useEffect(() => {
     if (state !== 'not_ready') return
-    const t = setTimeout(() => setTries(n => n + 1), 30e3)
+    if (tries >= 10) { setState('slow'); return }
+    const t = setTimeout(() => setTries(n => n + 1), 30e3 * Math.min(2 ** tries, 8))
     return () => clearTimeout(t)
   }, [state, tries])
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 30e3); return () => clearInterval(t) }, [])
@@ -107,7 +114,10 @@ export default function ManageOrder() {
   // One call shape for every change. A window that closed since the page
   // loaded comes back as a reason, and the page switches to the closed card.
   const post = async (body: Record<string, unknown>) => {
-    const r = await fetch(`${API_BASE}/api/public/manage-order`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order, sig, ...body }) })
+    let r: Response
+    try {
+      r = await fetch(`${API_BASE}/api/public/manage-order`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order, sig, ...body }) })
+    } catch { throw new Error(OFFLINE) }
     const d = await r.json().catch(() => ({}))
     if (r.ok) return d
     if (['too_late', 'in_production', 'shipped', 'cancelled'].includes(d.error) || (d.error === 'unavailable' && ['in_production', 'cancelled'].includes(d.detail))) {
@@ -138,6 +148,22 @@ export default function ManageOrder() {
           <div className={card}>
             <p className="flex items-center gap-2 text-[20px] font-bold"><Loader2 className="w-5 h-5 animate-spin text-[#4600D6]" />We're setting up your order</p>
             <p className="text-[17px] text-[#666666] mt-2 leading-snug">Your order just came in. It takes a few minutes to get it ready to change here, so this page will refresh on its own. You can also come back to the link in your email any time in the next 48 hours.</p>
+          </div>
+        )}
+
+        {state === 'unavailable' && (
+          <div className={card}>
+            <p className="text-[20px] font-bold">We couldn't load your order just now.</p>
+            <p className="text-[17px] text-[#666666] mt-2">Check your connection and try again. Your link is fine.</p>
+            <button onClick={() => window.location.reload()} className="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-md text-sm font-semibold" style={{ backgroundColor: '#1A1A1A', color: '#fff' }}>Try again</button>
+          </div>
+        )}
+
+        {state === 'slow' && (
+          <div className={card}>
+            <p className="text-[20px] font-bold">Your order is taking longer than usual to set up.</p>
+            <p className="text-[17px] text-[#666666] mt-2">Come back to the link in your email in a little while, or reply to that email and we'll help.</p>
+            <button onClick={() => window.location.reload()} className="mt-4 inline-flex items-center justify-center px-5 py-2.5 rounded-md text-sm font-semibold" style={{ backgroundColor: '#1A1A1A', color: '#fff' }}>Try again</button>
           </div>
         )}
 
@@ -304,7 +330,9 @@ function ReplacePhotoRow({ print: p, post, onChange }: { print: Print; post: Pos
 }
 
 async function postJson(path: string, body: Record<string, unknown>) {
-  const res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  let res: Response
+  try { res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) }
+  catch { return { ok: false, status: 0, data: { error: OFFLINE } } }
   const data = await res.json().catch(() => ({}))
   return { ok: res.ok, status: res.status, data }
 }
