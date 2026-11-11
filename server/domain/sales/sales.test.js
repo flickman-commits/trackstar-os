@@ -403,3 +403,12 @@ test('the library reads the file kind from the type', async () => {
   assert.equal(KINDS['application/vnd.openxmlformats-officedocument.presentationml.presentation'], 'deck')
   assert.equal(KINDS['text/csv'], undefined, 'a spreadsheet is not a sales asset')
 })
+
+test('a model-written email gets the first-line blank after the greeting, so it cannot be sent as written', async () => {
+  const { withOpenerBlank } = await import('./drafting.js')
+  const { NEEDS_OPENER } = await import('./angles.js')
+  const out = withOpenerBlank('Hey Sam,\n\nYour course past the river is one of the best in the state.\n\nWe make prints...')
+  assert.equal(out.split('\n\n')[1], NEEDS_OPENER)
+  assert.equal(withOpenerBlank(out), out)
+  assert.ok(withOpenerBlank('We make prints.').startsWith(NEEDS_OPENER))
+})

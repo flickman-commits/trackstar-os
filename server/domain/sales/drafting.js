@@ -14,7 +14,7 @@
  */
 import prisma from '../../db.js'
 import { complete, isLlmConfigured } from '../../lib/llm.js'
-import { cadenceFor, HOUSE_STYLE, CHARITY_RULES, DEFAULT_SOCIAL_PROOF, templateFor, fillTemplate, greetingName, RACE_ONE_LINERS } from './angles.js'
+import { cadenceFor, HOUSE_STYLE, CHARITY_RULES, DEFAULT_SOCIAL_PROOF, templateFor, fillTemplate, greetingName, RACE_ONE_LINERS, NEEDS_OPENER } from './angles.js'
 import { loadWorkspace } from './sequences.js'
 import { sendMessage, gmailStatus, lineToHtml } from './gmail.js'
 import { readAsset, isAssetStorageConfigured, isSalesAssetId } from './assets.js'
@@ -138,6 +138,23 @@ function nextSeasonYear(raceDate) {
 }
 
 /** What the model is told. Everything here comes from Attio or the send log. */
+/**
+ * The first line is always the sender's (CLAUDE.md: the tool never writes an
+ * opener). A model-written variant or rewrite gets the same blank a template
+ * does, straight after the greeting, so the composer will not send it until
+ * the person writes that line. Pure.
+ */
+export function withOpenerBlank(body) {
+  const text = String(body || '').trim()
+  if (text.includes(NEEDS_OPENER)) return text
+  const [first, ...rest] = text.split('\n')
+  const after = rest.join('\n').trim()
+  if (/^\s*(hey|hi|hello|dear)\b/i.test(first || '')) return `${first}\n\n${NEEDS_OPENER}${after ? `\n\n${after}` : ''}`
+  return `${NEEDS_OPENER}${text ? `\n\n${text}` : ''}`
+}
+
+const OPENER_RULE = `After the greeting, put this line on its own, exactly as written, for the sender to replace with their own opener: ${NEEDS_OPENER}\nNever write an opening line about the recipient yourself; the paragraph after that line goes straight to the point of the email.`
+
 export function buildPrompt({ deal, person, touchNumber, step, previous, socialProof, sender }) {
   const pipeline = pipelineOf(deal)
   const firstName = greetingName(person)
@@ -177,6 +194,7 @@ export function buildPrompt({ deal, person, touchNumber, step, previous, socialP
     for (const t of previous) lines.push(`--- Touch ${t.touchNumber} · subject: ${t.subject}\n${(t.body || '').slice(0, 800)}`)
   }
   lines.push('')
+  lines.push(OPENER_RULE)
   lines.push(`Write ${VARIANT_COUNT} variants. Return JSON: {"variants":[{"subject":"...","body":"..."}]} with exactly ${VARIANT_COUNT} items.`)
   return lines.join('\n')
 }
@@ -227,7 +245,7 @@ export async function draftVariants({ dealId, personId, useTemplate = false, act
 
   const raw = Array.isArray(json?.variants) ? json.variants : Array.isArray(json) ? json : []
   const variants = raw
-    .map(v => ({ subject: String(v.subject || '').trim(), body: String(v.body || '').trim() }))
+    .map(v => ({ subject: String(v.subject || '').trim(), body: withOpenerBlank(String(v.body || '').trim()) }))
     .filter(v => v.subject && v.body)
     .slice(0, VARIANT_COUNT)
   if (!variants.length) throw new UserError('The model returned no usable variants')
@@ -255,6 +273,9 @@ export async function reviseDraft({ dealId, subject, body, instruction, actor })
       body,
       '',
       `Rewrite it to this instruction, keeping everything else that works: ${instruction}`,
+      body.includes(NEEDS_OPENER)
+        ? OPENER_RULE
+        : 'The line after the greeting is the sender\'s own opener: keep it word for word, and write no other opener.',
       'Return JSON: {"subject":"...","body":"..."}',
     ].join('\n'),
     json: true,
@@ -263,7 +284,9 @@ export async function reviseDraft({ dealId, subject, body, instruction, actor })
     cacheSystem: true,
     purpose: 'sales.revise',
   })
-  const out = { subject: String(json?.subject || subject).trim(), body: String(json?.body || '').trim() }
+  const revised = String(json?.body || '').trim()
+  // The blank stays until the person fills it, whatever the model returned.
+  const out = { subject: String(json?.subject || subject).trim(), body: revised && body.includes(NEEDS_OPENER) ? withOpenerBlank(revised) : revised }
   if (!out.body) throw new UserError('The model returned nothing usable')
   return { ...out, model: `${provider}/${model}` }
 }
