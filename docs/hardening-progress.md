@@ -45,7 +45,7 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 - [x] 5.5 Bulk-runner order creation cannot double-create: a `creatingAt` mark before the create, and a lookup by order number at Artelo on retry (relies on `orders/get`'s `name` filter, used the same way in support/replacements.js). Not verified against Artelo.
 - [x] 5.6 Photo-later emails stamped before sending, cleared on failure; refunds interrupted after closing are flagged to #admin-alerts (not refunded automatically).
 - [x] 5.7 Etsy token refresh: compare-and-swap save, one re-read after a refusal, failures to #admin-alerts hourly; health check and Test connections use the shared client.
-- [~] 5.8 Unique (orderId, version) on RenderJob and (orderId, raceId) on RunnerResearch are in the schema, and render creation retries a taken number. NOT applied to the database: Matt runs `scripts/check-duplicate-rows.mjs`, then `npx prisma db push`. Research writes were not converted to upsert (a rare race now errors instead of duplicating). Order.orderNumber unique not added.
+- [x] 5.8 Unique (orderId, version) on RenderJob and (orderId, raceId) on RunnerResearch are in the schema, and render creation retries a taken number. Applied to the database by Matt on 2026-11-10 (duplicate check 0 and 0, then `npx prisma db push`). Research writes were not converted to upsert (a rare race now errors instead of duplicating). Order.orderNumber unique not added.
 - [~] 5.9 Import-side completion goes through `completeOrder` (via 'artelo'). Not done: setting a custom order's design status to sent_to_production on the way, which changes what counts for designer pay. Matt's call.
 - [x] 5.10 Photo add-on: the photo is kept when Shopify added the paid line despite an error answer.
 - [x] 5.11 "When production is broken" in the README. Backup line left for Matt.
@@ -83,7 +83,6 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 ## Waiting on Matt
 - Phase 1: add `CONNECTIONS_FORCE_OFF=all` (or the explicit list in `.env.example`) to `.env.local`. Never in Vercel.
 - Phases 1 to 5: commits are local, not pushed.
-- Phase 5, 5.8: duplicate check run 2026-11-10, 0 and 0. Next: `npx prisma db push` (the code works before and after).
 - Phase 5, 5.9: should a custom order completed by the import (fulfilled in Artelo) also be marked sent_to_production, which counts it for designer pay?
 - Phase 5, 5.11: fill in the README's backup line (Supabase backup tier, how to restore).
 - Phase 4: after deploying, delete ADMIN_SECRET from Vercel.
