@@ -3,6 +3,12 @@ import { ExternalLink, Loader2 } from 'lucide-react'
 import { btnGhost, btnPrimary, cardLabel, chip, chipTone, infoCard, inputBase, sectionLabel, segment, textLink } from '@/lib/ui'
 import { type Deal, type Person } from '@/types/sales'
 
+/** A CRM field used as a link: only an http(s) address, never javascript: or anything else typed into Attio. */
+function webLink(v: string | null | undefined): string | undefined {
+  const s = String(v || '').trim()
+  return /^https?:\/\//i.test(s) ? s : undefined
+}
+
 /**
  * The person and the deal, straight from Attio.
  *
@@ -112,13 +118,13 @@ export default function WhoPane({ deal, person, onSelectPerson, onNote, busy }: 
           </div>
         )}
         <div className="flex items-center gap-3 mt-2.5 flex-wrap">
-          {person?.linkedin && <a href={person.linkedin} target="_blank" rel="noopener noreferrer" className={textLink}>LinkedIn <ExternalLink className="w-3 h-3" /></a>}
+          {webLink(person?.linkedin) && <a href={webLink(person?.linkedin)} target="_blank" rel="noopener noreferrer" className={textLink}>LinkedIn <ExternalLink className="w-3 h-3" /></a>}
           {(person?.webUrl || deal.webUrl) && (
             <a href={person?.webUrl || deal.webUrl || '#'} target="_blank" rel="noopener noreferrer" className={textLink}>Open in Attio <ExternalLink className="w-3 h-3" /></a>
           )}
           {gmailUrl && <a href={gmailUrl} target="_blank" rel="noopener noreferrer" className={textLink}>View thread in Gmail <ExternalLink className="w-3 h-3" /></a>}
           {!free && !noteOpen && <button onClick={() => setNoteOpen(true)} className={textLink}>+ Add note</button>}
-          {deal.publishedLink && <a href={deal.publishedLink} target="_blank" rel="noopener noreferrer" className={textLink}>Published piece <ExternalLink className="w-3 h-3" /></a>}
+          {webLink(deal.publishedLink) && <a href={webLink(deal.publishedLink)} target="_blank" rel="noopener noreferrer" className={textLink}>Published piece <ExternalLink className="w-3 h-3" /></a>}
           {person?.location && <span className="text-xs text-off-black/50">{person.location}</span>}
         </div>
         {deal.people.length > 1 && (

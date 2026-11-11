@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Copy, Pencil, Check, ChevronDown as ChevronDownIcon } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import type { Order } from '@/components/orders/orderModel'
+import { toast } from 'sonner'
 
 /*
  * The small labelled rows and sections the order detail view is built from.
@@ -32,10 +33,12 @@ export function CollapsibleSection({ title, defaultOpen = true, children, badge 
 export function CopyableField({ label, value, aside }: { label: React.ReactNode; value: string; aside?: React.ReactNode }) {
   const [copied, setCopied] = useState(false)
 
+  // The tick only when it was really copied (the clipboard can refuse: an
+  // unfocused window, a browser setting); otherwise say so.
   const handleCopy = () => {
     navigator.clipboard.writeText(value)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) })
+      .catch(() => toast.error('Could not copy. Select the text and copy it by hand.'))
   }
 
   return (

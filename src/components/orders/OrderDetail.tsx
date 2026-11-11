@@ -101,7 +101,7 @@ export interface OrderDetailProps {
  * place, or as a popup over the completed list.
  */
 export default function OrderDetail({
-  order: selectedOrder, orders, activeView, design, raceShorthands, team, myId,
+  order: selectedOrder, orders, activeView: _activeView, design, raceShorthands, team, myId,
   possibleMatches: possibleMatchesMap, setPossibleMatches: setPossibleMatchesMap,
   edit: { isEditing, setIsEditing, values: editValues, setValues: setEditValues },
   nav: { inline: inlineDetail, index: currentOrderIndex, total: navTotal, go: navigateOrder, close: closeModal },
@@ -708,12 +708,9 @@ export default function OrderDetail({
       }
       setToast({ message: `Weather: ${data.condition} · ${data.temp}`, type: 'success' })
       setShowWeatherCalc(false)
-      // Refresh the order so the new weather + info breakdown show.
-      const refreshed = await apiFetch(`/api/orders?type=${activeView}`).then(r => r.json())
-      const updated = refreshed.orders?.find((o: { orderNumber: string }) => o.orderNumber === order.orderNumber)
-      if (updated) {
-        setSelectedOrder(prev => prev && prev.orderNumber === order.orderNumber ? { ...prev, ...updated, displayOrderNumber: updated.displayOrderNumber || updated.orderNumber } : prev)
-      }
+      // Refresh the order so the new weather + info breakdown show: this order
+      // only (reloadOrder), not the whole list of every standard order ever, which is what it read before.
+      await reloadOrder(order.orderNumber)
       await fetchOrders()
     } catch {
       setToast({ message: 'Failed to calculate weather', type: 'error' })
@@ -800,17 +797,8 @@ export default function OrderDetail({
       setToast({ message: 'Race data updated!', type: 'success' })
       setIsEditingWeather(false)
       await fetchOrders()
-
-      // Update selected order with new data
-      const updatedOrders = await apiFetch(`/api/orders?type=${activeView}`).then(r => r.json())
-      const updated = updatedOrders.orders?.find((o: { orderNumber: string }) => o.orderNumber === order.orderNumber)
-      if (updated) {
-        setSelectedOrder(prev => prev && prev.orderNumber === order.orderNumber ? {
-          ...prev,
-          ...updated,
-          displayOrderNumber: updated.displayOrderNumber || updated.orderNumber
-        } : prev)
-      }
+      // This order only (reloadOrder), not the whole history of the view.
+      await reloadOrder(order.orderNumber)
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error saving race data:', error)
       setToast({ message: 'Failed to save race data', type: 'error' })
