@@ -51,13 +51,13 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 - [x] 5.11 "When production is broken" in the README. Backup line left for Matt.
 
 ## Phase 6: AI and outbound email
-- [ ] 6.1 Weekly playbook review proposes, does not publish
-- [ ] 6.2 Mark untrusted text in drafting and triage prompts
-- [ ] 6.3 LLM plumbing (timeouts, max_tokens, model ids, retry backoff)
-- [ ] 6.4 Sales suppression, reply detection, `[First line]` in AI Rewrite
-- [ ] 6.5 Do not trust the From address without authentication
-- [ ] 6.6 Support reply idempotency
-- [ ] 6.7 Guard rails for the nightly routine
+- [~] 6.1 Weekly playbook review: kept auto-publishing (Matt's call, Oct 30, recorded in playbookReview.js) but holds a revision that adds a link or changes Escalate or a refund rule; Review in Settings applies the held one. Evidence fenced and marked as data. Fully proposal-only is one line away if Matt wants it.
+- [x] 6.2 Customer text fenced in draft and triage prompts (`server/domain/support/untrusted.js`); unauthored notes (portal replies, triage) shown apart from the team's.
+- [x] 6.3 LLM plumbing: per-call timeout (2 min default, 4 research agent, 280 s playbook), max_tokens cut-off reported, Claude ids only to Anthropic, failing drafts back off (SystemConfig draft_fail:*). Not done: a spend ledger. Default model is still claude-opus-5 ($5/$25); claude-opus-5-5 is $4/$20 but defaults to effort medium, so switching is Matt's call.
+- [~] 6.4 Sales: AI variants and Rewrite keep the first-line blank; follow-ups held when they replied in our thread (`server/domain/sales/replies.js`); Attio next_action_date left alone under a person's next action. NOT done, needs Matt: a suppression (do-not-contact) list and where people add to it, and the opt-out wording and postal address line for first touches.
+- [~] 6.5 Inbound email stores Gmail's sender check (SupportMessage.senderCheck); a conversation whose latest email did not pass is drafted as unverified. NEEDS `npx prisma db push` BEFORE DEPLOY. Not done: requiring a pass before mail from our domain or a forwarder counts as the team's (could misfile internal mail if Google leaves the header off it; not checkable here).
+- [x] 6.6 Support reply: same content to the same conversation refused within 10 minutes (released if the send failed); attachments must belong to the conversation's orders.
+- [~] 6.7 Nightly: capture_fixture will not overwrite a known finisher without replace + reason, and a replaced one blocks a fixed claim; event ids proved against real customers' runners; timing-page output marked untrusted and the skill says so; GitHub Action for sensitive paths (needs SLACK_SENSITIVE_WEBHOOK_URL secret). Not done: save_event_id comparing the event's year and title (platform-specific); limiting the routine's key scopes (Matt's settings).
 
 ## Phase 7: Customer pages and the operator's screen
 - [ ] 7.1 A failed load is not a dead link
@@ -82,7 +82,10 @@ The build plan from the 2026-11-10 audit (commit `77e6039`). One phase per sessi
 
 ## Waiting on Matt
 - Phase 1: add `CONNECTIONS_FORCE_OFF=all` (or the explicit list in `.env.example`) to `.env.local`. Never in Vercel.
-- Phases 1 to 5: commits are local, not pushed.
+- Phases 1 to 6: commits are local, not pushed.
+- Phase 6, 6.5: `npx prisma db push` (adds SupportMessage.senderCheck) BEFORE pushing to main, or the mailbox sync fails.
+- Phase 6, 6.4: suppression list and opt-out wording.
+- Phase 6, 6.7: add the GitHub secret SLACK_SENSITIVE_WEBHOOK_URL; delete the stale remote branches (15 sweep/*, 5 claude/*, listed in the Phase 6 report); check the nightly routine's API key scopes.
 - Phase 5, 5.9: should a custom order completed by the import (fulfilled in Artelo) also be marked sent_to_production, which counts it for designer pay?
 - Phase 5, 5.11: fill in the README's backup line (Supabase backup tier, how to restore).
 - Phase 4: after deploying, delete ADMIN_SECRET from Vercel.
