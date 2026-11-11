@@ -25,12 +25,28 @@ function kindOf(contents) {
 }
 
 // A text that is not a runner's name: an all-caps label (START, FINISH) or the race title.
+// Short race names spelled out, so a title like "New York City" on the "NYC
+// Marathon" design reads as the race and not a runner's name (Nov 11 2026: the
+// new NYC design dropped "Marathon", and its title was hidden as a leftover).
+var RACE_SPELLED = { nyc: 'new york city', la: 'los angeles', sf: 'san francisco', dc: 'washington dc', philly: 'philadelphia' };
+function raceTitles(raceName) {
+  var full = String(raceName || '').toLowerCase();
+  var words = full.split(/\s+/), out = [full];
+  var spelled = [];
+  for (var i = 0; i < words.length; i++) spelled.push(RACE_SPELLED[words[i]] || words[i]);
+  out.push(spelled.join(' '));
+  return out;
+}
+
 function notAName(text, raceName) {
   var txt = trim(String(text).replace(/\u0003/g, ' '));
   if (/^[A-Z\s]+$/.test(txt) || /marathon|half|miler|ultra/i.test(txt)) return true;
   if (/^(start|finish)$/i.test(txt)) return true;
   if (txt.split(/\s+/).length < 2 && !/name/i.test(txt)) return true;   // a lone word is a label, not a runner
-  if (raceName && txt.length >= 4 && String(raceName).toLowerCase().indexOf(txt.toLowerCase()) >= 0) return true;
+  if (raceName && txt.length >= 4) {
+    var titles = raceTitles(raceName), low = txt.toLowerCase();
+    for (var r = 0; r < titles.length; r++) if (titles[r].indexOf(low) >= 0) return true;
+  }
   return false;
 }
 
