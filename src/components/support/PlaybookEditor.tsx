@@ -71,6 +71,7 @@ export default function PlaybookEditor({ isAdmin }: { isAdmin: boolean }) {
               </div>
               {review && (
                 <div className="space-y-1.5">
+                  {review.reason && <div className="text-[11px] text-amber-700">{review.reason} Read the changes before applying.</div>}
                   {review.line && <div className="text-[11px] text-off-black/50">{review.line}</div>}
                   <ul className="space-y-1">
                     {review.changes.map((c, i) => <li key={i} className="text-xs text-off-black"><span className="font-medium">{c.what}</span> <span className="text-off-black/50">({c.why})</span></li>)}

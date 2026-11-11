@@ -10,7 +10,7 @@
  */
 import { setCors } from '../../_lib/auth.js'
 import { requireAdminOnly, recordAudit } from '../../_lib/users.js'
-import { reviewPlaybook } from '../../../server/domain/support/playbookReview.js'
+import { reviewPlaybook, heldProposal, clearHeldProposal } from '../../../server/domain/support/playbookReview.js'
 import { savePlaybook, playbookVersions } from '../../../server/domain/support/playbook.js'
 import { sendPublicError } from '../../../server/lib/publicError.js'
 
@@ -22,6 +22,9 @@ export default async function handler(req, res) {
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {}
     if (body.action === 'preview') {
+      // A proposal the Monday review held for a person is shown as it was proposed.
+      const held = body.fresh === true ? null : await heldProposal()
+      if (held) return res.status(200).json({ status: 'proposal', reason: `Held on ${held.at.slice(0, 10)}: it ${held.warnings.join('; ')}.`, line: held.line, changes: held.changes, playbook: held.playbook })
       const out = await reviewPlaybook({ dryRun: true })
       return res.status(200).json({ status: out.status, reason: out.reason || null, line: out.line || null, changes: out.changes || [], playbook: out.playbook || null })
     }
@@ -29,6 +32,7 @@ export default async function handler(req, res) {
       const changes = (Array.isArray(body.changes) ? body.changes : []).slice(0, 25)
       const summary = [String(body.line || '').slice(0, 300), ...changes.map(c => `- ${String(c?.what || '').slice(0, 300)} (${String(c?.why || '').slice(0, 300)})`)].filter(Boolean).join('\n')
       const pb = await savePlaybook(body.playbook, { source: 'weekly', summary, actor: user })
+      await clearHeldProposal()
       await recordAudit({ action: 'support.playbook', summary: `Applied the playbook review (${changes.length} change${changes.length === 1 ? '' : 's'})`, detail: { changes: changes.length }, actor: user })
       return res.status(200).json({ playbook: pb, playbookVersions: await playbookVersions() })
     }
