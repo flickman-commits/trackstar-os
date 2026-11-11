@@ -26,6 +26,32 @@ const RACE_NAME_ALIASES = {
   'Berlin World Major Race': 'Berlin Marathon',
   'Tokyo World Major Race': 'Tokyo Marathon',
   'Sydney World Major Race': 'Sydney Marathon',
+
+  // The NYC and Philadelphia listings dropped "Marathon" on 2026-11-11.
+  'New York City': 'NYC Marathon',
+  NYC: 'NYC Marathon',
+  Philadelphia: 'Philadelphia Marathon',
+  Philly: 'Philadelphia Marathon',
+}
+
+/*
+ * What a customer sees for these races, on the storefront (the cart's Race
+ * Name, the Review step) and in anything we send them. The prints and listings
+ * say the city, never "<City> Marathon". Orders that come in with these names
+ * resolve back through RACE_NAME_ALIASES above.
+ */
+const CUSTOMER_RACE_NAMES = {
+  'NYC Marathon': 'New York City',
+  'Chicago Marathon': 'Chicago',
+  'Boston Marathon': 'Boston',
+  'Philadelphia Marathon': 'Philadelphia',
+}
+
+/** The race name to show a customer: the city for the races above, else the name as is. */
+export function customerRaceName(raceName) {
+  if (!raceName) return raceName
+  const canonical = normalizeRaceName(raceName) || raceName
+  return CUSTOMER_RACE_NAMES[canonical] || CUSTOMER_RACE_NAMES[String(canonical).trim()] || raceName
 }
 
 // Listing-title decorations stripped before matching a title to a race.

@@ -21,6 +21,7 @@ import { stripQuoted } from './mailbox.js'
 import { can } from '../../../api/_lib/roles.js'
 import { replyWindow } from './instagram.js'
 import { UserError } from './errors.js'
+import { customerRaceName } from '../../scrapers/raceNameNormalization.js'
 import { getOrderTotalUsd, BIG_SPENDER_THRESHOLD_USD } from '../../lib/orderValue.js'
 import { replacementsFor } from './replacements.js'
 
@@ -258,7 +259,7 @@ async function mentionedOrders(t, context) {
       number: n,
       orderedAt: rows[0].createdAt,
       items: rows.map(r => ({
-        race: r.raceNameOverride || r.raceName || 'Print',
+        race: customerRaceName(r.raceNameOverride || r.raceName) || 'Print',
         year: r.yearOverride || r.raceYear || null,
         runner: r.runnerNameOverride || r.runnerName || null,
       })),
@@ -471,7 +472,8 @@ function itemRow(o, catalog) {
     status: o.status,
     designStatus: ['custom', 'race_partner'].includes(o.trackstarOrderType) ? o.designStatus : null,
     runner: o.runnerNameOverride || o.runnerName,
-    race: o.raceNameOverride || o.raceName,
+    // The name a customer knows it by: drafts quote it ("New York City", never "NYC Marathon").
+    race: customerRaceName(o.raceNameOverride || o.raceName),
     year: o.yearOverride || o.raceYear,
     size: o.productSize,
     frame: o.frameType,

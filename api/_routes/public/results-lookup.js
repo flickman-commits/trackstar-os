@@ -17,7 +17,7 @@
 import { setCors } from '../../_lib/auth.js'
 import { researchService } from '../../../server/services/ResearchService.js'
 import { isRacePublicSafe, raceNeedsBrowser, getCanonicalRaceName } from '../../../server/scrapers/index.js'
-import { parseRaceNameFromTitle } from '../../../server/scrapers/raceNameNormalization.js'
+import { parseRaceNameFromTitle, customerRaceName } from '../../../server/scrapers/raceNameNormalization.js'
 import {
   checkRateLimitDurable,
   buildCacheKey,
@@ -101,6 +101,10 @@ export default async function handler(req, res) {
   // Canonical race name (e.g. "Personalized Boston Race Print" → "Boston
   // Marathon"). Used in logs so all observability rolls up by canonical name.
   const raceCanonical = getCanonicalRaceName(resolvedRace) || resolvedRace
+  // What the shopper sees and the order's Race Name property records: the
+  // print's own title ("New York City", never "NYC Marathon"). Logs keep the
+  // canonical name.
+  const shownRace = customerRaceName(raceCanonical)
 
   // Rate limit before doing any work. Durable: each lookup can be a live
   // scrape, and a per-instance counter resets on every cold start.
@@ -128,7 +132,7 @@ export default async function handler(req, res) {
     // rather than the listing title the widget sent us. Omitting it left the
     // widget printing "Bayshore Marathon Personalized Race Print" on the review
     // screen and writing it to the order's Race Name property.
-    return res.status(200).json(fallback({ reason: 'no_instant_lookup', raceCanonical }))
+    return res.status(200).json(fallback({ reason: 'no_instant_lookup', raceCanonical: shownRace }))
   }
 
   const cacheKey = buildCacheKey({ race: resolvedRace, year, name })
@@ -177,7 +181,7 @@ export default async function handler(req, res) {
       payload = {
         found: true,
         instant: true,
-        raceCanonical,
+        raceCanonical: shownRace,
         result: {
           name,
           bib: result.bibNumber,
@@ -191,7 +195,7 @@ export default async function handler(req, res) {
       payload = {
         found: false,
         instant: true,
-        raceCanonical,
+        raceCanonical: shownRace,
         fallbackRequired: true,
         // The candidate list was trimmed upstream — let the widget prompt the
         // shopper to refine their search rather than hiding matches silently.
@@ -223,7 +227,7 @@ export default async function handler(req, res) {
       payload = {
         found: false,
         instant: true,
-        raceCanonical,
+        raceCanonical: shownRace,
         fallbackRequired: true,
         truncated: false,
         suggestions: [{
@@ -244,10 +248,10 @@ export default async function handler(req, res) {
         errorType: 'upstream_error',
         detail: result.researchNotes || null,
       }).catch(() => {})
-      payload = fallback({ reason: 'upstream_error', instant: true, raceCanonical })
+      payload = fallback({ reason: 'upstream_error', instant: true, raceCanonical: shownRace })
     } else {
       outcome = 'not_found'
-      payload = fallback({ reason: 'not_found', instant: true, raceCanonical })
+      payload = fallback({ reason: 'not_found', instant: true, raceCanonical: shownRace })
     }
 
     // Never cache a failure. `found`, `suggestions` and `not_found` are facts
