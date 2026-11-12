@@ -95,6 +95,22 @@ export class NYRRScraper extends BaseScraper {
     }
   }
 
+  /** True only when NYRR answers that it has no such event (eventDetails null). Never throws; false when unsure. */
+  async _eventMissing() {
+    try {
+      const response = await fetchWithTimeout(`${this.baseUrl}/events/details`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventCode: this.eventCode })
+      })
+      if (!response.ok) return false
+      const data = await response.json()
+      return data?.success === true && data.eventDetails == null
+    } catch {
+      return false
+    }
+  }
+
   /** True when the event has no finishers at all, i.e. results are not posted. Never throws. */
   async _eventIsEmpty() {
     try {
@@ -153,7 +169,15 @@ export class NYRRScraper extends BaseScraper {
         console.log(`[${this.tag}] No results found for: ${runnerName}`)
         // An event with no finishers at all has not been posted yet (NYC 2026
         // on race day): say so, so nobody goes hunting for a missing runner.
-        if (await this._eventIsEmpty()) return this.notFoundResult(`NYRR has not posted the official ${this.year} results yet. We will find this runner's result once they are up; the lookup runs again on its own.`)
+        if (await this._eventIsEmpty()) {
+          // An empty list for a year NYRR has no event for at all is not
+          // "results coming": NYC 2010 (7411) has no M2010, and the order sat
+          // ten days in Results not posted yet. Results not online instead.
+          if (await this._eventMissing()) {
+            return { ...this.yearNotConfiguredResult(), researchNotes: `Results for ${this.raceName} ${this.year} are not available on the results site (NYRR has no ${this.eventCode} event).` }
+          }
+          return this.notFoundResult(`NYRR has not posted the official ${this.year} results yet. We will find this runner's result once they are up; the lookup runs again on its own.`)
+        }
         return this.notFoundResult()
       }
 
