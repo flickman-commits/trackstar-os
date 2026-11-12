@@ -11,6 +11,10 @@ function inside(bounds, rect) { var cx = (bounds[0] + bounds[2]) / 2, cy = (boun
 function kindOf(contents) {
   var s = trim(String(contents).replace(/\u0003/g, ' '));
   if (/^\d{1,2}:\d{2}:\d{2}$/.test(s)) return 'time';
+  // M:SS: a time under an hour (Philadelphia 8K: "39:00"). Only the time when
+  // the artboard has no H:MM:SS frame (collectFrames), so a stray "7:36" on
+  // another design is never taken for it. A pace has "/ mi" and is caught below.
+  if (/^\d{1,2}:\d{2}$/.test(s)) return 'shorttime';
   if (/\d{1,2}:\d{2}\s*\/\s*mi/i.test(s)) return 'pace';
   if (/^\d{1,2}\.\d{2}\.\d{2}$/.test(s)) return 'date';
   if (/^(19|20)\d{2}$/.test(s)) return 'year';
@@ -94,6 +98,7 @@ function collectFrames(doc, ab, raceName) {
     if (!kind) continue;
     if (kind == 'name' && notAName(tf.contents, raceName)) continue;
     if (L.locked) L.locked = false;
+    if (kind == 'shorttime' && frames.shorttime) continue;
     if (frames[kind]) {
       var keepNew = isPlaceholder(kind, tf.contents) && !isPlaceholder(kind, frames[kind].contents);
       var keepOld = isPlaceholder(kind, frames[kind].contents) && !isPlaceholder(kind, tf.contents);
@@ -103,6 +108,8 @@ function collectFrames(doc, ab, raceName) {
     }
     frames[kind] = tf;
   }
+  // A minutes-only time is the time only on a design with no H:MM:SS frame.
+  if (frames.shorttime) { if (!frames.time) frames.time = frames.shorttime; delete frames.shorttime; }
   // A four-digit "year" on a design that carries a date is a bib number (2047 is a bib, not a year).
   if (frames.year && frames.date) {
     if (!frames.bib) { frames.bib = frames.year; } else { leftovers.push(frames.year); }
@@ -178,7 +185,7 @@ function noTimeFrames(doc, ab) {
     var L = layerOf(tf); if (!L || L.name != layer.name) continue;
     if (!inside(tf.geometricBounds, ab)) continue;
     var kind = kindOf(tf.contents);
-    if (!kind || kind == 'name' || kind == 'time' || kind == 'pace') continue;
+    if (!kind || kind == 'name' || kind == 'time' || kind == 'shorttime' || kind == 'pace') continue;
     frames[kind] = tf; n++;
   }
   return n ? { layer: layer, frames: frames } : null;

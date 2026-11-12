@@ -39,6 +39,10 @@ export function formatTime(time) {
       cleaned = parts.map((p, i) => i === 0 ? String(p) : String(p).padStart(2, '0')).join(':')
     }
   }
+  // Under an hour (an 8K, 5K or 10K) prints as minutes: "0:49:59" is "49:59",
+  // as the Philadelphia 8K design shows it ("39:00").
+  const sub = cleaned.match(/^0{1,2}:(\d{2}):(\d{2})$/)
+  if (sub && sub[1] !== '00') return `${Number(sub[1])}:${sub[2]}`
   return cleaned.replace(/^0(\d):/, '$1:')
 }
 
