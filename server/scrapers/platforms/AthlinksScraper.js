@@ -206,17 +206,26 @@ export class AthlinksScraper extends BaseScraper {
       // the runner; several bibs are different people sharing the name, and
       // which event they ran never settles it (Denver Colfax 2026 had a Diego
       // Garcia in the half and two in the marathon). A person picks.
+      // Keyed by bib AND distance: a challenge runner keeps one bib across
+      // courses (Philadelphia 2023 bib 40101 finished both the 8K and the
+      // half), and which of those prints is the customer's to say.
       const people = new Map()
       for (const r of results) {
         const distKey = this._distKeyOf(r.courseName)
-        if (!distKey || !r.chipMs || people.has(String(r.bib))) continue
-        people.set(String(r.bib), { r, distKey })
+        const key = `${String(r.bib)}|${distKey}`
+        if (!distKey || !r.chipMs || people.has(key)) continue
+        people.set(key, { r, distKey })
       }
       const order = this.config.eventSearchOrder || ['marathon', 'half']
       const found = [...people.values()].sort((a, b) => order.indexOf(a.distKey) - order.indexOf(b.distKey))
       if (found.length === 1) return this._found(found[0].r, found[0].distKey)
       if (found.length > 1) {
-        return this.ambiguousResult(found.map(({ r, distKey }) => ({ name: r.displayName, bib: r.bib, time: this.formatTime(msToTime(r.chipMs)), eventType: this.config.eventLabels?.[distKey] || distKey })))
+        // Each candidate carries its own pace and page, so accepting one (the
+        // same bib can be in two courses) needs no second lookup to fill them.
+        return this.ambiguousResult(found.map(({ r, distKey }) => {
+          const f = this._found(r, distKey)
+          return { name: r.displayName, bib: r.bib, time: f.officialTime, pace: f.officialPace, eventType: f.eventType, resultsUrl: f.resultsUrl }
+        }))
       }
       for (const r of results) if (this._distKeyOf(r.courseName)) console.log(`[${this.tag}] ${r.displayName} is in ${r.courseName} but has no finish time`)
 

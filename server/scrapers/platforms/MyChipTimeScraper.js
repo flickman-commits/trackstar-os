@@ -16,9 +16,9 @@ const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/
 /**
  * Decide a name search from every sold event's own answer. Each event comes
  * back found, ambiguous or not found; the name matches from all of them are
- * pooled and deduped by bib (the same bib twice is one person). One bib is
- * the runner. Several bibs are different people sharing the name, and which
- * event they ran never settles it: Denver Colfax 2026 had a Diego Garcia in
+ * pooled and deduped by bib within an event. One entry is the runner.
+ * Several are different people sharing the name, or one challenge runner in
+ * two events, and which event they ran never settles it: Denver Colfax 2026 had a Diego Garcia in
  * the half and two in the marathon, and the half one was printed for a
  * marathon customer. A person picks. `answers` is in eventSearchOrder, so the
  * picker lists earlier events first. A strong name match in one event still
@@ -36,7 +36,9 @@ function poolEventAnswers(scraper, runnerName, answers) {
     for (const row of rows) {
       const c = row.candidate
       const bib = String(c.bib ?? '').trim()
-      const key = bib ? `bib ${bib}` : `${c.name}|${c.time}|${c.eventType}`
+      // Bib and event: one bib in two events is a challenge runner who ran
+      // both, and which print they bought is theirs to say.
+      const key = bib ? `bib ${bib}|${c.eventType}` : `${c.name}|${c.time}|${c.eventType}`
       if (!people.has(key)) people.set(key, row)
     }
   }
@@ -536,7 +538,7 @@ export class MyChipTimeScraper extends BaseScraper {
     // fractional seconds the page hides, so recomputing it misses at .5
     // boundaries. Computed only when the column is missing.
     if (match.chipTime) {
-      const distanceMiles = /half/i.test(eventLabel) ? 13.1 : 26.2
+      const distanceMiles = this._distanceFor(eventLabel)
       const computedPace = this.cleanPagePace(match.pace) || this.calculatePace(this.normalizeTime(match.chipTime), distanceMiles)
       return {
         found: true,
@@ -561,7 +563,7 @@ export class MyChipTimeScraper extends BaseScraper {
     const rawTime = match.finishTime || null
     const normalizedTime = rawTime ? this.normalizeTime(rawTime) : null
     const time = this.formatTime(normalizedTime)
-    const rawPace = normalizedTime ? this.calculatePace(normalizedTime, 26.2) : null
+    const rawPace = normalizedTime ? this.calculatePace(normalizedTime, this._distanceFor(eventLabel)) : null
     const pace = this.formatPace(rawPace)
 
     return {
@@ -578,6 +580,18 @@ export class MyChipTimeScraper extends BaseScraper {
         rawCells: match.rawCells
       }
     }
+  }
+
+  /**
+   * Miles for an event label: the config's distances entry for the key that
+   * label belongs to (Philadelphia's 8K is 4.97), else 13.1 for a half and
+   * 26.2 for anything else. Only used when the page prints no Total Pace.
+   */
+  _distanceFor(eventLabel) {
+    const key = Object.keys(this.config.eventLabels || {}).find(k => this.config.eventLabels[k] === eventLabel)
+    const miles = key ? this.config.distances?.[key] : null
+    if (miles) return miles
+    return /half/i.test(eventLabel || '') ? 13.1 : 26.2
   }
 
   _notFound(notes = null, possibleMatches = null) {

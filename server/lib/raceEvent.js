@@ -10,6 +10,7 @@ export function eventFromName(raceName) {
   if (/half/i.test(n)) return 'Half Marathon'
   if (/ten[- ]?miler|10[- ]?mile/i.test(n)) return '10 Miler'
   if (/\b10k\b/i.test(n)) return '10K'
+  if (/\b8k\b/i.test(n)) return '8K'
   if (/\b5k\b/i.test(n)) return '5K'
   if (/marathon/i.test(n)) return 'Marathon'
   return null

@@ -362,6 +362,44 @@ export const CHIP_TIME_FIXTURES = [
     expectedBib: '16943',
     notes: 'Dallas 2025 HALF (eID 16991) - verifies pace is computed against 13.1, not 26.2 (26.2 would give ~5:03/mi). Gun 2:47:21 vs chip 2:12:20, a 35-minute gap, so this is the strongest gun-time catch we have. NEGATIVE SPLIT: 11:17 → 10:50 → 10:28 → 10:26 per-segment against a 10:06/M overall. Page prints 10:06/M.',
   },
+  // Philadelphia 2025, one per distance (the weekend's three are searched
+  // together). philadelphiamarathon.com links these MyChipTime events as
+  // "View 2025 Results". MyChipTime prints whole seconds (no tenths), and its
+  // Total Pace column is the overall pace; the per-split "Pace" columns are
+  // running averages and differ from it.
+  {
+    platform: 'mychiptime',
+    race: 'Philadelphia Marathon',
+    year: 2025,
+    runner: 'Andrew Kowalski',
+    expectedChipTime: '2:58:22',
+    expectedChipPace: '6:48',
+    expectedBib: '11909',
+    officialPage: { url: 'https://www.mychiptime.com/searchResultGen.php?eID=16897&fname=Andrew&lname=Kowalski', shows: '02:58:22', readOn: '2026-11-12' },
+    notes: 'Philadelphia 2025 Marathon (eID 16897). Gun 03:02:12 vs chip 02:58:22, so a gun-time regression fails. UNEVEN: running-average pace 7:14/M at 5K down to 6:48/M at the finish (negative split). Page Total Pace 6:48/M; 10702s / 26.2 = 6:48.5, so the page pace (not a recomputed 6:49) is what prints.',
+  },
+  {
+    platform: 'mychiptime',
+    race: 'Philadelphia Marathon',
+    year: 2025,
+    runner: 'Mikayla Brennan',
+    expectedChipTime: '2:42:34',
+    expectedChipPace: '12:25',
+    expectedBib: '32309',
+    officialPage: { url: 'https://www.mychiptime.com/searchResultGen.php?eID=16896&fname=Mikayla&lname=Brennan', shows: '02:42:34', readOn: '2026-11-12' },
+    notes: 'Philadelphia 2025 HALF (eID 16896) - pace against 13.1, not 26.2 (26.2 would give ~6:12). Gun 03:02:31 vs chip 02:42:34. POSITIVE SPLIT: 10:45/M at 4.3K fading to 12:25/M overall. Page Total Pace 12:25/M; 9754s / 13.1 = 12:24.6.',
+  },
+  {
+    platform: 'mychiptime',
+    race: 'Philadelphia Marathon',
+    year: 2025,
+    runner: 'Melissa Gallagher',
+    expectedChipTime: '0:49:59',
+    expectedChipPace: '10:03',
+    expectedBib: '44748',
+    officialPage: { url: 'https://www.mychiptime.com/searchResultGen.php?eID=16898&fname=Melissa&lname=Gallagher', shows: '00:49:59', readOn: '2026-11-12' },
+    notes: 'Philadelphia 2025 8K (eID 16898) - pace against 4.97 mi (26.2 would give ~1:54, 13.1 ~3:49). Gun 01:07:44 vs chip 00:49:59, an 18-minute gap. POSITIVE SPLIT: 9:41/M at 2.4M fading to 10:03/M overall. Page Total Pace 10:03/M; 2999s / 4.97 = 10:03.4.',
+  },
 
   // ── MultiSport Australia (Sydney) ─────────────────────────────────────
   {
@@ -725,6 +763,28 @@ export const CHIP_TIME_FIXTURES = [
     expectedChipPace: '8:13',
     expectedBib: '6902',
     notes: 'Philadelphia 2021 via yearOverrides -> Athlinks event 996156, course "Marathon  Runner" (double space). 12923s ÷ 26.2 = 8:13.2; Athlinks prints 08:13. Athlinks Philly = chip (2024 cross-check vs MyChipTime: bib 559 chip 2:47:25, gun 2:47:39).',
+  },
+  {
+    platform: 'athlinks',
+    race: 'Philadelphia Marathon',
+    year: 2023,
+    runner: 'Megan Gallagher',
+    expectedChipTime: '2:09:29',
+    expectedChipPace: '9:53',
+    expectedBib: '3344',
+    officialPage: { url: 'https://www.athlinks.com/event/156909/results/Event/1068740/Course/2426707/Bib/3344', shows: '2:09:29', readOn: '2026-11-12' },
+    notes: 'Philadelphia 2023 HALF via yearOverrides -> Athlinks event 1068740, course "Half Marathon" (2426707). Page: TIME RUN 2:09:29, PACE 9:53 min/mi, DISTANCE 13.1 Miles. 7769000 ms (whole second); 7769s / 13.1 = 9:53.0. Athlinks publishes one "Run" interval only, so no splits or gun time to check for this year.',
+  },
+  {
+    platform: 'athlinks',
+    race: 'Philadelphia Marathon',
+    year: 2023,
+    runner: 'Kristen Gallagher',
+    expectedChipTime: '1:02:22',
+    expectedChipPace: '12:33',
+    expectedBib: '37055',
+    officialPage: { url: 'https://www.athlinks.com/event/156909/results/Event/1068740/Course/2426711/Bib/37055', shows: '1:02:22', readOn: '2026-11-12' },
+    notes: 'Philadelphia 2023 8K via yearOverrides -> Athlinks event 1068740, course "8K Run" (2426711). Page: TIME RUN 1:02:22, PACE 12:33 min/mi, DISTANCE 8.0 Kilometers. 3742s / 4.97 = 12:32.9, so pacing against 4.97 and rounding gives the page; flooring would give 12:32 and 26.2 would give 2:23.',
   },
   {
     platform: 'xacte',
