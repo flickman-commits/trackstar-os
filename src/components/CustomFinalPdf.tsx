@@ -166,6 +166,8 @@ export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, 
 
   // On its way: queued (Hold), attached and waiting on the order's other prints, or sent.
   const send = finalPdf.send
+  // Queued but the upload failed: it cannot go until the file is in Artelo (6441 said "sending" while both copies had failed).
+  const stuck = send?.state === 'queued' && !finalPdf.inArtelo && Boolean(finalPdf.arteloError)
   if (send && ['queued', 'waiting', 'sent'].includes(send.state)) {
     return (
       <div className="space-y-2">
@@ -174,9 +176,9 @@ export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, 
           <div className="flex items-center gap-3">
             <p className="flex-1">
               <span className={`font-semibold mr-1.5 ${send.state === 'sent' ? 'text-green-700' : 'text-[#4600D6]'}`}>
-                {send.state === 'sent' ? `Sent to production ${clock(send.at)}.` : send.state === 'waiting' ? 'Attached in Artelo.' : send.inHold ? `In hold until ${dayClock(send.at)}.` : `Sending to production at ${clock(send.at)}.`}
+                {send.state === 'sent' ? `Sent to production ${clock(send.at)}.` : send.state === 'waiting' ? 'Attached in Artelo.' : stuck ? 'Not sent yet.' : send.inHold ? `In hold until ${dayClock(send.at)}.` : `Sending to production at ${clock(send.at)}.`}
               </span>
-              {send.state === 'sent' ? 'Artelo has it as Received.' : send.state === 'waiting' ? 'The Artelo order goes once every print on it is ready.' : send.inHold ? 'The customer has 48 hours from ordering to ask for a change; it goes to production on its own after that. Hold it if something is wrong.' : <><span className="font-mono">{finalPdf.fileName}</span> is attached to the Artelo order and sent. Hold it if something is wrong.</>}
+              {send.state === 'sent' ? 'Artelo has it as Received.' : send.state === 'waiting' ? 'The Artelo order goes once every print on it is ready.' : stuck ? 'The PDF has to reach the Artelo library before it can go to production, and that failed (below). Try again; it sends once the upload works.' : send.inHold ? 'The customer has 48 hours from ordering to ask for a change; it goes to production on its own after that. Hold it if something is wrong.' : <><span className="font-mono">{finalPdf.fileName}</span> is attached to the Artelo order and sent. Hold it if something is wrong.</>}
             </p>
             {send.state === 'queued' && (
               <button onClick={() => sendAction('hold')} disabled={busy !== null} className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-md bg-white border-2 border-[#4600D6]/30 text-[#4600D6] font-semibold hover:bg-[#4600D6]/[0.04] disabled:opacity-50">

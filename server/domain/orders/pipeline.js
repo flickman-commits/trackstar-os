@@ -33,9 +33,18 @@ const RESULT_STATES = new Set(['found'])
 // The oldest race year anyone builds a scraper for (Matt, 2026-10-21).
 export const SCRAPER_MIN_YEAR = 2020
 
-function raceRun(race, year) {
-  if (!race?.raceDate) return year ? year < new Date().getUTCFullYear() : false
-  return race.raceDate.getTime() <= Date.now()
+/**
+ * Has the race happened? Only a clear "not yet" waits: a race date still
+ * ahead in this year or later, or no date and a year still ahead. Anything
+ * unsure counts as run, so the order shows in Action where someone looks,
+ * not in Race not run yet where nobody does (Matt, 2026-11-12). No date and
+ * this year used to count as not run, which hid races that had happened.
+ */
+export function raceRun(race, year, now = new Date()) {
+  const thisYear = now.getUTCFullYear()
+  if (!race?.raceDate) return !(year && year > thisYear)
+  const ahead = new Date(race.raceDate).getTime() > now.getTime()
+  return !(ahead && (!year || year >= thisYear))
 }
 
 /**

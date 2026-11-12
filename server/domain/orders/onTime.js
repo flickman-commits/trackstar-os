@@ -75,8 +75,8 @@ async function computeOnTimeFresh(days) {
     const r = race.get(raceKey(o))
     const rd = r?.date || null
     const start = rd && rd > o.createdAt ? rd : o.createdAt
-    // Race not run yet (the pipeline's rule: no date known and this year or later counts as not run).
-    if (start > now || (!rd && (o.yearOverride ?? o.raceYear) >= now.getUTCFullYear())) continue
+    // Race not run yet (the pipeline's rule: no date known and a later year counts as not run).
+    if (start > now || (!rd && (o.yearOverride ?? o.raceYear) > now.getUTCFullYear())) continue
     const done = completedAt.get(o.orderNumber) || null
     if (o.status === 'completed' && !done) continue  // closed by the Artelo sync: no time of ours
     const end = done || now
