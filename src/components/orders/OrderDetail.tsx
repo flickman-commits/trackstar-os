@@ -3139,9 +3139,15 @@ Thank you!`
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
                       {(design.job?.status === 'done' && (design.job.review === 'pending' || design.job.review === 'approved')) ? (
                         <DesignReview compact d={design} arteloOrderUrl={selectedOrder.status !== 'completed' && selectedOrder.trackstarOrderType !== 'bulk' ? selectedOrder.arteloUrl : null} onComplete={selectedOrder.status !== 'completed' ? () => markAsCompleted(selectedOrder.orderNumber) : undefined} />
+                      ) : (!design.state && design.reserved && selectedOrder.pipeline?.stage === 'review') ? (
+                        // The print is still loading: its buttons in place, greyed, so they do not appear late.
+                        <div className="grid gap-1.5 grid-cols-[1fr,2fr]" aria-busy>
+                          <span className="h-12 inline-flex items-center justify-center gap-2 rounded-xl bg-white border-2 border-red-200 text-red-700 text-[15px] font-semibold opacity-40"><X className="w-5 h-5" /> Reject</span>
+                          <span className="h-12 inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 text-white text-[15px] font-semibold opacity-40"><Loader2 className="w-5 h-5 animate-spin" /> Approve & send</span>
+                        </div>
                       ) : (
-                        <div className="py-2 flex items-center justify-center text-[13px] text-off-black/55 text-center px-1">
-                          {selectedOrder.pipeline?.reason || getStatusDisplay(selectedOrder).label}
+                        <div className="h-12 flex items-center justify-center text-[13px] text-off-black/55 text-center px-1">
+                          <span className="line-clamp-2">{selectedOrder.pipeline?.reason || getStatusDisplay(selectedOrder).label}</span>
                         </div>
                       )}
                     </div>

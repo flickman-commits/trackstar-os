@@ -133,20 +133,19 @@ function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; o
   // by side, the explanation and three buttons squeezed the text to a word a line.
   if (compact) {
     const title = s.state === 'sent' ? `Sent ${clock(s.at)}` : s.state === 'waiting' ? 'Waiting on other prints' : s.inHold ? `In hold until ${dayClock(s.at)}` : `Sending at ${clock(s.at)}`
-    const btn = 'flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-[14px] font-semibold whitespace-nowrap disabled:opacity-50'
+    const btn = 'flex-1 min-w-0 h-12 inline-flex items-center justify-center gap-1.5 px-2 rounded-xl text-[14px] font-semibold whitespace-nowrap disabled:opacity-50'
     const actions = [
       s.state === 'queued' && d.canManage && <button key="send" onClick={() => { void d.sendAction('send-now') }} disabled={d.busy} className={`${btn} bg-[#4600D6] text-white`}>{d.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Send</button>,
       (s.state === 'waiting' || s.state === 'sent') && onComplete && <button key="done" onClick={onComplete} className={`${btn} bg-green-600 text-white`}><Check className="w-4 h-4" /> Complete</button>,
       s.state === 'queued' && d.canManage && <button key="hold" onClick={() => { void d.sendAction('hold') }} disabled={d.busy} className={`${btn} bg-white border-2 border-[#4600D6]/30 text-[#4600D6]`}><Pause className="w-4 h-4" /> Hold</button>,
       (s.state === 'queued' || s.state === 'waiting') && d.canManage && <button key="undo" onClick={() => { void d.sendAction('back-to-review') }} disabled={d.busy} aria-label="Back to review" className={`${btn} bg-white border-2 border-off-black/15 text-off-black`}><Undo2 className="w-4 h-4" /> Undo</button>,
     ].filter(Boolean)
+    // One row, the same height as Reject and Approve: the header above already says where it stands.
+    if (actions.length) return <div className="flex gap-1.5">{actions}</div>
     return (
-      <div className="space-y-1.5">
-        <p className={`flex items-center gap-1.5 px-1 text-[13px] font-semibold ${s.state === 'sent' ? 'text-green-800' : 'text-[#4600D6]'}`}>
-          {s.state === 'sent' ? <Check className="w-4 h-4 shrink-0" /> : <Send className="w-4 h-4 shrink-0" />}<span className="truncate">{title}</span>
-        </p>
-        {actions.length > 0 && <div className="flex gap-1.5">{actions}</div>}
-      </div>
+      <p className={`h-12 flex items-center justify-center gap-1.5 px-1 text-[13px] font-semibold ${s.state === 'sent' ? 'text-green-800' : 'text-[#4600D6]'}`}>
+        {s.state === 'sent' ? <Check className="w-4 h-4 shrink-0" /> : <Send className="w-4 h-4 shrink-0" />}<span className="truncate">{title}</span>
+      </p>
     )
   }
   return (
@@ -191,7 +190,7 @@ function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; o
 
 export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = false }: { d: Design; arteloOrderUrl?: string | null; onComplete?: () => void; compact?: boolean }) {
   // compact: the phone's bottom bar, shorter buttons in the same order.
-  const pad = compact ? 'py-3 text-[15px] !rounded-xl' : 'py-4 text-base'
+  const pad = compact ? 'h-12 text-[15px] !rounded-xl' : 'py-4 text-base'
   const [rejecting, setRejecting] = useState(false)
   const [note, setNote] = useState('')
   const [fileProblem, setFileProblem] = useState<boolean | null>(null)
@@ -259,6 +258,22 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
     const talking = job.send?.state === 'support'
     // Expedited: the API only sends Standard shipping, so this one is attached by hand.
     const manual = job.send?.state === 'manual'
+    if (compact) {
+      // One row on a phone, the same height as every other state. Held or
+      // talking to Support shows in the header's status; expedited says so on Attach.
+      const btn = 'flex-1 min-w-0 h-12 inline-flex items-center justify-center gap-1.5 px-2 rounded-xl text-[14px] font-semibold whitespace-nowrap disabled:opacity-50'
+      const canSend = d.canManage && d.autoSend && !manual && !opened
+      return (
+        <div className="flex gap-1.5">
+          {canSend && <button onClick={() => { void d.sendAction('send-now') }} disabled={d.busy} className={`${btn} bg-green-600 text-white`}>{d.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} {talking ? 'Send anyway' : 'Send'}</button>}
+          {canSend && <button onClick={() => { void d.sendAction('back-to-review') }} disabled={d.busy} aria-label="Back to review" className={`${btn} bg-white border-2 border-off-black/15 text-off-black`}><Undo2 className="w-4 h-4" /> Undo</button>}
+          <a href={arteloOrderUrl} target="_blank" rel="noopener noreferrer" onClick={openArtelo} className={`${btn} ${manual ? 'bg-white border-2 border-red-300 text-red-700' : opened || canSend ? 'bg-white border-2 border-[#4600D6]/30 text-[#4600D6]' : 'bg-[#4600D6] text-white'}`}>
+            <img src="/artelo-icon.png" alt="" className="w-4 h-4 rounded-[3px]" /> {manual ? 'Attach, expedited' : 'Attach'}
+          </a>
+          {opened && onComplete && <button onClick={onComplete} className={`${btn} bg-green-600 text-white`}><Check className="w-4 h-4" /> Complete</button>}
+        </div>
+      )
+    }
     return (
       <div className="space-y-2">
       {manual && (
