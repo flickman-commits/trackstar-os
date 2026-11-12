@@ -53,3 +53,29 @@ test('growth compares closed windows this year with last year, and needs three r
   assert.deepEqual(suggestedGrowth({ history: h, races, today }), { growth: 1.5, races: 3 })
   assert.deepEqual(suggestedGrowth({ history: h, races: races.slice(0, 4), today }), { growth: 1, races: 2 })
 })
+
+test('Christmas: last year\'s shape from Thanksgiving week, scaled by the lift, 1 outside it', async () => {
+  const { holidayIndex, thanksgivingMonday, HOLIDAY_LIFT_LAST_YEAR } = await import('./seasonality.js')
+  assert.equal(thanksgivingMonday(2025), '2025-11-24')
+  assert.equal(thanksgivingMonday(2026), '2026-11-23')
+  assert.equal(HOLIDAY_LIFT_LAST_YEAR, 4.7)
+  assert.equal(holidayIndex('2026-11-20'), 1)
+  assert.equal(holidayIndex('2026-11-23'), 4.11)
+  assert.ok(holidayIndex('2026-12-23') < 0.5, 'after the cutoff it drops')
+  assert.equal(holidayIndex('2027-01-10'), 1)
+  assert.equal(holidayIndex('2026-12-09', 1), 1, 'a lift of 1 is no Christmas')
+  const half = holidayIndex('2026-12-09', 1 + (HOLIDAY_LIFT_LAST_YEAR - 1) / 2)
+  assert.ok(Math.abs(half - (1 + (7.49 - 1) / 2)) < 1e-9)
+})
+
+test('a race with no last year is paced from what is in; one a week past race day from its last seven days', async () => {
+  const { expectedOrders } = await import('./forecast.js')
+  assert.deepEqual(expectedOrders({ lastYear: 0, received: 0, growth: 1, override: null, share: 0.1, run: false }), { expected: 0, basis: 'none' })
+  // Before race day the share is floored at 15%: 30 orders in at 2% is not 1,500.
+  assert.equal(expectedOrders({ lastYear: 0, received: 30, growth: 1, override: null, share: 0.02, run: false }).expected, 200)
+  assert.equal(expectedOrders({ lastYear: 0, received: 600, growth: 1, override: null, share: 0.6, run: true }).expected, 1000)
+  // 70 in the last week, which the curve says is 7% of a race's orders: 20% still to come is 200 more.
+  assert.deepEqual(expectedOrders({ lastYear: 0, received: 800, growth: 1, override: null, share: 0.8, run: true, lastWeek: 70, weekShare: 0.07 }), { expected: 1000, basis: 'rate' })
+  assert.deepEqual(expectedOrders({ lastYear: 500, received: 50, growth: 1.2, override: null, share: 0.1, run: false }), { expected: 600, basis: 'last_year' })
+  assert.deepEqual(expectedOrders({ lastYear: 500, received: 50, growth: 1.2, override: 900, share: 0.1, run: false }), { expected: 900, basis: 'typed' })
+})

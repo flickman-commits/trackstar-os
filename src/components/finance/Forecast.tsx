@@ -72,7 +72,7 @@ export default function Forecast() {
 }
 
 function WeeksChart({ weeks }: { weeks: ForecastWeek[] }) {
-  const rows = weeks.map(w => ({ ...w, label: dayLabel(w.weekStart), actualRev: w.actual.revenue, forecastRev: w.forecast.revenue }))
+  const rows = weeks.map(w => ({ ...w, label: `${dayLabel(w.weekStart)}${(w.holiday ?? 1) > 1.05 ? ' 🎄' : ''}`, actualRev: w.actual.revenue, forecastRev: w.forecast.revenue }))
   return (
     <div className="h-64">
       <ResponsiveContainer width="100%" height="100%">
@@ -90,6 +90,7 @@ function WeeksChart({ weeks }: { weeks: ForecastWeek[] }) {
                 {w.forecast.revenue > 0 && <div className="flex justify-between gap-4"><span>Forecast</span><span className="tabular-nums">{usd(w.forecast.revenue)}</span></div>}
                 <div className="flex justify-between gap-4 font-semibold"><span>Contribution margin</span><span className="tabular-nums">{usd(w.cm)}</span></div>
                 <div className="flex justify-between gap-4 text-off-black/60"><span>Orders</span><span className="tabular-nums">{intText(w.orders)}{w.forecast.raceOrders ? ` (${intText(w.forecast.raceOrders)} from races)` : ''}</span></div>
+                {w.holiday != null && Math.abs(w.holiday - 1) > 0.05 && <div className="text-off-black/60">{w.holiday > 1 ? `Christmas: ${w.holiday}x a normal week` : `After the Christmas cutoff: ${w.holiday}x a normal week`}</div>}
                 {w.races.length > 0 && <div className="pt-1 mt-1 border-t border-border-gray text-off-black/70">Race days: {w.races.join(', ')}</div>}
               </div>
             )
@@ -149,6 +150,8 @@ function Months({ data, busy, save }: { data: ForecastPayload; busy: boolean; sa
   )
 }
 
+const BASIS: Record<string, string> = { pace: "from this year's pace", rate: 'from the last 7 days', last_year: 'from last year' }
+
 /** The races in the window: last year's orders, expected this year (typed over if you know better), what has come in. */
 function Races({ data, busy, save }: { data: ForecastPayload; busy: boolean; save: Save }) {
   const [draft, setDraft] = useState<Record<string, string>>({})
@@ -157,7 +160,7 @@ function Races({ data, busy, save }: { data: ForecastPayload; busy: boolean; sav
     <div className={`${card} overflow-x-auto`}>
       <div className="px-4 py-2.5 border-b border-border-gray flex items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-off-black">Races driving it</h3>
-        <span className="text-[11px] text-off-black/45">Expected is last year's orders times {data.drivers.find(x => x.key === 'growth')?.value ?? 1}x unless typed. Orders arrive from 30 days before race day to 60 after.</span>
+        <span className="text-[11px] text-off-black/45">Expected is last year's orders times {data.drivers.find(x => x.key === 'growth')?.value ?? 1}x, or this year's pace when there is no last year, unless typed. Orders arrive from 30 days before race day to 60 after; Christmas lifts them on top.</span>
       </div>
       {rows.length === 0 ? <p className="px-4 py-3 text-xs text-off-black/45">No races with a confirmed date in this window. Dates come from the Race Database.</p> : (
         <table className="w-full text-xs">
@@ -169,7 +172,7 @@ function Races({ data, busy, save }: { data: ForecastPayload; busy: boolean; sav
             const changed = draft[r.key] !== undefined && draft[r.key] !== (r.override != null ? String(r.override) : '')
             return (
               <tr key={`${r.key}|${r.year}`} className="border-b border-border-gray/60 last:border-0">
-                <td className="px-3 py-1.5 font-medium">{r.name}{r.noHistory && <span className="ml-1.5 text-[10px] font-normal text-amber-700">no orders last year</span>}</td>
+                <td className="px-3 py-1.5 font-medium">{r.name}{r.noHistory ? <span className="ml-1.5 text-[10px] font-normal text-amber-700">no orders yet to go on</span> : r.basis && BASIS[r.basis] && <span className="ml-1.5 text-[10px] font-normal text-off-black/45">{BASIS[r.basis]}</span>}</td>
                 <td className="px-3 py-1.5 whitespace-nowrap">{dayLabel(r.date)}</td>
                 <td className={`px-3 py-1.5 ${num}`}>{intText(r.lastYear)}</td>
                 <td className={`px-3 py-1.5 ${num}`}>

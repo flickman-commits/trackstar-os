@@ -12,6 +12,12 @@
  *   built from the last year of orders). On top of that, a baseline: the
  *   orders per day that no race window explains. Orders times revenue per
  *   order is revenue; costs and ad spend follow the trailing ratios.
+
+ *   A race with no orders last year (the Order table starts in January 2026)
+ *   is paced from what has come in against the curve, and once it is a week
+ *   past race day, from its last seven days (expectedOrders). Christmas lifts
+ *   every day's orders from Thanksgiving week to the shipping cutoff, then
+ *   drops them, in last year's shape (seasonality.js, the Holiday lift driver).
  *
  *   Order counts are distinct Shopify/Etsy orders in the Order table
  *   (standard and custom prints; bulk and samples are left out). Revenue per
@@ -33,6 +39,7 @@ import { getCanonicalRaceName } from '../../scrapers/index.js'
 import { loadRules, ruleFor } from './rules.js'
 import { summarize, computeDay } from './scoreboard.js'
 import { rowsBetween } from './ledger.js'
+import { holidayIndex, HOLIDAY_LIFT_LAST_YEAR } from './seasonality.js'
 import { todayET, addDays, daysBetween, mondayOf, monthOf, lastOfMonth, monthLabel, shiftMonth, isValidMonth } from './periods.js'
 
 export class ForecastError extends Error {
@@ -50,9 +57,11 @@ const SCENARIO_GROWTH = { base: 1, upside: 1.2, downside: 0.8 }
 export const DRIVERS = [
   { key: 'growth', label: 'Race demand vs last year', unit: 'x', help: 'Last year\'s orders for each race, times this' },
   { key: 'baselinePerDay', label: 'Baseline orders per day', unit: 'orders', help: 'Orders no race window explains' },
+  { key: 'holidayLift', label: 'Holiday lift', unit: 'x', help: 'Thanksgiving week to the Christmas cutoff, against a normal week (last year 4.7x)' },
   { key: 'revenuePerOrderCents', label: 'Revenue per order', unit: 'cents', help: 'Ledger revenue over tracked orders, last 28 days' },
   { key: 'cogsPct', label: 'Fees, production and shipping', unit: '%', help: 'Share of revenue, last 28 days' },
-  { key: 'adSpendPerWeekCents', label: 'Ad spend per week', unit: 'cents', help: 'Meta and Google, average of the last 4 weeks' },
+  { key: 'adSpendPct', label: 'Ad spend, share of revenue', unit: '%', help: 'Meta, Trybe and Google over revenue, last 28 days: spend follows demand' },
+  { key: 'adSpendPerWeekCents', label: 'Ad spend per week, held flat', unit: 'cents', help: 'Used only when typed; shown is the last 4 weeks' },
   { key: 'hoursPerWeekCents', label: 'Hours per week', unit: 'cents', help: 'Logged hours at each person\'s rate, last 4 weeks' },
   { key: 'customsPerMonthCents', label: 'Customs per month', unit: 'cents', help: 'Paid to designers, last closed month' },
 ]
@@ -156,6 +165,7 @@ export function readHistory({ orders, races, today }) {
   for (const r of races) if (r.raceDate) dateOf.set(`${raceKey(r.raceName)}|${r.year}`, dayOf(r.raceDate))
   const byRaceYear = new Map()      // key|year -> Set of order numbers in the window
   const receivedSoFar = new Map()   // key|year -> Set, any time (for this year's count)
+  const lastWeek = new Map()        // key|year -> Set, the seven days before today
   const curveCounts = new Map()     // offset -> count, from complete windows
   const raceOrderDays = new Set()   // order number|day that a race window explains
   const seen = new Set()
@@ -167,6 +177,7 @@ export function readHistory({ orders, races, today }) {
     const ry = `${k}|${o.raceYear}`
     if (!receivedSoFar.has(ry)) receivedSoFar.set(ry, new Set())
     receivedSoFar.get(ry).add(num)
+    if (day >= addDays(today, -7) && day < today) { if (!lastWeek.has(ry)) lastWeek.set(ry, new Set()); lastWeek.get(ry).add(num) }
     const D = dateOf.get(ry)
     if (!D) continue
     const off = daysBetween(D, day)
@@ -192,7 +203,7 @@ export function readHistory({ orders, races, today }) {
     const num = String(o.parentOrderNumber || o.orderNumber || '')
     if (num && !raceOrderDays.has(`${num}|${day}`)) baseOrders.add(num)
   }
-  return { dateOf, byRaceYear, receivedSoFar, curve, curveFromData: total >= 50, curveOrders: total, baselinePerDay: baseOrders.size / 56 }
+  return { dateOf, byRaceYear, receivedSoFar, lastWeek, curve, curveFromData: total >= 50, curveOrders: total, baselinePerDay: baseOrders.size / 56 }
 }
 
 /** Before there is enough history: a rise to race day, a peak in the week after, a long tail. */
@@ -219,6 +230,34 @@ export function suggestedGrowth({ history, races, today }) {
   }
   if (!lastYear || n < 3) return { growth: 1, races: n }
   return { growth: Math.min(5, Math.max(0.3, Math.round((thisYear / lastYear) * 100) / 100)), races: n }
+}
+
+/** Share of a race's orders in by a day offset from race day, on the arrival curve. */
+export function shareBy(curve, off) {
+  let n = 0
+  for (let o = -BEFORE; o <= Math.min(off, AFTER); o++) n += curve.get(o) || 0
+  return n
+}
+
+/**
+ * A race's expected orders this year. Typed by hand wins. Otherwise last
+ * year's times growth, unless this year's pace says otherwise: once half the
+ * curve has passed, the orders in so far over the share they should be is
+ * the better guess. A race with no last year is paced from what is in; before
+ * race day the share is floored at 15%, so a handful of early orders cannot
+ * become thousands.
+ */
+export function expectedOrders({ lastYear, received, growth, override, share, run, lastWeek = 0, weekShare = 0 }) {
+  if (override != null) return { expected: override, basis: 'typed' }
+  // A week past race day, the last seven days say how fast it is still coming:
+  // the rest of the curve at that rate. The curve was learned in the off
+  // season, when tails die faster than they do before Christmas.
+  if (run && weekShare > 0 && lastWeek > 0) return { expected: received + Math.round(lastWeek * (1 - share) / weekShare), basis: 'rate' }
+  const paced = received > 0 && share > 0 ? Math.round(received / (run ? share : Math.max(share, 0.15))) : 0
+  if (!lastYear) return paced ? { expected: paced, basis: 'pace' } : { expected: 0, basis: 'none' }
+  const fromLastYear = Math.round(lastYear * growth)
+  if (share >= 0.5) return { expected: Math.max(paced, received), basis: 'pace' }
+  return { expected: Math.max(fromLastYear, received), basis: 'last_year' }
 }
 
 // ── the model ───────────────────────────────────────────────────────────────
@@ -255,15 +294,19 @@ export async function forecast({ scenario = 'base', today = todayET() } = {}) {
   }
   const computed = {
     growth: Math.round(growthHint.growth * SCENARIO_GROWTH[scenario] * 100) / 100,
+    holidayLift: Math.round(HOLIDAY_LIFT_LAST_YEAR * SCENARIO_GROWTH[scenario] * 10) / 10,
     baselinePerDay: Math.round(history.baselinePerDay * 10) / 10,
     revenuePerOrderCents: tracked28 ? Math.round(last28.revenue / tracked28) : (last28.aov || 0),
     cogsPct: last28.revenue ? Math.round((last28.cogs - (last28.designerFeeBase === 'gp' ? last28.designerFee : 0)) / last28.revenue * 1000) / 10 : 35,
+    adSpendPct: last28.revenue ? Math.round(last28.adSpend / last28.revenue * 1000) / 10 : 30,
     adSpendPerWeekCents: Math.round(last28.adSpend / 4),
     hoursPerWeekCents: Math.round(hoursCents / 4),
     customsPerMonthCents: customsGuess,
   }
   const overrides = settings.scenarios[scenario] || {}
   const d = { ...computed, ...overrides }
+  // Ad spend follows revenue at its recent share, unless a flat week is typed.
+  const adsFor = revenue => ('adSpendPerWeekCents' in overrides ? Math.round(d.adSpendPerWeekCents / 7) : Math.round(revenue * d.adSpendPct / 100))
 
   // The races: last year's orders, this year's so far, what is still to come.
   const raceList = []
@@ -279,15 +322,21 @@ export async function forecast({ scenario = 'base', today = todayET() } = {}) {
     const lastYear = history.byRaceYear.get(`${k}|${r.year - 1}`)?.size || 0
     const received = history.receivedSoFar.get(id)?.size || 0
     const override = settings.raceOverrides[k] ?? null
-    const expected = override ?? Math.round(lastYear * d.growth)
-    raceList.push({ key: k, name: r.raceName, year: r.year, date: D, lastYear, received, expected, override, remaining: Math.max(0, expected - received), noHistory: !lastYear && override == null })
+    const off = daysBetween(D, today)
+    const before = shareBy(history.curve, off - 1)
+    const { expected, basis } = expectedOrders({
+      lastYear, received, growth: d.growth, override, share: before, run: off >= 0,
+      ...(off >= 7 && off <= AFTER ? { lastWeek: history.lastWeek.get(id)?.size || 0, weekShare: before - shareBy(history.curve, off - 8) } : {}),
+    })
+    raceList.push({ key: k, name: r.raceName, year: r.year, date: D, lastYear, received, expected, basis, override, remaining: Math.max(0, expected - received), noHistory: basis === 'none' })
   }
   raceList.sort((a, b) => a.date.localeCompare(b.date))
 
   // Day by day: the remaining orders of each race spread over its remaining days by the curve, plus the baseline.
   const tomorrow = addDays(today, 1)
   const daily = new Map()
-  for (let day = horizonStart; day <= horizonEnd; day = addDays(day, 1)) daily.set(day, { base: day >= tomorrow ? d.baselinePerDay : 0, race: 0, byRace: {} })
+  // Christmas lifts every order a day expects, race or not (seasonality.js).
+  for (let day = horizonStart; day <= horizonEnd; day = addDays(day, 1)) daily.set(day, { base: day >= tomorrow ? d.baselinePerDay : 0, race: 0, byRace: {}, holiday: holidayIndex(day, d.holidayLift) })
   for (const r of raceList) {
     if (!r.remaining) continue
     const fromOff = Math.max(-BEFORE, daysBetween(r.date, tomorrow))
@@ -310,7 +359,7 @@ export async function forecast({ scenario = 'base', today = todayET() } = {}) {
   const weeks = []
   for (let w = 0; w < HORIZON_WEEKS; w++) {
     const start = addDays(horizonStart, w * 7)
-    const wk = { weekStart: start, weekEnd: addDays(start, 6), actual: { revenue: 0, orders: 0, cogs: 0, adSpend: 0, cm: 0, designerFee: 0 }, forecast: { revenue: 0, orders: 0, cogs: 0, adSpend: 0, cm: 0, designerFee: 0, raceOrders: 0 }, races: [] }
+    const wk = { weekStart: start, weekEnd: addDays(start, 6), actual: { revenue: 0, orders: 0, cogs: 0, adSpend: 0, cm: 0, designerFee: 0 }, forecast: { revenue: 0, orders: 0, cogs: 0, adSpend: 0, cm: 0, designerFee: 0, raceOrders: 0 }, races: [], holiday: Math.round(holidayIndex(addDays(start, 3), d.holidayLift) * 100) / 100 }
     for (let i = 0; i < 7; i++) {
       const day = addDays(start, i)
       const a = actualDays.get(day)
@@ -319,14 +368,14 @@ export async function forecast({ scenario = 'base', today = todayET() } = {}) {
         continue
       }
       const slot = daily.get(day)
-      const ordersN = slot.base + slot.race
+      const ordersN = (slot.base + slot.race) * slot.holiday
       const revenue = Math.round(ordersN * d.revenuePerOrderCents)
       const cogs = Math.round(revenue * d.cogsPct / 100)
-      const ads = Math.round(d.adSpendPerWeekCents / 7)
+      const ads = adsFor(revenue)
       const fee = ruleFor(rules, 'designer_fee', day) || { pct: 7.5, base: 'cm' }
       const gp = revenue - cogs
       const feeCents = fee.base === 'gp' ? Math.round(gp * fee.pct / 100) : Math.round((gp - ads) * fee.pct / 100)
-      wk.forecast.orders += ordersN; wk.forecast.raceOrders += slot.race
+      wk.forecast.orders += ordersN; wk.forecast.raceOrders += slot.race * slot.holiday
       wk.forecast.revenue += revenue; wk.forecast.cogs += cogs; wk.forecast.adSpend += ads; wk.forecast.designerFee += feeCents
       wk.forecast.cm += gp - ads - feeCents
     }
@@ -349,9 +398,9 @@ export async function forecast({ scenario = 'base', today = todayET() } = {}) {
     for (let day = first > tomorrow ? first : tomorrow; day <= last && day <= horizonEnd; day = addDays(day, 1)) {
       const slot = daily.get(day)
       if (!slot) continue
-      const rev = Math.round((slot.base + slot.race) * d.revenuePerOrderCents)
+      const rev = Math.round((slot.base + slot.race) * slot.holiday * d.revenuePerOrderCents)
       const cogs = Math.round(rev * d.cogsPct / 100)
-      const ads = Math.round(d.adSpendPerWeekCents / 7)
+      const ads = adsFor(rev)
       const fee = ruleFor(rules, 'designer_fee', day) || { pct: 7.5, base: 'cm' }
       const feeCents = fee.base === 'gp' ? Math.round((rev - cogs) * fee.pct / 100) : Math.round((rev - cogs - ads) * fee.pct / 100)
       fRev += rev; fAds += ads; fFee += feeCents; fCm += rev - cogs - ads - feeCents

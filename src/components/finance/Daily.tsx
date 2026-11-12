@@ -31,6 +31,25 @@ const LEVERS: Col[] = [
   { key: 'units', label: 'Units', fmt: int('units'), group: 'Cost' }, { key: 'costPerUnit', label: 'Cost/unit', fmt: money('costPerUnit'), group: 'Cost' }, { key: 'cogsPct', label: 'COGS %', fmt: pct('cogsPct'), group: 'Cost' }, { key: 'adSpendPct', label: 'Ads %', fmt: pct('adSpendPct'), group: 'Cost' },
 ]
 
+/**
+ * The Daily Tracker sheet's colours, so the two read the same: a solid band
+ * per group, a lighter header under it, and the group's totals tinted.
+ */
+const TONE: Record<string, { band: string; head: string; tint: string; edge: string }> = {
+  Revenue: { band: '#1565C0', head: '#1E88E5', tint: 'rgba(30,136,229,0.07)', edge: '#1565C0' },
+  Channels: { band: '#1565C0', head: '#1E88E5', tint: 'rgba(30,136,229,0.07)', edge: '#1565C0' },
+  Costs: { band: '#C62828', head: '#E53935', tint: 'rgba(229,57,53,0.07)', edge: '#C62828' },
+  Cost: { band: '#C62828', head: '#E53935', tint: 'rgba(229,57,53,0.07)', edge: '#C62828' },
+  'Ad spend': { band: '#E65100', head: '#FB8C00', tint: 'rgba(251,140,0,0.09)', edge: '#E65100' },
+  Meta: { band: '#E65100', head: '#FB8C00', tint: 'rgba(251,140,0,0.09)', edge: '#E65100' },
+  Google: { band: '#B45309', head: '#D97706', tint: 'rgba(217,119,6,0.09)', edge: '#B45309' },
+  Profit: { band: '#2E7D32', head: '#43A047', tint: 'rgba(67,160,71,0.08)', edge: '#2E7D32' },
+  Funnel: { band: '#5E35B1', head: '#7E57C2', tint: 'rgba(126,87,194,0.07)', edge: '#5E35B1' },
+  Ratios: { band: '#1F2A44', head: '#3A4766', tint: 'rgba(31,42,68,0.05)', edge: '#1F2A44' },
+}
+const tone = (g?: string) => TONE[g || ''] || TONE.Ratios
+const WEEK_COLS: [string, string][] = [['Revenue', 'Revenue'], ['COGS', 'Costs'], ['Gross profit', 'Profit'], ['Ad spend', 'Ad spend'], ['Designer', 'Profit'], ['CM', 'Profit'], ['CM %', 'Profit'], ['ROAS', 'Ratios'], ['Orders', 'Ratios'], ['AOV', 'Ratios'], ['CPA', 'Ratios']]
+
 const FIELD_LABEL: Record<string, string> = {
   shopifyGrossCents: 'Gross sales', shopifyDiscountsCents: 'Discounts', shopifyReturnsCents: 'Returns', shopifyShippingCents: 'Shipping charged', shopifyTaxCents: 'Taxes', shopifyNetCents: 'Net sales', shopifyOrders: 'Orders', shopifySessions: 'Sessions', shopifyAddToCart: 'Add to cart', shopifyReachedCheckout: 'Reached checkout', shopifyCompletedCheckout: 'Completed checkout', shopifyFeesCents: 'Shopify fees',
   etsyGrossCents: 'Gross sales', etsyDiscountsCents: 'Discounts', etsyReturnsCents: 'Returns', etsyShippingCents: 'Shipping charged', etsyTaxCents: 'Taxes', etsyNetCents: 'Net sales', etsyOrders: 'Orders', etsyVisits: 'Visits', etsyFeesCents: 'Etsy fees',
@@ -91,13 +110,13 @@ export default function Daily() {
           <div className={`${card} overflow-x-auto`}>
             <table className="min-w-full text-xs whitespace-nowrap">
               <thead>
-                <tr className="bg-subtle-gray border-b border-border-gray">
-                  <th className="sticky left-0 bg-subtle-gray z-10 px-3 py-1.5 text-left" />
-                  {groups.map(([g, n], i) => <th key={i} colSpan={n} className={`px-2 py-1.5 text-left ${tableHead} border-l border-border-gray`}>{g}</th>)}
+                <tr>
+                  <th className="sticky left-0 z-10 px-3 py-1.5 text-left" style={{ background: '#1F2A44' }} />
+                  {groups.map(([g, n], i) => <th key={i} colSpan={n} className="px-2 py-1.5 text-center text-[11px] font-bold uppercase tracking-wide text-white border-l border-white/30" style={{ background: tone(g).band }}>{g}</th>)}
                 </tr>
-                <tr className="bg-subtle-gray border-b border-border-gray">
-                  <th className={`sticky left-0 bg-subtle-gray z-10 px-3 py-1.5 text-left ${tableHead}`}>Date</th>
-                  {cols.map(c => <th key={c.key} className={`px-2 py-1.5 ${tableHead} ${num}`}>{c.label}</th>)}
+                <tr>
+                  <th className="sticky left-0 z-10 px-3 py-1.5 text-left text-[11px] font-semibold text-white" style={{ background: '#1F2A44' }}>Date</th>
+                  {cols.map((c, i) => <th key={c.key} className={`px-2 py-1.5 text-[11px] font-semibold text-white ${num} ${i && cols[i - 1].group !== c.group ? 'border-l border-white/30' : ''}`} style={{ background: tone(c.group).head }}>{c.label}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -105,7 +124,7 @@ export default function Daily() {
                 {data.total && (
                   <tr className="border-t-2 border-off-black/20 bg-subtle-gray font-semibold">
                     <td className="sticky left-0 bg-subtle-gray z-10 px-3 py-2 text-left">{monthLabel(month)} <span className="font-normal text-off-black/45">· {data.total.dayCount} days</span></td>
-                    {cols.map(c => <td key={c.key} className={`px-2 py-2 ${num}`}>{c.fmt(data.total as Totals & Record<string, unknown>)}</td>)}
+                    {cols.map(c => <td key={c.key} className={`px-2 py-2 ${num}`} style={c.strong ? { background: tone(c.group).tint } : undefined}>{c.fmt(data.total as Totals & Record<string, unknown>)}</td>)}
                   </tr>
                 )}
               </tbody>
@@ -114,15 +133,15 @@ export default function Daily() {
           <div className={`${card} overflow-x-auto`}>
             <div className="px-3 py-2 border-b border-border-gray"><h3 className="text-sm font-semibold text-off-black">Weeks <span className="font-normal text-off-black/45 text-xs">Monday to Sunday</span></h3></div>
             <table className="min-w-full text-xs whitespace-nowrap">
-              <thead><tr className="bg-subtle-gray border-b border-border-gray">
-                <th className={`px-3 py-1.5 text-left ${tableHead}`}>Week of</th>
-                {['Revenue', 'COGS', 'Gross profit', 'Ad spend', 'Designer', 'CM', 'CM %', 'ROAS', 'Orders', 'AOV', 'CPA'].map(h => <th key={h} className={`px-2 py-1.5 ${tableHead} ${num}`}>{h}</th>)}
+              <thead><tr>
+                <th className="px-3 py-1.5 text-left text-[11px] font-semibold text-white" style={{ background: '#1F2A44' }}>Week of</th>
+                {WEEK_COLS.map(([h, g]) => <th key={h} className={`px-2 py-1.5 text-[11px] font-semibold text-white ${num}`} style={{ background: tone(g).head }}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {data.weeks.map(w => (
                   <tr key={w.weekStart} className="border-b border-border-gray/60">
                     <td className="px-3 py-1.5">{dayLabel(w.weekStart)} to {dayLabel(w.weekEnd)} <span className="text-off-black/40">· {w.dayCount}d</span></td>
-                    {[usd(w.revenue), usd(w.cogs), usd(w.grossProfit), usd(w.adSpend), usd(w.designerFee), usd(w.cm), pctText(w.cmPct), xText(w.roas), intText(w.orders), usd(w.aov), usd(w.cpa)].map((v, i) => <td key={i} className={`px-2 py-1.5 ${num}`}>{v}</td>)}
+                    {[usd(w.revenue), usd(w.cogs), usd(w.grossProfit), usd(w.adSpend), usd(w.designerFee), usd(w.cm), pctText(w.cmPct), xText(w.roas), intText(w.orders), usd(w.aov), usd(w.cpa)].map((v, i) => <td key={i} className={`px-2 py-1.5 ${num} ${[0, 2, 5].includes(i) ? 'font-semibold' : ''}`} style={[0, 1, 2, 3, 5].includes(i) ? { background: tone(WEEK_COLS[i][1]).tint } : undefined}>{v}</td>)}
                   </tr>
                 ))}
               </tbody>
@@ -145,7 +164,7 @@ function Row({ d, cols, onOpen }: { d: DayRow; cols: Col[]; onOpen: () => void }
         {d.overridden.length > 0 && <PencilLine className="inline w-3 h-3 ml-1 text-off-black/40" aria-label="Has an override" />}
         {d.landed && missing.length > 0 && <span className="ml-1 text-[10px] text-amber-700">{missing.join(', ')} missing</span>}
       </td>
-      {cols.map(c => <td key={c.key} className={`px-2 py-1.5 ${num} ${c.strong ? 'font-semibold' : ''}`}>{d.landed ? c.fmt(d as unknown as Totals & Record<string, unknown>) : '–'}</td>)}
+      {cols.map((c, i) => <td key={c.key} className={`px-2 py-1.5 ${num} ${c.strong ? 'font-semibold' : ''} ${i && cols[i - 1].group !== c.group ? 'border-l border-border-gray' : ''}`} style={c.strong ? { background: tone(c.group).tint } : undefined}>{d.landed ? c.fmt(d as unknown as Totals & Record<string, unknown>) : '–'}</td>)}
     </tr>
   )
 }
