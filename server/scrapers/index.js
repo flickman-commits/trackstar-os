@@ -34,6 +34,7 @@ import kiawahIslandConfig from './configs/kiawahIsland.js'
 import louisianaConfig from './configs/louisiana.js'
 import austinConfig from './configs/austin.js'
 import philadelphiaConfig from './configs/philadelphia.js'
+import richmondConfig from './configs/richmond.js'
 import marinecorpsConfig from './configs/marinecorps.js'
 import nycConfig from './configs/nyc.js'
 import cimConfig from './configs/cim.js'
@@ -138,6 +139,7 @@ const ALL_CONFIGS = [
   louisianaConfig,
   austinConfig,
   philadelphiaConfig,
+  richmondConfig,
   marinecorpsConfig,
   nycConfig,
   cimConfig,

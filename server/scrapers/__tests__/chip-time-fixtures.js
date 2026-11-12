@@ -400,6 +400,43 @@ export const CHIP_TIME_FIXTURES = [
     officialPage: { url: 'https://www.mychiptime.com/searchResultGen.php?eID=16898&fname=Melissa&lname=Gallagher', shows: '00:49:59', readOn: '2026-11-12' },
     notes: 'Philadelphia 2025 8K (eID 16898) - pace against 4.97 mi (26.2 would give ~1:54, 13.1 ~3:49). Gun 01:07:44 vs chip 00:49:59, an 18-minute gap. POSITIVE SPLIT: 9:41/M at 2.4M fading to 10:03/M overall. Page Total Pace 10:03/M; 2999s / 4.97 = 10:03.4.',
   },
+  // Richmond, one per distance (the weekend's three are searched together).
+  // richmondmarathon.org/results links RunSignUp race 53399 for every year
+  // 2021-2025. The page prints whole seconds (no tenths), so there is no
+  // fraction to round; its Pace column is what prints.
+  {
+    platform: 'runsignup',
+    race: 'Richmond Marathon',
+    year: 2025,
+    runner: 'Shauna Delong',
+    expectedChipTime: '4:00:50',
+    expectedChipPace: '9:12',
+    expectedBib: '3351',
+    officialPage: { url: 'https://runsignup.com/Race/Results/53399/?resultSetId=621927#resultSetId-621927', shows: '4:00:50', readOn: '2026-11-12' },
+    notes: 'Richmond 2025 Marathon (event 923215, result set 621927). Gun 4:01:27 vs chip 4:00:50. POSITIVE SPLIT: Half Spl 1:46:25 (8:07/mi) then 2:14:25 for the second half (10:16/mi). Individual result page: Chip Time 4:00:50, Gun Time 4:01:27, Pace 9:12. 14450s / 26.2 = 9:11.5.',
+  },
+  {
+    platform: 'runsignup',
+    race: 'Richmond Marathon',
+    year: 2023,
+    runner: 'Claire Weibel',
+    expectedChipTime: '2:03:24',
+    expectedChipPace: '9:26',
+    expectedBib: '17953',
+    officialPage: { url: 'https://runsignup.com/Race/Results/53399/?resultSetId=425038#resultSetId-425038', shows: '2:03:24', readOn: '2026-11-12' },
+    notes: 'Richmond 2023 HALF (event 665696, result set 425038) - pace against 13.1, not 26.2 (26.2 would give ~4:43). Clock (gun) 2:09:38 vs chip 2:03:24. POSITIVE SPLIT: 10K 57:12 (9:12/mi), then 9:37/mi for the rest. Page Pace 9:26; 7404s / 13.1 = 9:25.2, so RunSignUp\'s own pace sits a second above a recomputed one here; the page value is what prints.',
+  },
+  {
+    platform: 'runsignup',
+    race: 'Richmond Marathon',
+    year: 2024,
+    runner: 'Yvonne Conrad',
+    expectedChipTime: '1:25:26',
+    expectedChipPace: '17:12',
+    expectedBib: '26930',
+    officialPage: { url: 'https://runsignup.com/Race/Results/53399/?resultSetId=511318#resultSetId-511318', shows: '1:25:26', readOn: '2026-11-12' },
+    notes: 'Richmond 2024 8K (event 784054, result set 511318) - pace against 4.97 mi (13.1 would give ~6:31, 26.2 ~3:16). Clock (gun) 1:31:53 vs chip 1:25:26, a 6.5-minute gap. The 8K has no splits, so the uneven-splits runners are the marathon and half above. Alexander Conrad (bib 26931, 1:25:23) is in the same 8K, so the name filter must keep the first name. Page Pace 17:12; 5126s / 4.97 = 17:11.4.',
+  },
 
   // ── MultiSport Australia (Sydney) ─────────────────────────────────────
   {
