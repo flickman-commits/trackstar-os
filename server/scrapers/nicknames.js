@@ -56,6 +56,8 @@ const RAW = {
   jeremiah:  ['jerry', 'jay'],
   jeremy:    ['jerry', 'jer'],
   jessica:   ['jess', 'jessie'],
+  // Jack Karl (6534) is "John Karl" in the NYRR results.
+  john:      ['jack', 'johnny'],
   jonathan:  ['jon', 'jonny'],
   joseph:    ['joe', 'joey'],
   joshua:    ['josh'],

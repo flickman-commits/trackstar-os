@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
 import { BaseScraper } from '../scrapers/BaseScraper.js'
-import { ResearchService, isFailedSearch } from './ResearchService.js'
+import { ResearchService, isFailedSearch, bibNameAgrees } from './ResearchService.js'
 
 // A results site that takes the connection and never answers, like the
 // Athlinks search endpoint did for Miami 2025.
@@ -143,4 +143,46 @@ test('a Sr is not taken for the Jr the customer typed', async () => {
   const scraper = new ScriptedScraper([function () { return this.notFoundResult() }, sr, function () { return this.notFoundResult() }, function () { return this.notFoundResult() }])
   const r = await serviceWith(scraper).findRunner('Miami Marathon', 2025, 'Robert Pedersen Jr.', { skipLastNameFallback: true })
   assert.equal(r.found, false)
+})
+
+/** London: Emily Mackenroth ran 2025 with bib 14016; in 2024 that bib was Charlie Muddyman. */
+class YearsScraper extends BaseScraper {
+  constructor(year) { super('London Marathon', year) }
+  async searchRunner(name) {
+    return this.year === 2025 && name === 'Emily Mackenroth'
+      ? { ...this.notFoundResult(), found: true, runnerName: 'Emily Mackenroth', bibNumber: '14016', officialTime: '4:07:12', researchStatus: 'found' }
+      : this.notFoundResult()
+  }
+  async searchRunnerByBib(bib) {
+    const name = this.year === 2024 ? 'Charlie Muddyman' : 'Emily Mackenroth'
+    return { ...this.notFoundResult(), found: true, runnerName: name, bibNumber: bib, officialTime: this.year === 2024 ? '4:27:30' : '4:07:12', researchStatus: 'found' }
+  }
+}
+
+test('a bib under another name is not used: wrong year (London 2024, 5408)', async () => {
+  const service = new ResearchService()
+  service.loadOverrides = async () => {}
+  service.scraperFor = (_race, year) => new YearsScraper(year)
+  const r = await service.findRunner('London Marathon', 2024, 'Emily Mackenroth', { bib: '14016', skipLastNameFallback: true })
+  assert.equal(r.found, false)
+  assert.equal(r.officialTime ?? null, null)
+  assert.equal(r.possibleMatches[0].name, 'Charlie Muddyman')
+  assert.match(r.researchNotes, /belongs to "Charlie Muddyman"/)
+  assert.match(r.researchNotes, /in the 2025 results \(bib 14016\): check the race year/)
+})
+
+test('a bib under the same name, written another way, is used', async () => {
+  assert.equal(bibNameAgrees('Emily Mackenroth', 'MACKENROTH, Emily'), true)
+  assert.equal(bibNameAgrees('Mike Smith', 'Michael J Smith'), true)
+  assert.equal(bibNameAgrees('Emily Mackenroth', 'Charlie Muddyman'), false)
+  assert.equal(bibNameAgrees('Emily Mackenroth', 'Emily Smith'), false)
+  assert.equal(bibNameAgrees('Emily Mackenroth', null), false)
+  // Bib matches already printed, read against their order names.
+  assert.equal(bibNameAgrees('Jack Karl', 'John Karl'), true)
+  assert.equal(bibNameAgrees('Taylor Rogers Zelnio', 'Taylor Rogers'), true)
+  assert.equal(bibNameAgrees('Amanda Devera', 'Amanda De Vera'), true)
+  assert.equal(bibNameAgrees('Payton Romig', 'Payten Romig'), true)
+  assert.equal(bibNameAgrees('Elizabeth Rhoad', 'Elizabeth Vollkommer'), false)
+  assert.equal(bibNameAgrees('Matthew DeVenio', 'Anonymous Runner'), false)
+  assert.equal(bibNameAgrees('Cori Rotsko', 'Scott Langenburg'), false)
 })

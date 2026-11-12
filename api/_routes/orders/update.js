@@ -215,22 +215,25 @@ export default async function handler(req, res) {
       if (!Number.isInteger(newYear) || newYear < 1970 || newYear > now + 1) {
         return res.status(400).json({ error: `The year should be between 1970 and ${now + 1}` })
       }
-      if (existingOrder.status === 'completed') {
-        return res.status(400).json({ error: 'This order is completed. A new year on a printed order is a reprint: ask Matt.' })
-      }
+      // A print already made for the wrong year (5408: the customer's 2025
+      // race printed as 2024) is a reprint. The year changes, the order opens
+      // again for research and a new design, and the print that went out stays
+      // on record. The new design is never sent on its own (queueSend skips an
+      // order with a sent print): once approved, Support's New Artelo order
+      // sends it as the replacement.
       const sent = await prisma.renderJob.findFirst({ where: { orderId: existingOrder.id, arteloSentAt: { not: null } }, select: { id: true } })
-      if (sent) return res.status(400).json({ error: 'A print of this order has gone to Artelo production already. A new year is a reprint: ask Matt.' })
+      const reprint = Boolean(sent) || existingOrder.status === 'completed'
       const stale = await prisma.runnerResearch.findMany({
         where: { orderId: existingOrder.id, race: { year: { not: newYear } } },
         select: { id: true, bibNumber: true, officialTime: true, officialPace: true, researchStatus: true, source: true, race: { select: { raceName: true, year: true } } },
       })
       if (stale.length) await prisma.runnerResearch.deleteMany({ where: { id: { in: stale.map(r => r.id) } } })
-      const closed = await prisma.renderJob.updateMany({ where: { orderId: existingOrder.id, review: { in: ['pending', 'approved'] } }, data: { review: 'closed', reviewNote: `Race year changed to ${newYear}`, reviewedAt: new Date(), sendAfter: null } })
-      if (['ready', 'flagged', 'missing_year'].includes(existingOrder.status)) updateData.status = 'pending'
+      const closed = await prisma.renderJob.updateMany({ where: { orderId: existingOrder.id, review: { in: ['pending', 'approved'] }, arteloSentAt: null }, data: { review: 'closed', reviewNote: `Race year changed to ${newYear}`, reviewedAt: new Date(), sendAfter: null } })
+      if (['ready', 'flagged', 'missing_year', 'completed'].includes(existingOrder.status)) updateData.status = 'pending'
       const person = actor?.id ? await prisma.user.findUnique({ where: { id: actor.id }, select: { firstName: true, lastName: true } }) : null
       const who = [person?.firstName, person?.lastName].filter(Boolean).join(' ') || actor?.email || 'Someone'
-      await prisma.orderComment.create({ data: { orderId: existingOrder.id, text: `Race year changed from ${oldYear || 'none'} to ${newYear}. Research runs again for ${newYear}.`, authorId: actor?.id || null, authorName: who } })
-      await recordAudit({ action: 'order.year', summary: `Order ${existingOrder.orderNumber}: race year ${oldYear || 'none'} to ${newYear}${stale.length ? `, ${stale.length} old result${stale.length === 1 ? '' : 's'} cleared` : ''}${closed.count ? `, ${closed.count} design${closed.count === 1 ? '' : 's'} closed` : ''}`, detail: { orderNumber: existingOrder.orderNumber, before: oldYear, after: newYear, clearedResearch: stale, closedRenders: closed.count }, actor })
+      await prisma.orderComment.create({ data: { orderId: existingOrder.id, text: `Race year changed from ${oldYear || 'none'} to ${newYear}. Research runs again for ${newYear}.${reprint ? ' A print already went out, so this is a reprint: approve the new design, then send it from Support with New Artelo order (it does not go to production on its own).' : ''}`, authorId: actor?.id || null, authorName: who } })
+      await recordAudit({ action: 'order.year', summary: `Order ${existingOrder.orderNumber}: race year ${oldYear || 'none'} to ${newYear}${reprint ? ' (reprint)' : ''}${stale.length ? `, ${stale.length} old result${stale.length === 1 ? '' : 's'} cleared` : ''}${closed.count ? `, ${closed.count} design${closed.count === 1 ? '' : 's'} closed` : ''}`, detail: { orderNumber: existingOrder.orderNumber, before: oldYear, after: newYear, clearedResearch: stale, closedRenders: closed.count }, actor })
     }
 
     // Update race-level data (weather, date) on the Race record if provided.

@@ -91,6 +91,11 @@ export async function queueSend(job, { orderType } = {}) {
     const order = await prisma.order.findUnique({ where: { id: job.orderId }, select: { trackstarOrderType: true, shopifyOrderData: true, createdAt: true } })
     const type = orderType || order?.trackstarOrderType
     if (!SEND_TYPES.includes(type) || !(await autoSendOn())) return job
+    // A print of this order already went to production: this design is a
+    // reprint (a corrected year, 5408). Artelo's order is done, so it goes
+    // out from Support's New Artelo order, never by itself.
+    const sent = await prisma.renderJob.findFirst({ where: { orderId: job.orderId, id: { not: job.id }, arteloSentAt: { not: null } }, select: { id: true } })
+    if (sent) return job
     // Not before the customer's change window closes (changeWindow.js): the
     // confirmation email says they can fix the address for that long.
     const hold = Date.now() + holdMinutes() * MIN

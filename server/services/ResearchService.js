@@ -14,6 +14,7 @@ import prisma from '../db.js'
 import { getScraperForRace, hasScraperForRace, getCanonicalRaceName, namedEventsFor, isRacePublicSafe, onlyEventFor } from '../scrapers/index.js'
 import { ensureOverridesLoaded } from '../scrapers/scraperOverrides.js'
 import WeatherService from './WeatherService.js'
+import { firstNamesEquivalent } from '../scrapers/nicknames.js'
 import { yearUnknown, YearUnknownError } from '../domain/orders/yearUnknown.js'
 
 /** The runner's own results page from their bib, or null when the race's scraper has no such page. */
@@ -158,6 +159,49 @@ export async function clearAgentNote(orderId) {
   await prisma.orderComment.deleteMany({ where: { orderId, authorName: 'Research agent' } }).catch(() => {})
 }
 
+/** Lower case, accents off, punctuation to spaces, as words. */
+function nameWords(s) {
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean)
+}
+
+/** One letter changed, added or dropped ("Payton" and "Payten"). */
+function oneEditApart(a, b) {
+  if (Math.abs(a.length - b.length) > 1) return false
+  let i = 0, j = 0, edits = 0
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue }
+    if (++edits > 1) return false
+    if (a.length > b.length) i++
+    else if (b.length > a.length) j++
+    else { i++; j++ }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1
+}
+
+/**
+ * Does the name on a bib's results row agree with the order's name? The
+ * same surname (written with or without a space, "De Vera"; or the results
+ * dropping a second surname, "Taylor Rogers" for Taylor Rogers Zelnio) and
+ * the same first name (a nickname, an initial, or one letter off), in either
+ * order ("Mackenroth, Emily"). A different surname (a maiden name) or no name
+ * to check is a person's call, never a match.
+ */
+export function bibNameAgrees(orderName, officialName) {
+  const a = nameWords(orderName), b = nameWords(officialName)
+  if (a.length < 2 || b.length < 2) return false
+  const surname = (ws, first) => ws.filter(w => w !== first)
+  const sameSurname = (x, y) => {
+    const xs = surname(x, x[0]), ys = surname(y, y.includes(x[0]) ? x[0] : y[0])
+    if (!xs.length || !ys.length) return false
+    return ys.includes(xs[xs.length - 1]) || xs.includes(ys[ys.length - 1]) || xs.join('') === ys.join('')
+  }
+  if (!sameSurname(a, b)) return false
+  const first = a[0]
+  return b.some(w => w === first || firstNamesEquivalent(w, first)
+    || ((w.length === 1 || first.length === 1) && w[0] === first[0])
+    || (w.length >= 4 && first.length >= 4 && w[0] === first[0] && oneEditApart(w, first)))
+}
+
 export class ResearchService {
 
   /** The scraper for a race. A method so a test can hand in a stub. */
@@ -168,6 +212,24 @@ export class ResearchService {
   /** Load dashboard event-id overrides. A method so a test can skip the database. */
   loadOverrides() {
     return ensureOverridesLoaded()
+  }
+
+  /**
+   * The year either side where this name is in the results, for a note when
+   * the order's year looks wrong. Null when neither has it, or on any failure.
+   */
+  async nameInNearbyYears(raceName, year, runnerName) {
+    const latest = new Date().getFullYear()
+    for (const y of [year + 1, year - 1]) {
+      if (!Number.isInteger(y) || y > latest) continue
+      try {
+        const scraper = this.scraperFor(raceName, y)
+        if (!scraper) continue
+        const r = await this.searchOnce(scraper, raceName, y, runnerName)
+        if (r?.found) return { year: y, bib: r.bibNumber || null }
+      } catch { /* a year with no scraper or a failed search: no hint */ }
+    }
+    return null
   }
 
   /**
@@ -624,9 +686,10 @@ export class ResearchService {
    * @param {string|null} [opts.bib] - A bib known for this order (typed in by
    *   a person on the research row, or the customer's). When the name search
    *   finds nobody, or several people none of whom wear this bib, the runner
-   *   is looked up by bib instead (scraper.searchRunnerByBib). The official
-   *   name it returns is recorded in the notes only; the order's name stays
-   *   what gets printed.
+   *   is looked up by bib instead (scraper.searchRunnerByBib). The bib's row
+   *   is used only when its name agrees with the order's (bibNameAgrees);
+   *   otherwise it is a suggestion for a person. The official name is
+   *   recorded in the notes only; the order's name stays what gets printed.
    * @returns {Promise<Object>} Normalized scraper result (found, ambiguous,
    *   possibleMatches, bibNumber, officialTime, officialPace, eventType,
    *   researchStatus, researchNotes, rawData, ...)
@@ -784,9 +847,30 @@ export class ResearchService {
         const byBib = await scraper.searchRunnerByBib(wantedBib)
         // The scraper promises an exact bib match; check anyway, because a
         // wrong runner here prints a stranger's time on someone's poster.
-        if (byBib?.found && String(byBib.bibNumber || '').trim() === wantedBib) {
-          const officialName = byBib.runnerName || byBib.rawData?.name || null
-          console.log(`[ResearchService] Matched by bib ${wantedBib}: ${officialName || 'unnamed'}`)
+        const officialName = byBib?.found ? (byBib.runnerName || byBib.rawData?.name || null) : null
+        // Name AND bib, never the bib alone. A bib is only unique within one
+        // year: London 2024 order 5408 was really a 2025 runner, her name was
+        // not in 2024, and bib 14016 in 2024 was a stranger whose time went to
+        // print. A bib row under another name (or no name to check) is a
+        // suggestion for a person, with a look at the years either side.
+        if (byBib?.found && String(byBib.bibNumber || '').trim() === wantedBib && !bibNameAgrees(runnerName, officialName)) {
+          console.log(`[ResearchService] Bib ${wantedBib} is "${officialName || 'unnamed'}", not "${runnerName}": not used`)
+          const elsewhere = await this.nameInNearbyYears(raceName, year, runnerName)
+          results = {
+            ...results,
+            found: false,
+            ambiguous: false,
+            researchStatus: 'not_found',
+            researchNotes: [
+              officialName
+                ? `Bib ${wantedBib} in the ${year} results belongs to "${officialName}", not "${runnerName}", so it was not used.`
+                : `Bib ${wantedBib} is in the ${year} results with no name to check against "${runnerName}", so it was not used.`,
+              elsewhere ? `"${runnerName}" is in the ${elsewhere.year} results${elsewhere.bib ? ` (bib ${elsewhere.bib})` : ''}: check the race year.` : null,
+            ].filter(Boolean).join(' '),
+            possibleMatches: [{ name: officialName || `Bib ${wantedBib}`, bib: wantedBib, time: byBib.officialTime || null, pace: byBib.officialPace || null, eventType: byBib.eventType || null, resultsUrl: byBib.resultsUrl || null }],
+          }
+        } else if (byBib?.found && String(byBib.bibNumber || '').trim() === wantedBib) {
+          console.log(`[ResearchService] Matched by bib ${wantedBib}: ${officialName}`)
           byBib.researchNotes = [
             `Matched by bib ${wantedBib} because the name "${runnerName}" did not match`
               + (officialName ? `; the official results list this bib as "${officialName}".` : '.'),
