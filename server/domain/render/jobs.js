@@ -217,9 +217,13 @@ export async function failJob({ jobId, workerId, error }) {
 export async function signedFiles(job, ttl = 600) {
   if (job.status !== 'done') return { pdfUrl: null, previewUrl: null }
   const sb = storage()
+  // A custom final PDF has no preview. Storage (since storage-js 2.119, the
+  // 2026-11-10 npm audit fix) throws on a null path instead of answering with
+  // an error, which failed every custom print's Drive and Artelo copy (6441).
+  const sign = (path, opts) => path ? sb.storage.from(BUCKET).createSignedUrl(path, ttl, opts) : { data: null }
   const [pdf, preview] = await Promise.all([
-    sb.storage.from(BUCKET).createSignedUrl(job.pdfPath, ttl, { download: `${job.spec?.file || job.orderId}.pdf` }),
-    sb.storage.from(BUCKET).createSignedUrl(job.previewPath, ttl),
+    sign(job.pdfPath, { download: `${job.spec?.file || job.orderId}.pdf` }),
+    sign(job.previewPath),
   ])
   return { pdfUrl: pdf.data?.signedUrl || null, previewUrl: preview.data?.signedUrl || null }
 }
