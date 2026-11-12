@@ -129,6 +129,26 @@ function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; o
   const s = d.job?.send
   if (!s || !['queued', 'waiting', 'sent'].includes(s.state)) return null
   const pad = compact ? 'py-3 text-[15px]' : 'py-3.5 text-base'
+  // The phone's bar: one line of status, the actions in a row under it. Side
+  // by side, the explanation and three buttons squeezed the text to a word a line.
+  if (compact) {
+    const title = s.state === 'sent' ? `Sent ${clock(s.at)}` : s.state === 'waiting' ? 'Waiting on other prints' : s.inHold ? `In hold until ${dayClock(s.at)}` : `Sending at ${clock(s.at)}`
+    const btn = 'flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-[14px] font-semibold whitespace-nowrap disabled:opacity-50'
+    const actions = [
+      s.state === 'queued' && d.canManage && <button key="send" onClick={() => { void d.sendAction('send-now') }} disabled={d.busy} className={`${btn} bg-[#4600D6] text-white`}>{d.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Send</button>,
+      (s.state === 'waiting' || s.state === 'sent') && onComplete && <button key="done" onClick={onComplete} className={`${btn} bg-green-600 text-white`}><Check className="w-4 h-4" /> Complete</button>,
+      s.state === 'queued' && d.canManage && <button key="hold" onClick={() => { void d.sendAction('hold') }} disabled={d.busy} className={`${btn} bg-white border-2 border-[#4600D6]/30 text-[#4600D6]`}><Pause className="w-4 h-4" /> Hold</button>,
+      (s.state === 'queued' || s.state === 'waiting') && d.canManage && <button key="undo" onClick={() => { void d.sendAction('back-to-review') }} disabled={d.busy} aria-label="Back to review" className={`${btn} bg-white border-2 border-off-black/15 text-off-black`}><Undo2 className="w-4 h-4" /> Undo</button>,
+    ].filter(Boolean)
+    return (
+      <div className="space-y-1.5">
+        <p className={`flex items-center gap-1.5 px-1 text-[13px] font-semibold ${s.state === 'sent' ? 'text-green-800' : 'text-[#4600D6]'}`}>
+          {s.state === 'sent' ? <Check className="w-4 h-4 shrink-0" /> : <Send className="w-4 h-4 shrink-0" />}<span className="truncate">{title}</span>
+        </p>
+        {actions.length > 0 && <div className="flex gap-1.5">{actions}</div>}
+      </div>
+    )
+  }
   return (
     <div className={`rounded-md border px-4 ${compact ? 'py-2.5' : 'py-3'} flex items-center gap-3 ${s.state === 'sent' ? 'border-green-200 bg-green-50' : 'border-[#4600D6]/25 bg-[#4600D6]/[0.04]'}`}>
       {s.state === 'sent' ? <Check className="w-5 h-5 text-green-700 shrink-0" /> : <Send className="w-5 h-5 text-[#4600D6] shrink-0" />}
@@ -171,7 +191,7 @@ function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; o
 
 export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = false }: { d: Design; arteloOrderUrl?: string | null; onComplete?: () => void; compact?: boolean }) {
   // compact: the phone's bottom bar, shorter buttons in the same order.
-  const pad = compact ? 'py-3 text-[15px]' : 'py-4 text-base'
+  const pad = compact ? 'py-3 text-[15px] !rounded-xl' : 'py-4 text-base'
   const [rejecting, setRejecting] = useState(false)
   const [note, setNote] = useState('')
   const [fileProblem, setFileProblem] = useState<boolean | null>(null)
@@ -258,11 +278,11 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
             </div>
           )}
           <button onClick={() => { void d.sendAction('send-now') }} disabled={d.busy} className={`w-full inline-flex items-center justify-center gap-2 ${pad} rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors`}>
-            {d.busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} {job.send?.state === 'blocked' ? 'Try sending again' : talking ? 'Send anyway' : 'Skip hold period, send to production now'}
+            {d.busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} {job.send?.state === 'blocked' ? 'Try sending again' : talking ? 'Send anyway' : compact ? 'Send to production' : 'Skip hold period, send to production now'}
           </button>
           {/* Approved by mistake: undo it. The design waits for review again and nothing sends. */}
           <button onClick={() => { void d.sendAction('back-to-review') }} disabled={d.busy} className={`w-full inline-flex items-center justify-center gap-2 ${pad} rounded-md bg-white border-2 border-off-black/15 text-off-black font-semibold hover:bg-off-black/[0.04] disabled:opacity-50 transition-colors`}>
-            <Undo2 className="w-5 h-5" /> Send back to review
+            <Undo2 className="w-5 h-5" /> {compact ? 'Back to review' : 'Send back to review'}
           </button>
         </>
       )}
@@ -298,7 +318,9 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
         </div>
         <label className="flex items-start gap-2 text-xs text-off-black/70 cursor-pointer">
           <input type="checkbox" checked={isFile} onChange={e => setFileProblem(e.target.checked)} className="mt-0.5 accent-[#4600D6]" />
-          <span><span className="font-medium text-off-black">Design file problem</span>: the layout, a layer or the artboard needs Dan. Goes on Settings &gt; Design Needs. Leave it off for wrong data (name, bib, time, date, weather).</span>
+          {compact
+            ? <span><span className="font-medium text-off-black">Design file problem</span> (goes to Dan), not wrong data</span>
+            : <span><span className="font-medium text-off-black">Design file problem</span>: the layout, a layer or the artboard needs Dan. Goes on Settings &gt; Design Needs. Leave it off for wrong data (name, bib, time, date, weather).</span>}
         </label>
       </div>
     )
@@ -323,10 +345,10 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
   // On a phone Approve is the wide button on the right, under the thumb.
   return (
     <div className="space-y-1.5">
-      <div className={`grid gap-3 ${compact ? 'grid-cols-[1fr,2fr]' : 'grid-cols-1 sm:grid-cols-2'}`}>
+      <div className={`grid ${compact ? 'gap-1.5 grid-cols-[1fr,2fr]' : 'gap-3 grid-cols-1 sm:grid-cols-2'}`}>
         {compact ? [reject, approve] : [approve, reject]}
       </div>
-      {d.autoSend && (
+      {d.autoSend && !compact && (
         <p className="text-[11px] text-off-black/50">
           Goes to Artelo production in a few minutes; you can Hold it until then.{' '}
           <button onClick={() => { void d.review('approved', undefined, false, false) }} disabled={d.busy} className="underline decoration-dotted underline-offset-2 hover:text-off-black disabled:opacity-40">Approve only, don't send</button>

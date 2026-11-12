@@ -218,7 +218,7 @@ export default function Settings() {
 
   return (
     <>
-      <div className="fixed top-0 right-0 left-0 md:left-[92px] bottom-[calc(92px+env(safe-area-inset-bottom))] md:bottom-0 z-40 bg-[#f3f3f3] flex flex-col">
+      <div className="fixed top-0 right-0 left-0 md:left-[92px] bottom-0 z-40 bg-[#f3f3f3] flex flex-col">
         <div className="px-3 md:px-5 w-full flex flex-col h-full min-h-0">
           {(!settingsPanelInUrl || !isPhone) && (
             <PageHeader title="Settings" subtitle={currentUser?.email || undefined} />

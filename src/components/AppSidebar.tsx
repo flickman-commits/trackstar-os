@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation } from 'react-router-dom'
-import { Package, Users, Ticket, Calculator, Settings, Wrench, Send, FileText, ListOrdered, Braces, Vote, Inbox, Gift, Landmark, Clock } from 'lucide-react'
+import { Package, Users, Ticket, Calculator, Settings, Wrench, Send, FileText, ListOrdered, Braces, Vote, Inbox, Gift, Landmark, Clock, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Capability } from '@/lib/roles'
 
@@ -229,17 +229,19 @@ function SalesTile({ item, active }: { item: Item; active: boolean }) {
 }
 
 /**
- * The same tools, laid along the bottom for a phone.
+ * The phone's menu: one rounded square in the bottom right corner, showing
+ * the page you are on. Tap it and the whole rail opens above it as a list;
+ * choosing a page (or tapping outside) folds it back to the square.
  *
- * On a narrow screen a fixed side rail would eat a third of the width, so the
- * desktop rail hides below md and this takes its place: the same floating
- * dark card, inset from the edges with the same radius and shadow, turned on
- * its side along the bottom where a thumb already rests. The tiles sit in a row and scroll sideways when
- * they do not fit; the card itself stays put. Same white card on the current
- * tile, so the app reads as one thing on both screens. The three small
- * utilities lose their flyout and sit in the row as ordinary tiles; a hover
- * menu has no meaning on a thumb.
+ * It used to be a bar along the bottom, which took a strip of every screen
+ * and sat on top of the order view's Approve buttons. On a phone the work is
+ * quick actions (approve a print, answer a customer), so the page gets the
+ * screen and the menu stays out of the way until it is wanted. Same dark
+ * card and white current tile as the desktop rail.
  */
+/** Above the home indicator, and above the order view's bottom bar when one is up (--phone-bar-h, set by OrderDetail). */
+const SQUARE_BOTTOM = 'calc(env(safe-area-inset-bottom) + 12px + var(--phone-bar-h, -8px) + 8px)'
+
 export function MobileToolBar({
   can,
   onOpenSettings,
@@ -252,55 +254,59 @@ export function MobileToolBar({
   activeId?: string
 }) {
   const fulfillmentTo = useFulfillmentReturn()
+  const { pathname } = useLocation()
+  const [open, setOpen] = useState(false)
+  // A new page closes it, however it was reached.
+  useEffect(() => { setOpen(false) }, [pathname])
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
   const items: Item[] = [
     ...railItems(can, fulfillmentTo),
-    // Discounts, Pace and Weather are desktop tools; the phone bar keeps to the pages.
+    // Discounts and Pace are desktop tools; the phone keeps to the pages.
     // Hours is the exception: a rep logs time from a phone.
     ...(can('hours') ? [{ id: 'hours', label: 'Hours', icon: Clock, onClick: onOpenHours, title: 'Log and submit your time' } as Item] : []),
     ...(can('tools.surveys') ? [{ id: 'surveys', label: 'Survey', icon: Vote, to: '/surveys', title: 'Design Survey' } as Item] : []),
+    ...(can('tools.samples') ? [{ id: 'samples', label: 'Samples', icon: Gift, to: '/samples', title: 'Samples' } as Item] : []),
     { id: 'settings', label: 'Settings', icon: Settings, onClick: onOpenSettings, title: 'Settings' },
   ]
+  const current = items.find(i => i.id === activeId) || items[0]
+  const CurrentIcon = current.icon
   return (
-    <nav
-      aria-label="Tools"
-      // Same inset (3), radius (22px) and shadow as the desktop rail, so it is
-      // recognisably the same object. Sits above the home indicator.
-      className="md:hidden fixed left-3 right-3 z-30 rounded-[22px] bg-dark-fill shadow-[0_2px_10px_rgba(0,0,0,0.18)]"
-      style={{ bottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}
-    >
-      {/* Horizontal scroll with the scrollbar hidden: the half-visible next
-          tile already says there is more, and a bar under a row of icons
-          looks broken. The rounded card clips the strip at its corners. */}
-      <div className="flex gap-1 px-1.5 py-1.5 overflow-x-auto rounded-[22px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {items.map(item => (
-          <div key={item.id} className="shrink-0">
-            <MobileTile item={item} active={activeId === item.id} />
-          </div>
-        ))}
-      </div>
-    </nav>
+    <div className="md:hidden">
+      {open && <div className="fixed inset-0 z-[44] bg-off-black/30" onClick={() => setOpen(false)} aria-hidden />}
+      {open && (
+        <nav
+          aria-label="Pages"
+          className="fixed right-3 z-[45] w-56 p-1.5 rounded-[22px] bg-dark-fill shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
+          style={{ bottom: `calc(${SQUARE_BOTTOM} + 56px + 8px)` }}
+        >
+          {items.map(item => {
+            const Icon = item.icon
+            const active = item.id === activeId
+            const cls = `flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-left text-[15px] transition-colors ${active ? 'bg-white text-dark-fill font-semibold' : 'text-white/80 active:bg-white/10'}`
+            const inner = <><Icon className="w-[18px] h-[18px] shrink-0" />{item.label}</>
+            if (item.to) return <Link key={item.id} to={item.to} onClick={() => setOpen(false)} className={cls}>{inner}</Link>
+            return <button key={item.id} onClick={() => { setOpen(false); item.onClick?.() }} className={cls}>{inner}</button>
+          })}
+        </nav>
+      )}
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-label={open ? 'Close menu' : `Menu: on ${current.label}`}
+        aria-expanded={open}
+        // White while it floats, so it sits lightly over the page; dark while open, like the menu it opened.
+        className={`fixed right-3 z-[45] w-14 h-14 rounded-[18px] flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-all ${open ? 'bg-dark-fill text-white shadow-[0_4px_16px_rgba(0,0,0,0.25)]' : 'bg-white text-dark-fill border border-border-gray shadow-[0_4px_16px_rgba(0,0,0,0.14)]'}`}
+        style={{ bottom: SQUARE_BOTTOM }}
+      >
+        {open ? <X className="w-5 h-5" /> : <CurrentIcon className="w-5 h-5" />}
+        <span className="text-[9px] font-semibold leading-none max-w-[50px] truncate">{open ? 'Close' : current.label}</span>
+      </button>
+    </div>
   )
-}
-
-/**
- * A phone tile: icon and label inside one rounded square. On desktop the
- * label hangs below the square, which reads well in a column; along the bottom
- * of a phone that costs a whole extra line, so here the square holds both.
- */
-function MobileTile({ item, active }: { item: Item; active?: boolean }) {
-  const Icon = item.icon
-  const cls = `flex flex-col items-center justify-center gap-1 w-[66px] h-[54px] rounded-xl transition-all focus:outline-none ${
-    active ? 'bg-white text-dark-fill shadow-[0_1px_3px_rgba(0,0,0,0.25)]' : 'text-white/55 active:bg-white/10'
-  }`
-  const inner = (
-    <>
-      <Icon className="w-[18px] h-[18px]" />
-      <span className={`text-[10px] leading-none text-center max-w-[60px] truncate ${active ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>
-    </>
-  )
-  if (item.to) return <Link to={item.to} className={cls} title={item.title}>{inner}</Link>
-  if (item.href) return <a href={item.href} target="_blank" rel="noopener noreferrer" className={cls} title={item.title}>{inner}</a>
-  return <button onClick={item.onClick} className={cls} title={item.title}>{inner}</button>
 }
 
 /** The places you go. Shared by the desktop rail and the mobile bar. */

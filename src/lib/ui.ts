@@ -94,7 +94,7 @@ export const chipTone = {
  */
 
 /** Page background and the centred column every tool page sits in. */
-export const pageShell = 'h-[calc(100dvh-92px-env(safe-area-inset-bottom))] md:h-screen overflow-hidden bg-[#f3f3f3] flex flex-col'
+export const pageShell = 'h-[100dvh] md:h-screen overflow-hidden bg-[#f3f3f3] flex flex-col'
 export const pageColumn = 'mx-auto px-4 md:px-8 lg:px-12 w-full flex flex-col h-full'
 
 /** Stars, then the big title. */

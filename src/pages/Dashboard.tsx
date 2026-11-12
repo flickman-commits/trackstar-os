@@ -1397,7 +1397,7 @@ export default function Dashboard() {
   )
 
   return (
-    <div className="h-[calc(100dvh-92px-env(safe-area-inset-bottom))] md:h-screen overflow-hidden bg-[#f3f3f3] flex flex-col">
+    <div className="h-[100dvh] md:h-screen overflow-hidden bg-[#f3f3f3] flex flex-col">
       <div className="max-w-[1800px] mx-auto px-4 md:px-6 lg:px-8 w-full flex flex-col h-full">
         {/* Header - Compact bar on mobile, full greeting on desktop */}
         {/* The phone header: stars, count, tool name, the view picker. */}
@@ -1560,46 +1560,22 @@ export default function Dashboard() {
                           onClick={() => setSelectedOrder(order)}
                           className="px-4 py-3 active:bg-subtle-gray cursor-pointer"
                         >
-                          {/* Row 1: Source + Order# + Badges ... Status */}
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <OrderSourceMark source={order.source} size="sm" />
-                              <span className="text-sm font-medium text-off-black">{order.displayOrderNumber}</span>
-                              {itemCount > 1 && (
-                                <span className="px-1.5 py-0.5 bg-off-black/5 text-off-black/60 text-[10px] font-medium rounded whitespace-nowrap">
-                                  {getOrderItemPosition(order)}/{itemCount}
-                                </span>
-                              )}
-                              {(() => { const age = orderAge(order); return <span className={`text-[11px] whitespace-nowrap ${age.cls}`}>{age.label}</span> })()}
-                            </div>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <HoverTip text={statusDisplay.label} align="center">
-                                <span className="cursor-help"><StatusPill size="xs" label={statusDisplay.label} dot={statusDisplay.dot} color={statusDisplay.color} bg={statusDisplay.bg} /></span>
-                              </HoverTip>
-                              {(order.notes || (order.commentCount ?? 0) > 0) && (
-                                <HoverTip text="Has notes or comments"><MessageSquareText className="w-3.5 h-3.5 text-amber-500 cursor-help" /></HoverTip>
-                              )}
-                              {!person && order.assigneeName && (
-                                <span className="inline-flex items-center gap-1 text-[11px] text-off-black/60 whitespace-nowrap" title="Assigned to">{(() => { const u = team.find(t => t.id === order.assigneeId); return u ? <Avatar user={u} size={16} /> : null })()}{order.assigneeName}</span>
-                              )}
-                            </div>
+                          {/* Two lines on a phone: who and how old, then the race and
+                              where it stands. Tags, bib and time are for the desk and
+                              the order's Details; a phone is for approving quickly. */}
+                          <div className="flex items-baseline gap-2 min-w-0">
+                            <OrderSourceMark source={order.source} size="sm" />
+                            <span className="text-sm font-semibold text-off-black shrink-0">{order.displayOrderNumber}{itemCount > 1 && <span className="ml-1 text-[11px] font-medium text-off-black/45">{getOrderItemPosition(order)}/{itemCount}</span>}</span>
+                            <span className="text-sm text-off-black truncate flex-1 min-w-0">{order.effectiveRunnerName || order.runnerName || 'Unknown Runner'}</span>
+                            {(order.notes || (order.commentCount ?? 0) > 0) && <MessageSquareText className="w-3.5 h-3.5 text-amber-500 shrink-0 self-center" aria-label="Has notes or comments" />}
+                            {(() => { const age = orderAge(order); return <span className={`text-[11px] whitespace-nowrap shrink-0 ${age.cls}`}>{age.label.replace(/^Ordered /, '')}</span> })()}
                           </div>
-                          {/* Row 2: Runner, then race underneath */}
-                          <div className="mt-1">
-                            <div className="text-sm text-off-black">
-                              {order.effectiveRunnerName || order.runnerName || 'Unknown Runner'}
-                            </div>
-                            <div className="text-xs text-off-black/50 mt-0.5">
-                              {order.effectiveRaceName || order.raceName} {order.effectiveRaceYear || order.raceYear}
-                            </div>
-                            {order.status === 'ready' && order.bibNumber && (
-                              <div className="text-xs text-green-600 mt-0.5">
-                                Bib {order.bibNumber} · {order.hadNoTime ? 'No time' : order.officialTime || 'time needed'}
-                              </div>
-                            )}
+                          <div className="mt-0.5 flex items-center gap-1.5 min-w-0 text-xs">
+                            <span className="text-off-black/50 truncate min-w-0">{order.effectiveRaceName || order.raceName} {order.effectiveRaceYear || order.raceYear}</span>
+                            <span className="text-off-black/25 shrink-0">·</span>
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDisplay.dot || 'bg-off-black/25'}`} />
+                            <span className="text-off-black/65 truncate min-w-0">{statusDisplay.label}</span>
                           </div>
-                          {/* Row 3: Tags */}
-                          <OrderTags order={order} className="mt-1.5" />
                         </div>
                         </Fragment>
                       )
