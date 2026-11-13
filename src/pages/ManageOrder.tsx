@@ -8,7 +8,7 @@ import { loadPublic, LoadError, OFFLINE } from '@/lib/publicLoad'
 /**
  * /order/:order/:sig (and the older /ship link): Manage your order, from the
  * button in the Shopify order confirmation. The customer fixes the runner's
- * name, changes the frame, adds a photo ($20, invoiced by Shopify), updates
+ * name, changes the size or frame, adds a photo ($20, invoiced by Shopify), updates
  * the address or cancels, with nobody at Trackstar in between
  * (server/domain/orders/selfServeOrder.js). A countdown with a bar at the top
  * says how long the window is open; after it the page points at support.
@@ -29,7 +29,7 @@ type Print = {
   standard: boolean; photo: 'on_print' | 'after_race' | 'none'; preorder: boolean; image: string | null; photoUrl: string | null
 }
 type Info = { number: string | null; placedAt: string | null; closesAt: string | null; windowHours: number; canChange: boolean; reason: string | null; support: string; photoPrice: number; prints: Print[]; shipTo: Address | null }
-type FrameChoice = { frame: string; difference: number }
+type FrameChoice = { size: string; frame: string | null; difference: number }
 
 const EMPTY: Address = { name: '', address1: '', address2: '', city: '', province: '', zip: '', country: 'US', phone: '' }
 const input = 'w-full rounded-[5px] border border-[#E0E0E0] bg-white px-3 py-3 text-[17px] text-[#1A1A1A] outline-none focus:border-[#4600D6]'
@@ -51,8 +51,9 @@ const ERR: Record<string, string> = {
   needs_full_name: 'Please enter a first and last name.',
   bad_address: "That address didn't work. Check the street, city and zip.",
   rate_limited: 'Too many tries. Wait a minute and try again.',
-  no_such_frame: "This print doesn't come in that frame.",
-  same_frame: "That's the frame it already has.",
+  no_such_frame: "This print doesn't come in that size and frame.",
+  same_frame: "That's the size and frame it already has.",
+  still_saving: 'Your last change is still saving. Try again in a few minutes.',
   photo_failed: "We couldn't add the photo. Please try again, or reply to your order email.",
   has_photo: 'This print already has a photo.',
   no_photo: "This print doesn't have a photo to replace.",
@@ -220,7 +221,7 @@ export default function ManageOrder() {
             )}
             <div>
               <h1 className="text-[30px] md:text-[34px] font-bold leading-[1.1]">Manage your order</h1>
-              <p className="text-[18px] leading-snug mt-2">Fix a name, change the frame, add or replace a photo, or update your address. We'll print it exactly as it reads here.</p>
+              <p className="text-[18px] leading-snug mt-2">Fix a name, change the size or frame, add or replace a photo, or update your address. We'll print it exactly as it reads here.</p>
             </div>
             {info.prints.map(p => (
               <PrintCard key={p.id} print={p} photoPrice={info.photoPrice || 20} post={post} onChange={setPrint} />
@@ -244,7 +245,82 @@ export default function ManageOrder() {
   )
 }
 
-type Post = (body: Record<string, unknown>) => Promise<Record<string, unknown> & { print?: Print; frames?: FrameChoice[]; shipTo?: Address; refunded?: string; owed?: number; invoiced?: boolean; now?: string; price?: number }>
+type Post = (body: Record<string, unknown>) => Promise<Record<string, unknown> & { print?: Print; choices?: FrameChoice[]; shipTo?: Address; refunded?: string | number; owed?: number; invoiced?: boolean; now?: string; price?: number }>
+
+const priceNote = (d: number) => d > 0 ? `+${money(d)}` : d < 0 ? `${money(d)} less` : 'No extra cost'
+
+/**
+ * Size first, then the frame at that size, each with what it costs against
+ * what they paid. 9777 wanted a bigger print and the page offered only
+ * frames, so she picked Unframed by mistake: the size comes first now.
+ */
+function SizeFramePicker({ current, choices, size, pick, onSize, onPick }: {
+  current: { size: string | null; frame: string | null }; choices: FrameChoice[]; size: string | null; pick: FrameChoice | null
+  onSize: (s: string) => void; onPick: (c: FrameChoice) => void
+}) {
+  const sizes = [...new Set([...(current.size ? [current.size] : []), ...choices.map(c => c.size)])]
+    .sort((a, b) => area(a) - area(b))
+  const atSize = choices.filter(c => c.size === size)
+  // What each size costs in the frame they have now. The cheapest option at a
+  // size would read "12x18, $25 less" (unframed) to someone with a framed
+  // print, the same trap as before.
+  const sameFrame = (s: string) => choices.find(c => c.size === s && c.frame === current.frame) || null
+  const sizeNote = (s: string) => {
+    if (s === current.size) return 'Your size now'
+    const same = sameFrame(s)
+    if (same) return priceNote(same.difference)
+    const ds = choices.filter(c => c.size === s).map(c => c.difference)
+    return ds.length ? `from ${priceNote(Math.min(...ds))}` : ''
+  }
+  const pill = (on: boolean) => `min-h-[48px] px-4 rounded-[8px] border-[1.5px] text-left flex flex-col justify-center ${on ? '' : 'bg-white'}`
+  return (
+    <div className="mt-2 space-y-4">
+      {sizes.length > 1 && (
+        <div>
+          <p className={label}>Size</p>
+          <div className="grid grid-cols-2 gap-2">
+            {sizes.map(s => {
+              const on = s === size
+              return (
+                <button key={s} type="button" onClick={() => { onSize(s); const same = sameFrame(s); if (same) onPick(same) }} className={pill(on)} style={{ borderColor: on ? PURPLE : '#E0E0E0', backgroundColor: on ? '#F6F3FF' : '#FFFFFF' }}>
+                  <span className="text-[17px] font-bold">{s}</span>
+                  <span className="text-[14px] text-[#666666]">{sizeNote(s)}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+      <div>
+        <p className={label}>Frame</p>
+        <div className="space-y-2">
+          {size === current.size && current.frame && (
+            <div className="w-full flex items-center justify-between rounded-[8px] border-[1.5px] border-[#E0E0E0] bg-[#F5F5F5] px-4 py-3.5">
+              <span className="text-[17px] font-bold text-[#666666]">{current.frame}</span>
+              <span className="text-[15px] text-[#666666]">Your frame now</span>
+            </div>
+          )}
+          {atSize.length === 0 && size !== current.size && <p className="text-[16px] text-[#666666]">No frames are available at this size.</p>}
+          {atSize.map(c => {
+            const on = pick?.size === c.size && pick?.frame === c.frame
+            return (
+              <button key={`${c.size}-${c.frame}`} type="button" onClick={() => onPick(c)} className="w-full flex items-center justify-between rounded-[8px] border-[1.5px] px-4 py-3.5 text-left" style={{ borderColor: on ? PURPLE : '#E0E0E0', backgroundColor: on ? '#F6F3FF' : '#FFFFFF' }}>
+                <span className="text-[17px] font-bold">{c.frame || 'Print only'}</span>
+                <span className="text-[15px] text-[#666666]">{priceNote(c.difference)}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** "12x18" -> 216, for putting sizes smallest first; anything else sorts last. */
+function area(s: string) {
+  const m = String(s).match(/(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/i)
+  return m ? Number(m[1]) * Number(m[2]) : Infinity
+}
 
 function Row({ title, value, action, children }: { title: string; value: React.ReactNode; action?: React.ReactNode; children?: React.ReactNode }) {
   return (
@@ -341,6 +417,8 @@ function PrintCard({ print: p, photoPrice, post, onChange }: { print: Print; pho
   const [editing, setEditing] = useState<null | 'name' | 'frame' | 'photo'>(null)
   const [name, setName] = useState(p.runnerName)
   const [frames, setFrames] = useState<FrameChoice[] | null>(null)
+  const [pickSize, setPickSize] = useState<string | null>(null)
+  const [current, setCurrent] = useState<{ size: string | null; frame: string | null }>({ size: null, frame: null })
   const [pick, setPick] = useState<FrameChoice | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [confirmPhoto, setConfirmPhoto] = useState(false)
@@ -362,14 +440,18 @@ function PrintCard({ print: p, photoPrice, post, onChange }: { print: Print; pho
   })
   const openFrames = () => run(async () => {
     const d = await post({ action: 'frames', printId: p.id })
-    setFrames(d.frames || []); setPick(null); setEditing('frame')
+    const cur = { size: (d.size as string) || p.size, frame: (d.frame as string) || p.frame }
+    setFrames(d.choices || []); setCurrent(cur); setPickSize(cur.size); setPick(null); setEditing('frame')
   })
   const saveFrame = () => run(async () => {
     if (!pick) return
-    const d = await post({ action: 'frame', printId: p.id, frame: pick.frame })
+    const d = await post({ action: 'frame', printId: p.id, size: pick.size, frame: pick.frame })
     if (d.print) onChange(d.print)
     setEditing(null)
-    setSaved(d.invoiced && d.owed ? `Changed to ${d.now}. We've emailed you an invoice for ${money(d.owed)}. Your print goes ahead once it's paid.` : `Changed to ${d.now}.`)
+    const now = (d.now || '').replace(/^(\S+) /, '$1, ')
+    setSaved(d.invoiced && d.owed ? `Changed to ${now}. We've emailed you an invoice for ${money(d.owed)}. Your print goes ahead once it's paid.`
+      : d.refunded ? `Changed to ${now}. We've refunded ${money(Number(d.refunded))}. ${REFUND_TIME}`
+      : `Changed to ${now}.`)
   })
   // Upload the storefront's way, then attach: the server adds the add-on and Shopify sends the invoice.
   const savePhoto = () => run(async () => {
@@ -415,25 +497,22 @@ function PrintCard({ print: p, photoPrice, post, onChange }: { print: Print; pho
         )}
       </Row>
 
-      {p.frame && (
+      {(p.size || p.frame) && (
         <Row
-          title="Frame"
-          value={editing === 'frame' ? null : p.frame}
+          title="Size and frame"
+          value={editing === 'frame' ? null : [p.size, p.frame].filter(Boolean).join(', ')}
           action={editing !== 'frame' && <button type="button" className={editBtn} onClick={() => { close(); openFrames() }} disabled={busy}>{busy && !editing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-4 h-4" />}Change</button>}
         >
           {editing === 'frame' && frames && (
-            <div className="mt-2 space-y-2">
-              {frames.length === 0 && <p className="text-[16px] text-[#666666]">No other frames are available at this size.</p>}
-              {frames.map(f => (
-                <button key={f.frame} type="button" onClick={() => setPick(f)} className="w-full flex items-center justify-between rounded-[8px] border-[1.5px] px-4 py-3.5 text-left" style={{ borderColor: pick?.frame === f.frame ? PURPLE : '#E0E0E0', backgroundColor: pick?.frame === f.frame ? '#F6F3FF' : '#FFFFFF' }}>
-                  <span className="text-[17px] font-bold">{f.frame}</span>
-                  <span className="text-[15px] text-[#666666]">{f.difference > 0 ? `+${money(f.difference)}` : f.difference < 0 ? `${money(f.difference)} less` : 'No extra cost'}</span>
-                </button>
-              ))}
+            <SizeFramePicker current={current} choices={frames} size={pickSize} pick={pick}
+              onSize={s => { setPickSize(s); setPick(null) }} onPick={setPick} />
+          )}
+          {editing === 'frame' && frames && (
+            <div className="mt-3 space-y-2">
               {pick && pick.difference > 0 && <p className="text-[15px] text-[#666666]">We'll email you an invoice for {money(pick.difference)}. Your print goes ahead once it's paid.</p>}
-              {pick && pick.difference < 0 && <p className="text-[15px] text-[#666666]">We'll refund the {money(pick.difference)} difference.</p>}
+              {pick && pick.difference < 0 && <p className="text-[15px] text-[#666666]">We'll refund the {money(pick.difference)} difference to your card right away.</p>}
               <div className="flex gap-2">
-                <button type="button" className={`${primary} flex-1`} onClick={saveFrame} disabled={busy || !pick}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}Change frame</button>
+                <button type="button" className={`${primary} flex-1`} onClick={saveFrame} disabled={busy || !pick}>{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}Save change</button>
                 <button type="button" className={secondary} onClick={close} disabled={busy}>Cancel</button>
               </div>
             </div>

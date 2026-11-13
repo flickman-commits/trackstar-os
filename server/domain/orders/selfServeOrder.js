@@ -6,9 +6,12 @@
  *
  * While the window is open (selfServeWindow.js), per print:
  *   name      the runner's name on the print (a typo, "Jonathan" not "Jon")
- *   frames    the frames this print can change to, at its size, and the cost
- *   frame     change it: Shopify order edit, invoice for any difference,
- *             Artelo follows (support/changeItem.js)
+ *   frames    every size and frame this print can change to, and the cost
+ *             (9777 wanted 12x18 and could only pick a frame, so she
+ *             picked Unframed by mistake)
+ *   frame     change the size and/or frame: Shopify order edit, invoice for
+ *             any difference or refund of it, Artelo follows
+ *             (support/changeItem.js)
  *   photo     add a photo to a print that has none: the page uploads it the
  *             storefront's way (photo-upload-url, photo-verify), and this adds
  *             a $20 Photo Add-On to the Shopify order (Shopify emails the
@@ -32,7 +35,7 @@ import prisma from '../../db.js'
 import { linkIsValid, placedAt, CHANGE_WINDOW_HOURS } from './changeWindow.js'
 import { closesAtFor, closedReasonFor, isFullName, toTitleCase } from './selfServeWindow.js'
 import { shippingAddress, cancellable, cancelAndRefund } from '../support/actions.js'
-import { frameChoices, changeItem } from '../support/changeItem.js'
+import { itemChoices, changeItem } from '../support/changeItem.js'
 import { checkOrder, createJob } from '../render/jobs.js'
 import { getCanonicalRaceName } from '../../scrapers/index.js'
 import { slackTo, slackText, slackLink } from '../../lib/slack.js'
@@ -208,8 +211,8 @@ export async function manageChange(shopifyOrderId, signature, body = {}) {
   if (action === 'frames') {
     open(ctx)
     const row = printOf(ctx, body.printId)
-    const out = await frameChoices({ orderRowId: row.id }).catch(e => { throw new ManageError('unavailable', 409, friendly(e)) })
-    return { size: out.size, current: out.current, frames: out.frames }
+    const out = await itemChoices({ orderRowId: row.id }).catch(e => { throw new ManageError('unavailable', 409, friendly(e)) })
+    return { size: out.size, frame: out.frame, choices: out.choices }
   }
 
   if (action === 'name') {
@@ -229,11 +232,15 @@ export async function manageChange(shopifyOrderId, signature, body = {}) {
     open(ctx)
     const row = printOf(ctx, body.printId)
     const frame = String(body.frame || '').trim()
+    const size = String(body.size || '').trim() || undefined
     if (!frame) throw new ManageError('bad_request')
     let out
-    try { out = await changeItem({ orderRowId: row.id, frame, actor: CUSTOMER }) } catch (e) { throw new ManageError('unavailable', 409, friendly(e)) }
-    // Shopify's invoice email carries the balance; the order waits for it the way any order edit does.
-    return { ok: true, was: out.was, now: out.now, owed: out.owed, invoiced: out.invoiced, print: printView({ ...row, frameType: frame.replace(/\s+/g, '') }) }
+    try { out = await changeItem({ orderRowId: row.id, size, frame, actor: CUSTOMER }) } catch (e) { throw new ManageError('unavailable', 409, friendly(e)) }
+    // Shopify's invoice email carries a balance; the order waits for it the way any order edit does. A cheaper one is refunded on the spot.
+    return {
+      ok: true, was: out.was, now: out.now, owed: out.owed, invoiced: out.invoiced, refunded: out.refunded || 0,
+      print: printView({ ...row, ...(size ? { productSize: size } : {}), frameType: frame.replace(/\s+/g, '') }),
+    }
   }
 
   if (action === 'photo') {
@@ -326,5 +333,6 @@ function friendly(e) {
   if (/cancelled/i.test(m)) return 'cancelled'
   if (/does not come in/i.test(m)) return 'no_such_frame'
   if (/already is/i.test(m)) return 'same_frame'
+  if (/still saving/i.test(m)) return 'still_saving'
   return null
 }

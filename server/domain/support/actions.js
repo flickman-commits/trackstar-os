@@ -410,6 +410,32 @@ export async function refund({ thread, shopifyOrderId, cents, reason, actor }) {
 }
 
 /**
+ * The difference back when a size or frame change makes the order cost less
+ * than was paid (support/changeItem.js). No rep presses this, so Shopify
+ * emails the customer the refund. Capped at what is left to refund and at the
+ * $250 line; over the line it throws and the caller tells a person. Returns
+ * the cents refunded.
+ */
+export async function refundOverpaid({ shopifyOrderId, cents, note }) {
+  const o = await refundable(shopifyOrderId)
+  if (!o.sale) throw new UserError('No captured payment on that order to refund against.')
+  const amount = Math.min(Math.round(Number(cents) || 0), o.availableCents)
+  if (amount <= 0) return 0
+  if (amount + o.refundedCents > REFUND_LIMIT_CENTS) throw new UserError(`${money(amount)} would take refunds on #${o.name} over the ${money(REFUND_LIMIT_CENTS)} line.`)
+  const data = await shopifyGraphQL(REFUND_CREATE, {
+    input: {
+      orderId: o.gid,
+      note: String(note || 'Size or frame change, the difference back'),
+      notify: true,
+      transactions: [{ orderId: o.gid, parentId: o.sale.id, gateway: o.sale.gateway, kind: 'REFUND', amount: toAmount(amount) }],
+    },
+  })
+  const errs = data?.refundCreate?.userErrors || []
+  if (errs.length) throw new UserError(`Shopify refused the refund: ${errs.map(e => e.message).join('; ')}`)
+  return amount
+}
+
+/**
  * Cancel and refund in full (scenario 14: wrong frame, changed their mind
  * before production). Only with the customer's yes, only while nothing has
  * been produced or shipped. Our rows leave the queue with a note. The

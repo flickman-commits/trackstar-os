@@ -10,7 +10,9 @@
  *   2. Every personalization field from the old item goes into the order's
  *      note, so nothing is lost in the swap.
  *   3. If the new item costs more, Shopify's invoice for the balance is
- *      emailed to the customer.
+ *      emailed to the customer. If it costs less, the difference goes back
+ *      to their card right away (Shopify emails the refund); a refund that
+ *      does not go through leaves a comment and a Slack alert for a person.
  * The discount the customer had on the old item (a code, the second-print
  * deal) carries onto the new one, so they are billed only the price
  * difference: a same-price frame swap costs nothing. Without it, order 6021
@@ -29,6 +31,8 @@ import prisma from '../../db.js'
 import { shopifyGraphQL, SHOPIFY_API_VERSION } from '../../services/shopifyAuth.js'
 import { UserError } from './errors.js'
 import { call as artelo } from '../render/artelo.js'
+import { refundOverpaid } from './actions.js'
+import { slackTo } from '../../lib/slack.js'
 
 const VERSION = SHOPIFY_API_VERSION
 const SEND_DELAY_MIN = 20
@@ -60,15 +64,36 @@ async function lineOfRow(orderRowId) {
   if (row.source !== 'shopify') throw new UserError('Only Shopify orders can be changed here. Change it in Etsy and Artelo by hand.')
   const line = row.arteloOrderData?.orderItems?.[row.lineItemIndex]?.orderItemId
   if (!line) throw new UserError('Could not find this print on the Shopify order')
-  return { row, shopifyOrderId: row.parentOrderNumber, lineItemId: `gid://shopify/LineItem/${line}` }
+  // The lines our other prints on this order point at, so the fallback below never takes one of theirs.
+  const others = await prisma.order.findMany({ where: { source: 'shopify', parentOrderNumber: row.parentOrderNumber, id: { not: row.id } }, select: { lineItemIndex: true, arteloOrderData: true } })
+  const claimed = new Set(others.map(r => r.arteloOrderData?.orderItems?.[r.lineItemIndex]?.orderItemId).filter(Boolean).map(id => `gid://shopify/LineItem/${id}`))
+  return { row, shopifyOrderId: row.parentOrderNumber, lineItemId: `gid://shopify/LineItem/${line}`, claimed }
+}
+
+export const STILL_SAVING = 'This print was just changed and the change is still saving. Try again in a few minutes.'
+
+/**
+ * The live Shopify line for one of our prints. A size or frame change swaps
+ * the line for a new one, and our row points at the old one until the next
+ * import moves it (reconcileEditedOrder, up to about 10 minutes). In that gap
+ * the print is the one live print line no other row of ours claims. 9777
+ * (2026-11-13): the customer's second change in that gap failed with
+ * "Something went wrong", and she emailed support.
+ */
+export function liveLine(order, lineItemId, claimed = new Set()) {
+  const prints = (order?.lineItems?.nodes || []).filter(li => li.currentQuantity > 0 && opt(li.variant, 'size'))
+  const exact = prints.find(li => li.id === lineItemId)
+  if (exact) return exact
+  const free = prints.filter(li => !claimed.has(li.id))
+  return free.length === 1 ? free[0] : null
 }
 
 /** The frames one of our prints can change to, at its size. */
 export async function frameChoices({ orderRowId }) {
-  const { lineItemId, shopifyOrderId } = await lineOfRow(orderRowId)
+  const { lineItemId, shopifyOrderId, claimed } = await lineOfRow(orderRowId)
   const order = await gql(ORDER, { id: gid(shopifyOrderId) }, 'order')
-  const li = order?.lineItems.nodes.find(l => l.id === lineItemId && l.currentQuantity > 0)
-  if (!li?.variant) throw new UserError('This print is no longer on the Shopify order. Wait for the next import, then try again.')
+  const li = liveLine(order, lineItemId, claimed)
+  if (!li?.variant) throw new UserError(STILL_SAVING)
   const size = opt(li.variant, 'size'), frame = opt(li.variant, 'frame')
   const frames = li.variant.product.variants.nodes
     .filter(v => opt(v, 'size') === size && opt(v, 'frame') && opt(v, 'frame') !== frame && v.availableForSale !== false)
@@ -77,6 +102,24 @@ export async function frameChoices({ orderRowId }) {
     // paid $205 for an item now $230, so framing it is $85, not $60.
     .map(v => ({ frame: opt(v, 'frame'), difference: Math.round((Number(v.price) - Number(li.originalUnitPriceSet?.shopMoney?.amount ?? li.variant.price)) * 100) / 100 }))
   return { size, current: frame, frames }
+}
+
+/**
+ * Every size and frame one of our prints can change to, with what the swap
+ * bills (or refunds), for the customer's Manage your order page. Sizes come
+ * in the product's own order, the way the store lists them.
+ */
+export async function itemChoices({ orderRowId }) {
+  const { lineItemId, shopifyOrderId, claimed } = await lineOfRow(orderRowId)
+  const order = await gql(ORDER, { id: gid(shopifyOrderId) }, 'order')
+  const li = liveLine(order, lineItemId, claimed)
+  if (!li?.variant) throw new UserError(STILL_SAVING)
+  const size = opt(li.variant, 'size'), frame = opt(li.variant, 'frame')
+  const paid = Number(li.originalUnitPriceSet?.shopMoney?.amount ?? li.variant.price)
+  const choices = li.variant.product.variants.nodes
+    .filter(v => opt(v, 'size') && v.availableForSale !== false && !(opt(v, 'size') === size && opt(v, 'frame') === frame))
+    .map(v => ({ size: opt(v, 'size'), frame: opt(v, 'frame'), difference: Math.round((Number(v.price) - paid) * 100) / 100 }))
+  return { size, frame, choices }
 }
 
 /** The print line items on an order, with their size and frame, for the form. */
@@ -98,8 +141,8 @@ export async function changeItemPrep({ shopifyOrderId }) {
 }
 
 export async function changeItem({ thread = null, orderRowId = null, shopifyOrderId, lineItemId, size, frame, actor }) {
-  let picked = null
-  if (orderRowId) ({ row: picked, shopifyOrderId, lineItemId } = await lineOfRow(orderRowId))
+  let picked = null, claimed = null
+  if (orderRowId) ({ row: picked, shopifyOrderId, lineItemId, claimed } = await lineOfRow(orderRowId))
   const id = gid(shopifyOrderId)
   const numericId = id.split('/').pop()
 
@@ -120,8 +163,9 @@ export async function changeItem({ thread = null, orderRowId = null, shopifyOrde
   if (order.cancelledAt) throw new UserError('That order is cancelled')
   if (order.displayFulfillmentStatus === 'FULFILLED') throw new UserError('Shopify says that order is fulfilled already')
   const prints = order.lineItems.nodes.filter(li => li.currentQuantity > 0 && opt(li.variant, 'size'))
-  const old = lineItemId ? prints.find(li => li.id === lineItemId) : prints.length === 1 ? prints[0] : null
-  if (!old) throw new UserError(prints.length ? 'Pick which print on the order to change' : 'No print on that order to change')
+  const old = claimed ? liveLine(order, lineItemId, claimed)
+    : lineItemId ? prints.find(li => li.id === lineItemId) : prints.length === 1 ? prints[0] : null
+  if (!old) throw new UserError(claimed && prints.length ? STILL_SAVING : prints.length ? 'Pick which print on the order to change' : 'No print on that order to change')
   if (old.unfulfilledQuantity < old.quantity) throw new UserError('That print has been fulfilled, so it cannot be changed')
 
   const fromSize = opt(old.variant, 'size'), fromFrame = opt(old.variant, 'frame')
@@ -149,7 +193,7 @@ export async function changeItem({ thread = null, orderRowId = null, shopifyOrde
     await gql(`mutation($id: ID!, $line: ID!, $discount: OrderEditAppliedDiscountInput!) { orderEditAddLineItemDiscount(id: $id, lineItemId: $line, discount: $discount) { calculatedOrder { id } userErrors { field message } } }`,
       { id: calcId, line: added.calculatedLineItem.id, discount: { percentValue, description: 'Carried from the original item' } }, 'orderEditAddLineItemDiscount')
   }
-  const committed = await gql(`mutation($id: ID!, $note: String) { orderEditCommit(id: $id, notifyCustomer: false, staffNote: $note) { order { id totalOutstandingSet { shopMoney { amount currencyCode } } } userErrors { field message } } }`, { id: calcId, note: `${old.title}: ${was} to ${now} (support)` }, 'orderEditCommit')
+  const committed = await gql(`mutation($id: ID!, $note: String) { orderEditCommit(id: $id, notifyCustomer: false, staffNote: $note) { order { id totalOutstandingSet { shopMoney { amount currencyCode } } currentTotalPriceSet { shopMoney { amount } } totalReceivedSet { shopMoney { amount } } totalRefundedSet { shopMoney { amount } } } userErrors { field message } } }`, { id: calcId, note: `${old.title}: ${was} to ${now} (support)` }, 'orderEditCommit')
 
   // 2. The personalization, kept on the order where everyone can see it.
   const day = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' })
@@ -163,6 +207,21 @@ export async function changeItem({ thread = null, orderRowId = null, shopifyOrde
     await gql(`mutation($id: ID!) { orderInvoiceSend(id: $id) { order { id } userErrors { field message } } }`, { id }, 'orderInvoiceSend')
     invoiced = true
   }
+  // 4. Paid more than the order now costs (a smaller size, a cheaper frame): the difference back to their card.
+  const cents = x => Math.round(Number(x?.shopMoney?.amount || 0) * 100)
+  const c = committed.order
+  const overpaidCents = cents(c.totalReceivedSet) - cents(c.totalRefundedSet) - cents(c.currentTotalPriceSet)
+  let refundedCents = 0, refundFailed = false
+  if (!invoiced && overpaidCents > 0) {
+    try {
+      refundedCents = await refundOverpaid({ shopifyOrderId: numericId, cents: overpaidCents, note: `${old.title}: ${was} to ${now}, the difference back` })
+    } catch (e) {
+      refundFailed = true
+      console.error('[changeItem] refund did not go through', numericId, e.message)
+      await slackTo('alerts', `:warning: #${order.name.replace(/^#/, '')} changed from ${was} to ${now}, but the $${(overpaidCents / 100).toFixed(2)} refund did not go through. Refund it by hand in Shopify.`).catch(() => {})
+    }
+  }
+  const refunded = refundedCents / 100
 
   // Our rows: the new size and frame now, so the render and dashboard match.
   const number = order.name.replace(/^#/, '')
@@ -170,10 +229,10 @@ export async function changeItem({ thread = null, orderRowId = null, shopifyOrde
   const row = (picked && rows.find(r => r.id === picked.id)) || rows.find(r => r.lineItemIndex === idx) || (rows.length === 1 ? rows[0] : null)
   if (row) {
     await prisma.order.update({ where: { id: row.id }, data: { productSize: toSize, ...(toFrame ? { frameType: toFrame.replace(/\s+/g, '') } : {}) } })
-    await prisma.orderComment.create({ data: { orderId: row.id, text: `${thread ? 'Support' : actorName(actor)} changed this print from ${was} to ${now}. Personalization copied to the Shopify order note.${invoiced ? ` Invoice sent for $${owed.toFixed(2)}.` : ''} Artelo picks it up on the next import, within about 10 minutes.`, authorId: actor?.id || null, authorName: actorName(actor) } })
+    await prisma.orderComment.create({ data: { orderId: row.id, text: `${thread ? 'Support' : actorName(actor)} changed this print from ${was} to ${now}. Personalization copied to the Shopify order note.${invoiced ? ` Invoice sent for $${owed.toFixed(2)}.` : ''}${refunded ? ` Refunded the $${refunded.toFixed(2)} difference.` : ''}${refundFailed ? ` The $${(overpaidCents / 100).toFixed(2)} refund did not go through: refund it by hand in Shopify.` : ''} Artelo picks it up on the next import, within about 10 minutes.`, authorId: actor?.id || null, authorName: actorName(actor) } })
     const later = new Date(Date.now() + SEND_DELAY_MIN * 60_000)
     await prisma.renderJob.updateMany({ where: { orderId: row.id, review: 'approved', arteloSentAt: null, sendAfter: { not: null, lt: later } }, data: { sendAfter: later } })
   }
-  if (thread) await prisma.supportNote.create({ data: { threadId: thread.id, kind: 'event', body: `${actorName(actor)} changed #${number} from ${was} to ${now}${invoiced ? ` and sent Shopify's invoice for $${owed.toFixed(2)}` : ''}`, authorId: actor?.id || null, authorName: actorName(actor) } })
-  return { number, was, now, owed, invoiced }
+  if (thread) await prisma.supportNote.create({ data: { threadId: thread.id, kind: 'event', body: `${actorName(actor)} changed #${number} from ${was} to ${now}${invoiced ? ` and sent Shopify's invoice for $${owed.toFixed(2)}` : ''}${refunded ? ` and refunded the $${refunded.toFixed(2)} difference` : ''}`, authorId: actor?.id || null, authorName: actorName(actor) } })
+  return { number, was, now, owed, invoiced, refunded, refundFailed }
 }
