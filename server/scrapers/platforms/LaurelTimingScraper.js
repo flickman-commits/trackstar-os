@@ -210,7 +210,30 @@ export class LaurelTimingScraper extends BaseScraper {
     })
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
     const html = await resp.text()
+    // The list shows 25 rows a page. A common surname runs past it (St.
+    // George 2026 "Anderson": Andrea was on page 2), so when the page offers
+    // more than one page, ask again with the list's page size set to All,
+    // the param the site's own "Show All" button sends (size_{listId}).
+    const listId = this._morePagesListId(html)
+    if (listId) {
+      const allUrl = `${url}&size_${listId}=100000`
+      console.log(`[${this.tag}] GET ${allUrl}`)
+      const allResp = await fetchWithTimeout(allUrl, {
+        headers: { 'User-Agent': UA, 'Accept': 'text/html' }
+      })
+      if (!allResp.ok) throw new Error(`HTTP ${allResp.status}`)
+      return this._parseSearchHtml(await allResp.text())
+    }
     return this._parseSearchHtml(html)
+  }
+
+  /** The list id when the search result runs to more than one page, else null. */
+  _morePagesListId(html) {
+    const $ = cheerio.load(html)
+    const sel = $('select[name^="page_"]').first()
+    if (!sel.length || sel.find('option').length < 2) return null
+    const m = (sel.attr('name') || '').match(/^page_(\d+)$/)
+    return m ? m[1] : null
   }
 
   _parseSearchHtml(html) {
