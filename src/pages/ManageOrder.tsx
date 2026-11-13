@@ -133,6 +133,9 @@ export default function ManageOrder() {
 
   const left = info?.closesAt && info.canChange ? timeLeft(info.closesAt, now) : null
   const frac = info?.closesAt ? fractionLeft(info.placedAt, info.closesAt, now) : 0
+  // Amber in the last 12 hours, so a customer who means to change something notices.
+  const lastHours = info?.closesAt ? new Date(info.closesAt).getTime() - now <= 12 * 3600e3 : false
+  const barColor = lastHours ? '#F28C28' : PURPLE
   // The order number goes in the subject and the first line, so support can find the order without asking.
   const supportHref = `mailto:${info?.support || 'fast@trackstar.art'}?subject=${encodeURIComponent(info?.number ? `Order #${info.number}` : 'My Trackstar order')}${info?.number ? `&body=${encodeURIComponent(`Order #${info.number}\n\n`)}` : ''}`
 
@@ -212,11 +215,12 @@ export default function ManageOrder() {
             {left && info.closesAt && (
               <div className="rounded-[12px] bg-[#F6F5F2] px-4 py-3.5">
                 <p className="flex items-center gap-2 text-[18px] leading-snug">
-                  <Clock className="w-5 h-5 shrink-0 text-[#4600D6]" aria-hidden />
+                  <Clock className="w-5 h-5 shrink-0 transition-colors duration-500" style={{ color: barColor }} aria-hidden />
                   {left.date ? <span>Changes can be made until <b>{left.date}</b></span> : <span><b>{left.text}</b> left to make changes</span>}
                 </p>
-                <div className="mt-2.5 h-2.5 w-full rounded-full bg-[#E0E0E0] overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(frac * 100)} aria-label="Time left to make changes">
-                  <div className="h-full rounded-full bg-[#4600D6] transition-[width] duration-500" style={{ width: `${Math.max(3, frac * 100)}%` }} />
+                {/* Fills as the window runs out: empty when the order is placed, full at the deadline. */}
+                <div className="mt-2.5 h-2.5 w-full rounded-full bg-[#E0E0E0] overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((1 - frac) * 100)} aria-label="Time used of the window to make changes">
+                  <div className="h-full rounded-full transition-[width,background-color] duration-500" style={{ width: `${(1 - frac) * 100}%`, backgroundColor: barColor }} />
                 </div>
               </div>
             )}
