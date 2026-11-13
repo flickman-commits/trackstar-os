@@ -14,6 +14,7 @@ const post = <T,>(path: string, body: unknown) => request<T>(path, { method: 'PO
 
 export const financeApi = {
   overview: (period: string) => request<OverviewPayload>(`/api/finance/overview?period=${encodeURIComponent(period)}`),
+  dismissNeed: (key: string, dismissed = true) => post<{ ok: true }>('/api/finance/overview', dismissed ? { dismiss: key } : { restore: key }),
   daily: (month: string) => request<DailyPayload>(`/api/finance/daily?month=${month}`),
   dayInputs: (day: string) => request<{ day: string; inputs: DayInput[]; readAt: string | null }>(`/api/finance/daily?day=${day}`),
   sync: (all = false) => post<NonNullable<SyncInfo>>('/api/finance/daily', { action: 'sync', all }),

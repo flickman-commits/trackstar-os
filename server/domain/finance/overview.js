@@ -11,9 +11,8 @@ import { lastSync } from './sheetSync.js'
 import { resolvePeriod, todayET, addDays, PERIODS, monthOf, shiftMonth, lastOfMonth, firstOfMonth, dayLabel } from './periods.js'
 import { moneyNeeds, needCard } from './needs.js'
 
-const TZ = 'America/New_York'
-const hourET = (now = new Date()) => Number(new Intl.DateTimeFormat('en-US', { timeZone: TZ, hour: 'numeric', hourCycle: 'h23' }).format(now))
 const HEADLINE = ['revenue', 'shopifyRevenue', 'etsyRevenue', 'cm', 'cmPct', 'grossProfit', 'grossMarginPct', 'adSpend', 'meta', 'trybe', 'google', 'roas', 'orders', 'aov', 'cpa', 'breakevenCpa', 'cogs', 'designerFee', 'organicOrders', 'organicPct', 'units', 'dayCount', 'lastLanded', 'first', 'last']
+const CM_ALERT_PCT = 10
 const pick = (s, keys) => Object.fromEntries(keys.map(k => [k, s[k]]))
 
 export async function overview({ period = 'today', now = new Date() } = {}) {
@@ -68,31 +67,18 @@ export async function overview({ period = 'today', now = new Date() } = {}) {
     lastYear: pick(summarize(lyRows, rules), HEADLINE), daysInMonth: Number(lastOfMonth(p.last).slice(8, 10)), dayNo,
   }
 
-  // Needs you.
+  // Needs you: the payments coming (needs.js), and one alert when the
+  // period kept under 10 cents of each dollar.
   const breakeven = ruleFor(rules, 'breakeven_roas', p.last)?.value || 1.56
-  // Money owed first (needs.js), then the alerts below.
   const needs = [...money]
-  const yesterday = addDays(today, -1)
-  const yRow = trend.days.find(d => d.day === yesterday)
-  if (yRow && hourET(now) >= 12) {
-    const late = Object.entries(yRow.has).filter(([, ok]) => !ok).map(([k]) => ({ shopify: 'Shopify', etsy: 'Etsy', printShop: 'Artelo', meta: 'Meta', google: 'Google Ads' }[k]))
-    if (late.length) needs.push(needCard({ kind: 'feed', tone: 'alert', title: `${late.join(', ')} not in yet`, detail: `${dayLabel(yesterday)} has not landed in the Daily Tracker. Check the feed, then Refresh.`, action: { label: 'Day by day', to: '/finance/daily' } }))
-  }
-  // Days the ads did not pay for themselves, and days that kept too little,
-  // as one line each with the worst day, not a line per day: a year view
-  // used to list hundreds.
-  const landedDays = s.days.filter(d => d.landed && d.revenue > 0)
-  const dayLink = d => `/finance/daily?month=${monthOf(d.day)}`
-  const lowRoas = landedDays.filter(d => d.roas != null && d.adSpend > 0 && d.roas < breakeven)
-  if (lowRoas.length) {
-    const worst = lowRoas.reduce((a, d) => (d.roas < a.roas ? d : a))
-    needs.push(needCard({ kind: 'roas', tone: 'alert', title: 'Ads below break-even', detail: `On ${lowRoas.length} of ${landedDays.length} day${landedDays.length === 1 ? '' : 's'} every $1 of ads brought back under $${breakeven.toFixed(2)}. Worst was ${dayLabel(worst.day)} at $${worst.roas.toFixed(2)}.`, action: { label: 'See the day', to: dayLink(worst) } }))
-  }
-  const lowCm = landedDays.filter(d => d.cmPct != null && d.cmPct < 20)
-  if (lowCm.length) {
-    const worst = lowCm.reduce((a, d) => (d.cmPct < a.cmPct ? d : a))
-    const lost = lowCm.filter(d => d.cmPct < 0).length
-    needs.push(needCard({ kind: 'cm', tone: 'alert', title: 'Thin margin', detail: `Kept less than 20 cents of each dollar on ${lowCm.length} of ${landedDays.length} day${landedDays.length === 1 ? '' : 's'}${lost ? `, and lost money on ${lost}` : ''}. Worst was ${dayLabel(worst.day)} at ${worst.cmPct.toFixed(0)}%.`, action: { label: 'See the day', to: dayLink(worst) } }))
+  if (s.dayCount && s.revenue > 0 && s.cmPct != null && s.cmPct < CM_ALERT_PCT) {
+    const range = p.first === p.last ? dayLabel(p.first) : `${dayLabel(p.first)} to ${dayLabel(s.lastLanded || p.last)}`
+    needs.push(needCard({
+      key: `cm:${p.first}..${p.last}`, kind: 'cm', tone: 'alert',
+      title: s.cmPct < 0 ? 'Losing money' : 'Margin under 10%',
+      detail: `Contribution margin was ${s.cmPct.toFixed(1)}% of revenue for ${range}. Ad spend was ${Math.round(s.revenue ? (s.adSpend / s.revenue) * 100 : 0)}% of revenue.`,
+      action: { label: 'Day by day', to: `/finance/daily?month=${monthOf(p.last)}` },
+    }))
   }
 
   return {

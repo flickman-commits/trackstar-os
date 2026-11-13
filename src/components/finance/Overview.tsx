@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ExternalLink, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ExternalLink, RefreshCw, X } from 'lucide-react'
 import { Bar, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, ReferenceDot } from 'recharts'
 import { btnGhost, btnPrimary, btnSecondary, segment, segmentGroup } from '@/lib/ui'
 import { financeApi, usd, usdShort, pctText, xText, intText, dayLabel, SERIES } from '@/lib/financeApi'
@@ -291,16 +291,27 @@ const NEED_TONE: Record<Need['tone'], { box: string; icon: typeof AlertTriangle;
 }
 
 /**
- * What Matt has to do, as cards across the top: approve hours, pay the team
+ * The payments coming, as cards across the top (approve hours, pay the team
  * every two weeks, pay race partners 30 days after their race, last month's
- * customs and fee, then the alerts. Each card's button does the next step
+ * customs and fee), and one alert when the margin is under 10%. Each card's
+ * button does the next step; the X hides it until it changes
  * (server/domain/finance/needs.js decides what is on them).
  */
 function NeedsYou({ needs }: { needs: Need[] }) {
-  if (!needs.length) {
+  const [hidden, setHidden] = useState<Set<string>>(new Set())
+  const shown = needs.filter(n => !hidden.has(n.key))
+  const toggle = (key: string, hide: boolean) => setHidden(prev => { const next = new Set(prev); if (hide) next.add(key); else next.delete(key); return next })
+  const dismiss = async (n: Need) => {
+    toggle(n.key, true)
+    try {
+      await financeApi.dismissNeed(n.key)
+      toast('Dismissed', { description: n.title, action: { label: 'Undo', onClick: () => { toggle(n.key, false); financeApi.dismissNeed(n.key, false).catch(e => toast.error((e as Error).message)) } } })
+    } catch (e) { toggle(n.key, false); toast.error((e as Error).message) }
+  }
+  if (!shown.length) {
     return (
       <div className={`${card} p-4 flex items-center gap-2 text-sm text-off-black/60`}>
-        <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Nothing needs you. Hours are approved, the team and the races are paid, the feeds landed.
+        <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Nothing needs you. No payments coming up.
       </div>
     )
   }
@@ -308,24 +319,27 @@ function NeedsYou({ needs }: { needs: Need[] }) {
     <div>
       <h3 className="text-sm font-semibold text-off-black mb-2">Needs you</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-        {needs.map((n, i) => {
+        {shown.map(n => {
           const tone = NEED_TONE[n.tone] || NEED_TONE.due
           const Icon = tone.icon
           return (
-            <div key={`${n.kind}-${i}`} className={`${card} ${tone.box} p-4 flex flex-col gap-2`}>
-              <div className="flex items-start gap-2">
-                <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${tone.iconCls}`} />
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] text-off-black/45">{tone.label}{n.due && n.tone !== 'alert' ? ` · ${dayLabel(n.due)}` : ''}</div>
-                  <div className="text-sm font-semibold text-off-black leading-snug">{n.title}</div>
-                </div>
+            <div key={n.key} className={`${card} ${tone.box} p-4 flex flex-col`}>
+              <div className="flex items-center gap-1.5 text-[11px] text-off-black/50">
+                <Icon className={`w-3.5 h-3.5 shrink-0 ${tone.iconCls}`} />
+                <span className="flex-1 truncate">{tone.label}{n.due && n.tone !== 'alert' ? ` · ${dayLabel(n.due)}` : ''}</span>
+                <button onClick={() => dismiss(n)} className="-m-1 p-1 rounded text-off-black/35 hover:text-off-black hover:bg-off-black/5" title="Dismiss" aria-label={`Dismiss ${n.title}`}>
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="mt-1.5 flex items-baseline justify-between gap-3">
+                <div className="text-sm font-semibold text-off-black leading-snug">{n.title}</div>
                 {n.cents != null && n.cents > 0 && <div className="text-sm font-semibold text-off-black tabular-nums whitespace-nowrap">{usd(n.cents, { cents: true })}</div>}
               </div>
-              {n.detail && <p className="text-[13px] text-off-black/65 leading-snug">{n.detail}</p>}
+              {n.detail && <p className="mt-1 text-[13px] text-off-black/65 leading-snug">{n.detail}</p>}
               {n.action && (
-                <Link to={n.action.to} className={`mt-auto self-start ${n.tone === 'due' ? btnPrimary : btnSecondary}`}>
-                  {n.action.label} <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
+                <div className="mt-auto pt-3">
+                  <Link to={n.action.to} className={n.tone === 'due' ? btnPrimary : btnSecondary}>{n.action.label} <ArrowRight className="w-3.5 h-3.5" /></Link>
+                </div>
               )}
             </div>
           )
