@@ -133,7 +133,8 @@ export default function ManageOrder() {
 
   const left = info?.closesAt && info.canChange ? timeLeft(info.closesAt, now) : null
   const frac = info?.closesAt ? fractionLeft(info.placedAt, info.closesAt, now) : 0
-  const supportHref = `mailto:${info?.support || 'fast@trackstar.art'}?subject=${encodeURIComponent(`Order #${info?.number || ''}`)}`
+  // The order number goes in the subject and the first line, so support can find the order without asking.
+  const supportHref = `mailto:${info?.support || 'fast@trackstar.art'}?subject=${encodeURIComponent(info?.number ? `Order #${info.number}` : 'My Trackstar order')}${info?.number ? `&body=${encodeURIComponent(`Order #${info.number}\n\n`)}` : ''}`
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-[#1A1A1A]" style={{ fontFamily: FONT, letterSpacing: '-0.04em' }}>
@@ -233,7 +234,7 @@ export default function ManageOrder() {
       </main>
 
       <footer className="w-full max-w-xl mx-auto px-5 pt-6 pb-8">
-        <p className="text-[16px] text-[#666666] mb-6">Questions? Reply to your order email and a person will answer.</p>
+        <p className="text-[16px] text-[#666666] mb-6">Questions? <a href={supportHref} className="font-bold text-[#4600D6] underline underline-offset-4">Email us here</a></p>
         <div className="rounded-[18px] bg-[#1A1A1A] px-7 pt-8 pb-6">
           <img src="https://www.trackstar.art/cdn/shop/files/Trackstar_White_Logo_Cropped.png" alt="Trackstar" style={{ width: 140, height: 'auto', marginBottom: 12 }} />
           <p className="text-[19px] leading-snug text-[#E6E6E6] mb-5">Celebrating athletic achievement.</p>
@@ -266,25 +267,26 @@ function SizeFramePicker({ current, choices, size, pick, onSize, onPick }: {
   // print, the same trap as before.
   const sameFrame = (s: string) => choices.find(c => c.size === s && c.frame === current.frame) || null
   const sizeNote = (s: string) => {
-    if (s === current.size) return 'Your size now'
+    if (s === current.size) return 'Current'
     const same = sameFrame(s)
     if (same) return priceNote(same.difference)
     const ds = choices.filter(c => c.size === s).map(c => c.difference)
     return ds.length ? `from ${priceNote(Math.min(...ds))}` : ''
   }
-  const pill = (on: boolean) => `min-h-[48px] px-4 rounded-[8px] border-[1.5px] text-left flex flex-col justify-center ${on ? '' : 'bg-white'}`
+  const pill = (on: boolean) => `min-h-[76px] px-2 py-3.5 rounded-[8px] border-[1.5px] text-center flex flex-col items-center justify-center gap-1 ${on ? '' : 'bg-white'}`
   return (
     <div className="mt-2 space-y-4">
       {sizes.length > 1 && (
         <div>
           <p className={label}>Size</p>
-          <div className="grid grid-cols-2 gap-2">
+          {/* All on one line (three sizes today); a fourth would wrap to a second row of three. */}
+          <div className="grid gap-2.5" style={{ gridTemplateColumns: `repeat(${Math.min(sizes.length, 3)}, minmax(0, 1fr))` }}>
             {sizes.map(s => {
               const on = s === size
               return (
                 <button key={s} type="button" onClick={() => { onSize(s); const same = sameFrame(s); if (same) onPick(same) }} className={pill(on)} style={{ borderColor: on ? PURPLE : '#E0E0E0', backgroundColor: on ? '#F6F3FF' : '#FFFFFF' }}>
-                  <span className="text-[17px] font-bold">{s}</span>
-                  <span className="text-[14px] text-[#666666]">{sizeNote(s)}</span>
+                  <span className="text-[18px] font-bold leading-none">{s}</span>
+                  <span className="text-[14px] text-[#666666] leading-tight whitespace-nowrap">{sizeNote(s)}</span>
                 </button>
               )
             })}
@@ -297,7 +299,7 @@ function SizeFramePicker({ current, choices, size, pick, onSize, onPick }: {
           {size === current.size && current.frame && (
             <div className="w-full flex items-center justify-between rounded-[8px] border-[1.5px] border-[#E0E0E0] bg-[#F5F5F5] px-4 py-3.5">
               <span className="text-[17px] font-bold text-[#666666]">{current.frame}</span>
-              <span className="text-[15px] text-[#666666]">Your frame now</span>
+              <span className="text-[15px] text-[#666666]">Current</span>
             </div>
           )}
           {atSize.length === 0 && size !== current.size && <p className="text-[16px] text-[#666666]">No frames are available at this size.</p>}
