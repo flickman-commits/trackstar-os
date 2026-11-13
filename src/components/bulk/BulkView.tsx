@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Plus, Loader2, Copy, ExternalLink, RefreshCw, FlaskConical,
-  CheckCircle2, ChevronLeft, ChevronDown, ChevronUp, Trash2, Pencil,
+  CheckCircle2, ChevronLeft, ChevronDown, ChevronUp, Trash2, Pencil, RotateCcw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
@@ -11,6 +11,8 @@ import { useAuth } from '@/lib/auth'
 import AssigneePicker, { Avatar, type Teammate } from '@/components/AssigneePicker'
 import { OrderModal, InvoiceCard, ProductionFile, type Billing } from '@/components/bulk/BillingPanels'
 import StatusPill from '@/components/orders/StatusPill'
+import { RefundModal, RefundsCard } from '@/components/bulk/BulkRefunds'
+import { useRefunds } from '@/lib/bulkRefunds'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -50,6 +52,8 @@ const PARTNER_LABEL = { race: 'Race partner', charity: 'Charity partner', corpor
 
 export interface BulkOrder {
   id: string
+  /** Runners who did not finish (bulk/dnf.js): off the list and the print count. */
+  dnf?: { id: string; orderNumber: string; runnerName: string; at: string; by: string | null }[]
   number: string
   partnerName: string
   raceName: string
@@ -273,6 +277,9 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
   const [editingOrder, setEditingOrder] = useState(false)
   const { arm, isArmed } = useArmed()
   const { isAdmin } = useAuth()
+  // Refunds (bulk/BulkRefunds.tsx): the dialog, and the card of those asked for.
+  const refunds = useRefunds(id)
+  const [refundOpen, setRefundOpen] = useState(false)
 
   const load = useCallback(async () => {
     const res = await apiFetch(`${API_BASE}/api/bulk?id=${id}`)
@@ -293,6 +300,16 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
     } catch (err) { toast.error((err as Error).message); return null }
   }
   const update = (fields: Record<string, unknown>) => act({ action: 'update', ...fields })
+  // A runner marked DNF by mistake (or who did finish): back on the list, open again.
+  const undoDnf = async (orderNumber: string) => {
+    try {
+      const res = await apiFetch(`${API_BASE}/api/bulk/dnf`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderNumber, undo: true }) })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not put them back')
+      toast.success(`${data.runnerName || 'Runner'} is back on the list`)
+      await load(); refunds.load(); refreshRunners()
+    } catch (err) { toast.error((err as Error).message) }
+  }
 
   // An order that fell through; its unpaid Shopify draft goes with it.
   const remove = async () => {
@@ -460,7 +477,8 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
 
   const pg = b.progress
   const notReady = runners.length - pg.sent - pg.queued - pg.stuck - pg.held
-  const toCome = Math.max(0, (b.quantity || 0) - runners.length)
+  const dnfs = b.dnf || []
+  const toCome = Math.max(0, (b.quantity || 0) - runners.length - dnfs.length)
   const arteloCard = (
     <div className="bg-white border border-border-gray rounded-md p-4 space-y-3">
       <h3 className="text-sm font-semibold uppercase tracking-tight">Production status</h3>
@@ -542,6 +560,23 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
 
         {billing && <InvoiceCard order={billing} onChanged={load} />}
 
+        {refunds.state && <RefundsCard state={refunds.state} stripeInvoiceUrl={b.stripeInvoiceUrl} onChanged={s => { refunds.setState(s); load() }} />}
+
+        {/* Runners who did not finish: no print, off the list; put back if it was a mistake. */}
+        {dnfs.length > 0 && (
+          <div>
+            <h4 className={label}>Did not finish · {dnfs.length}</h4>
+            <div className="space-y-1">
+              {dnfs.map(x => (
+                <div key={x.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="min-w-0 truncate text-off-black/70" title={`Marked DNF by ${x.by || 'someone'} ${fmtDate(x.at)}`}>{x.runnerName} <span className="text-off-black/35">{x.orderNumber}</span></span>
+                  <button onClick={() => undoDnf(x.orderNumber)} className="shrink-0 text-[11px] font-medium text-[#4600D6] hover:underline">Put back</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Smaller things you can do to the order. */}
         <div>
           <h4 className={label}>Actions</h4>
@@ -553,6 +588,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
                 {researching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FlaskConical className="w-3.5 h-3.5" />} Research all runners
               </button>
             )}
+            {r.paid && <button onClick={() => { refunds.load(); setRefundOpen(true) }} disabled={!refunds.state || Boolean(refunds.state.open)} className={link} title={refunds.state?.open ? 'A refund on this order is already waiting' : 'Refund the whole order or the prints with no runner. An admin approves it.'}><RotateCcw className="w-3.5 h-3.5" /> Refund</button>}
             {isAdmin && !submitted && <button onClick={remove} className={`${link} text-red-600 hover:text-red-700`}><Trash2 className="w-3.5 h-3.5" /> {isArmed('delete') ? deleteWarning : 'Delete this bulk order'}</button>}
           </div>
         </div>
@@ -574,6 +610,7 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
       </div>
       </div>
       </div>
+      {refundOpen && refunds.state && <RefundModal state={refunds.state} stripeInvoiceUrl={b.stripeInvoiceUrl} onClose={() => setRefundOpen(false)} onDone={s => { refunds.setState(s); setRefundOpen(false) }} />}
       {editingOrder && billing && <OrderModal order={billing} onClose={() => setEditingOrder(false)} onCreated={() => { setEditingOrder(false); load() }} />}
     </div>
   )

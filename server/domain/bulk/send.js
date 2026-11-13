@@ -220,15 +220,21 @@ async function resumeSend(order) {
   return { arteloId, url: arteloOrderUrl(arteloId) }
 }
 
-/** The whole run reads as sent once every paid-for print has gone. */
-async function settleBulkStatus(bulkOrderId) {
+/**
+ * The whole run reads as sent once every paid-for print has gone. A DNF
+ * runner (dnf.js) is not a print, and prints refunded (refunds.js) are no
+ * longer paid for.
+ */
+export async function settleBulkStatus(bulkOrderId) {
   const bulk = await prisma.bulkOrder.findUnique({ where: { id: bulkOrderId }, select: { id: true, status: true, quantity: true } })
   if (!bulk || bulk.status === 'submitted') return
-  const [total, sent] = await Promise.all([
-    prisma.order.count({ where: { bulkOrderId } }),
-    prisma.order.count({ where: { bulkOrderId, status: 'completed' } }),
+  const [total, sent, refunded] = await Promise.all([
+    prisma.order.count({ where: { bulkOrderId, bulkDnfAt: null } }),
+    prisma.order.count({ where: { bulkOrderId, bulkDnfAt: null, status: 'completed' } }),
+    prisma.bulkRefund.aggregate({ where: { bulkOrderId, status: 'refunded', kind: { in: ['unfilled', 'full'] } }, _sum: { prints: true } }),
   ])
-  if (total && sent >= total && total >= (bulk.quantity || 0)) await prisma.bulkOrder.update({ where: { id: bulkOrderId }, data: { status: 'submitted', submittedAt: new Date() } })
+  const owed = Math.max(0, (bulk.quantity || 0) - (refunded._sum.prints || 0))
+  if (total && sent >= total && total >= owed) await prisma.bulkOrder.update({ where: { id: bulkOrderId }, data: { status: 'submitted', submittedAt: new Date() } })
   else if (sent && bulk.status === 'collecting') await prisma.bulkOrder.update({ where: { id: bulkOrderId }, data: { status: 'fulfillment' } })
 }
 

@@ -194,6 +194,11 @@ model Order {
   bulkSentAt       DateTime?
   bulkSendError    String?
   bulkOrder        BulkOrder? @relation(fields: [bulkOrderId], references: [id], onDelete: Cascade)
+  // A bulk runner who did not finish (server/domain/bulk/dnf.js): their order
+  // is closed (status completed, nothing prints) and they leave the runner
+  // list and the print count, so the prints paid for and not made can be refunded.
+  bulkDnfAt        DateTime?
+  bulkDnfBy        String?
   renderJobs       RenderJob[]
   galleryPick      GalleryPick?
   shippingAddress  Json?      // { line1, line2, city, state, zip, country }
@@ -376,6 +381,7 @@ model BulkOrder {
   updatedAt         DateTime  @updatedAt
 
   runners           Order[]
+  refunds           BulkRefund[]
 
   @@index([dueDate])
   @@index([status])
@@ -1773,4 +1779,35 @@ model Replacement {
   updatedAt      DateTime  @updatedAt
 
   @@index([createdAt])
+}
+
+// A refund on a bulk order (server/domain/bulk/refunds.js): the whole order,
+// the prints with no runner, or an amount an admin types. Anyone on the order
+// can ask for one; an admin approves it, because these are big amounts. A
+// Shopify-paid order is refunded through Shopify on approval; a Stripe one
+// is refunded in Stripe by hand and then marked done here. Money in integer
+// cents with a currency (CLAUDE.md).
+model BulkRefund {
+  id            String    @id @default(cuid())
+  bulkOrderId   String
+  bulkOrder     BulkOrder @relation(fields: [bulkOrderId], references: [id], onDelete: Cascade)
+  kind          String    // full | unfilled | custom
+  prints        Int?      // prints refunded (unfilled: paid for and not made)
+  amountCents   Int?      // null until an admin sets it (someone who does not see money asks by prints)
+  paidCents     Int?      // what the order was paid, when asked: the base for the suggestion
+  currency      String    @default("USD")
+  reason        String
+  via           String    // shopify | stripe
+  status        String    @default("requested") // requested | approved (Stripe: refund it there) | refunded | declined | failed
+  requestedBy   String?
+  decidedBy     String?
+  decidedAt     DateTime?
+  refundedAt    DateTime?
+  shopifyRefundId String?
+  error         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([bulkOrderId])
+  @@index([status])
 }

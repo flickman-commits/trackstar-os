@@ -2,8 +2,10 @@
 // The app function (api/app.js): route under /api/ -> handler module.
 export default {
   'bulk/billing': () => import('../../_routes/bulk/billing.js'),
+  'bulk/dnf': () => import('../../_routes/bulk/dnf.js'),
   'bulk/files': () => import('../../_routes/bulk/files.js'),
   'bulk': () => import('../../_routes/bulk/index.js'),
+  'bulk/refund': () => import('../../_routes/bulk/refund.js'),
   'creators/ads': () => import('../../_routes/creators/ads.js'),
   'creators/catalog': () => import('../../_routes/creators/catalog.js'),
   'creators/manage': () => import('../../_routes/creators/manage.js'),

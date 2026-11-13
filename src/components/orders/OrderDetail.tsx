@@ -3,7 +3,7 @@ import DesignStatusPicker from '@/components/orders/DesignStatusPicker'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, CalendarClock, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff, Ruler } from 'lucide-react'
+import { Plus, CalendarClock, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff, Ruler, Flag } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { shrinkImage } from '@/lib/shrinkImage'
@@ -2288,6 +2288,26 @@ Thank you!`
                         className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2"
                         title={selectedOrder.hadNoTime ? 'Render the print with the finish time and pace again' : 'The customer wants the print without their time: render it with NO TIME'}>
                         <TimerOff className="w-3.5 h-3.5" /> {selectedOrder.hadNoTime ? 'Put the time back' : 'Convert to NO TIME'}
+                      </button>
+                    )}
+                    {/* A bulk runner who did not finish: no print. Their order closes and
+                        they leave the partner's list and its print count (bulk/dnf.js). */}
+                    {selectedOrder.trackstarOrderType === 'bulk' && selectedOrder.status !== 'completed' && !isEditing && (
+                      <button onClick={async () => {
+                          const name = selectedOrder.effectiveRunnerName || selectedOrder.runnerName || 'this runner'
+                          if (!(await confirm({ title: `${name} did not finish?`, body: 'Their order closes and nothing prints. They come off the bulk order\'s runner list and its print count goes down by one, so their print counts toward a refund. You can put them back from the bulk order.', action: 'Mark DNF', danger: true }))) return
+                          try {
+                            const res = await apiFetch('/api/bulk/dnf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: selectedOrder.id }) })
+                            const data = await res.json().catch(() => ({}))
+                            if (!res.ok) throw new Error(data.error || 'Could not mark them DNF')
+                            setToast({ message: `${name} marked DNF. Their order is closed, one print fewer on ${data.bulk?.number || 'the bulk order'}.`, type: 'success' })
+                            closeModal()
+                            await fetchOrders()
+                          } catch (e) { setToast({ message: e instanceof Error ? e.message : 'Could not mark them DNF', type: 'error' }) }
+                        }}
+                        className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:underline underline-offset-2"
+                        title="The runner did not finish: close their order, no print">
+                        <Flag className="w-3.5 h-3.5" /> Runner DNF
                       </button>
                     )}
                     {/* The print already went out and the customer wants it in another size too:

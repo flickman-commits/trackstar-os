@@ -224,7 +224,7 @@ export async function readiness(bulk, runners) {
 const RETRY_AFTER_MS = 6 * 3600e3
 
 export async function researchPending(bulk, { limit = 10, now = new Date() } = {}) {
-  const due = { bulkOrderId: bulk.id, researchedAt: null, OR: [{ researchAttemptedAt: null }, { researchAttemptedAt: { lt: new Date(now.getTime() - RETRY_AFTER_MS) } }] }
+  const due = { bulkOrderId: bulk.id, bulkDnfAt: null, researchedAt: null, OR: [{ researchAttemptedAt: null }, { researchAttemptedAt: { lt: new Date(now.getTime() - RETRY_AFTER_MS) } }] }
   const runners = await prisma.order.findMany({
     where: due,
     orderBy: { lineItemIndex: 'asc' },
@@ -308,7 +308,7 @@ export async function checkUrl(url) {
  */
 export async function researchRacedRunners({ limit = 10, now = new Date() } = {}) {
   const runs = await prisma.bulkOrder.findMany({
-    where: { status: { not: 'submitted' }, paidAt: { not: null }, raceDate: { not: null, lte: new Date(now.getTime() - 12 * 3600e3) }, runners: { some: { researchedAt: null, OR: [{ researchAttemptedAt: null }, { researchAttemptedAt: { lt: new Date(now.getTime() - RETRY_AFTER_MS) } }] } } },
+    where: { status: { not: 'submitted' }, paidAt: { not: null }, raceDate: { not: null, lte: new Date(now.getTime() - 12 * 3600e3) }, runners: { some: { bulkDnfAt: null, researchedAt: null, OR: [{ researchAttemptedAt: null }, { researchAttemptedAt: { lt: new Date(now.getTime() - RETRY_AFTER_MS) } }] } } },
     orderBy: { dueDate: 'asc' },
   })
   const out = { researched: 0, runs: [] }

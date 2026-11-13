@@ -28,7 +28,7 @@ export async function bulkNeedingAttention(now = new Date()) {
   })
   if (!runs.length) return []
   const runners = await prisma.order.findMany({
-    where: { bulkOrderId: { in: runs.map(r => r.id) } },
+    where: { bulkOrderId: { in: runs.map(r => r.id) }, bulkDnfAt: null },
     select: { bulkOrderId: true, shippingAddress: true, researchedAt: true, productionFileUrl: true, status: true, bulkSentAt: true, renderJobs: { where: { review: 'approved' }, select: { id: true }, take: 1 }, runnerResearch: { select: { researchStatus: true }, take: 1, orderBy: { createdAt: 'desc' } } },
   })
   const designs = await prisma.order.findMany({ where: { id: { in: runs.map(r => r.partnerOrderId).filter(Boolean) } }, select: { id: true, designStatus: true } })

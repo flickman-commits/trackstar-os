@@ -69,7 +69,11 @@ function shapeRunner(r) {
 async function loadOne(id) {
   const bulk = await prisma.bulkOrder.findUnique({ where: { id } })
   if (!bulk) return null
-  const runners = await prisma.order.findMany({ where: { bulkOrderId: id }, orderBy: { lineItemIndex: 'asc' }, select: RUNNER_SELECT })
+  // A DNF runner (bulk/dnf.js) is off the list and the count; they are listed apart, to put back.
+  const [runners, dnf] = await Promise.all([
+    prisma.order.findMany({ where: { bulkOrderId: id, bulkDnfAt: null }, orderBy: { lineItemIndex: 'asc' }, select: RUNNER_SELECT }),
+    prisma.order.findMany({ where: { bulkOrderId: id, bulkDnfAt: { not: null } }, orderBy: { bulkDnfAt: 'desc' }, select: { id: true, orderNumber: true, runnerName: true, runnerNameOverride: true, bulkDnfAt: true, bulkDnfBy: true } }),
+  ])
   for (const r of runners) r.send = sendStateOf(r, await notReadyReason(r, bulk))
   const ready = await readiness(bulk, runners)
   return {
@@ -77,6 +81,7 @@ async function loadOne(id) {
     paymentStatus: paymentStatus(bulk),
     shopifyOrderUrl: shopifyAdminUrl(bulk.shopifyOrderId),
     runners: runners.map(shapeRunner),
+    dnf: dnf.map(r => ({ id: r.id, orderNumber: r.orderNumber, runnerName: r.runnerNameOverride || r.runnerName, at: r.bulkDnfAt, by: r.bulkDnfBy })),
     readiness: ready,
     progress: progressOf(runners),
   }
@@ -135,7 +140,7 @@ export default async function handler(req, res) {
       // memory. A query per order is what exhausts the pool on a busy morning.
       const list = await prisma.bulkOrder.findMany({ orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }], })
       const all = list.length
-        ? await prisma.order.findMany({ where: { bulkOrderId: { in: list.map(b => b.id) } }, select: { bulkOrderId: true, shippingAddress: true, researchedAt: true, productionFileUrl: true, status: true, runnerResearch: { select: { researchStatus: true }, take: 1, orderBy: { createdAt: 'desc' } } } })
+        ? await prisma.order.findMany({ where: { bulkOrderId: { in: list.map(b => b.id) }, bulkDnfAt: null }, select: { bulkOrderId: true, shippingAddress: true, researchedAt: true, productionFileUrl: true, status: true, runnerResearch: { select: { researchStatus: true }, take: 1, orderBy: { createdAt: 'desc' } } } })
         : []
       const byBulk = new Map()
       for (const r of all) { if (!byBulk.has(r.bulkOrderId)) byBulk.set(r.bulkOrderId, []); byBulk.get(r.bulkOrderId).push(r) }
