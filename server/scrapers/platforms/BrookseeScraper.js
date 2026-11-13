@@ -275,7 +275,46 @@ export class BrookseeScraper extends BaseScraper {
       })
     }
 
+    if (rows.length === 0) {
+      const single = this.parseParticipantPage(html)
+      if (single) rows.push(single)
+    }
+
     return rows
+  }
+
+  /**
+   * A search with exactly one hit skips the list and opens that runner's own
+   * page (Eugene 2026 "Hickman" in the marathon: Matt Hickman #3726, 3:26:13,
+   * 7:52/mi). It has no result table, so read its cards instead. The page
+   * prints no gun time; pace is time over the card's distance.
+   */
+  parseParticipantPage(html) {
+    const clean = (s) => String(s || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+    const head = html.match(/<h3 class="participant-name">([\s\S]*?)<span class="participant-bib">\s*#?([^<]*)<\/span>/)
+    if (!head) return null
+    const card = (label) => {
+      const re = new RegExp(`<p class="data-value">([^<]*)</p>\\s*<div class="label-container">\\s*<p class="data-label">${label}</p>`)
+      return clean((html.match(re) || [])[1])
+    }
+    const chipTime = card('Chip Time')
+    if (!chipTime) return null
+    const parts = clean(head[1]).split(' ')
+    const lastName = parts.length > 1 ? parts.pop() : ''
+    const distance = parseFloat(card('Distance'))
+    const pace = distance > 0 ? this.calculatePace(chipTime, distance) : card('Pace \\(min/miles\\)')
+    const pk = (html.match(/name="_query" value="pk%3D(\d+)/) || [])[1] || null
+    return {
+      participantId: pk,
+      overallPlace: '', genderPlace: '', divisionPlace: '',
+      bib: clean(head[2]),
+      lastName,
+      firstName: parts.join(' '),
+      gender: '', age: '',
+      chipTime,
+      pace,
+      gunTime: '',
+    }
   }
 
   extractRunnerData(result, eventType) {
