@@ -186,7 +186,18 @@ export class BrookseeScraper extends BaseScraper {
         throw new Error(`Brooksee ${response.status}: ${response.statusText}`)
       }
 
-      const html = await response.text()
+      let html = await response.text()
+      // 25 rows a page; a common surname runs past it. Ask again with the
+      // list size set to All, the param the site's Show All button sends
+      // (same site as Laurel; St. George 2026 Andrea Anderson was on page 2).
+      const pages = html.match(/<select name="page_(\d+)"[^>]*>([\s\S]*?)<\/select>/)
+      if (pages && (pages[2].match(/<option/g) || []).length > 1) {
+        const allResp = await fetchWithTimeout(`${url}&size_${pages[1]}=100000`, {
+          headers: { 'Accept': 'text/html', 'User-Agent': 'Mozilla/5.0 (compatible; TrackstarBot/1.0)' }
+        })
+        if (!allResp.ok) throw new Error(`Brooksee ${allResp.status}: ${allResp.statusText}`)
+        html = await allResp.text()
+      }
       const rows = this.parseResultRows(html)
 
       console.log(`[${this.tag} ${this.year}] Found ${rows.length} results in ${eventLabel}`)
