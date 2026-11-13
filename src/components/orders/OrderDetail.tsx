@@ -487,6 +487,9 @@ export default function OrderDetail({
     setOrders(prev => prev.map(o => fresh.find(f => f.orderNumber === o.orderNumber) || o))
     const mine = fresh.find(f => f.orderNumber === orderNumber)
     if (mine) setSelectedOrder(prev => (prev?.orderNumber === orderNumber ? mine : prev))
+    // The design panel's "can this render?" was read when the order opened: a
+    // new bib, time or pace left Re-render greyed out with the old reasons.
+    if (orderNumber === selectedOrder?.orderNumber) void design.reload()
   }
 
   const acceptMatch = async (orderNumber: string, match: { name: string; bib: string; time: string; pace?: string; eventType?: string; resultsUrl?: string }) => {
