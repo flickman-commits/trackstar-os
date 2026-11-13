@@ -433,6 +433,9 @@ export default async function handler(req, res) {
         isBigSpender: isBigSpender(order),
         // Bought before the race's design changed: they get the old design (designSwitch.js).
         oldDesign: usesOldDesign(order, getCanonicalRaceName(order.raceNameOverride ?? order.raceName) || (order.raceNameOverride ?? order.raceName)),
+        // Set by hand: render before race day, and the design version (new / old).
+        renderBeforeRace: Boolean(order.renderBeforeRace),
+        designChoice: order.designChoice || null,
         newDesign: usesNewDesign(order, getCanonicalRaceName(order.raceNameOverride ?? order.raceName) || (order.raceNameOverride ?? order.raceName)),
         // A sample: a creator's sample, or an order sent from Tools > Samples (Shopify tag "sample").
         isSample: order.source === 'creator_sample' || String(order.shopifyOrderData?.tags || '').split(',').some(t => t.trim().toLowerCase() === 'sample'),

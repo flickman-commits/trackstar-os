@@ -77,6 +77,9 @@ export function placedAt(order) {
 
 /** Did this order buy before `at`? An order we cannot date counts as before (it is old). */
 function boughtBefore(order, at) {
+  // Set by hand on the order (7950: a creator's NYC print on the new design).
+  if (order?.designChoice === 'new') return false
+  if (order?.designChoice === 'old') return true
   if (order?.source === 'etsy') return true
   const p = placedAt(order)
   return !p || p.getTime() < new Date(at).getTime()

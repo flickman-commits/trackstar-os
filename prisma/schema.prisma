@@ -51,6 +51,10 @@ model Order {
   // An admin moved this order to rush by hand (comped or arranged off-site).
   // The import's paid-rush check never undoes it.
   rushOverride       Boolean   @default(false)
+  // Render before race day (a creator's print): the "race has not happened" gate is lifted for this order only.
+  renderBeforeRace   Boolean   @default(false)
+  // A race whose design changed (render/designSwitch.js): 'new' or 'old' set by hand beats when they bought.
+  designChoice       String?
   customerEmail      String?   // Customer email from Shopify order
   customerName       String?   // Customer first name from Shopify order (for email template)
   bibNumberCustomer  String?   // Bib # provided by customer (custom orders only)

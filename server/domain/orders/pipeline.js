@@ -120,7 +120,7 @@ export function pipelineFor({ order, research, race, render, hasScraper, templat
     // Order of work: a known future race waits; otherwise the result comes
     // first (entering it puts the race on file, which Race > Edit needs), then
     // the race date, then the weather.
-    if (race?.raceDate && !raceRun(race, year)) return stage('waiting', 'Race not run yet', { fix: `${raceName} ${year} has not happened yet.` })
+    if (race?.raceDate && !order.renderBeforeRace && !raceRun(race, year)) return stage('waiting', 'Race not run yet', { fix: `${raceName} ${year} has not happened yet.` })
     const missing = triathlonMissing(research)
     if (missing.length) return stage('action', 'Needs manual research', { kind: 'data', fix: `Triathlons are researched by hand. Find the athlete on the race's results site and enter the ${missing.join(', ')} under Runner > Edit.` })
     if (!race?.raceDate) return stage('action', 'Needs race date', { kind: 'data', fix: `${raceName} ${year} has no race date. Add it with a source under Race > Edit; the weather follows from it.` })
@@ -129,7 +129,8 @@ export function pipelineFor({ order, research, race, render, hasScraper, templat
     if (blockers.length) return stage('action', 'Needs race data', { kind: 'data', fix: `${blockers.join('. ')}.` })
     return stage('action', 'Make by hand', { kind: 'setup', fix: 'Everything for this triathlon print is here. Make it from the triathlon design, then mark it complete.' })
   }
-  if (!raceRun(race, year)) return stage('waiting', 'Race not run yet', { fix: `${raceName} ${year} has not happened yet. Results are looked up two days after race day.` })
+  // Render before race day (set by hand on the order): it moves on like a race that has run.
+  if (!order.renderBeforeRace && !raceRun(race, year)) return stage('waiting', 'Race not run yet', { fix: `${raceName} ${year} has not happened yet. Results are looked up two days after race day.` })
 
   const rs = research?.researchStatus || null
   // No scraper only matters while the result is missing. A result already on

@@ -182,6 +182,8 @@ export interface Order {
   noBib?: boolean
   // Bought before the race's design changed (Philadelphia, NYC, Chicago, 2026-11-11): print the old design.
   oldDesign?: boolean
+  renderBeforeRace?: boolean
+  designChoice?: 'new' | 'old' | null
   // Bought after it changed: print the new design.
   newDesign?: boolean
   isSample?: boolean

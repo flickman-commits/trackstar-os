@@ -98,7 +98,7 @@ export function templateFor(order, raceName, eventType) {
 export const SPEC_SELECT = {
   id: true, orderNumber: true, parentOrderNumber: true, lineItemIndex: true, trackstarOrderType: true, status: true,
   // When they bought decides the design for a race whose design changed (designSwitch.js).
-  source: true, createdAt: true,
+  source: true, createdAt: true, designChoice: true, renderBeforeRace: true,
   raceName: true, raceNameOverride: true, raceYear: true, yearOverride: true,
   runnerName: true, runnerNameOverride: true, productSize: true, hadNoTime: true, noBib: true,
   photoPath: true, photoAddedManually: true, photoFree: true, photoLater: true, photoLaterClosedAt: true, shopifyOrderData: true, arteloOrderData: true,
@@ -152,7 +152,9 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
   const condition = formatCondition(race?.weatherCondition)
   const temp = formatTemp(race?.weatherTemp)
   // Hard gate: a date prints only with evidence on file, and weather only when computed for that date.
-  for (const b of printBlockers(race)) reasons.push(b)
+  // Render before race day, set by hand (a creator's print): only the "not happened" gate lifts.
+  for (const b of printBlockers(race)) if (!(order.renderBeforeRace && b === 'Race has not happened yet')) reasons.push(b)
+  if (order.renderBeforeRace && (!condition || !temp)) reasons.push('Weather has not been computed')
 
   // Paid at checkout for a photo they upload after the race (orders/photoLater.js).
   if (awaitingLaterPhoto(order)) reasons.push('Waiting for the customer to upload their photo')

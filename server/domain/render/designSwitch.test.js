@@ -67,3 +67,10 @@ test('a design made from the main file once it was the new design is not the old
   assert.equal(sameDesign('Philadelphia Marathon / Original', 'Philadelphia Marathon', null), false)
   assert.deepEqual(changedPrintedFields({ template: 'Boston Marathon / Original' }, { template: 'Boston Marathon' }, { renderedAt: '2026-11-10T00:00:00Z' }), ['template'])
 })
+
+test('a design set by hand beats when they bought (7950: a creator print on the new NYC design)', () => {
+  assert.equal(originalKeyFor({ ...before, designChoice: 'new' }, 'NYC Marathon'), null)
+  assert.equal(usesOldDesign({ ...before, designChoice: 'new' }, 'NYC Marathon'), false)
+  assert.equal(usesNewDesign({ ...before, designChoice: 'new' }, 'NYC Marathon'), true)
+  assert.equal(originalKeyFor({ ...after, designChoice: 'old' }, 'NYC Marathon'), 'NYC Marathon / Original')
+})

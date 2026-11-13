@@ -3,7 +3,7 @@ import DesignStatusPicker from '@/components/orders/DesignStatusPicker'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff, Ruler } from 'lucide-react'
+import { Plus, CalendarClock, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff, Ruler } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { shrinkImage } from '@/lib/shrinkImage'
@@ -2244,6 +2244,25 @@ Thank you!`
                         <X className="w-3.5 h-3.5" /> Remove photo &amp; re-render
                       </button>
                     )}
+                    {/* A creator's print for a race not run yet: render it before race day anyway (subtle on purpose). */}
+                    {design.canManage && selectedOrder.status !== 'completed' && !isEditing && (selectedOrder.renderBeforeRace || (selectedOrder.raceDateIso && new Date(`${selectedOrder.raceDateIso}T23:59:59Z`).getTime() > Date.now())) && (
+                      <button onClick={async () => {
+                          const on = !selectedOrder.renderBeforeRace
+                          if (on && !(await confirm({ title: 'Render before race day?', body: 'The race has not happened yet. The print uses the bib, time and pace on the order and the race weather as they are now. Use this for a creator or sample print, not a customer waiting on results.', action: 'Render before race day' }))) return
+                          try {
+                            const r = await apiFetch('/api/orders/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderNumber: selectedOrder.orderNumber, renderBeforeRace: on }) })
+                            const d = await r.json().catch(() => ({}))
+                            if (!r.ok) throw new Error(d.error || 'Could not change it')
+                            setSelectedOrder(prev => prev && prev.id === selectedOrder.id ? { ...prev, renderBeforeRace: on } : prev)
+                            await fetchOrders(); await design.reload()
+                            setToast({ message: on ? 'This order can render before race day. Create Design when the runner details are in.' : 'This order waits for race day again.', type: 'success' })
+                          } catch (e) { setToast({ message: e instanceof Error ? e.message : 'Could not change it', type: 'error' }) }
+                        }}
+                        className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-off-black/45 hover:text-off-black hover:underline underline-offset-2"
+                        title="For a creator or sample print: lift the race-not-run-yet hold on this order only">
+                        <CalendarClock className="w-3.5 h-3.5" /> {selectedOrder.renderBeforeRace ? 'Wait for race day again' : 'Render before race day'}
+                      </button>
+                    )}
                     {/* The customer wants the print without their time (or asked for it back). */}
                     {design.canManage && selectedOrder.status !== 'completed' && !isEditing && (
                       <button onClick={async () => {
@@ -2615,15 +2634,17 @@ Thank you!`
                 {/* Bought before the race's design changed (designSwitch.js): it must go out with the old design. */}
                 {selectedOrder.oldDesign && (
                   <div className="rounded-md border-2 border-red-600 bg-red-600 px-4 py-3 text-white">
-                    <p className="text-base font-bold tracking-tight">USE OLD DESIGN - THEY BOUGHT BEFORE WE SWITCHED</p>
-                    <p className="mt-0.5 text-[13px] leading-snug text-white/90">They ordered before the new {selectedOrder.effectiveRaceName || selectedOrder.raceName} design went live (11:00 AM ET, Nov 11), so their print keeps "Marathon". The script renders it from the old production file on its own. Anything made or fixed by hand uses the old file too.</p>
+                    <p className="text-base font-bold tracking-tight">{selectedOrder.designChoice === 'old' ? 'USE OLD DESIGN - SET BY HAND' : 'USE OLD DESIGN - THEY BOUGHT BEFORE WE SWITCHED'}</p>
+                    <p className="mt-0.5 text-[13px] leading-snug text-white/90">{selectedOrder.designChoice === 'old' ? `Someone set this order to the old ${selectedOrder.effectiveRaceName || selectedOrder.raceName} design, with "Marathon".` : `They ordered before the new ${selectedOrder.effectiveRaceName || selectedOrder.raceName} design went live (11:00 AM ET, Nov 11), so their print keeps "Marathon".`} The script renders it from the old production file on its own. Anything made or fixed by hand uses the old file too.</p>
+                    {design.canManage && <DesignChoiceLink order={selectedOrder} to={selectedOrder.designChoice === 'old' ? null : 'new'} onDone={async (msg) => { await fetchOrders(); await design.reload(); setToast({ message: msg, type: 'success' }) }} onError={m => setToast({ message: m, type: 'error' })} />}
                   </div>
                 )}
                 {/* Bought after the design changed: the new design, without "Marathon". */}
                 {selectedOrder.newDesign && (
                   <div className="rounded-md border-2 border-blue-600 bg-blue-600 px-4 py-3 text-white">
-                    <p className="text-base font-bold tracking-tight">USE NEW DESIGN - THEY BOUGHT AFTER WE SWITCHED</p>
-                    <p className="mt-0.5 text-[13px] leading-snug text-white/90">They ordered after the new {selectedOrder.effectiveRaceName || selectedOrder.raceName} design went live (11:00 AM ET, Nov 11), so their print has no "Marathon". The script renders it from the new production file on its own. Anything made or fixed by hand uses the new file too, not the OLD one.</p>
+                    <p className="text-base font-bold tracking-tight">{selectedOrder.designChoice === 'new' ? 'USE NEW DESIGN - SET BY HAND' : 'USE NEW DESIGN - THEY BOUGHT AFTER WE SWITCHED'}</p>
+                    <p className="mt-0.5 text-[13px] leading-snug text-white/90">{selectedOrder.designChoice === 'new' ? `Someone set this order to the new ${selectedOrder.effectiveRaceName || selectedOrder.raceName} design, without "Marathon".` : `They ordered after the new ${selectedOrder.effectiveRaceName || selectedOrder.raceName} design went live (11:00 AM ET, Nov 11), so their print has no "Marathon".`} The script renders it from the new production file on its own. Anything made or fixed by hand uses the new file too, not the OLD one.</p>
+                    {design.canManage && <DesignChoiceLink order={selectedOrder} to={selectedOrder.designChoice === 'new' ? null : 'old'} onDone={async (msg) => { await fetchOrders(); await design.reload(); setToast({ message: msg, type: 'success' }) }} onError={m => setToast({ message: m, type: 'error' })} />}
                   </div>
                 )}
                 {/* The same runner's print ordered twice, as separate orders: check before both go out. */}
@@ -3389,6 +3410,26 @@ function frameChip(frameType: string) {
   const black = /black/i.test(f), natural = /natural|oak/i.test(f) && !black
   const chip = `inline-flex items-center gap-1.5 px-2 py-1 rounded border text-xs font-semibold ${black ? 'bg-off-black text-white border-off-black' : natural ? 'bg-[#e9d9bd] text-[#5c4425] border-[#d6c09a]' : 'bg-white text-off-black/70 border-border-gray'}`
   return { label: /unframed/i.test(f) ? 'Unframed' : f, chip }
+}
+
+/** The quiet link on a design banner: switch this order's design by hand, or back to when they bought. */
+function DesignChoiceLink({ order, to, onDone, onError }: { order: Order; to: 'new' | 'old' | null; onDone: (msg: string) => void | Promise<void>; onError: (msg: string) => void }) {
+  const [busy, setBusy] = useState(false)
+  const label = to === 'new' ? 'Use the new design instead' : to === 'old' ? 'Use the old design instead' : 'Go back to when they bought'
+  return (
+    <button disabled={busy} onClick={async () => {
+        setBusy(true)
+        try {
+          const r = await apiFetch('/api/orders/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderNumber: order.orderNumber, designChoice: to }) })
+          const d = await r.json().catch(() => ({}))
+          if (!r.ok) throw new Error(d.error || 'Could not change the design')
+          await onDone(to ? `Set to the ${to} design. An open design made from the other file is closed; Create Design for a new one.` : 'The design follows when they bought again.')
+        } catch (e) { onError(e instanceof Error ? e.message : 'Could not change the design') } finally { setBusy(false) }
+      }}
+      className="mt-1.5 text-xs font-medium text-white/75 underline underline-offset-2 hover:text-white disabled:opacity-50">
+      {busy ? '…' : label}
+    </button>
+  )
 }
 
 function BulkSendLine({ order }: { order: Order }) {

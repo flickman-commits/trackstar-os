@@ -30,6 +30,8 @@ export default async function handler(req, res) {
       bibNumber, officialTime, officialPace,
       // The customer wants no bib on the print: the bib frame renders empty.
       noBib,
+      // Render before race day (a creator's print), and the design version for a race whose design changed.
+      renderBeforeRace, designChoice,
       // The event the print is for, set by hand when it should not follow the
       // result (a full-marathon DNF who wants the half print). Picks the production file.
       eventType,
@@ -339,6 +341,16 @@ export default async function handler(req, res) {
       await recordAudit({ action: 'order.no-bib', summary: `Order ${existingOrder.orderNumber}: ${noBib ? 'no bib on the print' : 'bib back on the print'}`, detail: { orderNumber: existingOrder.orderNumber, noBib }, actor })
     }
 
+    if (typeof renderBeforeRace === 'boolean' && renderBeforeRace !== existingOrder.renderBeforeRace) {
+      updateData.renderBeforeRace = renderBeforeRace
+      await recordAudit({ action: 'order.render-before-race', summary: `Order ${existingOrder.orderNumber}: ${renderBeforeRace ? 'renders before race day' : 'waits for race day again'}`, detail: { orderNumber: existingOrder.orderNumber, renderBeforeRace }, actor })
+    }
+    if (designChoice !== undefined && (designChoice ?? null) !== (existingOrder.designChoice ?? null)) {
+      if (designChoice !== null && !['new', 'old'].includes(designChoice)) return res.status(400).json({ error: 'The design is new or old' })
+      updateData.designChoice = designChoice
+      await recordAudit({ action: 'order.design-choice', summary: `Order ${existingOrder.orderNumber}: ${designChoice ? `the ${designChoice} design, set by hand` : 'design follows when they bought again'}`, detail: { orderNumber: existingOrder.orderNumber, before: existingOrder.designChoice ?? null, after: designChoice }, actor })
+    }
+
     // Update the order
     if (existingOrder.trackstarOrderType === 'custom') {
       const LABEL = { runnerNameOverride: 'runner', raceNameOverride: 'race', yearOverride: 'year', bibNumberCustomer: 'bib', timeCustomer: 'time', creativeDirection: 'creative direction' }
@@ -355,7 +367,7 @@ export default async function handler(req, res) {
 
     // A new name, race or result means an open design was made from the old
     // one: close it now rather than leave it to be approved or sent.
-    const printChanged = 'runnerNameOverride' in updateData || 'raceNameOverride' in updateData || 'noBib' in updateData
+    const printChanged = 'runnerNameOverride' in updateData || 'raceNameOverride' in updateData || 'noBib' in updateData || 'designChoice' in updateData
       || bibNumber !== undefined || officialTime !== undefined || officialPace !== undefined || Boolean(eventType)
     if (printChanged && existingOrder.trackstarOrderType !== 'custom') {
       const closed = await closeOutdatedDesigns(existingOrder.id, 'The order was edited after this design was made; a new design replaces it').catch(e => { console.error('[API /orders/update] closing old designs', e.message); return 0 })
