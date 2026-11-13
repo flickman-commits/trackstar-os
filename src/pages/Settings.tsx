@@ -47,6 +47,7 @@ const SETTINGS_NAV: {
   {
     group: 'Tools',
     items: [
+      { id: 'pricing', label: 'Pricing Calculator', blurb: 'Costs, retail and margin across DTC and wholesale', icon: DollarSign, cap: 'settings.pricing' },
       { id: 'reviews', label: 'Request Reviews', blurb: 'Copy a review request message for any product', icon: Star, cap: 'settings.reviews' },
       { id: 'features', label: 'Feature Requests', blurb: 'What the team has asked to have built', icon: Lightbulb },
       { id: 'design_needs', label: 'Design Needs', blurb: 'What the production files need so the script can make the print', icon: PencilRuler, cap: 'settings.design_needs' },
@@ -77,7 +78,6 @@ const SETTINGS_NAV: {
     group: 'Store',
     adminOnly: true,
     items: [
-      { id: 'pricing', label: 'Pricing Calculator', blurb: 'Costs, retail and margin across DTC and wholesale', icon: DollarSign },
       { id: 'products', label: 'Products & Prices', blurb: 'Change prices across every Shopify product at once', icon: DollarSign },
       { id: 'skipped', label: 'Skipped Products', blurb: 'Shopify products with nothing to personalize, kept out of the fulfillment tool', icon: EyeOff },
       { id: 'gallery', label: 'Site Gallery', blurb: 'Approved customs to feature on the custom product page', icon: ImageIcon },
@@ -294,7 +294,7 @@ export default function Settings() {
                 </div>
 
                 <div className="flex-1 overflow-auto p-3 md:p-5">
-              {settingsPanel === 'pricing' && isAdmin && <PricingCalculator />}
+              {settingsPanel === 'pricing' && can('settings.pricing') && <PricingCalculator />}
               {(settingsPanel === 'stats' || settingsPanel === 'support_closes' || settingsPanel === 'support_stats') && isAdmin && <StatsHub initial={settingsPanel === 'support_closes' ? 'tickets' : settingsPanel === 'support_stats' ? 'support' : 'overview'} />}
               {/* The Custom Counter lives in Finance > Payouts now; old links still land there. */}
               {settingsPanel === 'counter' && <Navigate to="/finance/payouts" replace />}

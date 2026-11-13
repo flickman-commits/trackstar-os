@@ -39,12 +39,13 @@ import {
   WHOLESALE_TIERS,
   WHOLESALE_EXCLUDED_SIZES,
 } from '../../../server/services/pricing.js'
-import { requireAdminOnly } from '../../_lib/users.js'
+import { requireCapability } from '../../_lib/users.js'
 import { sendPublicError } from '../../../server/lib/publicError.js'
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, OPTIONS' })) return
-  if (!(await requireAdminOnly(req, res))) return
+  // Sales & Marketing quote wholesale and charity deals from this (settings.pricing).
+  if (!(await requireCapability(req, res, 'settings.pricing'))) return
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
   try {

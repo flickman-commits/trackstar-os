@@ -54,6 +54,7 @@ export const CAPABILITIES = [
   { id: 'tools.pace', group: 'Tools', label: 'Pace calculator' },
   { id: 'tools.weather', group: 'Tools', label: 'Race weather' },
   { id: 'tools.surveys', group: 'Tools', label: 'Design Survey' },
+  { id: 'settings.pricing', group: 'Reports', label: 'Pricing Calculator', blurb: 'Our costs, retail and margin, DTC and wholesale' },
   { id: 'settings.reviews', group: 'Reports', label: 'Request Reviews' },
   { id: 'settings.stats', group: 'Reports', label: 'Stats' },
   { id: 'settings.design_needs', group: 'Reports', label: 'Design Needs' },
@@ -64,7 +65,7 @@ export const grantable = list => [...new Set((Array.isArray(list) ? list : []).f
 const EDITABLE_ROLES = ROLES.filter(r => r !== 'admin')
 
 export const DEFAULT_CAPS = {
-  sales: ['sales', 'creators', 'tools.discounts', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.reviews', 'settings.stats'],
+  sales: ['sales', 'creators', 'tools.discounts', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.pricing', 'settings.reviews', 'settings.stats'],
   fulfillment: ['support', 'creators', 'orders.render', 'orders.add_photo', 'tools.discounts', 'tools.pace', 'tools.weather', 'settings.stats', 'settings.design_needs'],
   support: ['support', 'hours', 'tools.discounts', 'tools.pace', 'tools.weather'],
   creators: ['creators', 'hours', 'tools.discounts'],
@@ -83,7 +84,7 @@ export function normalizeRole(role) {
 // `_known` predates all of these). A role gets a new capability's default
 // until an admin saves the table again, so "on by default" holds for a
 // workspace whose roles were set up before the capability existed.
-const ADDED_LATER = ['hours', 'orders.add_photo']
+const ADDED_LATER = ['hours', 'orders.add_photo', 'settings.pricing']
 
 function clean(map) {
   const known = new Set(Array.isArray(map?._known) ? map._known : [...GRANTABLE].filter(c => !ADDED_LATER.includes(c)))

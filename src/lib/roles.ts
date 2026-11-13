@@ -40,6 +40,7 @@ export const CAPABILITY_LABEL: Partial<Record<Capability, string>> = {
   'tools.weather': 'Weather',
   'tools.surveys': 'Design Survey',
   'tools.samples': 'Samples',
+  'settings.pricing': 'Pricing',
   'settings.reviews': 'Reviews',
   'settings.stats': 'Stats',
   'settings.design_needs': 'Design Needs',
@@ -47,7 +48,7 @@ export const CAPABILITY_LABEL: Partial<Record<Capability, string>> = {
 
 const DEFAULT_CAPS: Record<Role, Caps> = {
   admin: '*',
-  sales: ['sales', 'creators', 'tools.discounts', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.reviews', 'settings.stats'],
+  sales: ['sales', 'creators', 'tools.discounts', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.pricing', 'settings.reviews', 'settings.stats'],
   fulfillment: ['support', 'creators', 'orders.render', 'orders.add_photo', 'tools.discounts', 'tools.pace', 'tools.weather', 'settings.stats', 'settings.design_needs'],
   support: ['support', 'hours', 'tools.discounts', 'tools.pace', 'tools.weather'],
   creators: ['creators', 'hours', 'tools.discounts'],
