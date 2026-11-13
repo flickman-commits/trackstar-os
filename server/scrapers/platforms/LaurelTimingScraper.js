@@ -239,6 +239,20 @@ export class LaurelTimingScraper extends BaseScraper {
       if (!fullName) continue
       rows.push({ pk, fullName })
     }
+    // Newer layout (seen Nov 2026 on Portland): one anchor with the full
+    // name, <a class='individual name' href='...?pk={pk}'>Seth Nieman</a>,
+    // in a table row that also has bib, chip time and pace cells. The
+    // individual page is unchanged, so only the name and pk are read here.
+    const seen = new Set(rows.map(r => r.pk))
+    $('a.individual.name').each((_, el) => {
+      const href = $(el).attr('href') || ''
+      const pkMatch = href.match(/[?&]pk=(\d+)/)
+      if (!pkMatch || seen.has(pkMatch[1])) return
+      const fullName = $(el).text().replace(/\s+/g, ' ').trim()
+      if (!fullName) return
+      seen.add(pkMatch[1])
+      rows.push({ pk: pkMatch[1], fullName })
+    })
     return rows
   }
 
