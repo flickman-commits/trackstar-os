@@ -13,7 +13,7 @@
  */
 import prisma from '../../db.js'
 import { sendNew, stripQuoted } from './mailbox.js'
-import { replyToHtml } from './format.js'
+import { replyToHtml, replyToPlain } from './format.js'
 import { UserError } from './errors.js'
 import { senderOwnerId } from './customerMail.js'
 import { listMockups, resolveMockup } from './mockups.js'
@@ -68,7 +68,7 @@ export async function emailCustomer({ orderId, subject, text, actor, mockupRef =
     attachments = [{ bytes: f.bytes, contentType: f.contentType, filename: f.filename }]
   }
 
-  const stored = await sendNew({ userId: actor?.id || null, to, subject: subj, html: replyToHtml(body), text: body, attachments })
+  const stored = await sendNew({ userId: actor?.id || null, to, subject: subj, html: replyToHtml(body), text: replyToPlain(body), attachments })
   const held = mockupRef ? await holdForCustomer({ orderId: order.id, actor }) : null
   const by = actorName(actor)
   // The sender owns the conversation only if they work in Support (a designer does not).

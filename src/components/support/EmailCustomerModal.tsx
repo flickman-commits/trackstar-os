@@ -34,11 +34,13 @@ const ASK = '[what we need]'
 // Each chip writes the whole email for that one ask; picking another replaces it.
 type Pick = 'bib' | 'name' | 'time' | 'race' | 'mockup' | 'address' | 'hof'
 const ASKS: { id: Exclude<Pick, 'mockup' | 'address' | 'hof'>; label: string; text: string }[] = [
-  { id: 'bib', label: 'Bib number', text: 'the bib number (it\'s on the race app or confirmation email)' },
-  { id: 'name', label: 'Last name', text: 'the full name they registered under, exactly as it shows in the results' },
-  { id: 'time', label: 'Finish time', text: 'the official finish time' },
-  { id: 'race', label: 'Which race', text: 'which race, year and distance this is for' },
+  { id: 'bib', label: 'Bib number', text: 'The bib number (it\'s on the race app or confirmation email)' },
+  { id: 'name', label: 'Last name', text: 'The full name they registered under, exactly as it shows in the results' },
+  { id: 'time', label: 'Finish time', text: 'The official finish time' },
+  { id: 'race', label: 'Which race', text: 'Which race, year and distance this is for' },
 ]
+/** "Gracie Wendels" -> "Gracie Wendels'", "Jo Smith" -> "Jo Smith's". */
+const possessive = (name: string) => (/s$/i.test(name) ? `${name}'` : `${name}'s`)
 // The Hall of Fame email waits on the gift card; Send stays off until Create gift card fills this in.
 const GIFT_CODE = '[gift card code]'
 
@@ -58,7 +60,7 @@ function template(o: EmailCustomerOrder, rep: string, pick: Pick | null, shipTo:
   const who = firstName(o.customerName)
   const runner = String(o.runnerName || '').trim()
   const race = [o.raceName, o.raceYear].filter(Boolean).join(' ')
-  const forWhat = runner && race ? `${runner}'s ${race} print` : race ? `your ${race} print` : 'your print'
+  const forWhat = runner && race ? `${possessive(runner)} ${race} print` : race ? `your ${race} print` : 'your print'
   const hi = `Hey${who ? ` ${who}` : ''},`
   const bye = `Thanks,\n${rep} from Trackstar`
   if (pick === 'hof') {
@@ -92,12 +94,15 @@ ${addressBlock(shipTo)}
 Is that right? If not, reply with the correct address (include any apt or unit number).
 
 ${bye}`
+  // The ask on its own line in bold (**…** is bold in the sent email), so it is the first thing they see.
   const ask = ASKS.find(a => a.id === pick)?.text || ASK
   return `${hi}
 
-We're working on ${forWhat} and need one thing from you: ${ask}.
+We're working on ${forWhat} and need one thing from you:
 
-Just reply here and we'll take it from there.
+**${ask}**
+
+Just reply to this email with that info and we'll get your order processed as soon as we hear back.
 
 ${bye}`
 }
