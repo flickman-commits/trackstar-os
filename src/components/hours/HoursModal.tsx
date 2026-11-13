@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth'
 import ActionModal from '@/components/ActionModal'
 import { btnPrimary, btnGhost, inputBase, modalPrimary, modalCancel } from '@/lib/ui'
 import { financeApi, dayLabel, mondayOf, addDays, todayET } from '@/lib/financeApi'
-import type { HoursPayload, TimeEntry } from '@/types/finance'
+import type { HoursPayload, Person, TimeEntry, Timesheet } from '@/types/finance'
 import { StatusChip } from '@/components/finance/bits'
 import { useLocation } from 'react-router-dom'
 import { HOURS_CHANGED } from './RunningTimer'
@@ -60,17 +60,144 @@ const TINTS = [
   'bg-violet-50 border-l-violet-300', 'bg-sky-50 border-l-sky-300', 'bg-emerald-50 border-l-emerald-300',
   'bg-amber-50 border-l-amber-300', 'bg-rose-50 border-l-rose-300', 'bg-teal-50 border-l-teal-300', 'bg-indigo-50 border-l-indigo-300',
 ]
-function tintFor(note: string | null | undefined): string {
+// The same seven hues as solid dots (spelled out so Tailwind keeps them).
+const DOTS = ['bg-violet-300', 'bg-sky-300', 'bg-emerald-300', 'bg-amber-300', 'bg-rose-300', 'bg-teal-300', 'bg-indigo-300']
+function tintIndex(note: string | null | undefined): number {
   const k = String(note || '').trim().toLowerCase()
-  if (!k) return 'bg-subtle-gray border-l-border-gray'
+  if (!k) return -1
   let h = 0
   for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) >>> 0
-  return TINTS[h % TINTS.length]
+  return h % TINTS.length
+}
+function tintFor(note: string | null | undefined): string {
+  const i = tintIndex(note)
+  return i < 0 ? 'bg-subtle-gray border-l-border-gray' : TINTS[i]
 }
 
 export default function HoursModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { isAdmin } = useAuth()
   if (!open) return null
-  return <HoursBody onClose={onClose} />
+  // Admins do not log hours (hourlyPeople leaves them out); Matt sees the team's week instead.
+  return isAdmin ? <TeamHours onClose={onClose} /> : <HoursBody onClose={onClose} />
+}
+
+type TeamWeek = { timesheets: Timesheet[]; people: Person[]; weekStart: string; thisWeek: string }
+const fullName = (p?: { firstName?: string | null; lastName?: string | null } | null) => [p?.firstName, p?.lastName].filter(Boolean).join(' ')
+
+/**
+ * Everyone's hours for one week, read-only: a total, each person's total and
+ * where their sheet stands, and the same seven days with every entry marked
+ * with whose it is. Click a person to see only theirs. Approving stays in
+ * Finance > Timesheets.
+ */
+function TeamHours({ onClose }: { onClose: () => void }) {
+  const [week, setWeek] = useState<string>(mondayOf(todayET()))
+  const [data, setData] = useState<TeamWeek | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [only, setOnly] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    setData(null)
+    financeApi.timesheetsWeek(week).then(d => { if (live) { setData(d); setError(null) } }).catch(e => { if (live) setError((e as Error).message) })
+    return () => { live = false }
+  }, [week])
+
+  const today = todayET()
+  const thisMonday = mondayOf(today)
+  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(week, i)), [week])
+  // One row per person who logs hours, with or without a sheet this week; anyone else with a sheet too.
+  const rows = useMemo(() => {
+    if (!data) return []
+    const byUser = new Map(data.timesheets.map(t => [t.userId, t]))
+    const list = data.people.map(p => ({ id: p.id, name: fullName(p), sheet: byUser.get(p.id) || null }))
+    for (const t of data.timesheets) if (!list.some(r => r.id === t.userId)) list.push({ id: t.userId, name: fullName(t.user) || 'Someone', sheet: t })
+    return list.sort((a, b) => (b.sheet?.totalMinutes || 0) - (a.sheet?.totalMinutes || 0) || a.name.localeCompare(b.name))
+  }, [data])
+  const shown = rows.filter(r => !only || r.id === only)
+  // Each person their own color, by their place in the list (a hash put Dani and Elí in the same lilac).
+  const hue = (id: string) => Math.max(0, rows.findIndex(r => r.id === id)) % TINTS.length
+  const entries = shown.flatMap(r => (r.sheet?.entries || []).map(e => ({ ...e, who: r.name, hue: hue(r.id) })))
+  const total = rows.reduce((s, r) => s + (r.sheet?.totalMinutes || 0), 0)
+  const shownTotal = shown.reduce((s, r) => s + (r.sheet?.totalMinutes || 0), 0)
+  const waiting = rows.filter(r => r.sheet?.status === 'submitted').length
+  const earlier = Array.from({ length: 12 }, (_, i) => addDays(thisMonday, -7 * i))
+
+  return (
+    <ActionModal icon={Clock} title={<>Hours Tracker<span className="ml-2 font-semibold text-[#4600D6]">Team</span></>}
+      sub={<>week of {dayLabel(week)}<span className="ml-3 inline-flex items-center px-2 py-0.5 rounded-md bg-off-black/[0.06] text-off-black text-base font-semibold tabular-nums align-middle" title="Everyone's total for this week">{data ? minutesText(total) : '…'}</span></>}
+      onClose={onClose} size="xl" bare
+      actions={<div className="flex items-center gap-1 mr-2">
+        <button onClick={() => setWeek(w => addDays(w, -7))} className={btnGhost} aria-label="Previous week"><ChevronLeft className="w-4 h-4" /></button>
+        <button onClick={() => setWeek(w => addDays(w, 7))} disabled={week >= thisMonday} className={btnGhost} aria-label="Next week"><ChevronRight className="w-4 h-4" /></button>
+      </div>}
+      footer={<>
+        <span className="text-sm text-off-black/60 mr-auto">
+          {minutesText(total)} across {rows.filter(r => r.sheet?.totalMinutes).length || 'no one'}{rows.filter(r => r.sheet?.totalMinutes).length === 1 ? ' person' : rows.filter(r => r.sheet?.totalMinutes).length ? ' people' : ''} this week
+          {waiting ? ` · ${waiting} waiting on you` : ''}
+        </span>
+        <a href="/finance/timesheets" className={modalPrimary}>Review in Finance</a>
+      </>}>
+      <div className="p-4 md:p-5 space-y-4">
+        {error && <p className="text-sm text-red-700">{error}</p>}
+        {!data ? <p className="text-sm text-off-black/50">Loading…</p> : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {rows.map(r => {
+                const on = only === r.id
+                return (
+                  <button key={r.id} onClick={() => setOnly(on ? null : r.id)} title={on ? 'Show everyone' : `Show only ${r.name}`}
+                    className={`text-left rounded-xl border p-3 transition-colors ${on ? 'border-[#4600D6] bg-[#F6F3FF]' : 'border-border-gray bg-white hover:bg-subtle-gray'}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${DOTS[hue(r.id)]}`} />
+                      <span className="text-sm font-semibold text-off-black truncate">{r.name}</span>
+                    </div>
+                    <p className="text-2xl font-bold tabular-nums text-off-black mt-1">{minutesText(r.sheet?.totalMinutes || 0)}</p>
+                    <div className="mt-1"><StatusChip status={r.sheet ? r.sheet.status : 'empty'} /></div>
+                  </button>
+                )
+              })}
+              {rows.length === 0 && <p className="text-sm text-off-black/50 col-span-full">No one logs hours yet.</p>}
+            </div>
+            {only && <p className="text-xs text-off-black/55">Showing {rows.find(r => r.id === only)?.name}'s {minutesText(shownTotal)}. <button onClick={() => setOnly(null)} className="text-[#4600D6] hover:underline">Show everyone</button></p>}
+            <div className="grid grid-cols-1 md:grid-cols-7 gap-2">
+              {days.map((d, i) => {
+                const list = entries.filter(e => e.day === d)
+                const dayTotal = list.reduce((s, e) => s + (e.minutes || 0), 0)
+                return (
+                  <div key={d} className={`rounded-md border ${d === today ? 'border-off-black/40' : 'border-border-gray'} ${d > today ? 'bg-subtle-gray/60' : 'bg-white'} p-2 flex flex-col min-h-[120px]`}>
+                    <div className="flex items-baseline justify-between mb-1.5">
+                      <span className="text-xs font-semibold text-off-black">{DAYS[i]} <span className="font-normal text-off-black/45">{dayLabel(d).replace(/^\w+ /, '')}</span></span>
+                      <span className="text-xs tabular-nums text-off-black/60">{dayTotal ? minutesText(dayTotal) : ''}</span>
+                    </div>
+                    <div className="space-y-1 flex-1">
+                      {list.map(e => (
+                        <div key={e.id} className={`rounded border-l-2 ${TINTS[e.hue]} px-1.5 py-1 text-xs`} title={`${e.who}${e.note ? `: ${e.note}` : ''}`}>
+                          <span className="font-semibold tabular-nums">{e.startedAt && !e.endedAt ? 'running' : minutesText(e.minutes)}</span>
+                          <span className="ml-1 text-off-black/70">{e.who.split(' ')[0]}</span>
+                          {e.note && <span className="block text-off-black/55 truncate">{e.note}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-off-black/45 mb-1">Earlier weeks</p>
+              <div className="flex flex-wrap gap-1.5">
+                {earlier.map(w => (
+                  <button key={w} onClick={() => setWeek(w)} className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs ${w === week ? 'bg-dark-fill text-white border-dark-fill' : 'bg-white border-border-gray text-off-black/70 hover:bg-subtle-gray'}`}>
+                    <span className="font-medium">{weeksAgo(w, thisMonday)}</span>
+                    <span className="opacity-60">{dayLabel(w)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </ActionModal>
+  )
 }
 
 function HoursBody({ onClose }: { onClose: () => void }) {
