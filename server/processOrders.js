@@ -21,16 +21,16 @@ import { researchService } from './services/ResearchService.js'
 import { hasScraperForRace } from './scrapers/index.js'
 import { parseRaceNameFromTitle } from './scrapers/raceNameNormalization.js'
 import { incrementCustomersServed, syncCustomersServedToShopify, getCountedOrderIds, saveCountedOrderIds } from './services/customersServed.js'
-import { isExpeditedShipping, getShippingMethod } from './lib/shipping.js'
+import { isExpeditedShipping } from './lib/shipping.js'
 import { fetchWithTimeout } from './lib/fetchWithTimeout.js'
-import { slackTo, slackDm } from './lib/slack.js'
+import { slackTo, slackDm, slackLink, slackText } from './lib/slack.js'
 import { buildShopifyMatchMap, buildEtsyMatchMap, isRushAddonLineItem, isRemovedLineItem, normalizeShopifyLines } from './lib/lineItemMatching.js'
 import { isBulkShopifyOrder } from './domain/bulk/shopifyBulk.js'
 import { assigneeForNewOrder, isAutoAssignee, endExpiredShifts } from './domain/orders/assignment.js'
 import { requireConnection } from './lib/connections.js'
 import { listExcluded, isExcludedLine } from './domain/orders/excludedProducts.js'
 import { alertArteloHolds } from './domain/orders/arteloMismatch.js'
-import { arteloOrderUrl } from './lib/links.js'
+import { arteloOrderUrl, orderAppUrl } from './lib/links.js'
 import { yearUnknown } from './domain/orders/yearUnknown.js'
 import { isStoredPhotoPath } from './lib/photoPath.js'
 import { completeOrder } from './domain/orders/complete.js'
@@ -1479,16 +1479,15 @@ export async function processOrders(options = {}) {
                   orderSource === 'shopify' &&
                   isExpeditedShipping(lineItemShopifyData)
                 ) {
-                  const shippingMethod = getShippingMethod(lineItemShopifyData)
                   const displayNum = lineItemShopifyData?.name || `#${order.orderId}`
-                  // Artelo lets us pick the shipping label on the order now, so
-                  // nobody has to ask their support. The customer pays $40 for
-                  // expedited, so the label has to come in under that.
-                  const text = `🚀 <@U09UVEP1N3Y> *EXPEDITED ORDER* - *${displayNum}* (${raceName}, ${runnerName})\n` +
-                    `Customer paid for *${shippingMethod || 'expedited'}* shipping. Put this one through right away:\n` +
-                    `• Verify all personalization is complete\n` +
-                    `• Send it to production now (no need to wait for Matt)\n` +
-                    `• In the Artelo order, under Shipping, click *Change shipping method* and pick *UPS Next Day Air Saver*, as long as it is under $40 (what the customer paid). If it is $40 or more, pick the fastest option under $40, and tell Matt if there is none`
+                  // The customer pays $40 for expedited, so the label has to
+                  // come in under that. Links go straight to the order in
+                  // TrackstarOS and in Artelo, where the label is changed.
+                  const ref = `${String(displayNum).replace(/^#/, '')}${lineItemIndex ? `-${lineItemIndex + 1}` : ''}`
+                  const artelo = arteloOrderUrl(order.id)
+                  const text = `🚀 <@U09UVEP1N3Y> *Expedited:* ${slackLink(orderAppUrl(ref), `#${ref}`)} (${slackText(raceName)}, ${slackText(runnerName)})\n` +
+                    `1. Check the personalization and send it to production now\n` +
+                    `2. ${artelo ? slackLink(artelo, 'In Artelo') : 'In Artelo'}, change shipping to *UPS Next Day Air Saver* (under $40, or the fastest option under $40)`
                   // Eli's DM, or #trackstar-alerts if that does not go through.
                   slackDm({ slackId: 'U09UVEP1N3Y', firstName: 'Eli' }, text)
                     .then(sent => sent || slackTo('alerts', text))

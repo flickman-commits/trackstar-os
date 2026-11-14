@@ -156,7 +156,7 @@ function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; o
           {s.state === 'sent' ? `Sent to production ${clock(s.at)}` : s.state === 'waiting' ? 'Uploaded, waiting on other prints' : s.inHold ? `In hold until ${dayClock(s.at)}` : `Sending to production at ${clock(s.at)}`}
         </p>
         <p className="text-xs text-off-black/60">
-          {s.state === 'sent' ? 'Artelo has it as Received.' : s.state === 'waiting' ? 'Attached to its item in Artelo. The order goes to production once every print on it has its design.' : s.inHold ? 'The customer has 48 hours from ordering to ask for a change. It goes to Artelo on its own after that, unless a Support conversation about it is open.' : 'Attached to the Artelo order and sent. Hold it if something is wrong.'}
+          {s.state === 'sent' ? 'Artelo has it as Received.' : s.state === 'waiting' ? 'Attached to its item in Artelo. The order goes to production once every print on it has its design.' : s.inHold ? 'Sends to Artelo automatically when the customer’s 48-hour change window ends.' : 'Attached to the Artelo order and sent. Hold it if something is wrong.'}
         </p>
       </div>
       {/* Send right away: skip the rest of the hold; the sender takes it within a minute. */}
