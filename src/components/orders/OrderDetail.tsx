@@ -2395,8 +2395,8 @@ Thank you!`
 
               {/* Expedited shipping steps. The tag says it is expedited; this
                   block is the instructions. Artelo's API only sends Standard,
-                  so the sender skips these (arteloSend.js) and a person picks
-                  the label in Artelo, under $40 (what the customer pays). */}
+                  so the sender attaches these without sending (arteloSend.js)
+                  and a person picks the label in Artelo, under $40. */}
               {selectedOrder.isExpedited && (
                 <div className="bg-red-50 border-2 border-red-300 rounded-md p-4 mb-3">
                   <div className="flex items-center gap-2 mb-2">
@@ -2406,13 +2406,10 @@ Thank you!`
                   <div className="text-xs text-red-900/90 leading-relaxed space-y-1.5">
                     <p>The customer paid for <strong>{selectedOrder.shippingMethod || 'expedited'}</strong> shipping.</p>
                     <ol className="list-decimal list-inside space-y-1 pl-1">
-                      <li>Double-check that all personalization fields are filled in correctly.</li>
-                      <li>Approve the design right away. No need to wait for Matt. The tool does not send expedited orders on its own: Artelo only sends Standard shipping from here.</li>
+                      <li>Check the personalization and approve right away. No 48-hour hold; it attaches in Artelo within a few minutes but does not send.</li>
                       <li>
-                        <strong>Manually attach and add expedited shipping to this order</strong> in Artelo: attach the print, then under <strong>Shipping</strong> click <strong>Change shipping method</strong> and pick <strong>UPS Next Day Air Saver</strong>, as long as it is <strong>under $40</strong> (what the customer paid).
-                        If it is $40 or more, pick the fastest option under $40, and tell Matt if there is none.
+                        Click <strong>Expedite Shipping in Artelo</strong>, change the shipping to <strong>UPS Next Day Air Saver</strong> (under $40, or the fastest option under $40), and send it to production there. It completes here on its own.
                       </li>
-                      <li>Send it to production in Artelo, then mark it complete here.</li>
                     </ol>
                   </div>
                 </div>

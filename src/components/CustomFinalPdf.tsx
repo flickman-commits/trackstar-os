@@ -195,8 +195,8 @@ export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, 
   // Held, or Artelo would not take it: say so, and (for whoever can) Send to production.
   const sendBar = send && (send.state === 'manual' ? (
     <div className="rounded-md border-2 border-red-300 bg-red-50 px-3 py-2.5 text-[13px] leading-snug text-red-800">
-      <span className="font-semibold mr-1.5">Manually attach and add expedited shipping to this order.</span>
-      It was not sent: Artelo only sends Standard shipping from here. Attach it in Artelo, change the shipping method, send it to production, then mark it complete.
+      <span className="font-semibold mr-1.5">Attached in Artelo, not sent yet.</span>
+      Change the shipping to UPS Next Day Air Saver (under $40), then send it to production in Artelo. It completes here on its own.
     </div>
   ) : (
     <div className="space-y-2">

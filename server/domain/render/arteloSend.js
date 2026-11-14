@@ -21,10 +21,10 @@
  * processing, the order not imported yet, a payment) are tried again later;
  * the rest wait for a person, who can Send now once it is fixed.
  *
- * Expedited orders are not sent either: send-to-production always ships
- * Standard and the API has no way to pick a faster service, so the file goes
- * to the library and the order waits for a person to attach it and change the
- * shipping in Artelo (shown as "manual", under Action).
+ * Expedited orders skip the change window and are attached but not sent:
+ * send-to-production always ships Standard and the API has no way to pick a
+ * faster service, so a person changes the shipping in Artelo and sends it
+ * there (shown as "manual", under Action). Once Artelo has it, it is marked sent.
  *
  * Bulk and partner orders are not sent this way. Sending can be switched off
  * (Settings > Connections > Artelo, auto-send); approving then only uploads
@@ -343,9 +343,6 @@ export async function sendOne(job) {
     if (upload?.status === 'Pending') return outcome(job, { error: 'Artelo is still processing the file', retryIn: 1 })
     if (upload?.status === 'Deleted') return outcome(job, { error: 'Artelo rejected the file in its library', notify: true })
 
-    // Artelo's API only sends Standard shipping: a person attaches it and picks the faster service.
-    if (isExpeditedShipping(order.shopifyOrderData)) return outcome(job, { error: `${EXPEDITED}: manually attach and add expedited shipping to this order in Artelo, then mark it complete`, notify: true })
-
     const arteloId = order.arteloOrderData?.id
     if (!arteloId) return outcome(job, { error: 'Artelo has not imported this order yet', retryIn: 10 })
     const live = await call('orders/get-by-id', { query: { orderId: arteloId } })
@@ -397,6 +394,12 @@ export async function sendOne(job) {
     // attached design is its approved one (siblingGate.js).
     const block = siblingBlock(await otherPrints(order))
     if (block) return outcome(job, { error: `Not sent: ${block}`, retryIn: 15, notify: true })
+
+    // Expedited: attached, but not sent. Artelo's API only sends Standard
+    // shipping, so a person changes the shipping in Artelo and sends it there.
+    // Looked at again every 15 minutes: once Artelo has it, it is marked sent
+    // (the "already gone" check above) and the order completes on its own.
+    if (isExpeditedShipping(order.shopifyOrderData)) return outcome(job, { error: `${EXPEDITED}: attached in Artelo. Change the shipping there and send it to production`, retryIn: 15 })
 
     try {
       await call('orders/send-to-production', { method: 'POST', body: { orderId: arteloId } })

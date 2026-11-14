@@ -217,7 +217,7 @@ const actionGroup = (o: Order): (typeof ACTION_GROUPS)[number] => {
   const r = o.pipeline?.reason || '', k = o.pipeline?.kind
   if (/^(Confirm weather|Confirm race date|Pick a match|Enter the time)$/.test(r)) return 'Quick decisions'
   if (/^(Design rejected|Render failed|Email bounced|Held|Flagged)$/.test(r)) return 'Fix in the tool'
-  if (k === 'artelo' || /Artelo/.test(r) || r === 'Expedited shipping') return 'Artelo'
+  if (k === 'artelo' || /Artelo/.test(r) || r === 'Expedited shipping' || r === 'Expedite shipping in Artelo') return 'Artelo'
   if (k === 'setup' || /^(Needs a scraper|Needs race data|Needs race date|Needs NO TIME layer|Needs a production file|Make by hand)$/.test(r)) return 'Needs a designer or developer'
   return 'Research'
 }
@@ -498,7 +498,7 @@ export default function Dashboard() {
       : send === 'support' ? { stage: 'hold', reason: 'Support conversation open', threadId: design.job?.send?.threadId || null, fix: 'Approved, and held from production while a Support conversation with the customer is open. Closing the conversation releases it within 15 minutes. Send anyway sends it now.' }
       : send === 'held' ? { stage: 'attach', reason: 'Held', fix: 'Approved, and held from production. Send it to production when it is ready, or attach it in Artelo by hand.' }
       : send === 'waiting' ? { stage: 'attach', reason: 'Uploaded, waiting on other prints', fix: 'Attached to its item in Artelo. The Artelo order goes to production once every print on it has its design. Mark it complete if the rest is handled in Artelo.' }
-      : send === 'manual' ? { stage: 'action', reason: 'Expedited shipping', kind: 'artelo', fix: 'Manually attach and add expedited shipping to this order in Artelo, then mark it complete.' }
+      : send === 'manual' ? { stage: 'action', reason: 'Expedite shipping in Artelo', kind: 'artelo', fix: 'Attached in Artelo. Change the shipping to UPS Next Day Air Saver (under $40) and send it to production there. It completes here on its own.' }
       : send === 'blocked' ? { stage: 'action', reason: 'Artelo would not take it', kind: 'artelo', fix: design.job?.send?.reason || 'Artelo refused it.' }
       : { stage: 'attach', reason: 'Attach in Artelo', fix: 'The print is approved and in the Artelo library (Orders folder), but was not sent. Send it to production, or attach it in Artelo by hand and mark the order done.' }
     if (pipeline) {

@@ -256,7 +256,7 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
   if (d.visible && job?.status === 'done' && job.review === 'approved' && arteloOrderUrl) {
     const held = job.send?.state === 'held'
     const talking = job.send?.state === 'support'
-    // Expedited: the API only sends Standard shipping, so this one is attached by hand.
+    // Expedited: attached, but the API only sends Standard shipping, so the shipping is changed and it is sent in Artelo.
     const manual = job.send?.state === 'manual'
     if (compact) {
       // One row on a phone, the same height as every other state. Held or
@@ -268,7 +268,7 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
           {canSend && <button onClick={() => { void d.sendAction('send-now') }} disabled={d.busy} className={`${btn} bg-green-600 text-white`}>{d.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} {talking ? 'Send anyway' : 'Send'}</button>}
           {canSend && <button onClick={() => { void d.sendAction('back-to-review') }} disabled={d.busy} aria-label="Back to review" className={`${btn} bg-white border-2 border-off-black/15 text-off-black`}><Undo2 className="w-4 h-4" /> Undo</button>}
           <a href={arteloOrderUrl} target="_blank" rel="noopener noreferrer" onClick={openArtelo} className={`${btn} ${manual ? 'bg-white border-2 border-red-300 text-red-700' : opened || canSend ? 'bg-white border-2 border-[#4600D6]/30 text-[#4600D6]' : 'bg-[#4600D6] text-white'}`}>
-            <img src="/artelo-icon.png" alt="" className="w-4 h-4 rounded-[3px]" /> {manual ? 'Attach, expedited' : 'Attach'}
+            <img src="/artelo-icon.png" alt="" className="w-4 h-4 rounded-[3px]" /> {manual ? 'Expedite shipping' : 'Attach'}
           </a>
           {opened && onComplete && <button onClick={onComplete} className={`${btn} bg-green-600 text-white`}><Check className="w-4 h-4" /> Complete</button>}
         </div>
@@ -278,8 +278,8 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
       <div className="space-y-2">
       {manual && (
         <div className="rounded-md border-2 border-red-300 bg-red-50 px-3 py-2.5 text-[13px] leading-snug text-red-800">
-          <span className="font-semibold mr-1.5">Manually attach and add expedited shipping to this order.</span>
-          It was not sent: Artelo only sends Standard shipping from here. Attach it in Artelo, change the shipping method, send it to production, then mark it complete.
+          <span className="font-semibold mr-1.5">Attached in Artelo, not sent yet.</span>
+          Change the shipping to UPS Next Day Air Saver (under $40), then send it to production in Artelo. It completes here on its own.
         </div>
       )}
       {d.canManage && d.autoSend && !manual && (
@@ -304,7 +304,7 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
       <div className={`grid gap-3 ${opened && onComplete ? (compact ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2') : 'grid-cols-1'}`}>
         <a href={arteloOrderUrl} target="_blank" rel="noopener noreferrer" onClick={openArtelo}
           className={`flex items-center justify-center gap-2 ${pad} rounded-md font-semibold transition-opacity ${opened ? 'bg-white border-2 border-[#4600D6]/30 text-[#4600D6] hover:bg-[#4600D6]/[0.04]' : 'bg-[#4600D6] text-white hover:opacity-90'}`}>
-          <img src="/artelo-icon.png" alt="" className="w-5 h-5 rounded-[4px]" /> {compact && opened ? 'Attach' : 'Attach in Artelo'} <ArrowUpRight className="w-4 h-4 opacity-70" />
+          <img src="/artelo-icon.png" alt="" className="w-5 h-5 rounded-[4px]" /> {manual ? 'Expedite Shipping in Artelo' : compact && opened ? 'Attach' : 'Attach in Artelo'} <ArrowUpRight className="w-4 h-4 opacity-70" />
           {!compact && <kbd className={`ml-1 inline-flex items-center px-1.5 py-0.5 rounded border text-[11px] font-medium opacity-70 font-sans ${opened ? 'border-[#4600D6]/30' : 'border-white/30'}`}>A</kbd>}
         </a>
         {opened && onComplete && (

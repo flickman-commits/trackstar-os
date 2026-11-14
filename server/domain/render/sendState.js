@@ -10,8 +10,8 @@
  *   held     a person held it
  *   waiting  attached; the Artelo order has other prints still to come
  *   blocked  Artelo would not take it; under Action with the reason
- *   manual   expedited shipping: the API only sends Standard, so a person
- *            attaches it and picks the faster shipping in Artelo
+ *   manual   expedited shipping: attached, but the API only sends Standard,
+ *            so a person picks the faster shipping in Artelo and sends it
  *   sent     Artelo has it
  *   null     approved without sending (Approve only, or before Approve sent things)
  */
