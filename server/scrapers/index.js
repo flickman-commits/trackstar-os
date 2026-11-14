@@ -532,6 +532,11 @@ export function onlyEventFor(raceName) {
   return types.length === 1 ? types[0] : null
 }
 
+/** The race's main event as its config lists it ("Marathon", "Half Marathon"), or null with no config. */
+export function mainEventFor(raceName) {
+  return findConfigForRace(raceName)?.eventTypes?.[0] || null
+}
+
 export function isMainEvent(raceName, eventType) {
   const e = String(eventType || '').trim().toLowerCase()
   if (!e || e === 'marathon') return true

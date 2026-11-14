@@ -18,6 +18,8 @@ import { setCors } from '../../_lib/auth.js'
 import { researchService } from '../../../server/services/ResearchService.js'
 import { isRacePublicSafe, raceNeedsBrowser, getCanonicalRaceName } from '../../../server/scrapers/index.js'
 import { parseRaceNameFromTitle, customerRaceName } from '../../../server/scrapers/raceNameNormalization.js'
+import { hasDesignFor } from '../../../server/domain/catalog/designs.js'
+import { cachedReadyTemplateKeys } from '../../../server/domain/catalog/distanceSync.js'
 import {
   checkRateLimitDurable,
   buildCacheKey,
@@ -45,6 +47,32 @@ function fallback(extra = {}) {
 // 10s AbortController: we want to answer the shopper rather than have them
 // hang up on us, because an answer gets logged and an abort doesn't.
 const SERVER_LOOKUP_TIMEOUT_MS = 9000
+
+/**
+ * Says, for each runner in the response, whether we have the design for the
+ * event they ran: `hasDesign` true or false, or absent when we cannot tell.
+ * The wizard stops an order for a design that does not exist (a half at a
+ * race we only drew the marathon for) instead of letting it get stuck in the
+ * Action queue after the customer has paid.
+ *
+ * Added on the way out, never cached with the result: the design list can
+ * change inside the hour a result is held. `title` is the listing title the
+ * widget sent, which is what tells a World Majors print from the standard one.
+ */
+async function withDesigns(payload, title) {
+  try {
+    const keys = await cachedReadyTemplateKeys()
+    const mark = r => {
+      const has = hasDesignFor(title, r?.eventType, keys)
+      return has === null ? r : { ...r, hasDesign: has }
+    }
+    if (payload.result) return { ...payload, result: mark(payload.result) }
+    if (Array.isArray(payload.suggestions)) return { ...payload, suggestions: payload.suggestions.map(mark) }
+  } catch (error) {
+    console.error('[LOOKUP] design check failed:', error)
+  }
+  return payload
+}
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, OPTIONS', allowPublic: true })) return
@@ -139,7 +167,7 @@ export default async function handler(req, res) {
   const cached = getCached(cacheKey)
   if (cached) {
     await observe({ outcome: 'cached', status: 200, cachedHit: true, raceForLog: raceCanonical })
-    return res.status(200).json({ ...cached, cached: true })
+    return res.status(200).json({ ...(await withDesigns(cached, race)), cached: true })
   }
 
   try {
@@ -266,7 +294,7 @@ export default async function handler(req, res) {
     const pending = /has not posted the official/.test(result.researchNotes || '')
     if (outcome !== 'upstream_error' && !pending) setCached(cacheKey, payload)
     await observe({ outcome, status: 200, raceForLog: raceCanonical })
-    return res.status(200).json(payload)
+    return res.status(200).json(await withDesigns(payload, race))
   } catch (error) {
     console.error('[public/results-lookup] lookup failed:', error.message)
     // Unhandled exception — alert (throttled).

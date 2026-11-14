@@ -535,5 +535,17 @@ export async function syncProductCatalog() {
     where: { productId: { notIn: seen } },
   })
 
-  return { synced: products.length, removed: removed.count }
+  // The storefront's distance pills come from the design list (distanceSync.js).
+  // A failure there must not fail the catalog sync, but it has to be seen.
+  let distances
+  try {
+    const { syncListingDistances } = await import('../domain/catalog/distanceSync.js')
+    const r = await syncListingDistances()
+    distances = { changed: r.changed.length, listings: r.changed.map(c => c.handle) }
+  } catch (error) {
+    console.error('[catalog] distances sync failed:', error)
+    distances = { error: 'Distances were not synced; see the logs' }
+  }
+
+  return { synced: products.length, removed: removed.count, distances }
 }
