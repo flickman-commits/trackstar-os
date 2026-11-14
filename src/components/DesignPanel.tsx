@@ -124,6 +124,8 @@ const clock = (t?: string | null) => t ? new Date(t).toLocaleTimeString('en-US',
 // "Thu 3:15 PM": a print in hold goes up to two days out.
 const dayClock = (t?: string | null) => t ? new Date(t).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : ''
 
+const sendLink = 'inline-flex items-center gap-1 text-sm font-medium text-[#4600D6] hover:underline underline-offset-2 disabled:opacity-50'
+
 /** An approved print on its way to production: queued (Hold), waiting on the order's other prints, or sent. */
 function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; onComplete?: () => void }) {
   const s = d.job?.send
@@ -158,6 +160,13 @@ function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; o
         <p className="text-xs text-off-black/60">
           {s.state === 'sent' ? 'Artelo has it as Received.' : s.state === 'waiting' ? 'Attached to its item in Artelo. The order goes to production once every print on it has its design.' : s.inHold ? 'Sends to Artelo automatically when the customer’s 48-hour change window ends.' : 'Attached to the Artelo order and sent. Hold it if something is wrong.'}
         </p>
+        {/* The less common moves, as links: Hold keeps it back, Back to review undoes an approval by mistake. */}
+        {(s.state === 'queued' || s.state === 'waiting') && d.canManage && (
+          <div className="mt-1.5 flex flex-wrap gap-x-5 gap-y-1">
+            {s.state === 'queued' && <button onClick={() => { void d.sendAction('hold') }} disabled={d.busy} className={sendLink}><Pause className="w-4 h-4" /> Hold</button>}
+            <button onClick={() => { void d.sendAction('back-to-review') }} disabled={d.busy} title="Undo the approval: the design goes back to waiting for review and nothing sends" className={`${sendLink} !text-off-black/60`}><Undo2 className="w-4 h-4" /> Back to review</button>
+          </div>
+        )}
       </div>
       {/* Send right away: skip the rest of the hold; the sender takes it within a minute. */}
       {s.state === 'queued' && d.canManage && (
@@ -171,17 +180,6 @@ function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; o
       {(s.state === 'waiting' || s.state === 'sent') && onComplete && (
         <button onClick={onComplete} className={`inline-flex items-center gap-1.5 px-4 ${pad} rounded-md bg-green-600 border-2 border-green-600 text-white font-semibold hover:bg-green-700`}>
           <Check className="w-4 h-4" /> {compact ? 'Complete' : 'Mark as complete'}
-        </button>
-      )}
-      {s.state === 'queued' && d.canManage && (
-        <button onClick={() => { void d.sendAction('hold') }} disabled={d.busy} className={`inline-flex items-center gap-1.5 px-4 ${pad} rounded-md bg-white border-2 border-[#4600D6]/30 text-[#4600D6] font-semibold hover:bg-[#4600D6]/[0.04] disabled:opacity-50`}>
-          {d.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pause className="w-4 h-4" />} Hold
-        </button>
-      )}
-      {/* Approved by mistake: undo it. The design waits for review again. */}
-      {(s.state === 'queued' || s.state === 'waiting') && d.canManage && (
-        <button onClick={() => { void d.sendAction('back-to-review') }} disabled={d.busy} title="Undo the approval: the design goes back to waiting for review and nothing sends" className={`inline-flex items-center gap-1.5 px-4 ${pad} rounded-md bg-white border-2 border-off-black/15 text-off-black font-semibold hover:bg-off-black/[0.04] disabled:opacity-50`}>
-          <Undo2 className="w-4 h-4" /> Back to review
         </button>
       )}
     </div>
@@ -274,46 +272,51 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
         </div>
       )
     }
+    // One card: what is going on, one main button, the rest as small links.
+    // Before 2026-11-14 this was up to four full-width buttons stacked.
+    const blocked = job.send?.state === 'blocked'
+    const canSend = d.canManage && d.autoSend && !manual
+    const tone = manual || blocked ? 'border-red-200 bg-red-50' : held || talking ? 'border-amber-200 bg-amber-50' : 'border-[#4600D6]/25 bg-[#4600D6]/[0.04]'
+    const ink = manual || blocked ? 'text-red-800' : held || talking ? 'text-amber-900' : 'text-[#4600D6]'
+    const title = manual ? 'Expedited: attached in Artelo, not sent yet'
+      : blocked ? 'Artelo would not take it'
+      : talking ? 'Support conversation open'
+      : held ? `Held${job.send?.by ? ` by ${job.send.by}` : ''}`
+      : 'Approved, not sent'
+    const body = manual ? 'Change the shipping to UPS Next Day Air Saver (under $40), then send it to production in Artelo. It completes here on its own.'
+      : blocked ? `${String(job.send?.reason || 'Artelo refused it').replace(/\.$/, '')}.${job.send?.next ? ' The tool tries again on its own.' : ' Sort it out in Artelo, then try again.'}`
+      : talking ? 'Held from production in case the customer is asking for a change. Closing the conversation releases it within 15 minutes.'
+      : held ? `${clock(job.send?.at)}. It stays approved until someone sends it.`
+      : 'The print is in the Artelo library. Send it to production, or attach it in Artelo by hand and mark it complete.'
+    const mainCls = `shrink-0 inline-flex items-center justify-center gap-2 px-5 py-3.5 text-base rounded-md font-semibold disabled:opacity-50 transition-colors`
+    const link = 'inline-flex items-center gap-1 text-sm font-medium text-[#4600D6] hover:underline underline-offset-2 disabled:opacity-50'
+    const artelo = (
+      <a href={arteloOrderUrl} target="_blank" rel="noopener noreferrer" onClick={openArtelo} className={manual || !canSend ? `${mainCls} bg-[#4600D6] text-white hover:opacity-90` : link}>
+        <img src="/artelo-icon.png" alt="" className={manual || !canSend ? 'w-5 h-5 rounded-[4px]' : 'w-4 h-4 rounded-[3px]'} /> {manual ? 'Expedite Shipping in Artelo' : 'Attach in Artelo'} <ArrowUpRight className="w-4 h-4 opacity-70" />
+      </a>
+    )
     return (
-      <div className="space-y-2">
-      {manual && (
-        <div className="rounded-md border-2 border-red-300 bg-red-50 px-3 py-2.5 text-[13px] leading-snug text-red-800">
-          <span className="font-semibold mr-1.5">Attached in Artelo, not sent yet.</span>
-          Change the shipping to UPS Next Day Air Saver (under $40), then send it to production in Artelo. It completes here on its own.
+      <div className={`rounded-md border px-4 py-3 ${tone}`}>
+        <div className="flex items-center gap-4">
+          <div className="flex-1 min-w-0">
+            <p className={`font-semibold ${ink}`}>{title}</p>
+            <p className={`text-sm ${ink} opacity-80`}>
+              {body}
+              {talking && job.send?.threadId && <> <a href={`/support?thread=${encodeURIComponent(job.send.threadId)}`} className="underline font-semibold">Open the conversation</a></>}
+            </p>
+          </div>
+          {canSend ? (
+            <button onClick={() => { void d.sendAction('send-now') }} disabled={d.busy} className={`${mainCls} bg-green-600 text-white hover:bg-green-700`}>
+              {d.busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} {blocked ? 'Try sending again' : talking ? 'Send anyway' : 'Send to production'}
+            </button>
+          ) : artelo}
         </div>
-      )}
-      {d.canManage && d.autoSend && !manual && (
-        <>
-          {held && <p className="text-xs text-amber-700">Held{job.send?.by ? ` by ${job.send.by}` : ''} {clock(job.send?.at)}. It stays approved until someone sends it.</p>}
-          {talking && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] leading-snug text-amber-900">
-              <span className="font-semibold mr-1.5">Support conversation open.</span>
-              Held from production in case the customer is asking for a change. Closing the conversation releases it within 15 minutes.
-              {job.send?.threadId && <> <a href={`/support?thread=${encodeURIComponent(job.send.threadId)}`} className="underline font-semibold">Open the conversation</a></>}
-            </div>
-          )}
-          <button onClick={() => { void d.sendAction('send-now') }} disabled={d.busy} className={`w-full inline-flex items-center justify-center gap-2 ${pad} rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors`}>
-            {d.busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} {job.send?.state === 'blocked' ? 'Try sending again' : talking ? 'Send anyway' : compact ? 'Send to production' : 'Skip hold period, send to production now'}
-          </button>
+        <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1">
+          {canSend && artelo}
+          {opened && onComplete && <button onClick={onComplete} className={link}><Check className="w-4 h-4" /> Mark as complete</button>}
           {/* Approved by mistake: undo it. The design waits for review again and nothing sends. */}
-          <button onClick={() => { void d.sendAction('back-to-review') }} disabled={d.busy} className={`w-full inline-flex items-center justify-center gap-2 ${pad} rounded-md bg-white border-2 border-off-black/15 text-off-black font-semibold hover:bg-off-black/[0.04] disabled:opacity-50 transition-colors`}>
-            <Undo2 className="w-5 h-5" /> {compact ? 'Back to review' : 'Send back to review'}
-          </button>
-        </>
-      )}
-      <div className={`grid gap-3 ${opened && onComplete ? (compact ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2') : 'grid-cols-1'}`}>
-        <a href={arteloOrderUrl} target="_blank" rel="noopener noreferrer" onClick={openArtelo}
-          className={`flex items-center justify-center gap-2 ${pad} rounded-md font-semibold transition-opacity ${opened ? 'bg-white border-2 border-[#4600D6]/30 text-[#4600D6] hover:bg-[#4600D6]/[0.04]' : 'bg-[#4600D6] text-white hover:opacity-90'}`}>
-          <img src="/artelo-icon.png" alt="" className="w-5 h-5 rounded-[4px]" /> {manual ? 'Expedite Shipping in Artelo' : compact && opened ? 'Attach' : 'Attach in Artelo'} <ArrowUpRight className="w-4 h-4 opacity-70" />
-          {!compact && <kbd className={`ml-1 inline-flex items-center px-1.5 py-0.5 rounded border text-[11px] font-medium opacity-70 font-sans ${opened ? 'border-[#4600D6]/30' : 'border-white/30'}`}>A</kbd>}
-        </a>
-        {opened && onComplete && (
-          <button onClick={onComplete} className={`inline-flex items-center justify-center gap-2 ${pad} rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors`}>
-            <Check className="w-5 h-5" /> {compact ? 'Complete' : 'Mark as complete'}
-            {!compact && <kbd className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded border border-white/30 text-[11px] font-medium opacity-70 font-sans">F</kbd>}
-          </button>
-        )}
-      </div>
+          {d.canManage && d.autoSend && <button onClick={() => { void d.sendAction('back-to-review') }} disabled={d.busy} className={`${link} !text-off-black/60`}><Undo2 className="w-4 h-4" /> Back to review</button>}
+        </div>
       </div>
     )
   }

@@ -211,8 +211,8 @@ const queueOf = (o: Order): 'review' | 'action' | 'waiting' | 'approved' | 'not_
   if (s === 'hold' || s === 'attach') return 'approved'
   return 'waiting'
 }
-// Action, grouped so the quick decisions sit above the digging.
-const ACTION_GROUPS = ['Quick decisions', 'Fix in the tool', 'Research', 'Artelo', 'Needs a designer or developer'] as const
+// Action, grouped so the quick ones sit above the digging. Artelo first: those are usually a minute in Artelo (Matt, 2026-11-14).
+const ACTION_GROUPS = ['Artelo', 'Quick decisions', 'Fix in the tool', 'Research', 'Needs a designer or developer'] as const
 const actionGroup = (o: Order): (typeof ACTION_GROUPS)[number] => {
   const r = o.pipeline?.reason || '', k = o.pipeline?.kind
   if (/^(Confirm weather|Confirm race date|Pick a match|Enter the time)$/.test(r)) return 'Quick decisions'
