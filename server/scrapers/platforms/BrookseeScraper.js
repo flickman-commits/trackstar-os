@@ -286,6 +286,36 @@ export class BrookseeScraper extends BaseScraper {
       })
     }
 
+    // Newer layout (Vermont City 2026, Nov 2026; Laurel read it first, 91fbc0d):
+    // one full-name link (<a class='individual name' href='...?pk=…'>Alex Hoss</a>)
+    // and the cells in another order (bib, name, chip time, pace, places, age,
+    // gun time). Each <tr class="result"> is read cell by cell by its class.
+    if (rows.length === 0) {
+      const clean = (s) => String(s || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+      for (const tr of html.split(/<tr class="result"/).slice(1)) {
+        const row = tr.split(/<\/tr>/)[0]
+        const name = row.match(/<a class=['"]individual name['"][^>]*>([\s\S]*?)<\/a>/)
+        if (!name) continue
+        const cell = (cls) => clean((row.match(new RegExp(`<td class="${cls}"[^>]*>([\\s\\S]*?)</td>`)) || [])[1])
+        const full = clean(name[1])
+        const sp = full.indexOf(' ')
+        rows.push({
+          participantId: (row.match(/individual name['"][^>]*href=['"][^'"]*[?&]pk=(\d+)/) || [])[1] || null,
+          overallPlace: cell('td_num placeoverall'),
+          genderPlace: cell('td_num placegender'),
+          divisionPlace: cell('td_num placediv'),
+          bib: cell('bib'),
+          firstName: sp > 0 ? full.slice(0, sp) : full,
+          lastName: sp > 0 ? full.slice(sp + 1) : '',
+          gender: cell('gender'),
+          age: cell('age td_num'),
+          chipTime: cell('chiptime td_num'),
+          pace: cell('td_num pace'),
+          gunTime: cell('td_num guntime'),
+        })
+      }
+    }
+
     if (rows.length === 0) {
       const single = this.parseParticipantPage(html)
       if (single) rows.push(single)
@@ -298,7 +328,8 @@ export class BrookseeScraper extends BaseScraper {
    * A search with exactly one hit skips the list and opens that runner's own
    * page (Eugene 2026 "Hickman" in the marathon: Matt Hickman #3726, 3:26:13,
    * 7:52/mi). It has no result table, so read its cards instead. The page
-   * prints no gun time; pace is time over the card's distance.
+   * prints no gun time; pace is the page's Pace card, or time over the card's
+   * distance when it has none.
    */
   parseParticipantPage(html) {
     const clean = (s) => String(s || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
@@ -313,7 +344,10 @@ export class BrookseeScraper extends BaseScraper {
     const parts = clean(head[1]).split(' ')
     const lastName = parts.length > 1 ? parts.pop() : ''
     const distance = parseFloat(card('Distance'))
-    const pace = distance > 0 ? this.calculatePace(chipTime, distance) : card('Pace \\(min/miles\\)')
+    // The page's own pace first: it cuts the seconds (Vermont City 2026
+    // Rauful Hossain, 3:30:27 is 8:01.9/mi and the page prints 8:01), so
+    // working it out rounds a second high. Time over distance only without it.
+    const pace = card('Pace \\(min/miles\\)') || (distance > 0 ? this.calculatePace(chipTime, distance) : '')
     const pk = (html.match(/name="_query" value="pk%3D(\d+)/) || [])[1] || null
     return {
       participantId: pk,

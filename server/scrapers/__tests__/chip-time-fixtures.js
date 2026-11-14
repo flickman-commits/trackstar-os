@@ -926,6 +926,28 @@ export const CHIP_TIME_FIXTURES = [
     expectedBib: '14672',
     notes: 'San Antonio 2025 Half Marathon - verifies the half distance. Chip 1:50:07, gun 2:09:20 (19 min gap). 6607s ÷ 13.1 = 504.4 → 8:24; page pace 8:24. https://results.laurelt.com/sat/results?pk=8510373',
   },
+  {
+    platform: 'brooksee',
+    race: 'Vermont City Marathon',
+    year: 2026,
+    runner: 'Alex Hoss',
+    expectedChipTime: '4:31:08',
+    expectedChipPace: '10:20',
+    expectedBib: '1665',
+    officialPage: { url: 'https://results.laurelt.com/ver/results?race=167930&event=Marathon&search=Hoss', shows: '4:31:08', readOn: '2026-11-14' },
+    notes: 'Vermont City 2026 Marathon (race 167930, pk=8889608), order 9630. The new list layout (one full-name link, bib first) that the Brooksee parser missed until 2026-11-14. "Hoss" lists two runners, so this reads the list. Chip 4:31:08, gun 4:33:57. 16268s / 26.2 = 620.9 -> 10:20.9; the page prints 10:20 (it cuts the seconds).',
+  },
+  {
+    platform: 'brooksee',
+    race: 'Vermont City Marathon',
+    year: 2026,
+    runner: 'Rauful Hossain',
+    expectedChipTime: '3:30:27',
+    expectedChipPace: '8:01',
+    expectedBib: '318',
+    officialPage: { url: 'https://results.laurelt.com/ver/results?pk=8867957', shows: '3:30:27', readOn: '2026-11-14' },
+    notes: 'Vermont City 2026 Marathon. "Hossain" has one hit, so the site opens the runner page (cards). 12627s / 26.2 = 481.9 -> 8:01.9; the page Pace card prints 8:01, which the scraper now reads instead of rounding its own to 8:02. Chip 3:30:27, gun 3:32:37.',
+  },
 
   // ── SVE Timing (Big Sur) ─────────────────────────────────────────────
   // SVE has no per-athlete splits; pace is computed. Picked for a wide
