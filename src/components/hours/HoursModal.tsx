@@ -171,7 +171,7 @@ function TeamHours({ onClose }: { onClose: () => void }) {
                       <span className="text-xs font-semibold text-off-black">{DAYS[i]} <span className="font-normal text-off-black/45">{dayLabel(d).replace(/^\w+ /, '')}</span></span>
                       <span className="text-xs tabular-nums text-off-black/60">{dayTotal ? minutesText(dayTotal) : ''}</span>
                     </div>
-                    {/* One card per person per day: their total and how many sessions, not every session. */}
+                    {/* One card per person per day: their total, then their name small underneath. */}
                     <div className="space-y-1 flex-1">
                       {shown.map(r => {
                         const mine = list.filter(e => e.uid === r.id)
@@ -181,8 +181,8 @@ function TeamHours({ onClose }: { onClose: () => void }) {
                         const notes = [...new Set(mine.map(e => e.note).filter(Boolean))].join(', ')
                         return (
                           <div key={r.id} className={`rounded border-l-2 ${TINTS[hue(r.id)]} px-1.5 py-1 text-xs`} title={notes ? `${r.name}: ${notes}` : r.name}>
-                            <span className="block font-semibold text-off-black">{r.name.split(' ')[0]}</span>
-                            <span className="block text-off-black/65"><b className="font-semibold text-off-black tabular-nums">{minutesText(minutes)}</b> across {mine.length} session{mine.length === 1 ? '' : 's'}</span>
+                            <span className="block font-semibold text-off-black tabular-nums">{minutesText(minutes)}</span>
+                            <span className="block text-[10px] text-off-black/55">{r.name.split(' ')[0]}</span>
                             {running && <span className="block text-red-600">Timer running</span>}
                           </div>
                         )
