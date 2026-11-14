@@ -110,13 +110,14 @@ function TeamHours({ onClose }: { onClose: () => void }) {
     if (!data) return []
     const byUser = new Map(data.timesheets.map(t => [t.userId, t]))
     const list = data.people.map(p => ({ id: p.id, name: fullName(p), sheet: byUser.get(p.id) || null }))
-    for (const t of data.timesheets) if (!list.some(r => r.id === t.userId)) list.push({ id: t.userId, name: fullName(t.user) || 'Someone', sheet: t })
+    // Only people who log hours: an admin testing the timer (Matt) is not on the team's week.
+    for (const t of data.timesheets) if (!list.some(r => r.id === t.userId) && t.user?.role !== 'admin') list.push({ id: t.userId, name: fullName(t.user) || 'Someone', sheet: t })
     return list.sort((a, b) => (b.sheet?.totalMinutes || 0) - (a.sheet?.totalMinutes || 0) || a.name.localeCompare(b.name))
   }, [data])
   const shown = rows.filter(r => !only || r.id === only)
   // Each person their own color, by their place in the list (a hash put Dani and Elí in the same lilac).
   const hue = (id: string) => Math.max(0, rows.findIndex(r => r.id === id)) % TINTS.length
-  const entries = shown.flatMap(r => (r.sheet?.entries || []).map(e => ({ ...e, who: r.name, hue: hue(r.id) })))
+  const entries = shown.flatMap(r => (r.sheet?.entries || []).map(e => ({ ...e, who: r.name, uid: r.id, hue: hue(r.id) })))
   const total = rows.reduce((s, r) => s + (r.sheet?.totalMinutes || 0), 0)
   const shownTotal = shown.reduce((s, r) => s + (r.sheet?.totalMinutes || 0), 0)
   const waiting = rows.filter(r => r.sheet?.status === 'submitted').length
@@ -141,6 +142,7 @@ function TeamHours({ onClose }: { onClose: () => void }) {
         {error && <p className="text-sm text-red-700">{error}</p>}
         {!data ? <p className="text-sm text-off-black/50">Loading…</p> : (
           <>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-off-black/45 -mb-2">Weekly summary</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               {rows.map(r => {
                 const on = only === r.id
@@ -169,14 +171,22 @@ function TeamHours({ onClose }: { onClose: () => void }) {
                       <span className="text-xs font-semibold text-off-black">{DAYS[i]} <span className="font-normal text-off-black/45">{dayLabel(d).replace(/^\w+ /, '')}</span></span>
                       <span className="text-xs tabular-nums text-off-black/60">{dayTotal ? minutesText(dayTotal) : ''}</span>
                     </div>
+                    {/* One card per person per day: their total and how many sessions, not every session. */}
                     <div className="space-y-1 flex-1">
-                      {list.map(e => (
-                        <div key={e.id} className={`rounded border-l-2 ${TINTS[e.hue]} px-1.5 py-1 text-xs`} title={`${e.who}${e.note ? `: ${e.note}` : ''}`}>
-                          <span className="font-semibold tabular-nums">{e.startedAt && !e.endedAt ? 'running' : minutesText(e.minutes)}</span>
-                          <span className="ml-1 text-off-black/70">{e.who.split(' ')[0]}</span>
-                          {e.note && <span className="block text-off-black/55 truncate">{e.note}</span>}
-                        </div>
-                      ))}
+                      {shown.map(r => {
+                        const mine = list.filter(e => e.uid === r.id)
+                        if (!mine.length) return null
+                        const minutes = mine.reduce((s, e) => s + (e.minutes || 0), 0)
+                        const running = mine.some(e => e.startedAt && !e.endedAt)
+                        const notes = [...new Set(mine.map(e => e.note).filter(Boolean))].join(', ')
+                        return (
+                          <div key={r.id} className={`rounded border-l-2 ${TINTS[hue(r.id)]} px-1.5 py-1 text-xs`} title={notes ? `${r.name}: ${notes}` : r.name}>
+                            <span className="block font-semibold text-off-black">{r.name.split(' ')[0]}</span>
+                            <span className="block text-off-black/65"><b className="font-semibold text-off-black tabular-nums">{minutesText(minutes)}</b> across {mine.length} session{mine.length === 1 ? '' : 's'}</span>
+                            {running && <span className="block text-red-600">Timer running</span>}
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 )

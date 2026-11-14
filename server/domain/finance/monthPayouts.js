@@ -57,7 +57,7 @@ export async function monthPayouts(month, { today = todayET() } = {}) {
     loadRules(),
     prisma.user.findMany({ where: { isActive: true, OR: [{ role: 'head_designer' }, { extraRoles: { has: 'head_designer' } }] }, select: { id: true, firstName: true, lastName: true } }),
     prisma.payoutLine.findMany({ where: { OR: prefixes.map(p => ({ sourceRef: { startsWith: p } })) }, select: { id: true, sourceRef: true, amountCents: true, paidAt: true } }),
-    prisma.timesheet.findMany({ where: { weekStart: { gte: first, lte: last } }, include: { user: { select: { id: true, firstName: true, lastName: true, hourlyRateCents: true } }, entries: { select: { minutes: true, day: true, startedAt: true, endedAt: true } } }, orderBy: { weekStart: 'asc' } }),
+    prisma.timesheet.findMany({ where: { weekStart: { gte: first, lte: last } }, include: { user: { select: { id: true, firstName: true, lastName: true, role: true, hourlyRateCents: true } }, entries: { select: { minutes: true, day: true, startedAt: true, endedAt: true } } }, orderBy: { weekStart: 'asc' } }),
   ])
   const approvedBy = new Map(approvedLines.map(l => [l.sourceRef, l]))
   const stateFor = ref => (approvedBy.has(ref) ? 'approved' : closed ? 'submitted' : 'in_progress')
@@ -88,6 +88,7 @@ export async function monthPayouts(month, { today = todayET() } = {}) {
   }
 
   for (const t of sheets) {
+    if (t.user?.role === 'admin') continue // an admin testing the timer (Matt is not hourly) is never a payout line
     const minutes = summarizeEntries(t.entries).totalMinutes
     if (!minutes && t.status === 'draft') continue
     const rate = t.hourlyRateCents ?? t.user.hourlyRateCents ?? null

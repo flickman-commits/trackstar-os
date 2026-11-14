@@ -220,7 +220,8 @@ export async function listTimesheets({ status = null, userId = null, weekStart =
   if (status && status !== 'all') where.status = status
   if (userId) where.userId = userId
   const rows = await prisma.timesheet.findMany({ where, include: { user: { select: { id: true, firstName: true, lastName: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true, hourlyRateCents: true } }, entries: { select: ENTRY_SELECT, orderBy: [{ day: 'asc' }, { createdAt: 'asc' }] } }, orderBy: [{ weekStart: 'desc' }, { createdAt: 'asc' }], take: Math.min(500, Math.max(1, limit)) })
-  return rows.filter(r => r.status !== 'draft' || r.entries.length).map(r => ({ ...shape(r, r.user), rateNow: r.user.hourlyRateCents }))
+  // An admin's own minutes are tests (Matt is not hourly): never on the team's sheets.
+  return rows.filter(r => r.user?.role !== 'admin').filter(r => r.status !== 'draft' || r.entries.length).map(r => ({ ...shape(r, r.user), rateNow: r.user.hourlyRateCents }))
 }
 
 /** Everyone whose role includes hours (for the admin's filters and the reminders). */
