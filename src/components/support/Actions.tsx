@@ -114,15 +114,51 @@ const blankAddress = (thread: ThreadDetail): Address => ({ name: thread.customer
 
 type FormProps = { o: CustomerOrder; thread: ThreadDetail; onDone: () => void; onCancel: () => void }
 
+type Saved = { pasted: string; arteloUrl: string | null; taxNote?: string | null; owedCents?: number; address?: Address }
+
+/**
+ * After a support address change that added sales tax: Shopify's invoice for
+ * the difference, with a message the teammate can edit first. Artelo will not
+ * take the order until the balance is paid (or marked paid in Shopify).
+ */
+function TaxInvoice({ o, thread, cents, address }: { o: CustomerOrder; thread: ThreadDetail; cents: number; address?: Address }) {
+  const first = (thread.customerName || '').trim().split(/\s+/)[0]
+  const where = [address?.city, address?.province].filter(Boolean).join(', ')
+  const [message, setMessage] = useState(
+    `${first ? `Hi ${first}, ` : 'Hi, '}we've updated the shipping address on order #${o.number}${where ? ` to ${where}` : ''}. ` +
+    `Shipping to the new address adds ${usd(cents)} in sales tax, so here's an invoice for the difference. ` +
+    `As soon as it's paid, your print goes into production. Thanks!`)
+  const [busy, setBusy] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [pressKey] = useState(newIdempotencyKey)
+  const send = async () => {
+    setBusy(true)
+    try {
+      await supportApi.action('sendBalanceInvoice', { id: thread.id, shopifyOrderId: o.shopifyOrderId, message, idempotencyKey: pressKey })
+      setSent(true)
+      toast.success(`Invoice for ${usd(cents)} sent on #${o.number}`)
+    } catch (e) { toast.error((e as Error).message) }
+    finally { setBusy(false) }
+  }
+  if (sent) return <Done title="Invoice sent">Shopify emailed them the invoice for {usd(cents)}. The order goes to production once it is paid.</Done>
+  return (
+    <div className="space-y-2">
+      <label className={fieldLabel}>Message on the invoice</label>
+      <textarea value={message} onChange={e => setMessage(e.target.value.slice(0, 1000))} rows={4} className={`${modalInput} resize-none`} />
+      <button onClick={send} disabled={busy || !message.trim()} className={modalPrimary}>{busy && <Spin />}Send invoice for {usd(cents)}</button>
+    </div>
+  )
+}
+
 /** The ship-to form, prefilled from Shopify (or Artelo's copy), then the hand-off to Artelo. */
 function AddressForm({ o, thread, onDone, onCancel }: FormProps) {
   const [a, setA] = useState<Address>(o.shipTo || o.arteloAddress || blankAddress(thread))
   const [busy, setBusy] = useState(false)
-  const [saved, setSaved] = useState<{ pasted: string; arteloUrl: string | null; taxNote?: string | null } | null>(null)
+  const [saved, setSaved] = useState<Saved | null>(null)
   const save = async () => {
     setBusy(true)
     try {
-      const out = await supportApi.action<{ pasted: string; arteloUrl: string | null; taxNote?: string | null }>('shippingAddress', { id: thread.id, shopifyOrderId: o.shopifyOrderId, address: a })
+      const out = await supportApi.action<Saved>('shippingAddress', { id: thread.id, shopifyOrderId: o.shopifyOrderId, address: a })
       try { await navigator.clipboard.writeText(out.pasted) } catch { /* the button below copies too */ }
       setSaved(out)
       toast.success(`#${o.number} updated in Shopify. Address copied for Artelo.`)
@@ -138,6 +174,7 @@ function AddressForm({ o, thread, onDone, onCancel }: FormProps) {
         <pre className={`${note} whitespace-pre-wrap font-sans`}>{saved.pasted}</pre>
         <button onClick={() => { navigator.clipboard.writeText(saved.pasted).then(() => toast.success('Copied')).catch(() => {}) }} className={modalLink}><Copy className="w-4 h-4" />Copy again</button>
         {saved.taxNote && <div className={warn}>{saved.taxNote}</div>}
+        {(saved.owedCents || 0) > 0 && <TaxInvoice o={o} thread={thread} cents={saved.owedCents || 0} address={saved.address} />}
       </ActionModal>
     )
   }

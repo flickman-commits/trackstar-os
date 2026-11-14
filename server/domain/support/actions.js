@@ -277,7 +277,7 @@ export async function shippingAddress({ thread, shopifyOrderId, address, actor, 
   const taxNote = !owedCents ? null
     : invoiced ? `Shopify recalculated tax for the new address: the customer owes ${money(owedCents)} more, agreed to it, and Shopify emailed them the invoice.`
     : invoiceFailed ? `Shopify recalculated tax for the new address: the customer owes ${money(owedCents)} more and agreed to it, but sending Shopify's invoice failed. Send it from the Shopify order.`
-    : owedCents > 0 ? `Shopify recalculated tax for the new address: the customer now owes ${money(owedCents)}. Decide whether to let it go or ask for it.`
+    : owedCents > 0 ? `Shopify recalculated tax for the new address: the customer now owes ${money(owedCents)}, and Artelo will not send it to production until the order is paid. Send them the invoice for it, or mark it paid in Shopify to let it go.`
     : `Shopify recalculated tax for the new address: the customer is owed ${money(-owedCents)}. Refund it from Refund below.`
 
   const ours = { name: a.name, line1: a.address1, line2: a.address2, city: a.city, state: a.province, zip: a.zip, country: a.country, phone: a.phone }
@@ -287,11 +287,39 @@ export async function shippingAddress({ thread, shopifyOrderId, address, actor, 
     await prisma.order.updateMany({ where: { id: { in: rows.map(r => r.id) } }, data: { shippingAddress: ours } })
     const comment = source === 'customer'
       ? `The customer changed the ship-to from their confirmation email to: ${pasted.replace(/\n/g, ', ')}.${taxNote ? ` ${taxNote}` : ''}`
-      : `Ship-to changed by support to: ${pasted.replace(/\n/g, ', ')}. Change it in Artelo too.`
+      : `Ship-to changed by support to: ${pasted.replace(/\n/g, ', ')}. Change it in Artelo too.${taxNote ? ` ${taxNote}` : ''}`
     await prisma.orderComment.createMany({ data: rows.map(r => ({ orderId: r.id, text: comment, authorId: actor?.id || null, authorName: source === 'customer' ? 'Customer' : actorName(actor) })) })
   }
   if (thread) await event(thread.id, `${actorName(actor)} changed #${number}'s ship-to in Shopify to ${pasted.replace(/\n/g, ', ')}. Artelo still needs it.${taxNote ? ` ${taxNote}` : ''}`, actor)
   return { number, address: a, pasted, taxNote, owedCents, invoiced, arteloUrl: arteloOrderUrl(rows[0]?.arteloOrderData?.id) || null }
+}
+
+/**
+ * Shopify's invoice for what is still owed on an order (the extra sales tax
+ * after a support address change), with the teammate's message in it.
+ * Shopify emails it to the order's customer; paying it clears the balance
+ * that keeps Artelo from taking the order.
+ */
+export async function sendBalanceInvoice({ thread, shopifyOrderId, message, actor }) {
+  const id = String(shopifyOrderId || '').trim()
+  if (!/^\d+$/.test(id)) throw new UserError('That order has no Shopify id')
+  const gid = `gid://shopify/Order/${id}`
+  const o = (await shopifyGraphQL(ORDER_BALANCE, { id: gid }, { version: ADDRESS_VERSION }))?.order
+  if (!o) throw new UserError('Shopify has no such order')
+  const owedCents = toCents(o.totalOutstandingSet.shopMoney.amount)
+  if (owedCents <= 0) throw new UserError('Nothing is owed on that order now')
+  if (owedCents > REFUND_LIMIT_CENTS) throw new UserError(`The order owes ${money(owedCents)}, more than an invoice from here should cover. Ask Matt.`)
+  const text = String(message || '').trim().slice(0, 2000)
+  const sent = await shopifyGraphQL(`mutation($id: ID!, $email: EmailInput) { orderInvoiceSend(id: $id, email: $email) { order { id } userErrors { field message } } }`,
+    { id: gid, email: text ? { customMessage: text } : null }, { version: ADDRESS_VERSION })
+  const errs = sent?.orderInvoiceSend?.userErrors || []
+  if (errs.length) throw new UserError(`Shopify would not send the invoice: ${errs.map(e => e.message).join('; ')}`)
+  const number = String(o.name || id).replace(/^#/, '')
+  const rows = await prisma.order.findMany({ where: { source: 'shopify', parentOrderNumber: id }, select: { id: true } })
+  const note = `${actorName(actor)} sent Shopify's invoice for the ${money(owedCents)} still owed. Artelo takes the order once it is paid.`
+  if (rows.length) await prisma.orderComment.createMany({ data: rows.map(r => ({ orderId: r.id, text: note, authorId: actor?.id || null, authorName: actorName(actor) })) })
+  if (thread) await event(thread.id, `${actorName(actor)} sent #${number} an invoice for the ${money(owedCents)} still owed.`, actor)
+  return { number, owedCents }
 }
 
 // ---------------------------------------------------------------------------
