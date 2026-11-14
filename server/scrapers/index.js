@@ -532,6 +532,11 @@ export function onlyEventFor(raceName) {
   return types.length === 1 ? types[0] : null
 }
 
+/** Every event the race's config lists (["Marathon", "Half Marathon"]), or [] with no config. */
+export function eventTypesFor(raceName) {
+  return findConfigForRace(raceName)?.eventTypes || []
+}
+
 /** The race's main event as its config lists it ("Marathon", "Half Marathon"), or null with no config. */
 export function mainEventFor(raceName) {
   return findConfigForRace(raceName)?.eventTypes?.[0] || null

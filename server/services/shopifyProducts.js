@@ -541,7 +541,7 @@ export async function syncProductCatalog() {
   try {
     const { syncListingDistances } = await import('../domain/catalog/distanceSync.js')
     const r = await syncListingDistances()
-    distances = { changed: r.changed.length, listings: r.changed.map(c => c.handle) }
+    distances = { changed: r.changed.length, listings: [...new Set(r.changed.map(c => c.handle))] }
   } catch (error) {
     console.error('[catalog] distances sync failed:', error)
     distances = { error: 'Distances were not synced; see the logs' }

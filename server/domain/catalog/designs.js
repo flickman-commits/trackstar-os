@@ -12,16 +12,22 @@
  *   - listingDistances(title, keys): the labels for a listing, e.g.
  *     ["Full Marathon", "Half Marathon"]. Written to the product's
  *     trackstar.distances metafield by the catalog sync, for Liquid.
+ *   - listingPills(title, keys): the short tags shown on a race card and
+ *     listing page ("Full", "Half", "8K"), written to trackstar.distance_pills.
+ *     Empty for a race with one event (New York City): a tag there says
+ *     nothing. A race that runs a half we have not drawn (Houston) keeps its
+ *     lone "Full", because that is exactly what a half runner needs to see.
  *   - hasDesignFor(title, eventType, keys): does the design for the event a
  *     runner ran exist? Uses resolveTemplate, the same call the pipeline
  *     makes, so the wizard and the Action queue cannot disagree.
  */
 import { parseRaceNameFromTitle } from '../../scrapers/raceNameNormalization.js'
-import { getCanonicalRaceName, mainEventFor } from '../../scrapers/index.js'
+import { getCanonicalRaceName, mainEventFor, eventTypesFor } from '../../scrapers/index.js'
 import { resolveTemplate, eventLabel } from '../render/spec.js'
 
 export const DISTANCES_NAMESPACE = 'trackstar'
 export const DISTANCES_KEY = 'distances'
+export const PILLS_KEY = 'distance_pills'
 
 const isWorldMajors = title => /world\s*major/i.test(String(title || ''))
 // Parts of a template key that name a design variant, not a distance.
@@ -81,6 +87,17 @@ export function listingDistances(title, keys) {
     if (label) out.add(label)
   }
   return [...out].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b, undefined, { numeric: true }))
+}
+
+/** The tag for a distance: "Full Marathon" is "Full", "Half Marathon" is "Half". */
+export const pillLabel = label => String(label).replace(/\s+Marathon$/i, '')
+
+/** The tags a listing shows, or none when the race has a single event. */
+export function listingPills(title, keys) {
+  const distances = listingDistances(title, keys)
+  if (!distances.length) return []
+  const several = distances.length > 1 || eventTypesFor(listingRace(title).canonical).length > 1
+  return several ? distances.map(pillLabel) : []
 }
 
 /**

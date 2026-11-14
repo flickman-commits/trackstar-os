@@ -1,8 +1,10 @@
 /**
  * Publishes each listing's distances to Shopify, so the storefront can show
- * them without calling us: the trackstar.distances product metafield, a list
- * like ["Full Marathon", "Half Marathon"], read by the theme for the pills on
- * race cards and on the listing page.
+ * them without calling us. Two product metafields, both lists:
+ *   trackstar.distances       ["Full Marathon", "Half Marathon"]: every design
+ *                             the listing has. The wizard reads it.
+ *   trackstar.distance_pills  ["Full", "Half"]: the tags on race cards and the
+ *                             listing page. Empty for a one-event race.
  *
  * The design list decides (designs.js); this only writes what changed. Runs
  * with the catalog sync (nightly, and the sync_catalog tool), so a design
@@ -11,7 +13,7 @@
  */
 import prisma from '../../db.js'
 import { shopifyGraphql } from '../../services/shopifyProducts.js'
-import { listingDistances, DISTANCES_NAMESPACE, DISTANCES_KEY } from './designs.js'
+import { listingDistances, listingPills, DISTANCES_NAMESPACE, DISTANCES_KEY, PILLS_KEY } from './designs.js'
 
 /** Template keys the pipeline can render from: enabled, and the last check passed. */
 export async function readyTemplateKeys() {
@@ -32,7 +34,11 @@ const LISTINGS_QUERY = `
   query Listings($cursor: String) {
     products(first: 100, after: $cursor) {
       pageInfo { hasNextPage endCursor }
-      nodes { id handle title status distances: metafield(namespace: "${DISTANCES_NAMESPACE}", key: "${DISTANCES_KEY}") { value } }
+      nodes {
+        id handle title status
+        distances: metafield(namespace: "${DISTANCES_NAMESPACE}", key: "${DISTANCES_KEY}") { value }
+        pills: metafield(namespace: "${DISTANCES_NAMESPACE}", key: "${PILLS_KEY}") { value }
+      }
     }
   }
 `
@@ -43,7 +49,7 @@ function parseList(value) {
 
 /**
  * Bring every listing's distances metafield in line with the design list.
- * @returns {{ checked: number, changed: Array<{ handle: string, from: string[], to: string[] }> }}
+ * @returns {{ checked: number, changed: Array<{ handle: string, key: string, from: string[], to: string[] }> }}
  */
 export async function syncListingDistances({ dryRun = false } = {}) {
   const keys = await readyTemplateKeys()
@@ -61,16 +67,20 @@ export async function syncListingDistances({ dryRun = false } = {}) {
 
   const changed = []
   for (const p of listings) {
-    const from = parseList(p.distances?.value)
-    const to = p.status === 'ARCHIVED' ? from : listingDistances(p.title, keys)
-    if (JSON.stringify(from) !== JSON.stringify(to)) changed.push({ id: p.id, handle: p.handle, from, to })
+    if (p.status === 'ARCHIVED') continue
+    for (const [key, from, to] of [
+      [DISTANCES_KEY, parseList(p.distances?.value), listingDistances(p.title, keys)],
+      [PILLS_KEY, parseList(p.pills?.value), listingPills(p.title, keys)],
+    ]) {
+      if (JSON.stringify(from) !== JSON.stringify(to)) changed.push({ id: p.id, handle: p.handle, key, from, to })
+    }
   }
 
   if (!dryRun) {
     const sets = changed.filter(c => c.to.length)
     for (let i = 0; i < sets.length; i += 25) {
       const data = await shopifyGraphql(`mutation($metafields: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $metafields) { userErrors { field message } } }`, {
-        metafields: sets.slice(i, i + 25).map(c => ({ ownerId: c.id, namespace: DISTANCES_NAMESPACE, key: DISTANCES_KEY, type: 'list.single_line_text_field', value: JSON.stringify(c.to) })),
+        metafields: sets.slice(i, i + 25).map(c => ({ ownerId: c.id, namespace: DISTANCES_NAMESPACE, key: c.key, type: 'list.single_line_text_field', value: JSON.stringify(c.to) })),
       })
       const errors = data.metafieldsSet.userErrors
       if (errors.length) throw new Error(`Shopify would not save distances: ${errors.map(e => e.message).join('; ')}`)
@@ -79,11 +89,11 @@ export async function syncListingDistances({ dryRun = false } = {}) {
     const clears = changed.filter(c => !c.to.length)
     for (let i = 0; i < clears.length; i += 25) {
       const data = await shopifyGraphql(`mutation($metafields: [MetafieldIdentifierInput!]!) { metafieldsDelete(metafields: $metafields) { userErrors { field message } } }`, {
-        metafields: clears.slice(i, i + 25).map(c => ({ ownerId: c.id, namespace: DISTANCES_NAMESPACE, key: DISTANCES_KEY })),
+        metafields: clears.slice(i, i + 25).map(c => ({ ownerId: c.id, namespace: DISTANCES_NAMESPACE, key: c.key })),
       })
       const errors = data.metafieldsDelete.userErrors
       if (errors.length) throw new Error(`Shopify would not clear distances: ${errors.map(e => e.message).join('; ')}`)
     }
   }
-  return { checked: listings.length, changed: changed.map(({ handle, from, to }) => ({ handle, from, to })) }
+  return { checked: listings.length, changed: changed.map(({ handle, key, from, to }) => ({ handle, key, from, to })) }
 }

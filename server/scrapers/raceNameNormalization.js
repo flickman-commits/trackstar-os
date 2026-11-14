@@ -32,6 +32,12 @@ const RACE_NAME_ALIASES = {
   NYC: 'NYC Marathon',
   Philadelphia: 'Philadelphia Marathon',
   Philly: 'Philadelphia Marathon',
+
+  // The other majors' listings drop "Marathon" too (licensing), 2026-11.
+  Berlin: 'Berlin Marathon',
+  London: 'London Marathon',
+  Tokyo: 'Tokyo Marathon',
+  Sydney: 'Sydney Marathon',
 }
 
 /*

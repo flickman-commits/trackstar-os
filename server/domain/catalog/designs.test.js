@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { listingDistances, hasDesignFor, distanceLabel } from './designs.js'
+import { listingDistances, listingPills, listingRace, hasDesignFor, distanceLabel } from './designs.js'
 
 const KEYS = new Set([
   'Eugene Marathon', 'Eugene Marathon / Half Marathon',
@@ -47,4 +47,19 @@ test('labels', () => {
   assert.equal(distanceLabel('Motor City Half Marathon'), 'Half Marathon')
   assert.equal(distanceLabel('8k'), '8K')
   assert.equal(distanceLabel('10 Mile'), '10 Miler')
+})
+
+test('pills are short, and a one-event race has none', () => {
+  assert.deepEqual(listingPills('Eugene Marathon Personalized Race Print', KEYS), ['Full', 'Half'])
+  assert.deepEqual(listingPills('Philadelphia Personalized Race Print', KEYS), ['Full', 'Half', '8K'])
+  assert.deepEqual(listingPills('New York City Personalized Race Print', KEYS), [])
+  assert.deepEqual(listingPills('Army Ten Miler Personalized Race Print', KEYS), [])
+  // Houston runs a half we have no design for: the lone tag is the warning.
+  assert.deepEqual(listingPills('Houston Marathon Personalized Race Print', KEYS), ['Full'])
+})
+
+test('majors listings without the word Marathon still resolve', () => {
+  for (const city of ['Berlin', 'London', 'Tokyo', 'Sydney', 'Boston', 'Chicago']) {
+    assert.equal(listingRace(`${city} Personalized Race Print`).canonical, listingRace(`${city} Marathon Personalized Race Print`).canonical)
+  }
 })
