@@ -32,8 +32,8 @@ export interface EmailCustomerOrder {
 
 const ASK = '[what we need]'
 // Each chip writes the whole email for that one ask; picking another replaces it.
-type Pick = 'bib' | 'name' | 'time' | 'race' | 'mockup' | 'address' | 'hof'
-const ASKS: { id: Exclude<Pick, 'mockup' | 'address' | 'hof'>; label: string; text: string }[] = [
+type Pick = 'bib' | 'name' | 'time' | 'race' | 'mockup' | 'address' | 'photo' | 'hof'
+const ASKS: { id: Exclude<Pick, 'mockup' | 'address' | 'photo' | 'hof'>; label: string; text: string }[] = [
   { id: 'bib', label: 'Bib number', text: 'The bib number (it\'s on the race app or confirmation email)' },
   { id: 'name', label: 'Last name', text: 'The full name they registered under, exactly as it shows in the results' },
   { id: 'time', label: 'Finish time', text: 'The official finish time' },
@@ -85,6 +85,17 @@ Here's the design for ${forWhat} (attached). Does everything look right?
 Reply "looks good" and we'll print it, or tell us what to change.
 
 ${bye}`
+  // The photo they uploaded is too small or blurry to print well (Eli, 2026-11-15).
+  // Three days to send a better one, then it prints with the photo we have.
+  if (pick === 'photo') return `${hi}
+
+We're getting ${forWhat} ready, and the photo you uploaded is too low resolution to print sharply at full size.
+
+**Could you reply with a higher-quality version?** The original from your phone or the race photographer works best (not a screenshot or a photo sent through a text or social app).
+
+If we don't hear back within 3 days, we'll go ahead and print with the photo we have.
+
+${bye}`
   if (pick === 'address') return `${hi}
 
 Our shipping partner couldn't verify the address for ${forWhat}:
@@ -112,7 +123,7 @@ export type EmailPreset = { subject: string; text: string }
 
 export default function EmailCustomerModal({ order, repName, onClose, preset }: { order: EmailCustomerOrder; repName: string; onClose: () => void; preset?: EmailPreset | null }) {
   const number = String(order.displayNumber).replace(/^#/, '')
-  const subjects = { ask: `Trackstar Order ${number} (Action Required)`, mockup: `Trackstar Order ${number} (Please Approve Your Design)`, address: `Trackstar Order ${number} (Please Confirm Your Address)`, hof: 'Trackstar Hall of Fame' }
+  const subjects = { ask: `Trackstar Order ${number} (Action Required)`, mockup: `Trackstar Order ${number} (Please Approve Your Design)`, address: `Trackstar Order ${number} (Please Confirm Your Address)`, photo: `Trackstar Order ${number} (A Better Photo, Please)`, hof: 'Trackstar Hall of Fame' }
   const rep = repName || 'The team'
   const [subject, setSubject] = useState(preset?.subject || subjects.ask)
   const [pick, setPick] = useState<Pick | null>(null)
@@ -163,7 +174,7 @@ export default function EmailCustomerModal({ order, repName, onClose, preset }: 
     if (text !== template(order, rep, pick, shipTo, card?.code) && !arm(`replace:${next}`)) return
     setPick(next)
     setText(template(order, rep, next, shipTo, card?.code))
-    if (Object.values(subjects).includes(subject)) setSubject(next === 'mockup' || next === 'address' || next === 'hof' ? subjects[next] : subjects.ask)
+    if (Object.values(subjects).includes(subject)) setSubject(next === 'mockup' || next === 'address' || next === 'photo' || next === 'hof' ? subjects[next] : subjects.ask)
     box.current?.focus()
   }
   // Makes the $50 card in Shopify (or returns the one already made) and puts its code in the email.
@@ -223,10 +234,12 @@ export default function EmailCustomerModal({ order, repName, onClose, preset }: 
                 title={mockup ? `Attach ${mockup.label} for them to approve, and hold the print until they do` : 'Attach a mockup you made for them to approve'}>Approve mockup</button>
               <button onClick={() => choose('address')} className={modalChip(pick === 'address')}
                 title="Ask them to confirm the ship-to when Artelo says the address does not exist">Confirm address</button>
+              <button onClick={() => choose('photo')} className={modalChip(pick === 'photo')}
+                title="Their photo is too low quality to print: ask for a better one within 3 days">Better photo</button>
               <button onClick={() => choose('hof')} className={modalChip(pick === 'hof')}
                 title="They made the Trackstar Hall of Fame: a $50 gift card and a note from Matt">Hall of Fame</button>
             </div>
-            {[...ASKS.map(a => a.id), 'mockup' as Pick, 'address' as Pick, 'hof' as Pick].some(id => isArmed(`replace:${id}`)) && <p className="mt-2 text-amber-700">Click it again to replace what you wrote with the template.</p>}
+            {[...ASKS.map(a => a.id), 'mockup' as Pick, 'address' as Pick, 'photo' as Pick, 'hof' as Pick].some(id => isArmed(`replace:${id}`)) && <p className="mt-2 text-amber-700">Click it again to replace what you wrote with the template.</p>}
           </div>
           <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,application/pdf" className="hidden" onChange={e => attachOwn(e.target.files?.[0])} />
           {pick === 'hof' && (

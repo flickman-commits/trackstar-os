@@ -656,7 +656,7 @@ export default function Dashboard() {
   // A double click or F pressed twice used to send two completions.
   const completingRef = useRef<string | null>(null)
   const markAsCompleted = async (orderNumber: string) => {
-    if (completingRef.current === orderNumber) return
+    if (completingRef.current === orderNumber) return false
     completingRef.current = orderNumber
     try {
       const response = await apiFetch(`/api/orders/actions`, {
@@ -680,12 +680,14 @@ export default function Dashboard() {
       setSelectedOrder(prev => prev && prev.orderNumber === orderNumber ? { ...prev, status: 'completed' } : prev)
       setOrders(prev => prev.map(o => o.orderNumber === orderNumber ? { ...o, status: 'completed' } : o))
       await fetchOrders()
+      return true
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error completing order:', error)
       setToast({
         message: error instanceof Error ? error.message : 'Failed to complete order',
         type: 'error',
       })
+      return false
     } finally {
       completingRef.current = null
     }

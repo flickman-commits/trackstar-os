@@ -3,7 +3,7 @@ import DesignStatusPicker from '@/components/orders/DesignStatusPicker'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, CalendarClock, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff, Ruler, Flag } from 'lucide-react'
+import { Plus, CalendarClock, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff, Ruler, Flag, CheckCircle2 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { shrinkImage } from '@/lib/shrinkImage'
@@ -87,7 +87,7 @@ export interface OrderDetailProps {
     fetchOrders: () => Promise<void>
     loadTeam: () => void
     setToast: Dispatch<SetStateAction<ToastMessage | null>>
-    markAsCompleted: (orderNumber: string) => Promise<void>
+    markAsCompleted: (orderNumber: string) => Promise<boolean>
     assignOrder: (orderId: string, assigneeId: string | null) => Promise<void>
     /** Open the "Email customer" modal for this order, with a message already written if given. */
     emailCustomer: (order: Order, preset?: { subject: string; text: string } | null) => void
@@ -2342,6 +2342,19 @@ Thank you!`
                     {design.canManage && selectedOrder.status !== 'completed' && !isEditing && selectedOrder.trackstarOrderType !== 'bulk' && (
                       <button onClick={() => setConverting(true)} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2" title="The runner ran a race we do not carry: make this print a custom design. Shopify is not changed.">
                         <Shuffle className="w-3.5 h-3.5" /> Convert to custom order
+                      </button>
+                    )}
+                    {/* Close by hand, whatever stage it is at: a reopened order whose
+                        replacement went out from Artelo or Support has no design step
+                        left to finish it (Eli, 2026-11-15). Logged on the order. */}
+                    {selectedOrder.status !== 'completed' && !isEditing && selectedOrder.trackstarOrderType !== 'bulk' && (
+                      <button onClick={async () => {
+                          if (!(await confirm({ title: 'Close this order?', body: 'It is marked complete as it is, without sending anything to Artelo. Use it when the print, or its replacement, was handled outside the tool.', action: 'Close order' }))) return
+                          const number = selectedOrder.orderNumber, id = selectedOrder.id
+                          if (!(await markAsCompleted(number))) return
+                          apiFetch('/api/orders/comments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: id, text: `Closed by hand${user?.firstName ? ` by ${user.firstName}` : ''}.` }) }).catch(() => {})
+                        }} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2" title="Mark it complete as it is, without sending anything to Artelo">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Close order
                       </button>
                     )}
                     {selectedOrder.customerEmail && can('support') && !isEditing && selectedOrder.trackstarOrderType !== 'bulk' && (

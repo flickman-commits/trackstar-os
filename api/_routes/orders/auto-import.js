@@ -25,6 +25,7 @@ import { uploadPending } from '../../../server/domain/render/artelo.js'
 import { refreshUnpaidPhotoOrders } from '../../../server/domain/orders/photoRefresh.js'
 import { runPhotoLater } from '../../../server/domain/orders/photoLater.js'
 import { checkStorageUploads } from '../../../server/lib/storageHealth.js'
+import { watchHallOfFame } from '../../../server/domain/orders/hallOfFameWatch.js'
 
 export default async function handler(req, res) {
   if (!isCronRequest(req)) return res.status(401).json({ error: 'Unauthorized' })
@@ -94,6 +95,9 @@ export default async function handler(req, res) {
       // Bulk runs paid through Shopify: link or create their runs, mark paid.
       const bulk = await within('bulk sync', () => syncShopifyBulkOrders())
       if (bulk && (bulk.created || bulk.linked || bulk.paid)) console.log(`[orders.auto-import] bulk: ${bulk.created} created, ${bulk.linked} linked, ${bulk.paid} paid`)
+      // A new official marathon time that would crack the Hall of Fame: flagged once.
+      const hof = await within('Hall of Fame watch', () => watchHallOfFame())
+      if (hof?.flagged) console.log(`[orders.auto-import] Hall of Fame candidates flagged: ${hof.flagged}`)
       return imported
     })
     await storageCheck
