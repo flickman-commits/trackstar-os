@@ -18,6 +18,7 @@ import { shopifyGraphQL } from '../../services/shopifyAuth.js'
 import { slackTo, slackLink, slackText } from '../../lib/slack.js'
 import { orderAppUrl } from '../../lib/links.js'
 
+const ELI_SLACK_ID = 'U09UVEP1N3Y'
 const FLAG = orderId => `hall_of_fame_flag:${orderId}`
 const BOARD = `{ metaobjects(type: "hall_of_fame_athlete", first: 50) { nodes { fields { key value } } } }`
 // Results found from the day this started. Older ones were checked by hand
@@ -99,7 +100,8 @@ export async function watchHallOfFame({ limit = 200 } = {}) {
     const ref = `${String(order.shopifyOrderData?.name || order.parentOrderNumber).replace(/^#/, '')}${order.lineItemIndex ? `-${order.lineItemIndex + 1}` : ''}`
     const text = `Possible Hall of Fame: ${r.officialTime} official marathon time${either}. Check the runner and the result; if it holds, send the $50 card from Email customer > Hall of Fame and add them to the Hall of Fame on the site.`
     await prisma.orderComment.create({ data: { orderId: order.id, text, authorName: 'Trackstar' } })
-    await slackTo('alerts', `🏆 *Possible Hall of Fame:* ${slackLink(orderAppUrl(ref), `#${ref}`)} ${slackText(order.runnerName)}, ${slackText(order.raceName)} ${order.raceYear || ''}: *${slackText(r.officialTime)}*${slackText(either)}`).catch(() => {})
+    // Eli checks these and sends the card (Matt, 2026-11-15): tag him.
+    await slackTo('alerts', `🏆 <@${ELI_SLACK_ID}> *Possible Hall of Fame:* ${slackLink(orderAppUrl(ref), `#${ref}`)} ${slackText(order.runnerName)}, ${slackText(order.raceName)} ${order.raceYear || ''}: *${slackText(r.officialTime)}*${slackText(either)}`).catch(() => {})
     await mark(key, r)
     flagged++
   }

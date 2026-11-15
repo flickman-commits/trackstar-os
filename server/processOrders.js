@@ -980,6 +980,18 @@ export async function processOrders(options = {}) {
               continue
             }
 
+            // A bulk print the Bulk tab sent to Artelo ("BULK-0001-58", channel
+            // "Trackstar Bulk") already has its row there. Read back here it
+            // has no Shopify or Etsy data, so it came in as an Etsy order for
+            // "Unknown Runner, Unknown Race" (16 BULK-0001 prints held for
+            // address review, Nov 2026).
+            if (!existing && (/^BULK-/i.test(String(order.orderId || '')) || /trackstar bulk/i.test(String(order.channelName || '')))) {
+              results.skipped++
+              orderResult.action = 'skipped'
+              results.orders.push(orderResult)
+              continue
+            }
+
             // A bulk run paid through Shopify (a draft order tagged "bulk") is
             // not a print order. It belongs to the Bulk tab, where
             // syncShopifyBulkOrders links it to its run; never a standard row.
