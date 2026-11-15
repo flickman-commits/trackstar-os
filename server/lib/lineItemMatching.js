@@ -170,10 +170,19 @@ export function withAddonPhotos(lineItems) {
   const out = lineItems.map(li => li)
   const prints = () => out.map((li, i) => ({ li, i })).filter(({ li }) => !isAddonLineItem(li) && !isRemovedLineItem(li))
   for (const addon of addons) {
+    const path = propOf(addon, '_photo_path')
+    // Already on its print: that is the print it is for. Copying it on to
+    // the next print with the same title put one runner's photo on another
+    // runner's print (9878: Jayden All's photo on Tess Lilly's half; 8928,
+    // 9513 shipped that way), and a paid-once photo on a second print.
+    if (prints().some(({ li }) => propOf(li, '_photo_path') === path)) continue
     const forTitle = String(propOf(addon, '_addon_for') || '').trim().toLowerCase()
     const open = prints().filter(({ li }) => !propOf(li, '_photo_path'))
+    // The title names the product, not the print: two prints of the same
+    // race share it, so it decides only when one open print has it.
+    const titled = open.filter(({ li }) => String(li.title || '').trim().toLowerCase() === forTitle)
     const target = forTitle
-      ? open.find(({ li }) => String(li.title || '').trim().toLowerCase() === forTitle)
+      ? (titled.length === 1 ? titled[0] : null)
       : (prints().length === 1 ? open[0] : null)
     if (!target) continue
     out[target.i] = { ...target.li, properties: [...(target.li.properties || []), { name: '_photo_path', value: propOf(addon, '_photo_path') }] }

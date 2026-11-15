@@ -97,6 +97,20 @@ test('a photo that is only on the add-on lands on the print it names (order 4053
   assert.equal(withAddonPhotos([{ ...print, properties: [...print.properties, { name: '_photo_path', value: 'own.jpg' }] }, addon])[0].properties.find(p => p.name === '_photo_path').value, 'own.jpg')
 })
 
+test('one photo add-on never lands on a second print of the same race (9878)', async () => {
+  const { withAddonPhotos } = await import('./lineItemMatching.js')
+  const title = 'Indianapolis Monumental Marathon Personalized Race Print'
+  const half = { id: 1, product_id: 5, title, current_quantity: 1, properties: [{ name: 'Runner Name (First & Last)', value: 'Tess Lilly' }] }
+  const full = { id: 2, product_id: 5, title, current_quantity: 1, properties: [{ name: 'Runner Name (First & Last)', value: 'Jayden All' }, { name: '_photo_path', value: '2026-11-14/j.jpg' }] }
+  const addon = { id: 3, product_id: 10329625723163, title: 'Photo Add-On', current_quantity: 1, properties: [{ name: '_photo_path', value: '2026-11-14/j.jpg' }, { name: '_addon_for', value: title }] }
+  const out = withAddonPhotos([half, full, addon])
+  assert.equal(out[0].properties.some(p => p.name === '_photo_path'), false)
+  assert.equal(out[1].properties.find(p => p.name === '_photo_path').value, '2026-11-14/j.jpg')
+  // Only on the add-on, and two prints share its title: no guessing which.
+  const bare = { ...full, properties: full.properties.filter(p => p.name !== '_photo_path') }
+  assert.deepEqual(withAddonPhotos([half, bare, addon]).slice(0, 2).map(li => li.properties.some(p => p.name === '_photo_path')), [false, false])
+})
+
 test('a photo whose add-on was taken out of the cart or edited off comes off the print', async () => {
   const { normalizeShopifyLines } = await import('./lineItemMatching.js')
   const print = (id, path) => ({ id, product_id: 5, title: 'Boston Marathon Personalized Race Print', current_quantity: 1, properties: [{ name: 'Runner Name (First & Last)', value: 'Jane Doe' }, { name: '_photo_path', value: path }] })
