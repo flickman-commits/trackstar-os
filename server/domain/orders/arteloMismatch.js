@@ -45,13 +45,16 @@ export async function completedButNotSent({ days = 90, budgetMs = 240_000 } = {}
   const started = Date.now()
   const rows = await prisma.order.findMany({
     where: { status: 'completed', createdAt: { gte: new Date(Date.now() - days * 864e5) }, arteloOrderData: { not: null } },
-    select: { id: true, orderNumber: true, parentOrderNumber: true, lineItemIndex: true, trackstarOrderType: true, raceName: true, raceYear: true, runnerName: true, customerName: true, customerEmail: true, createdAt: true, shopifyOrderData: true, arteloOrderData: true },
+    select: { id: true, orderNumber: true, parentOrderNumber: true, lineItemIndex: true, trackstarOrderType: true, raceName: true, raceYear: true, runnerName: true, customerName: true, customerEmail: true, createdAt: true, shopifyOrderData: true, arteloOrderData: true, arteloHold: true },
   })
   // Artelo orders whose saved status does not yet say it went to production.
   const groups = new Map()
   for (const r of rows) {
     const id = r.arteloOrderData?.id
-    if (!id || DONE_AT_ARTELO.includes(r.arteloOrderData?.status)) continue
+    // A saved "Received" is not the last word when Artelo has since put the
+    // order on hold (alertArteloHolds): BULK-0001's prints were Received at
+    // the send, then held for address review, and sat for a week.
+    if (!id || (DONE_AT_ARTELO.includes(r.arteloOrderData?.status) && !r.arteloHold)) continue
     if (!groups.has(id)) groups.set(id, [])
     groups.get(id).push(r)
   }
@@ -133,6 +136,14 @@ const HOLDS_KEY = 'artelo_holds_alerted'
 const OUR_STEP = ['Missing Designs', 'Pending Approval']
 
 /**
+ * Our rows for Artelo order ids. A shop order's Artelo id is the row's
+ * parentOrderNumber; a bulk print is its own Artelo order, named by the
+ * runner's orderNumber (BULK-0001-58 under BULK-0001), so matching only the
+ * parent missed every bulk hold.
+ */
+export const rowsForArteloIds = ids => ({ OR: [{ parentOrderNumber: { in: ids } }, { orderNumber: { in: ids }, trackstarOrderType: 'bulk' }] })
+
+/**
  * Artelo holds an order for something only a person can clear there: an
  * address it could not verify ("Needs Address Review"), a payment
  * ("Customer Unpaid"). Nothing prints until someone acts, and nothing in
@@ -146,11 +157,11 @@ export async function alertArteloHolds(arteloOrders, { link } = {}) {
   // Our rows carry the hold for the Action queue; one that cleared in Artelo clears here.
   const holdIds = new Set(holds.map(o => String(o.orderId)))
   for (const o of holds) {
-    await prisma.order.updateMany({ where: { parentOrderNumber: String(o.orderId), NOT: { arteloHold: o.productionStatus } }, data: { arteloHold: o.productionStatus } })
+    await prisma.order.updateMany({ where: { AND: [rowsForArteloIds([String(o.orderId)]), { NOT: { arteloHold: o.productionStatus } }] }, data: { arteloHold: o.productionStatus } })
   }
   // Gone to production: whatever held it is over.
   const sent = (arteloOrders || []).filter(o => !holdIds.has(String(o.orderId)) && o.status !== 'PendingFulfillmentAction').map(o => String(o.orderId))
-  if (sent.length) await prisma.order.updateMany({ where: { parentOrderNumber: { in: sent }, NOT: { arteloHold: null } }, data: { arteloHold: null } })
+  if (sent.length) await prisma.order.updateMany({ where: { AND: [rowsForArteloIds(sent), { NOT: { arteloHold: null } }] }, data: { arteloHold: null } })
   if (!holds.length) return { holds: 0, alerted: 0 }
   const row = await prisma.systemConfig.findUnique({ where: { key: HOLDS_KEY } })
   let told = []
@@ -158,10 +169,10 @@ export async function alertArteloHolds(arteloOrders, { link } = {}) {
   const key = o => `${o.id}:${o.productionStatus}`
   const fresh = holds.filter(o => !told.includes(key(o)))
   if (fresh.length) {
-    const ours = await prisma.order.findMany({ where: { parentOrderNumber: { in: fresh.map(o => String(o.orderId)) } }, select: { parentOrderNumber: true, shopifyOrderData: true, runnerName: true, raceName: true } })
+    const ours = await prisma.order.findMany({ where: rowsForArteloIds(fresh.map(o => String(o.orderId))), select: { parentOrderNumber: true, orderNumber: true, trackstarOrderType: true, shopifyOrderData: true, runnerName: true, raceName: true } })
     const lines = fresh.slice(0, 20).map(o => {
-      const r = ours.find(x => x.parentOrderNumber === String(o.orderId))
-      const name = r ? String(r.shopifyOrderData?.name || o.orderId).replace('#', '') : o.orderId
+      const r = ours.find(x => x.parentOrderNumber === String(o.orderId) || (x.trackstarOrderType === 'bulk' && x.orderNumber === String(o.orderId)))
+      const name = r ? String(r.trackstarOrderType === 'bulk' ? r.orderNumber : (r.shopifyOrderData?.name || o.orderId)).replace('#', '') : o.orderId
       const url = link ? link(o.id) : null
       const h = arteloHoldText(o.productionStatus)
       return `• *${slackText(h.label)}*: ${r ? slackLink(orderAppUrl(name), `#${name}`) : `#${slackText(name)}`}${r ? ` (${slackText(r.raceName || '')}${r.runnerName ? ` / ${slackText(r.runnerName)}` : ''})` : ''}${url ? ` <${url}|Open in Artelo>` : ''}\n    _${slackText(h.why)}._`

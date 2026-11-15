@@ -29,7 +29,7 @@ import { isBulkShopifyOrder } from './domain/bulk/shopifyBulk.js'
 import { assigneeForNewOrder, isAutoAssignee, endExpiredShifts } from './domain/orders/assignment.js'
 import { requireConnection } from './lib/connections.js'
 import { listExcluded, isExcludedLine } from './domain/orders/excludedProducts.js'
-import { alertArteloHolds } from './domain/orders/arteloMismatch.js'
+import { alertArteloHolds, rowsForArteloIds } from './domain/orders/arteloMismatch.js'
 import { arteloOrderUrl, orderAppUrl } from './lib/links.js'
 import { yearUnknown } from './domain/orders/yearUnknown.js'
 import { isStoredPhotoPath } from './lib/photoPath.js'
@@ -823,7 +823,7 @@ export async function processOrders(options = {}) {
     try {
       const fulfilledIds = completedOrders.map(o => String(o.orderId))
       const stillOpen = fulfilledIds.length ? await prisma.order.findMany({
-        where: { parentOrderNumber: { in: fulfilledIds }, status: { not: 'completed' } },
+        where: { AND: [rowsForArteloIds(fulfilledIds), { status: { not: 'completed' } }] },
         select: { id: true, orderNumber: true },
       }) : []
       if (stillOpen.length) {
