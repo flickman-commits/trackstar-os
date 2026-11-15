@@ -176,14 +176,17 @@ export function withAddonPhotos(lineItems) {
     // runner's print (9878: Jayden All's photo on Tess Lilly's half; 8928,
     // 9513 shipped that way), and a paid-once photo on a second print.
     if (prints().some(({ li }) => propOf(li, '_photo_path') === path)) continue
+    // Only on the add-on (an older storefront, 4053). The title names the
+    // product, not the print, and two prints of one race share it; the cart
+    // order says which: the add-on is added right after its print, and
+    // Shopify keeps the lines in cart order. So the nearest open print before
+    // it (with its title, when it names one), else the nearest after it.
     const forTitle = String(propOf(addon, '_addon_for') || '').trim().toLowerCase()
+    const at = out.indexOf(addon)
     const open = prints().filter(({ li }) => !propOf(li, '_photo_path'))
-    // The title names the product, not the print: two prints of the same
-    // race share it, so it decides only when one open print has it.
-    const titled = open.filter(({ li }) => String(li.title || '').trim().toLowerCase() === forTitle)
-    const target = forTitle
-      ? (titled.length === 1 ? titled[0] : null)
-      : (prints().length === 1 ? open[0] : null)
+    const titled = forTitle ? open.filter(({ li }) => String(li.title || '').trim().toLowerCase() === forTitle) : []
+    const pool = titled.length ? titled : open
+    const target = [...pool].reverse().find(({ i }) => i < at) || pool.find(({ i }) => i > at) || null
     if (!target) continue
     out[target.i] = { ...target.li, properties: [...(target.li.properties || []), { name: '_photo_path', value: propOf(addon, '_photo_path') }] }
   }

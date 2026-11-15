@@ -106,9 +106,17 @@ test('one photo add-on never lands on a second print of the same race (9878)', a
   const out = withAddonPhotos([half, full, addon])
   assert.equal(out[0].properties.some(p => p.name === '_photo_path'), false)
   assert.equal(out[1].properties.find(p => p.name === '_photo_path').value, '2026-11-14/j.jpg')
-  // Only on the add-on, and two prints share its title: no guessing which.
+  // Only on the add-on, and two prints share its title: the print just before
+  // it in the cart is its print, whichever order the two came in.
   const bare = { ...full, properties: full.properties.filter(p => p.name !== '_photo_path') }
-  assert.deepEqual(withAddonPhotos([half, bare, addon]).slice(0, 2).map(li => li.properties.some(p => p.name === '_photo_path')), [false, false])
+  const has = lines => lines.filter(li => li.title === title).map(li => li.properties.some(p => p.name === '_photo_path'))
+  assert.deepEqual(has(withAddonPhotos([half, bare, addon])), [false, true])
+  assert.deepEqual(has(withAddonPhotos([bare, addon, half])), [true, false])
+  // Two photos, each after its own print: each lands on its own.
+  const addon2 = { ...addon, id: 4, properties: [{ name: '_photo_path', value: '2026-11-14/t.jpg' }, { name: '_addon_for', value: title }] }
+  const both = withAddonPhotos([half, addon2, bare, addon])
+  assert.equal(both[0].properties.find(p => p.name === '_photo_path').value, '2026-11-14/t.jpg')
+  assert.equal(both[2].properties.find(p => p.name === '_photo_path').value, '2026-11-14/j.jpg')
 })
 
 test('a photo whose add-on was taken out of the cart or edited off comes off the print', async () => {
