@@ -31,6 +31,7 @@ export default {
   'orders/no-time': () => import('../../_routes/orders/no-time.js'),
   'orders/photo': () => import('../../_routes/orders/photo.js'),
   'orders/production': () => import('../../_routes/orders/production.js'),
+  'orders/queue': () => import('../../_routes/orders/queue.js'),
   'orders/refresh-etsy-data': () => import('../../_routes/orders/refresh-etsy-data.js'),
   'orders/refresh-shopify-data': () => import('../../_routes/orders/refresh-shopify-data.js'),
   'orders/refresh-weather': () => import('../../_routes/orders/refresh-weather.js'),

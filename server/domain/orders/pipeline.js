@@ -79,7 +79,34 @@ function approvedStage(render, stage) {
   return stage('attach', 'Attach in Artelo', { fix: 'The print is approved and in the Artelo library (Orders folder), but was not sent. Send it to production, or attach it in Artelo by hand and mark the order done.' })
 }
 
-export function pipelineFor({ order, research, race, render, hasScraper, templates, noTimeGaps, photoUnpaid, workerOnline, waitingOnCustomer = null, emailBounced = null }) {
+/** The stages a person can move an order to by hand, as the queues name them. */
+export const OVERRIDE_STAGES = { review: 'Review', action: 'Action', waiting: 'Waiting', hold: 'Approved' }
+
+/** What a manual move is checked against: the worked-out stage and reason when it was made. */
+export const overrideBasis = p => `${p?.stage || ''}|${p?.reason || ''}`
+
+/**
+ * The order's stage, with a manual queue move on top (orders/queueOverride.js,
+ * Eli 2026-11-15). The move holds only while the worked-out stage is the one
+ * it was made from: new research, a new design, an approval or a send changes
+ * that, and the order goes back to its own queue instead of sitting where a
+ * person once put it. A completed order is never overridden.
+ */
+export function pipelineFor(args) {
+  const base = computePipeline(args)
+  const o = args.order?.queueOverride
+  if (!o || !OVERRIDE_STAGES[o.stage] || base.stage === 'done' || o.basis !== overrideBasis(base)) return base
+  const when = o.at ? new Date(o.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''
+  return {
+    stage: o.stage,
+    reason: `Moved to ${OVERRIDE_STAGES[o.stage]}`,
+    kind: base.kind,
+    fix: `${o.note ? `${o.note}. ` : ''}Moved here by ${o.by || 'someone'}${when ? ` on ${when}` : ''} from "${base.reason}". It goes back on its own when the order changes.`,
+    overridden: { from: base.stage, fromReason: base.reason, by: o.by || null, at: o.at || null, note: o.note || null },
+  }
+}
+
+function computePipeline({ order, research, race, render, hasScraper, templates, noTimeGaps, photoUnpaid, workerOnline, waitingOnCustomer = null, emailBounced = null }) {
   const raceName = order.raceNameOverride ?? order.raceName
   const year = order.yearOverride ?? order.raceYear
   const stage = (s, reason, extra = {}) => ({ stage: s, reason, ...extra })

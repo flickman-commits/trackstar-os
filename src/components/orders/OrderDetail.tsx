@@ -2344,6 +2344,11 @@ Thank you!`
                         <Shuffle className="w-3.5 h-3.5" /> Convert to custom order
                       </button>
                     )}
+                    {/* Move it to another queue by hand, with a reason (Eli, 2026-11-15); it
+                        goes back on its own when the order changes (orders/queueOverride.js). */}
+                    {selectedOrder.status !== 'completed' && !isEditing && selectedOrder.trackstarOrderType === 'standard' && (
+                      <QueueMove order={selectedOrder} onDone={(msg) => { fetchOrders(); setToast({ message: msg, type: 'success' }) }} onError={(msg) => setToast({ message: msg, type: 'error' })} />
+                    )}
                     {/* Close by hand, whatever stage it is at: a reopened order whose
                         replacement went out from Artelo or Support has no design step
                         left to finish it (Eli, 2026-11-15). Logged on the order. */}
@@ -3499,5 +3504,52 @@ function NoteText({ text, author }: { text: string; author?: string | null }) {
       <Linkify text={long && !open ? body.slice(0, 220).trimEnd() + '…' : body} />
       {long && <button type="button" onClick={() => setOpen(v => !v)} className="ml-1.5 text-[12px] font-medium text-amber-800 hover:underline">{open ? 'Less' : 'More'}</button>}
     </p>
+  )
+}
+
+const QUEUES: { stage: 'review' | 'action' | 'waiting' | 'hold'; label: string }[] = [
+  { stage: 'review', label: 'Review' }, { stage: 'action', label: 'Action' }, { stage: 'waiting', label: 'Waiting' }, { stage: 'hold', label: 'Approved' },
+]
+
+/** Move an order to another queue by hand, with a reason; or put a moved one back. */
+function QueueMove({ order, onDone, onError }: { order: Order; onDone: (msg: string) => void; onError: (msg: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [stage, setStage] = useState<string | null>(null)
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const moved = order.pipeline?.overridden
+  const send = async (to: string | null) => {
+    setBusy(true)
+    try {
+      const r = await apiFetch('/api/orders/queue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, stage: to, note }) })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data.error || 'Could not move it')
+      setOpen(false); setStage(null); setNote('')
+      onDone(to ? `Moved to ${QUEUES.find(q => q.stage === to)?.label}. It goes back on its own when the order changes.` : 'Back in its own queue.')
+    } catch (e) { onError(e instanceof Error ? e.message : 'Could not move it') }
+    finally { setBusy(false) }
+  }
+  const link = 'self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2 disabled:opacity-50'
+  if (moved && !open) {
+    return (
+      <button onClick={() => send(null)} disabled={busy} className={link} title={`Moved by ${moved.by || 'someone'} from "${moved.fromReason}"${moved.note ? `: ${moved.note}` : ''}`}>
+        <Shuffle className="w-3.5 h-3.5" /> Put back in its own queue
+      </button>
+    )
+  }
+  if (!open) return <button onClick={() => setOpen(true)} className={link}><Shuffle className="w-3.5 h-3.5" /> Move to another queue</button>
+  return (
+    <div className="w-full rounded-md border border-border-gray bg-subtle-gray p-2.5 space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {QUEUES.filter(q => q.stage !== order.pipeline?.stage).map(q => (
+          <button key={q.stage} onClick={() => setStage(q.stage)} className={`px-2.5 py-1 rounded-full text-xs font-medium border ${stage === q.stage ? 'bg-[#4600D6] text-white border-[#4600D6]' : 'bg-white text-off-black border-border-gray hover:border-[#4600D6]/40'}`}>{q.label}</button>
+        ))}
+      </div>
+      <input value={note} onChange={e => setNote(e.target.value)} placeholder="Why? (shows on the order)" className="w-full px-2.5 py-1.5 rounded border border-border-gray bg-white text-base md:text-sm" />
+      <div className="flex gap-3">
+        <button onClick={() => send(stage)} disabled={busy || !stage || !note.trim()} className="inline-flex items-center gap-1 text-xs font-semibold text-[#4600D6] disabled:opacity-40">{busy && <Loader2 className="w-3 h-3 animate-spin" />}Move</button>
+        <button onClick={() => { setOpen(false); setStage(null); setNote('') }} className="text-xs text-off-black/60">Cancel</button>
+      </div>
+    </div>
   )
 }

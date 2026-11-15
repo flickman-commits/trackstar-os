@@ -27,6 +27,9 @@ model Order {
   frameType          String
   notes              String?   // Notes from Shopify (year corrections, etc.)
   hadNoTime          Boolean   @default(false) // Flag: customer entered "no time" in runner name
+  // A person moved the order to another queue by hand (orders/queueOverride.js):
+  // { stage, note, by, at, basis }. Holds until the worked-out stage changes from `basis`.
+  queueOverride      Json?
   noBib              Boolean   @default(false) // The customer wants no bib on the print: the bib frame renders empty
   status             String    @default("pending") // "pending", "missing_year", "ready", "flagged", "completed"
   researchedAt       DateTime?
