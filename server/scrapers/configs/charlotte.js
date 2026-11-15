@@ -9,6 +9,11 @@
  * /v2/api/events/{code}/sub-events/{id} (name + distance):
  *   2025 3vgp2qeac5c9rhab: 248066 Marathon 26.2 mi, 248067 Half Marathon 13.1 mi
  *   2024 554nhffagcfxre7m: 216680 Marathon 26.2 mi, 216682 Half Marathon 13.1 mi
+ *   2026 e5kbhszx7m2nxjc7: 385288 Marathon 26.2 mi, 385289 Half Marathon 13.1 mi
+ *        (event "Novant Health Charlotte Marathon", eventDate 2026-11-14, timer
+ *        Start 2 Finish Charlotte; read 2026-11-15 off /v2/api/events/{code},
+ *        link from Matt. Excluded: 385290 Half Marathon Ruck, 385291 5K,
+ *        385657 a second 59-runner marathon set)
  *   (excluded: 5K, Marathon Pacer, ruck, etc.)
  * RaceRoster chip times carry tenths (4:59:37.1).
  *
@@ -18,7 +23,6 @@
  * press release). 2024/2025 search on Athlinks currently errors, which is why
  * RaceRoster is primary.
  *
- * 2026 (Nov 14) has not run.
  */
 export default {
   platform: 'raceroster',
@@ -40,10 +44,12 @@ export default {
   eventCodes: {
     2024: '554nhffagcfxre7m',
     2025: '3vgp2qeac5c9rhab',
+    2026: 'e5kbhszx7m2nxjc7',
   },
   subEventIds: {
     2024: { marathon: 216680, halfMarathon: 216682 },
     2025: { marathon: 248066, halfMarathon: 248067 },
+    2026: { marathon: 385288, halfMarathon: 385289 },
   },
   raceDates: {
     2022: '2022-11-12',

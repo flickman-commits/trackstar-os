@@ -40,12 +40,17 @@
  * 1078285 (8K), with empty result sets already created (754052 "Allianz
  * Richmond Marathon Overall Results", 754064 "CarMax Richmond Half Marathon
  * Overall Results", 754065 "Capital One Richmond 8K Overall Results"). The race
- * has not run, so they are NOT configured. Once results are posted: re-run the
+ * ran; configured 2026-11-15 from the results page's set list (754052 holds
+ * 5,468 marathon finishers, timed by GO Race Productions). Before that: re-run the
  * get-result-sets call for each 2026 event (the set ids can change when the
  * timer republishes), pull a runner through get-results to confirm the set is
  * filled with 2026 finishers, then add
  *   eventIds[2026]   = { marathon: 1078283, halfMarathon: 1078284, eightK: 1078285 }
  *   resultSets[2026] = { marathon: <set>, halfMarathon: <set>, eightK: <set> }
+ *
+ * The REST API (get-results, get-result-sets) answers "Permission Denied" for
+ * this race since Nov 2026, every year; the scraper falls back to searching
+ * the public results page.
  *
  * Times: the official page (runsignup.com/Race/Results/53399) prints whole
  * seconds, and the REST chip_time matches it. "Clock Time" is gun time and is
@@ -105,11 +110,13 @@ export default {
     2023: { marathon: 665695, halfMarathon: 665696, eightK: 665697 },
     2024: { marathon: 784052, halfMarathon: 784053, eightK: 784054 },
     2025: { marathon: 923215, halfMarathon: 923216, eightK: 923217 },
+    2026: { marathon: 1078283, halfMarathon: 1078284, eightK: 1078285 },
   },
   resultSets: {
     2022: { marathon: 360677, halfMarathon: 360477, eightK: 355411 },
     2023: { marathon: 425037, halfMarathon: 425038, eightK: 425041 },
     2024: { marathon: 516136, halfMarathon: 520173, eightK: 511318 },
     2025: { marathon: 621927, halfMarathon: 636597, eightK: 636609 },
+    2026: { marathon: 754052, halfMarathon: 754064, eightK: 754065 },
   },
 }

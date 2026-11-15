@@ -177,7 +177,16 @@ export class RunSignUpScraper extends BaseScraper {
         console.error(`[${this.tag} ${this.year}] Bib lookup error for ${wanted}:`, error.message)
         return this.upstreamErrorResult(error.message)
       }
-      if (data?.error) return this.upstreamErrorResult(`RunSignUp results API error: ${data.error.error_msg || 'unknown'}`)
+      // The API switched off for this race (a 200 with an error body): the
+      // results page's own search matches bib numbers too.
+      if (data?.error) {
+        const page = await this.pageResults(wanted, resultSetId)
+        if (!page) return this.upstreamErrorResult(`RunSignUp results API error: ${data.error.error_msg || 'unknown'}`)
+        const hit = page.find(row => this.bibsEqual(row.bib, wanted))
+        if (!hit) continue
+        console.log(`[${this.tag} ${this.year}] BIB MATCH (results page): ${hit.name} bib ${hit.bib} ${eventLabel} ${hit.chipTime || 'no chip time'}`)
+        return { ...this.extractRunnerData(hit, eventLabel), runnerName: hit.name, resultsUrl: this.runnerPageUrl(resultSetId, hit.bib) }
+      }
 
       const rows = data?.individual_results_sets?.[0]?.results || []
       const r = rows.find(row => this.bibsEqual(row.bib, wanted))
@@ -228,36 +237,45 @@ export class RunSignUpScraper extends BaseScraper {
       }
 
       const data = await response.json()
-      const resultSet = data?.individual_results_sets?.[0]
-      const rawResults = resultSet?.results || []
-
-      console.log(`[${this.tag} ${this.year}] API returned ${rawResults.length} results`)
-
-      if (rawResults.length === 0) {
-        return this.notFoundResult()
+      // A race can switch its results API off: RunSignUp still answers 200,
+      // with {"error":{"error_msg":"Permission Denied"}} as the body. Read as
+      // zero rows, every runner came back not found (Richmond, Nov 2026). The
+      // public results page serves the same rows as JSON, so read those.
+      let results
+      if (data?.error) {
+        console.log(`[${this.tag} ${this.year}] API error "${data.error.error_msg || 'unknown'}", reading the results page instead`)
+        results = await this.pageResults(lastName, resultSetId)
+        if (!results) return await this.searchEventType(runnerName, eventType, resultSetId)
+      } else {
+        const resultSet = data?.individual_results_sets?.[0]
+        const rawResults = resultSet?.results || []
+        console.log(`[${this.tag} ${this.year}] API returned ${rawResults.length} results`)
+        // Map API results to our standard format.
+        // IMPORTANT: ONLY use chip_time. RunSignUp's `clock_time` is gun time —
+        // never fall back to it. If chip_time is missing, we'd rather report
+        // a missing time than the wrong (gun) time and have the order printed wrong.
+        results = rawResults.map(r => {
+          const chip = (r.chip_time && String(r.chip_time).trim()) || null
+          if (!chip && r.clock_time) {
+            console.warn(`[${this.tag} ${this.year}] Runner ${r.first_name} ${r.last_name} has clock_time but no chip_time - refusing to use gun time`)
+          }
+          return {
+            name: `${r.first_name || ''} ${r.last_name || ''}`.trim(),
+            bib: r.bib != null ? String(r.bib) : null,
+            chipTime: chip,
+            pace: r.pace || null,
+            placeOverall: r.place != null ? String(r.place) : null,
+            gender: r.gender || null,
+            age: r.age != null ? String(r.age) : null,
+            city: r.city || null,
+            state: r.state || null
+          }
+        })
       }
 
-      // Map API results to our standard format.
-      // IMPORTANT: ONLY use chip_time. RunSignUp's `clock_time` is gun time —
-      // never fall back to it. If chip_time is missing, we'd rather report
-      // a missing time than the wrong (gun) time and have the order printed wrong.
-      const results = rawResults.map(r => {
-        const chip = (r.chip_time && String(r.chip_time).trim()) || null
-        if (!chip && r.clock_time) {
-          console.warn(`[${this.tag} ${this.year}] Runner ${r.first_name} ${r.last_name} has clock_time but no chip_time - refusing to use gun time`)
-        }
-        return {
-          name: `${r.first_name || ''} ${r.last_name || ''}`.trim(),
-          bib: r.bib != null ? String(r.bib) : null,
-          chipTime: chip,
-          pace: r.pace || null,
-          placeOverall: r.place != null ? String(r.place) : null,
-          gender: r.gender || null,
-          age: r.age != null ? String(r.age) : null,
-          city: r.city || null,
-          state: r.state || null
-        }
-      })
+      if (results.length === 0) {
+        return this.notFoundResult()
+      }
 
       // Filter for exact name matches
       const matches = this.filterNameMatches(runnerName, results, r => r.name)
@@ -301,6 +319,39 @@ export class RunSignUpScraper extends BaseScraper {
     } catch (error) {
       console.error(`[${this.tag} ${this.year}] API error: ${error.message}, falling back to Puppeteer`)
       return await this.searchEventType(runnerName, eventType, resultSetId)
+    }
+  }
+
+  /**
+   * The public results page's own search, as JSON: the rows the page shows
+   * for `any[]=<name>` (its search box sends exactly this; `search=` alone is
+   * ignored). Columns are found by their heading key, so only chip_time is
+   * read (clock_time is gun time) and the pace is the page's own avg_pace.
+   * Null when the page cannot be read, so the caller can try the browser.
+   */
+  async pageResults(query, resultSetId) {
+    try {
+      const url = `${this.baseUrl}/Race/Results/${this.raceId}/?resultSetId=${resultSetId}&page=1&num=100&search=&any%5B%5D=${encodeURIComponent(query)}&format=json`
+      const response = await fetchWithTimeout(url, { headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' } })
+      if (!response.ok) return null
+      const data = await response.json()
+      const keys = (data?.headings || []).map(h => h?.key)
+      const rows = data?.resultSet?.results
+      const at = k => keys.indexOf(k)
+      if (!Array.isArray(rows) || at('name') < 0 || at('chip_time') < 0) return null
+      console.log(`[${this.tag} ${this.year}] Results page returned ${rows.length} rows`)
+      const cell = (row, k) => (at(k) >= 0 && row[at(k)] != null && String(row[at(k)]).trim()) || null
+      return rows.map(row => ({
+        name: cell(row, 'name') || '',
+        bib: cell(row, 'bib_num'),
+        chipTime: cell(row, 'chip_time'),
+        pace: cell(row, 'avg_pace'),
+        placeOverall: cell(row, 'race_placement'),
+        gender: null, age: null, city: null, state: null,
+      }))
+    } catch (error) {
+      console.error(`[${this.tag} ${this.year}] Results page error: ${error.message}`)
+      return null
     }
   }
 
