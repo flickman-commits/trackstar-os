@@ -67,9 +67,13 @@ export type PayoutState = 'in_progress' | 'submitted' | 'approved'
 export type MonthLine = {
   key: string; kind: 'customs' | 'designer_fee' | 'hours' | 'race'; name: string; detail: string; amountCents: number | null; status: PayoutState
   paid?: boolean; sentBack?: boolean; userId?: string; timesheetId?: string; dealId?: string
+  // Hours only: the two-week pay period the week is paid in, and how it was paid.
+  period?: { start: string; end: string }; weekStart?: string; minutes?: number; rateCents?: number | null
+  paidAt?: string | null; paidRef?: string | null; payoutMethod?: PayoutMethod | null
 }
+export type PayoutMethod = 'wise' | 'payoneer' | 'other'
 export type MonthPayouts = {
-  month: string; label: string; closed: boolean; current: boolean; previous: string; next: string | null; lines: MonthLine[]
+  month: string; label: string; closed: boolean; current: boolean; today: string; designPayday: string; previous: string; next: string | null; lines: MonthLine[]
   totals: { totalCents: number; inProgressCents: number; submittedCents: number; approvedCents: number; customsCents: number; designerFeeCents: number; hoursCents: number; racesCents: number; unpriced: number }
   racesError: string | null
 }

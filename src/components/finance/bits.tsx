@@ -76,10 +76,10 @@ export function Spark({ values, color = '#121212' }: { values: (number | null)[]
 }
 
 export function StatusChip({ status }: { status: string }) {
-  // Three states everywhere: In progress (still being filled in, or sent back to fix), Submitted (waiting on Matt), Approved.
+  // The states everywhere, coloured like Finance > Payouts' cards: In progress (amber; Submitted, waiting on Matt, a stronger amber), Approved (blue), Paid (green).
   const tone: Record<string, string> = {
-    draft: 'bg-white border-border-gray text-off-black/60', in_progress: 'bg-white border-border-gray text-off-black/60', rejected: 'bg-white border-rose-300 text-rose-800',
-    submitted: 'bg-amber-100 border-amber-300 text-amber-800', approved: 'bg-emerald-100 border-emerald-300 text-emerald-800',
+    draft: 'bg-amber-50 border-amber-200 text-amber-800/80', in_progress: 'bg-amber-50 border-amber-200 text-amber-800/80', rejected: 'bg-white border-rose-300 text-rose-800',
+    submitted: 'bg-amber-100 border-amber-300 text-amber-800', approved: 'bg-blue-100 border-blue-300 text-blue-800',
     paid: 'bg-emerald-100 border-emerald-300 text-emerald-800', empty: 'bg-white border-border-gray text-off-black/40',
   }
   const label: Record<string, string> = { draft: 'In progress', in_progress: 'In progress', rejected: 'In progress', submitted: 'Submitted', approved: 'Approved', paid: 'Paid', empty: 'No hours' }

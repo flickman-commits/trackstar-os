@@ -40,6 +40,16 @@ export function mondayOf(day) {
   const dow = new Date(parse(day)).getUTCDay() // 0 Sunday
   return addDays(day, dow === 0 ? -6 : 1 - dow)
 }
+/**
+ * The hourly team is paid every two weeks: Monday to the Sunday 13 days on,
+ * paid that Sunday. Periods count from Mon Nov 2, 2026, the first one paid
+ * through the tool, both ways.
+ */
+export const PAY_ANCHOR = '2026-11-02'
+export function payPeriodOf(day) {
+  const start = addDays(PAY_ANCHOR, Math.floor(daysBetween(PAY_ANCHOR, day) / 14) * 14)
+  return { start, end: addDays(start, 13) }
+}
 export function isValidDay(day) {
   return typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day) && fmt(parse(day)) === day
 }

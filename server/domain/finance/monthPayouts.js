@@ -2,16 +2,19 @@
  * Payouts, one month at a time: everything the business pays out for that
  * month, in three states, and the month's total.
  *
- *   Customs       per designer, from the custom counter. In progress while
- *                 the month runs; Submitted once it is over (the statement
- *                 went to the designer); Approved when Matt approves it.
+ *   Customs       per designer, from the custom counter. The design team is
+ *                 paid on the last day of the month for the whole month:
+ *                 In progress until then; Submitted from that day; Approved
+ *                 when Matt approves it, or pays it (payDesigner).
  *   Designer fee  the head designer's share of the month (7.5% of
  *                 contribution margin from Nov 2026), from the scoreboard;
  *                 the same three states as customs.
- *   Hours         per person per week, for weeks that start in the month,
- *                 at the person's rate (frozen on approval). The week's own
- *                 state: In progress (being filled in, or sent back),
- *                 Submitted, Approved.
+ *   Hours         per person per week, grouped by two-week pay period
+ *                 (periods.js payPeriodOf), in the month the period is paid
+ *                 (its last Sunday), at the person's rate (frozen on
+ *                 approval). The week's own state: In progress (being
+ *                 filled in, or sent back), Submitted, Approved; then paid
+ *                 with Pay (payouts.js payPeriod).
  *   Race payouts  partner races whose payout falls due in the month: In
  *                 progress until the report goes out, Submitted when it has,
  *                 Approved once paid (Payouts > Races).
@@ -26,7 +29,8 @@ import { summaryBetween } from './ledger.js'
 import { loadRules } from './rules.js'
 import { summarizeEntries, hoursText } from './timesheets.js'
 import { listRacePayouts } from './racePayouts.js'
-import { todayET, monthOf, lastOfMonth, monthLabel, isValidMonth, dayLabel, shiftMonth } from './periods.js'
+import { todayET, monthOf, lastOfMonth, monthLabel, isValidMonth, dayLabel, shiftMonth, addDays, payPeriodOf } from './periods.js'
+import { PAYOUT_METHODS, METHOD_LABEL } from './payouts.js'
 
 export class MonthPayoutError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; this.expose = true }
@@ -50,17 +54,24 @@ export async function monthPayouts(month, { today = todayET() } = {}) {
   if (month > current) throw new MonthPayoutError('That month has not started yet')
   const closed = month < current
   const first = `${month}-01`, last = lastOfMonth(first)
+  // Design payday: the last day of the month, for the whole month.
+  const payday = today >= last
   const prefixes = ['customs', 'fee'].map(k => `${k}:${month}:`)
 
   const [counter, rules, heads, approvedLines, sheets] = await Promise.all([
     customCounter(month),
     loadRules(),
     prisma.user.findMany({ where: { isActive: true, OR: [{ role: 'head_designer' }, { extraRoles: { has: 'head_designer' } }] }, select: { id: true, firstName: true, lastName: true } }),
-    prisma.payoutLine.findMany({ where: { OR: prefixes.map(p => ({ sourceRef: { startsWith: p } })) }, select: { id: true, sourceRef: true, amountCents: true, paidAt: true } }),
-    prisma.timesheet.findMany({ where: { weekStart: { gte: first, lte: last } }, include: { user: { select: { id: true, firstName: true, lastName: true, role: true, hourlyRateCents: true } }, entries: { select: { minutes: true, day: true, startedAt: true, endedAt: true } } }, orderBy: { weekStart: 'asc' } }),
+    prisma.payoutLine.findMany({ where: { OR: prefixes.map(p => ({ sourceRef: { startsWith: p } })) }, select: { id: true, sourceRef: true, amountCents: true, paidAt: true, paidRef: true } }),
+    // Weeks of the pay periods paid this month: a period starts up to 13 days before the 1st.
+    prisma.timesheet.findMany({ where: { weekStart: { gte: addDays(first, -13), lte: last } }, include: { user: { select: { id: true, firstName: true, lastName: true, role: true, hourlyRateCents: true, payoutMethod: true } }, entries: { select: { minutes: true, day: true, startedAt: true, endedAt: true } } }, orderBy: { weekStart: 'asc' } }),
   ])
+  const paidLines = new Map((await prisma.payoutLine.findMany({ where: { id: { in: sheets.map(t => t.payoutLineId).filter(Boolean) } }, select: { id: true, paidAt: true, paidRef: true } })).map(l => [l.id, l]))
   const approvedBy = new Map(approvedLines.map(l => [l.sourceRef, l]))
-  const stateFor = ref => (approvedBy.has(ref) ? 'approved' : closed ? 'submitted' : 'in_progress')
+  const stateFor = ref => (approvedBy.has(ref) ? 'approved' : payday ? 'submitted' : 'in_progress')
+  const designerIds = [...new Set([...counter.designers.map(d => d.userId), ...heads.map(h => h.id)].filter(Boolean))]
+  const methodOf = new Map((await prisma.user.findMany({ where: { id: { in: designerIds } }, select: { id: true, payoutMethod: true } })).map(u => [u.id, u.payoutMethod]))
+  const paidBits = done => ({ paid: Boolean(done?.paidAt), paidAt: done?.paidAt || null, paidRef: done?.paidRef || null })
   const lines = []
 
   for (const d of counter.designers) {
@@ -68,7 +79,7 @@ export async function monthPayouts(month, { today = todayET() } = {}) {
     const ref = `customs:${month}:${d.userId}`
     const done = approvedBy.get(ref)
     lines.push({
-      key: ref, kind: 'customs', userId: d.userId, name: d.name, status: stateFor(ref), paid: Boolean(done?.paidAt),
+      key: ref, kind: 'customs', userId: d.userId, name: d.name, status: stateFor(ref), ...paidBits(done), payoutMethod: methodOf.get(d.userId) || null,
       amountCents: done ? done.amountCents : d.payoutCents,
       detail: `${d.count} custom${d.count === 1 ? '' : 's'}${d.repeats ? ` (${d.repeats} repeat${d.repeats === 1 ? '' : 's'})` : ''}`,
     })
@@ -81,21 +92,26 @@ export async function monthPayouts(month, { today = todayET() } = {}) {
     if (!done && !s.dayCount) continue
     const base = s.designerFeeBase === 'gp' ? 'gross profit' : 'contribution margin'
     lines.push({
-      key: ref, kind: 'designer_fee', userId: h.id, name: name(h), status: stateFor(ref), paid: Boolean(done?.paidAt),
+      key: ref, kind: 'designer_fee', userId: h.id, name: name(h), status: stateFor(ref), ...paidBits(done), payoutMethod: methodOf.get(h.id) || null,
       amountCents: done ? done.amountCents : s.designerFee,
       detail: `7.5% of ${base}${closed ? '' : `, ${s.dayCount} day${s.dayCount === 1 ? '' : 's'} so far`}`,
     })
   }
 
   for (const t of sheets) {
+    const period = payPeriodOf(t.weekStart)
+    if (period.end < first || period.end > last) continue
     if (t.user?.role === 'admin') continue // an admin testing the timer (Matt is not hourly) is never a payout line
     const minutes = summarizeEntries(t.entries).totalMinutes
     if (!minutes && t.status === 'draft') continue
     const rate = t.hourlyRateCents ?? t.user.hourlyRateCents ?? null
+    const paidLine = t.payoutLineId ? paidLines.get(t.payoutLineId) : null
     lines.push({
       key: `timesheet:${t.id}`, kind: 'hours', userId: t.userId, name: name(t.user), timesheetId: t.id,
       status: t.status === 'submitted' ? 'submitted' : t.status === 'approved' ? 'approved' : 'in_progress',
       sentBack: t.status === 'rejected', paid: Boolean(t.payoutLineId),
+      paidAt: paidLine?.paidAt || null, paidRef: paidLine?.paidRef || null,
+      period, weekStart: t.weekStart, minutes, rateCents: rate, payoutMethod: t.user.payoutMethod || null,
       amountCents: rate == null ? null : Math.round((minutes * rate) / 60),
       detail: `Week of ${dayLabel(t.weekStart)}: ${hoursText(minutes)}${rate == null ? ', no rate set' : ` at ${usdText(rate)}/h`}`,
     })
@@ -125,7 +141,7 @@ export async function monthPayouts(month, { today = todayET() } = {}) {
   const byStatus = st => sum(lines.filter(l => l.status === st))
   const byKind = k => sum(lines.filter(l => l.kind === k))
   return {
-    month, label: monthLabel(month), closed, current: month === current,
+    month, label: monthLabel(month), closed, current: month === current, today, designPayday: last,
     previous: shiftMonth(month, -1), next: month < current ? shiftMonth(month, 1) : null,
     lines,
     totals: {
@@ -141,7 +157,7 @@ export async function monthPayouts(month, { today = todayET() } = {}) {
 export async function approveMonthLine(month, key, { actor = null, today = todayET() } = {}) {
   if (!/^(customs|fee):\d{4}-\d{2}:[A-Za-z0-9_-]+$/.test(String(key || '')) || !String(key).includes(`:${month}:`)) throw new MonthPayoutError('Only customs and the designer fee are approved here; hours are approved by the week')
   const view = await monthPayouts(month, { today })
-  if (!view.closed) throw new MonthPayoutError(`${view.label} is not over yet`)
+  if (today < view.designPayday) throw new MonthPayoutError(`Design payday for ${view.label} is ${dayLabel(view.designPayday)}`)
   const line = view.lines.find(l => l.key === key)
   if (!line) throw new MonthPayoutError('Nothing to approve there')
   if (line.status === 'approved') return line
@@ -157,4 +173,32 @@ export async function unapproveMonthLine(month, key) {
   if (l.paidAt) throw new MonthPayoutError('That one is marked paid')
   await prisma.payoutLine.delete({ where: { id: l.id } })
   return { key, status: 'submitted' }
+}
+
+/**
+ * Pay one designer for a month, on or after its last day: their customs and,
+ * for the head designer, the fee, as one payment made in Wise or Payoneer
+ * (nothing moves money here). Lines not approved yet are approved at
+ * today's amount and marked paid together; their way of paying is
+ * remembered. The month's run is marked paid once every line on it is.
+ */
+export async function payDesigner({ month, userId, method, paidRef = '', actor = null, today = todayET() }) {
+  if (!PAYOUT_METHODS.includes(method)) throw new MonthPayoutError('Pick how you paid: Wise, Payoneer or other')
+  const view = await monthPayouts(month, { today })
+  if (today < view.designPayday) throw new MonthPayoutError(`Design payday for ${view.label} is ${dayLabel(view.designPayday)}`)
+  const mine = view.lines.filter(l => (l.kind === 'customs' || l.kind === 'designer_fee') && l.userId === userId && !l.paid && l.amountCents)
+  if (!mine.length) throw new MonthPayoutError('Nothing left to pay them for that month')
+  const at = new Date()
+  const ref = [METHOD_LABEL[method], String(paidRef || '').trim().slice(0, 100)].filter(Boolean).join(': ')
+  const run = await monthRun(month, { create: true, actor })
+  await prisma.$transaction(async tx => {
+    for (const l of mine) {
+      if (l.status === 'approved') await tx.payoutLine.update({ where: { sourceRef: l.key }, data: { paidAt: at, paidRef: ref } })
+      else await tx.payoutLine.create({ data: { payRunId: run.id, userId: l.userId, kind: l.kind, quantity: null, rateCents: null, amountCents: l.amountCents, sourceRef: l.key, note: `${l.detail}, ${view.label}`, paidAt: at, paidRef: ref } })
+    }
+    await tx.user.update({ where: { id: userId }, data: { payoutMethod: method } })
+    const left = await tx.payoutLine.count({ where: { payRunId: run.id, paidAt: null } })
+    if (!left) await tx.payRun.update({ where: { id: run.id }, data: { status: 'paid', paidAt: at } })
+  })
+  return { name: mine[0].name, month, label: view.label, amountCents: mine.reduce((n, l) => n + l.amountCents, 0), lines: mine.map(l => l.key) }
 }

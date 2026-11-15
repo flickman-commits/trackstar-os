@@ -867,6 +867,9 @@ model User {
   // Pay per hour, in cents (USD), for approved timesheets (Finance > Payouts >
   // Rates). Null = not paid by the hour.
   hourlyRateCents       Int?
+  // How Matt pays this person: wise | payoneer | other. Remembered from the
+  // last Pay on Finance > Payouts; only a label and a link, nothing moves money.
+  payoutMethod          String?
   isActive     Boolean   @default(true)
   // Bumped to sign this person out everywhere: on deactivation, a password
   // change or reset, or an admin's "Sign out everywhere". Carried in the

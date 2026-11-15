@@ -12,11 +12,13 @@
  *                          { action: 'add_line', runId, userId, kind, amountCents, note? }
  *                          { action: 'delete_line', lineId }
  *                          { action: 'set_hourly_rate', userId, cents | null }
+ *                          { action: 'pay_period', userId, periodStart, method: wise|payoneer|other, paidRef? }   one person's two weeks, paid
+ *                          { action: 'pay_designer', userId, month, method, paidRef? }   a designer's month (customs and fee), paid on its last day
  */
 import { setCors } from '../../_lib/auth.js'
 import { requireAdminOnly, recordAudit } from '../../_lib/users.js'
 import * as payouts from '../../../server/domain/finance/payouts.js'
-import { monthPayouts, approveMonthLine, unapproveMonthLine } from '../../../server/domain/finance/monthPayouts.js'
+import { monthPayouts, approveMonthLine, unapproveMonthLine, payDesigner } from '../../../server/domain/finance/monthPayouts.js'
 import { monthOf, todayET } from '../../../server/domain/finance/periods.js'
 import { answerError, body } from '../../_lib/finance.js'
 
@@ -42,6 +44,8 @@ export default async function handler(req, res) {
       case 'create_run': out = await payouts.createRun({ kind: b.kind, periodStart: b.periodStart, periodEnd: b.periodEnd, month: b.month, actor }); summary = `Created pay run "${out.label}" (${usd(out.totalCents)}, ${out.lines.length} lines)`; break
       case 'approve_run': out = await payouts.approveRun(String(b.id || '')); summary = `Approved pay run "${out.label}" (${usd(out.totalCents)})`; break
       case 'mark_paid': out = await payouts.markPaid(String(b.id || ''), { paidRef: b.paidRef, paidAt: b.paidAt }); summary = `Marked pay run "${out.label}" paid (${usd(out.totalCents)}${b.paidRef ? `, ${String(b.paidRef).slice(0, 60)}` : ''})`; break
+      case 'pay_period': out = await payouts.payPeriod({ userId: b.userId, periodStart: b.periodStart, method: b.method, paidRef: b.paidRef, actor }); summary = `Paid "${out.label}" (${usd(out.totalCents)}, ${b.method})`; break
+      case 'pay_designer': out = await payDesigner({ month: String(b.month || ''), userId: String(b.userId || ''), method: b.method, paidRef: b.paidRef, actor }); summary = `Paid ${out.name} for ${out.label} customs and fee (${usd(out.amountCents)}, ${b.method})`; break
       case 'delete_run': out = await payouts.deleteRun(String(b.id || '')); summary = `Deleted a draft pay run`; break
       case 'add_line': out = await payouts.addLine(String(b.runId || ''), { userId: String(b.userId || ''), kind: b.kind, amountCents: Number(b.amountCents), note: b.note }); summary = `Added a ${b.kind} line of ${usd(Number(b.amountCents))} to "${out.label}"`; break
       case 'delete_line': out = await payouts.deleteLine(String(b.lineId || '')); summary = `Removed a line from "${out.label}"`; break

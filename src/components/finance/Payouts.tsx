@@ -4,9 +4,11 @@ import { toast } from 'sonner'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Undo2 } from 'lucide-react'
 import CustomCounter, { RatesEditor } from '@/components/CustomCounter'
 import RacePayouts from '@/components/finance/RacePayouts'
+import PayPeriods from '@/components/finance/PayPeriods'
+import DesignPay from '@/components/finance/DesignPay'
 import { btnPrimary, btnSecondary, btnGhost, inputBase, segment, segmentGroup } from '@/lib/ui'
 import { financeApi, usd, todayET } from '@/lib/financeApi'
-import type { MonthLine, MonthPayouts, PayoutState, Rate } from '@/types/finance'
+import type { MonthLine, MonthPayouts, Rate } from '@/types/finance'
 import { card, ErrorCard, Spinner, StatusChip, tableHead, num } from './bits'
 
 /**
@@ -33,12 +35,11 @@ export default function Payouts() {
 }
 
 const SECTIONS: { kind: MonthLine['kind']; title: string; blurb: string }[] = [
-  { kind: 'customs', title: 'Customs', blurb: 'Per designer, at their rate. Submitted once the month is over.' },
+  { kind: 'customs', title: 'Customs', blurb: 'Per designer, at their rate. Paid the last day of the month.' },
   { kind: 'designer_fee', title: 'Head designer fee', blurb: 'The share of the month, from the scoreboard.' },
-  { kind: 'hours', title: 'Hours', blurb: 'By the week, for weeks that start this month.' },
+  { kind: 'hours', title: 'Hours', blurb: 'By two-week pay period, paid the Sunday it ends.' },
   { kind: 'race', title: 'Race partners', blurb: 'Revenue share due this month.' },
 ]
-const STATE_LABEL: Record<PayoutState, string> = { in_progress: 'In progress', submitted: 'Submitted', approved: 'Approved' }
 
 function Month() {
   const [params, setParams] = useSearchParams()
@@ -55,20 +56,30 @@ function Month() {
   }, [month])
   useEffect(() => { setData(null); load() }, [load])
 
-  const approve = async (l: MonthLine) => {
+  const approve = async (l: MonthLine) => approveAll([l])
+  const approveAll = async (ls: MonthLine[]) => {
+    const l = ls[0]
+    if (!l) return
     setBusy(l.key)
     try {
-      if (l.kind === 'hours' && l.timesheetId) await financeApi.review(l.timesheetId, 'approve')
-      else await financeApi.payoutAction({ action: 'approve_line', month, key: l.key })
+      for (const x of ls) {
+        if (x.kind === 'hours' && x.timesheetId) await financeApi.review(x.timesheetId, 'approve')
+        else await financeApi.payoutAction({ action: 'approve_line', month, key: x.key })
+      }
       toast.success(`Approved ${l.name}`)
       await load()
     } catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
   }
-  const undo = async (l: MonthLine) => {
+  const undo = async (l: MonthLine) => undoAll([l])
+  const undoAll = async (ls: MonthLine[]) => {
+    const l = ls[0]
+    if (!l) return
     setBusy(l.key)
     try {
-      if (l.kind === 'hours' && l.timesheetId) await financeApi.review(l.timesheetId, 'withdraw')
-      else await financeApi.payoutAction({ action: 'unapprove_line', month, key: l.key })
+      for (const x of ls) {
+        if (x.kind === 'hours' && x.timesheetId) await financeApi.review(x.timesheetId, 'withdraw')
+        else await financeApi.payoutAction({ action: 'unapprove_line', month, key: x.key })
+      }
       toast.success('Approval taken back')
       await load()
     } catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
@@ -85,18 +96,9 @@ function Month() {
 
       {error ? <ErrorCard text={error} /> : !data ? <Spinner /> : (
         <>
-          <div className={`${card} p-4 flex flex-wrap items-end justify-between gap-4`}>
-            <div>
-              <p className="text-xs text-off-black/50">{data.current ? 'Spent so far this month' : `Total for ${data.label}`}</p>
-              <p className="text-3xl font-semibold text-off-black tabular-nums mt-0.5">{usd(data.totals.totalCents)}</p>
-              {data.totals.unpriced > 0 && <p className="text-[11px] text-amber-700 mt-0.5">{data.totals.unpriced} line{data.totals.unpriced === 1 ? '' : 's'} not counted yet (no rate, or race sales not pulled)</p>}
-            </div>
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
-              {(['in_progress', 'submitted', 'approved'] as PayoutState[]).map(st => (
-                <div key={st}><p className="text-off-black/45">{STATE_LABEL[st]}</p><p className="font-semibold tabular-nums text-off-black">{usd(st === 'in_progress' ? data.totals.inProgressCents : st === 'submitted' ? data.totals.submittedCents : data.totals.approvedCents)}</p></div>
-              ))}
-            </div>
-          </div>
+          <Totals data={data} />
+
+          <DesignPay month={month} label={data.label} lines={data.lines} today={data.today} payday={data.designPayday} onChanged={load} />
 
           {SECTIONS.map(sec => {
             const lines = data.lines.filter(l => l.kind === sec.kind)
@@ -108,7 +110,8 @@ function Month() {
                   <div className="flex items-baseline gap-2"><h3 className="text-sm font-semibold text-off-black">{sec.title}</h3><span className="text-[11px] text-off-black/45">{sec.blurb}</span></div>
                   <span className="text-sm font-semibold tabular-nums">{usd(subtotal)}</span>
                 </div>
-                {lines.length === 0 ? <p className="px-4 py-3 text-xs text-off-black/45">{sec.kind === 'customs' ? 'No customs sent for review this month.' : 'No hours logged for weeks starting this month.'}</p> : (
+                {sec.kind === 'hours' ? <PayPeriods lines={lines} today={data.today} busy={busy !== null} onApprove={approveAll} onUndo={undoAll} onChanged={load} />
+                  : lines.length === 0 ? <p className="px-4 py-3 text-xs text-off-black/45">{sec.kind === 'customs' ? 'No customs sent for review this month.' : 'No hours logged for weeks starting this month.'}</p> : (
                   <table className="w-full text-xs">
                     <tbody>{lines.map(l => (
                       <tr key={l.key} className="border-b border-border-gray/60 last:border-0">
@@ -116,9 +119,8 @@ function Month() {
                         <td className="py-2 text-off-black/65">{l.detail}</td>
                         <td className={`py-2 px-3 ${num} font-semibold whitespace-nowrap w-28`}>{l.amountCents == null ? <span className="font-normal text-amber-700">–</span> : usd(l.amountCents)}</td>
                         <td className="py-2 whitespace-nowrap w-40">
-                          <StatusChip status={l.status} />
+                          <StatusChip status={l.paid ? 'paid' : l.status} />
                           {l.sentBack && <span className="ml-1.5 text-[11px] text-rose-700">sent back</span>}
-                          {l.paid && <span className="ml-1.5 text-[11px] text-emerald-700">paid</span>}
                         </td>
                         <td className="py-2 pr-4 whitespace-nowrap text-right w-36">
                           {l.kind === 'race' ? <Link to="/finance/payouts?tab=races" className="text-[11px] text-blue-600 hover:underline">Open in Races</Link>
@@ -145,6 +147,41 @@ function Month() {
           {data.racesError && <p className="text-[11px] text-amber-700">Race partner payouts are left out: {data.racesError}</p>}
         </>
       )}
+    </div>
+  )
+}
+
+/**
+ * The month's payouts: the total, then where it stands in three colour-coded
+ * cards that match the row chips. In progress takes in Submitted (both wait
+ * on someone); Approved is approved and not paid yet; Paid is paid.
+ */
+const BUCKETS = [
+  { key: 'in_progress', label: 'In progress', note: 'Being worked, or waiting for your approval', cls: 'bg-amber-50 border-amber-200', text: 'text-amber-900', sub: 'text-amber-800/70' },
+  { key: 'approved', label: 'Approved', note: 'Approved, not paid yet', cls: 'bg-blue-50 border-blue-200', text: 'text-blue-900', sub: 'text-blue-800/70' },
+  { key: 'paid', label: 'Paid', note: 'Marked paid', cls: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-900', sub: 'text-emerald-800/70' },
+] as const
+const bucketOf = (l: MonthLine) => (l.paid ? 'paid' : l.status === 'approved' ? 'approved' : 'in_progress')
+
+function Totals({ data }: { data: MonthPayouts }) {
+  const sums = { in_progress: 0, approved: 0, paid: 0 }
+  const counts = { in_progress: 0, approved: 0, paid: 0 }
+  for (const l of data.lines) { const b = bucketOf(l); sums[b] += l.amountCents || 0; counts[b] += 1 }
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className={`${card} p-4 col-span-2 lg:col-span-1`}>
+        <p className="text-xs text-off-black/50">Total payouts</p>
+        <p className="text-3xl font-semibold text-off-black tabular-nums mt-0.5">{usd(data.totals.totalCents)}</p>
+        <p className="text-[11px] text-off-black/45 mt-0.5">{data.label}</p>
+        {data.totals.unpriced > 0 && <p className="text-[11px] text-amber-700 mt-0.5">{data.totals.unpriced} line{data.totals.unpriced === 1 ? '' : 's'} not counted yet (no rate, or race sales not pulled)</p>}
+      </div>
+      {BUCKETS.map(b => (
+        <div key={b.key} className={`rounded-lg border p-4 ${b.cls} ${b.key === 'paid' ? 'col-span-2 lg:col-span-1' : ''}`}>
+          <p className={`text-xs font-semibold ${b.text}`}>{b.label}</p>
+          <p className={`text-2xl font-semibold tabular-nums mt-0.5 ${b.text}`}>{usd(sums[b.key])}</p>
+          <p className={`text-[11px] mt-0.5 ${b.sub}`}>{counts[b.key]} line{counts[b.key] === 1 ? '' : 's'} · {b.note}</p>
+        </div>
+      ))}
     </div>
   )
 }

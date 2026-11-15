@@ -13,9 +13,8 @@
 import prisma from '../../db.js'
 import { unpaidWeeks, unpaidMonths } from './payouts.js'
 import { listRacePayouts, RACE_PAYOUTS_CACHE } from './racePayouts.js'
-import { addDays, dayLabel, mondayOf } from './periods.js'
+import { dayLabel, monthOf, payPeriodOf, lastOfMonth, monthLabel } from './periods.js'
 
-const PAY_EVERY_DAYS = 14
 const RACE_SOON_DAYS = 7
 const usd = c => `$${(c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const hrs = m => `${(m / 60).toFixed(1).replace(/\.0$/, '')}h`
@@ -25,15 +24,14 @@ const card = c => ({ key: c.key || `${c.kind}:${c.title}`, ...c, text: `${c.titl
 const within = (p, ms, fallback) => Promise.race([p, new Promise(r => setTimeout(() => r(fallback), ms))])
 
 /**
- * The team's pay: hourly people are paid every two weeks. The period runs
- * from the day after the last hours run to 14 days on; once it has ended,
- * its approved weeks are due. Before any run, it starts the Monday of the
- * oldest approved week.
+ * The team's pay: hourly people are paid every two weeks, on the Sunday a
+ * period ends (periods.js payPeriodOf), each on their own from Finance >
+ * Payouts. Approved, unpaid weeks of a period whose payday has come are due;
+ * the period running now is coming up.
  */
 async function teamPay(today) {
-  const [weeks, lastRun, open] = await Promise.all([
+  const [weeks, open] = await Promise.all([
     unpaidWeeks(),
-    prisma.payRun.findFirst({ where: { kind: 'hours' }, orderBy: { periodEnd: 'desc' }, select: { periodEnd: true } }),
     prisma.payRun.findMany({ where: { status: { in: ['draft', 'approved'] } }, select: { id: true, label: true, status: true, lines: { select: { amountCents: true } } } }),
   ])
   const out = []
@@ -43,19 +41,22 @@ async function teamPay(today) {
       ? { key: `run:${r.id}:draft`, kind: 'run', tone: 'due', title: 'Approve the pay run', detail: r.label, cents, action: { label: 'Review run', to: '/finance/payouts' } }
       : { key: `run:${r.id}:approved`, kind: 'run', tone: 'due', title: 'Pay and mark paid', detail: `${r.label} is approved`, cents, action: { label: 'Mark paid', to: '/finance/payouts' } }))
   }
-  if (!weeks.length) return out
-  const start = lastRun ? addDays(lastRun.periodEnd, 1) : mondayOf(weeks[0].weekStart)
-  const end = addDays(start, PAY_EVERY_DAYS - 1)
-  const inPeriod = weeks.filter(w => w.weekStart <= end)
-  const due = today > end && inPeriod.length
-  const list = due ? inPeriod : weeks
-  const byPerson = new Map()
-  for (const w of list) byPerson.set(w.name, (byPerson.get(w.name) || 0) + w.minutes)
-  const people = [...byPerson].map(([n, m]) => `${n.split(' ')[0]} ${hrs(m)}`).join(', ')
-  const cents = list.reduce((a, w) => a + w.amountCents, 0)
-  out.push(card(due
-    ? { key: `payouts:${start}:due`, kind: 'payouts', tone: 'due', title: 'Pay the team', detail: `Hours for ${dayLabel(start)} to ${dayLabel(end)}: ${people}`, cents, due: addDays(end, 1), action: { label: 'Start pay run', to: '/finance/payouts' } }
-    : { key: `payouts:${start}:soon`, kind: 'payouts', tone: 'soon', title: 'Team pay coming up', detail: `${people} approved so far. The period ends ${dayLabel(end)}.`, cents, due: addDays(end, 1), action: { label: 'See payouts', to: '/finance/payouts' } }))
+  const periods = new Map()
+  for (const w of weeks) {
+    const p = payPeriodOf(w.weekStart)
+    const g = periods.get(p.start) || { ...p, byPerson: new Map(), cents: 0 }
+    g.byPerson.set(w.name, (g.byPerson.get(w.name) || 0) + w.minutes)
+    g.cents += w.amountCents
+    periods.set(p.start, g)
+  }
+  for (const g of [...periods.values()].sort((a, b) => a.start.localeCompare(b.start))) {
+    const due = today >= g.end
+    const people = [...g.byPerson].map(([n, m]) => `${n.split(' ')[0]} ${hrs(m)}`).join(', ')
+    const to = `/finance/payouts?month=${monthOf(g.end)}`
+    out.push(card(due
+      ? { key: `payouts:${g.start}:due`, kind: 'payouts', tone: 'due', title: 'Pay the team', detail: `Hours for ${dayLabel(g.start)} to ${dayLabel(g.end)}: ${people}`, cents: g.cents, due: g.end, action: { label: 'Pay', to } }
+      : { key: `payouts:${g.start}:soon`, kind: 'payouts', tone: 'soon', title: 'Team pay coming up', detail: `${people} approved so far. Payday is ${dayLabel(g.end)}.`, cents: g.cents, due: g.end, action: { label: 'See payouts', to } }))
+  }
   return out
 }
 
@@ -98,9 +99,29 @@ async function racePay(today) {
 }
 
 /** Last month's custom designs and the designer fee, once the month is closed. */
+/**
+ * The design team is paid on the last day of the month for the month: from
+ * that day, its customs and fee not paid yet (owed, or approved and not paid).
+ */
 async function monthlyPay(today) {
-  const months = await unpaidMonths({ today, back: 2 }).catch(() => [])
-  return months.map(m => card({ key: `monthly:${m.label}`, kind: 'monthly', tone: 'due', title: `Pay ${m.label} customs and designer fee`, detail: m.items.map(i => `${i.name.split(' ')[0]} ${i.kind === 'designer_fee' ? 'fee' : `${i.quantity} custom${i.quantity === 1 ? '' : 's'}`}`).join(', '), cents: m.totalCents, action: { label: 'Start monthly run', to: '/finance/payouts' } }))
+  const [months, approved] = await Promise.all([
+    unpaidMonths({ today, back: 2, includeCurrent: today === lastOfMonth(today) }).catch(() => []),
+    prisma.payoutLine.findMany({ where: { paidAt: null, OR: [{ sourceRef: { startsWith: 'customs:' } }, { sourceRef: { startsWith: 'fee:' } }] }, select: { sourceRef: true, amountCents: true, user: { select: { firstName: true } } } }),
+  ])
+  const byMonth = new Map()
+  const add = (month, who, cents) => {
+    const m = byMonth.get(month) || { month, people: new Map(), cents: 0 }
+    m.people.set(who, (m.people.get(who) || 0) + cents)
+    m.cents += cents
+    byMonth.set(month, m)
+  }
+  for (const m of months) for (const i of m.items) add(m.month, i.name.split(' ')[0], i.amountCents)
+  for (const l of approved) add(l.sourceRef.split(':')[1], l.user?.firstName || 'Someone', l.amountCents)
+  return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month)).map(m => card({
+    key: `monthly:${m.month}`, kind: 'monthly', tone: 'due', title: `Pay the design team for ${monthLabel(m.month)}`,
+    detail: [...m.people].map(([n, c]) => `${n} ${usd(c)}`).join(', '), cents: m.cents, due: lastOfMonth(`${m.month}-01`),
+    action: { label: 'Pay', to: `/finance/payouts?month=${m.month}` },
+  }))
 }
 
 export async function moneyNeeds({ today }) {

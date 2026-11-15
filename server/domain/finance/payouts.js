@@ -15,7 +15,7 @@ import prisma from '../../db.js'
 import { customCounter, ratesFor, designRole } from '../orders/customCounter.js'
 import { summaryBetween } from './ledger.js'
 import { loadRules } from './rules.js'
-import { todayET, monthOf, shiftMonth, lastOfMonth, monthLabel, isValidMonth, isValidDay, dayLabel, mondayOf, addDays } from './periods.js'
+import { todayET, monthOf, shiftMonth, lastOfMonth, monthLabel, isValidMonth, isValidDay, dayLabel, mondayOf, addDays, payPeriodOf } from './periods.js'
 import { summarizeEntries } from './timesheets.js'
 
 export class PayoutError extends Error {
@@ -57,10 +57,10 @@ export async function unpaidWeeks({ periodStart = null, periodEnd = null } = {})
   })
 }
 
-/** The closed months (before this one) whose customs or fee are not on a run yet. */
-export async function unpaidMonths({ today = todayET(), back = 3 } = {}) {
+/** The closed months (before this one, and this one on its last day with includeCurrent) whose customs or fee are not on a run yet. */
+export async function unpaidMonths({ today = todayET(), back = 3, includeCurrent = false } = {}) {
   const current = monthOf(today)
-  const months = Array.from({ length: back }, (_, i) => shiftMonth(current, -(i + 1)))
+  const months = [...(includeCurrent ? [current] : []), ...Array.from({ length: back }, (_, i) => shiftMonth(current, -(i + 1)))]
   const refs = new Set((await prisma.payoutLine.findMany({ where: { sourceRef: { not: null } }, select: { sourceRef: true } })).map(l => l.sourceRef))
   const rules = await loadRules()
   // Any of their roles: a head designer may hold it as an extra role.
@@ -187,6 +187,43 @@ export async function createRun({ kind, periodStart, periodEnd, month, actor }) 
     })
   }
   throw new PayoutError('kind must be hours or monthly')
+}
+
+export const PAYOUT_METHODS = ['wise', 'payoneer', 'other']
+export const METHOD_LABEL = { wise: 'Wise', payoneer: 'Payoneer', other: 'Other' }
+
+/**
+ * Pay one person for one two-week period (periods.js payPeriodOf): their
+ * approved weeks go on a run of their own, marked paid now, with how it was
+ * paid. Matt pays each person on their own (Dani by Wise, Eli's Payoneer
+ * invoice), so a run is one person's period. Nothing moves money: this
+ * records a payment made in Wise or Payoneer. Every week of theirs with
+ * hours in the period has to be approved first.
+ */
+export async function payPeriod({ userId, periodStart, method, paidRef = '', actor = null, today = todayET() }) {
+  if (!isValidDay(periodStart)) throw new PayoutError('Which pay period?')
+  const { start, end } = payPeriodOf(periodStart)
+  if (start !== periodStart) throw new PayoutError('That is not the first day of a pay period')
+  if (today < end) throw new PayoutError(`Payday for this period is ${dayLabel(end)}`)
+  if (!PAYOUT_METHODS.includes(method)) throw new PayoutError('Pick how you paid: Wise, Payoneer or other')
+  const user = await prisma.user.findUnique({ where: { id: String(userId || '') }, select: USER_SELECT })
+  if (!user) throw new PayoutError('No such person', 404)
+  const sheets = await prisma.timesheet.findMany({ where: { userId: user.id, weekStart: { gte: start, lte: end } }, include: { entries: { select: { minutes: true, day: true, startedAt: true, endedAt: true } } }, orderBy: { weekStart: 'asc' } })
+  const waiting = sheets.find(t => t.status !== 'approved' && summarizeEntries(t.entries).totalMinutes > 0)
+  if (waiting) throw new PayoutError(`Their week of ${dayLabel(waiting.weekStart)} is not approved yet`)
+  const weeks = (await unpaidWeeks({ periodStart: start, periodEnd: end })).filter(w => w.userId === user.id)
+  if (!weeks.length) throw new PayoutError('Nothing approved and unpaid for them in that period')
+  const at = new Date()
+  const ref = [METHOD_LABEL[method], String(paidRef || '').trim().slice(0, 100)].filter(Boolean).join(': ')
+  return prisma.$transaction(async tx => {
+    const run = await tx.payRun.create({ data: { kind: 'hours', periodStart: start, periodEnd: end, label: `Hours ${dayLabel(start)} to ${dayLabel(end)}: ${name(user)}`, status: 'paid', approvedAt: at, paidAt: at, note: `Paid: ${ref}`, createdById: actor?.id || null } })
+    for (const w of weeks) {
+      const line = await tx.payoutLine.create({ data: { payRunId: run.id, userId: w.userId, kind: 'hours', quantity: w.minutes, rateCents: w.rateCents, amountCents: w.amountCents, sourceRef: `timesheet:${w.timesheetId}`, note: `Week of ${dayLabel(w.weekStart)}`, paidAt: at, paidRef: ref } })
+      await tx.timesheet.update({ where: { id: w.timesheetId }, data: { payoutLineId: line.id } })
+    }
+    await tx.user.update({ where: { id: user.id }, data: { payoutMethod: method } })
+    return shapeRun(await tx.payRun.findUnique({ where: { id: run.id }, include: RUN_INCLUDE }))
+  })
 }
 
 async function runOr404(id) {
