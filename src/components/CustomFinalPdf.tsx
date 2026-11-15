@@ -210,7 +210,7 @@ export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, 
     </div>
   ))
 
-  // A designer's part is done: Matt attaches it in Artelo and sends it through.
+  // A designer's part is done: the tool attaches it in Artelo and sends it through.
   if (!canAttach) {
     return (
       <div className="space-y-2">
@@ -218,7 +218,7 @@ export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, 
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[13px] leading-snug text-off-black space-y-2">
           <p>
             <span className="font-semibold text-emerald-700 mr-1.5">Final PDF uploaded.</span>
-            {send ? 'It has not gone to production yet; see below.' : <>Matt has been pinged on Slack. He attaches <span className="font-mono">{finalPdf.fileName}</span> to the Artelo order and sends it to production. Nothing else to do here.</>}
+            {send ? 'It has not gone to production yet; see below.' : <>Matt sends it to production from here, and the tool attaches <span className="font-mono">{finalPdf.fileName}</span> to the Artelo order. Nothing else to do here.</>}
           </p>
           {where}
         </div>
@@ -228,42 +228,54 @@ export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, 
     )
   }
 
-  // An admin: attach it to the Artelo order, send it through, mark it complete.
+  // An admin. The tool attaches the PDF to the Artelo order and sends it
+  // (arteloSend.js, like a standard print); this says why it has not gone
+  // yet, with the one thing to do as the button. Attaching by hand is the
+  // exception (an order Artelo will not match), so it is a link.
+  const st = send?.state
+  const red = st === 'manual' || st === 'blocked'
+  const amber = st === 'support' || st === 'held'
+  const title = st === 'manual' ? 'Expedited: attached in Artelo, not sent yet'
+    : st === 'blocked' ? 'Artelo would not take it'
+    : st === 'support' ? 'Support conversation open'
+    : st === 'held' ? `Held${send?.by ? ` by ${send.by}` : ''}`
+    : 'Ready to send'
+  const body = st === 'manual' ? 'Change the shipping to UPS Next Day Air Saver (under $40), then send it to production in Artelo. It completes here on its own.'
+    : st === 'blocked' ? `${String(send?.reason || 'Artelo refused it').replace(/\.$/, '')}.${send?.next ? ' The tool tries again on its own.' : ''}`
+    : st === 'support' ? <>Held from production while the customer&apos;s conversation is open. Closing it releases the print within 15 minutes.{send?.threadId && <> <a href={`/support?thread=${encodeURIComponent(send.threadId)}`} className="underline font-semibold">Open the conversation</a></>}</>
+    : st === 'held' ? `${clock(send?.at)}. It does not go to production until someone sends it.`
+    : <>Send to production attaches <span className="font-mono">{finalPdf.fileName}</span> to Artelo order <span className="font-semibold">{orderNo}</span> and sends it.</>
+  const link = 'inline-flex items-center gap-1 text-sm font-medium text-[#4600D6] hover:underline underline-offset-2 disabled:opacity-50'
   return (
     <div className="space-y-2">
       {picker}
-      <div className="rounded-md border border-[#4600D6]/30 bg-[#4600D6]/[0.04] px-3 py-2.5 text-[13px] leading-snug text-off-black space-y-2">
-        <p>
-          <span className="font-semibold text-[#4600D6] mr-1.5">Send it through Artelo.</span>
-          Send to production attaches <span className="font-mono">{finalPdf.fileName}</span> to Artelo order <span className="font-semibold">{orderNo}</span> and sends it, like a standard print. Attach by hand in Artelo only when the order needs it (expedited shipping, a changed item), then mark it complete here.
-        </p>
+      <div className={`rounded-md border px-4 py-3 text-[13px] leading-snug space-y-2 ${red ? 'border-red-200 bg-red-50 text-red-800' : amber ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-[#4600D6]/30 bg-[#4600D6]/[0.04] text-off-black'}`}>
+        <div className="flex items-center gap-4">
+          <p className="flex-1 min-w-0">
+            <span className={`font-semibold mr-1.5 ${red || amber ? '' : 'text-[#4600D6]'}`}>{title}.</span>
+            {body}
+          </p>
+          {st === 'manual' ? (arteloOrderUrl && (
+            <a href={arteloOrderUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 inline-flex items-center gap-2 px-5 py-3.5 text-base rounded-md bg-[#4600D6] text-white font-semibold hover:opacity-90">
+              <img src="/artelo-icon.png" alt="" className="w-5 h-5 rounded-[4px]" /> Expedite Shipping in Artelo <ArrowUpRight className="w-4 h-4 opacity-70" />
+            </a>
+          )) : (
+            <button onClick={() => sendAction('send-now')} disabled={busy !== null} className="shrink-0 inline-flex items-center gap-2 px-5 py-3.5 text-base rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors">
+              {busy === 'send' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} {st === 'blocked' ? 'Try sending again' : st === 'support' ? 'Send anyway' : 'Send to production'}
+            </button>
+          )}
+        </div>
         {where}
       </div>
-      {sendBar || (
-        // Uploaded before Approve sent things, or with sending off: send it from here.
-        <button onClick={() => sendAction('send-now')} disabled={busy !== null} className="w-full inline-flex items-center justify-center gap-2 py-4 text-base rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors">
-          {busy === 'send' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} Send to production
-        </button>
-      )}
-
-      <div className={`grid gap-3 ${opened || !arteloOrderUrl ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
-        {arteloOrderUrl ? (
-          <a href={arteloOrderUrl} target="_blank" rel="noopener noreferrer" onClick={() => { writeOpened(finalPdf.id); setOpened(true) }}
-            className={`flex items-center justify-center gap-2 py-4 text-base rounded-md font-semibold transition-opacity ${opened ? 'bg-white border-2 border-[#4600D6]/30 text-[#4600D6] hover:bg-[#4600D6]/[0.04]' : 'bg-[#4600D6] text-white hover:opacity-90'}`}>
-            <img src="/artelo-icon.png" alt="" className="w-5 h-5 rounded-[4px]" /> Attach in Artelo <ArrowUpRight className="w-4 h-4 opacity-70" />
-          </a>
-        ) : (
-          <div className="flex items-center justify-center text-center px-3 py-3 rounded-md border border-border-gray bg-subtle-gray text-xs text-off-black/60">
-            No Artelo order is linked. Find order {orderNo} in Artelo and attach the file there.
-          </div>
-        )}
-        {(opened || !arteloOrderUrl) && (
-          <button onClick={onComplete} className="inline-flex items-center justify-center gap-2 py-4 text-base rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors">
-            <Check className="w-5 h-5" /> Sent by hand in Artelo, mark complete
-          </button>
-        )}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 px-1">
+        {st !== 'manual' && (arteloOrderUrl
+          ? <a href={arteloOrderUrl} target="_blank" rel="noopener noreferrer" onClick={() => { writeOpened(finalPdf.id); setOpened(true) }} className={link}>
+              <img src="/artelo-icon.png" alt="" className="w-4 h-4 rounded-[3px]" /> Attach by hand in Artelo <ArrowUpRight className="w-3.5 h-3.5 opacity-70" />
+            </a>
+          : <span className="text-xs text-off-black/60">No Artelo order is linked. Find order {orderNo} in Artelo to attach it by hand.</span>)}
+        {(opened || !arteloOrderUrl) && <button onClick={onComplete} className={link}><Check className="w-4 h-4" /> Sent by hand in Artelo, mark complete</button>}
+        <button onClick={() => setReplacing(true)} disabled={busy !== null} className={`${link} !text-off-black/60`}>Upload a different PDF</button>
       </div>
-      <button onClick={() => setReplacing(true)} disabled={busy !== null} className={`${btnGhost} w-full justify-center`}>Upload a different PDF</button>
     </div>
   )
 }
