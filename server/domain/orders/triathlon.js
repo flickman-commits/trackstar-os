@@ -1,9 +1,11 @@
 /**
- * Standard triathlon prints. One design serves every triathlon, so there are
- * no scrapers: a person looks the athlete up on the race's results site and
- * enters what prints. The print shows the overall time and bib, and for each
- * leg its time and distance (Swim 00:40:15 / 1.5 mi), plus the race date and
- * weather like every other print.
+ * Standard triathlon prints. One design serves every triathlon, made by hand.
+ * IRONMAN and IRONMAN 70.3 races have a scraper (IronmanScraper) that fills
+ * the result, legs included; for every other triathlon, and any leg the
+ * lookup could not fill, a person looks the athlete up on the race's results
+ * site and enters what prints. The print shows the overall time and bib, and
+ * for each leg its time and distance (Swim 00:40:15 / 1.5 mi), plus the race
+ * date and weather like every other print.
  */
 
 /** The leg fields a triathlon result holds, in print order. */

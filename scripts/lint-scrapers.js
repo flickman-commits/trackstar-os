@@ -89,7 +89,8 @@ for (const platformFile of platformFiles) {
 // Both expectedChipTime AND expectedChipPace are required — two sources of
 // gun/chip drift, so we lock both down. Boston bug (April 2026) is why.
 for (const fx of fixtures) {
-  const required = ['platform', 'race', 'year', 'runner', 'expectedChipTime', 'expectedChipPace']
+  // A triathlon print has no pace: noPace swaps the pace for expectedLegs.
+  const required = ['platform', 'race', 'year', 'runner', 'expectedChipTime', ...(fx.noPace ? ['expectedLegs'] : ['expectedChipPace'])]
   const missing = required.filter(k => !fx[k])
   if (missing.length > 0) {
     errors.push(`Fixture for ${fx.race || '?'}: missing fields ${missing.join(', ')}`)

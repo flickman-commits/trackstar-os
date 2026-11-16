@@ -149,6 +149,17 @@ function computePipeline({ order, research, race, render, hasScraper, templates,
     // the race date, then the weather.
     if (race?.raceDate && !order.renderBeforeRace && !raceRun(race, year)) return stage('waiting', 'Race not run yet', { fix: `${raceName} ${year} has not happened yet.` })
     const missing = triathlonMissing(research)
+    // IRONMAN races have a scraper (IronmanScraper): say what its lookup found.
+    // Every other triathlon, and whatever the lookup could not fill, is by hand.
+    const triRs = research?.researchStatus || null
+    if (missing.length && hasScraper && triRs !== 'no_scraper') {
+      if (!research) return stage('needs_research', 'Needs research', { fix: 'No lookup has run for this order yet. It runs on the next import, or run it now.' })
+      if (triRs === 'upstream_error') return stage('action', 'Timing site down', { kind: 'data', fix: 'The IRONMAN results site was down when the lookup ran. Run research again.' })
+      if (triRs === 'ambiguous') return stage('action', 'Pick a match', { kind: 'data', fix: 'More than one athlete matches. Confirm which one on the IRONMAN results page, then accept the match.' })
+      if (triRs === 'not_found') return stage('action', 'Runner not found', { kind: 'data', fix: `The athlete was not among the finishers. ${research.researchNotes && /no finish time/.test(research.researchNotes) ? `${research.researchNotes} ` : ''}Check the name, race and year, research again, or enter the result by hand under Runner > Edit.` })
+      if (triRs === 'year_not_configured') return stage('action', year < SCRAPER_MIN_YEAR ? 'Research by hand' : 'Needs a scraper', { kind: year < SCRAPER_MIN_YEAR ? 'data' : 'setup', fix: year < SCRAPER_MIN_YEAR ? `Scrapers only cover ${SCRAPER_MIN_YEAR} and later. Find the athlete on the race's results site and enter the ${missing.join(', ')} under Runner > Edit.` : `The ${raceName} scraper is not wired up for ${year}. A developer adds this year's subevent id, or enter the result by hand.` })
+      if (triRs === 'found') return stage('action', 'Needs manual research', { kind: 'data', fix: `The IRONMAN result is in, but it has no ${missing.join(', ')} (a leg shortened or cancelled that year shows no distance). Read it off the race's results page and enter it under Runner > Edit.` })
+    }
     if (missing.length) return stage('action', 'Needs manual research', { kind: 'data', fix: `Triathlons are researched by hand. Find the athlete on the race's results site and enter the ${missing.join(', ')} under Runner > Edit.` })
     if (!race?.raceDate) return stage('action', 'Needs race date', { kind: 'data', fix: `${raceName} ${year} has no race date. Add it with a source under Race > Edit; the weather follows from it.` })
     const blockers = printBlockers(race)

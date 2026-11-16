@@ -28,6 +28,7 @@ import { RaceResultScraper } from './platforms/RaceResultScraper.js'
 import { TrueTimeScraper } from './platforms/TrueTimeScraper.js'
 import { UltraSignupScraper } from './platforms/UltraSignupScraper.js'
 import { HuberTimingScraper } from './platforms/HuberTimingScraper.js'
+import { IronmanScraper } from './platforms/IronmanScraper.js'
 
 // --- Race configs ---
 import kiawahIslandConfig from './configs/kiawahIsland.js'
@@ -99,6 +100,21 @@ import atlanticCityConfig from './configs/atlanticCity.js'
 import desMoinesConfig from './configs/desMoines.js'
 import coloradoSpringsConfig from './configs/coloradoSprings.js'
 import humboldtRedwoodsConfig from './configs/humboldtRedwoods.js'
+import ironmanWisconsinConfig from './configs/ironmanWisconsin.js'
+import ironmanChattanoogaConfig from './configs/ironmanChattanooga.js'
+import ironman703ChattanoogaConfig from './configs/ironman703Chattanooga.js'
+import ironman703FloridaConfig from './configs/ironman703Florida.js'
+import ironman703WacoConfig from './configs/ironman703Waco.js'
+import ironman703MaineConfig from './configs/ironman703Maine.js'
+import ironman703NorthCarolinaConfig from './configs/ironman703NorthCarolina.js'
+import ironman703AugustaConfig from './configs/ironman703Augusta.js'
+import ironman703NewYorkConfig from './configs/ironman703NewYork.js'
+import ironmanCaliforniaConfig from './configs/ironmanCalifornia.js'
+import ironman703WisconsinConfig from './configs/ironman703Wisconsin.js'
+import ironmanFloridaConfig from './configs/ironmanFlorida.js'
+import ironmanMarylandConfig from './configs/ironmanMaryland.js'
+import ironmanCanadaOttawaConfig from './configs/ironmanCanadaOttawa.js'
+import ironman703MallorcaConfig from './configs/ironman703Mallorca.js'
 import { normalizeRaceName } from './raceNameNormalization.js'
 import { applyOverride } from './scraperOverrides.js'
 
@@ -129,6 +145,7 @@ const PLATFORM_MAP = {
   truetime: TrueTimeScraper,
   ultrasignup: UltraSignupScraper,
   hubertiming: HuberTimingScraper,
+  ironman: IronmanScraper,
 }
 
 /**
@@ -204,6 +221,21 @@ const ALL_CONFIGS = [
   desMoinesConfig,
   coloradoSpringsConfig,
   humboldtRedwoodsConfig,
+  ironmanWisconsinConfig,
+  ironmanChattanoogaConfig,
+  ironman703ChattanoogaConfig,
+  ironman703FloridaConfig,
+  ironman703WacoConfig,
+  ironman703MaineConfig,
+  ironman703NorthCarolinaConfig,
+  ironman703AugustaConfig,
+  ironman703NewYorkConfig,
+  ironmanCaliforniaConfig,
+  ironman703WisconsinConfig,
+  ironmanFloridaConfig,
+  ironmanMarylandConfig,
+  ironmanCanadaOttawaConfig,
+  ironman703MallorcaConfig,
 ]
 
 /**
@@ -361,6 +393,24 @@ function findConfigByKeywords(normalizedName) {
 }
 
 /**
+ * An IRONMAN race from however the customer typed it: "Iron Man 70.3 Waco",
+ * "Augusta 70.3 Ironman", "Ottawa Ironman". The name has to say IRONMAN and
+ * name a place one config lists (ironman.places); "70.3" (or "half") picks the
+ * 70.3, its absence the full IRONMAN. A full and a 70.3 at the same place
+ * (Wisconsin, Chattanooga) are different races with different distances, so a
+ * name that leaves the distance out is read as the full one only when that is
+ * what it says; one place matching two configs of the same distance is no
+ * match, and a person sets the race.
+ */
+function findIronmanConfig(normalizedName) {
+  if (!/iron\s*man/.test(normalizedName)) return null
+  const half = /\b70\.3\b|\bhalf\b/.test(normalizedName)
+  const hits = ALL_CONFIGS.filter(c => c.platform === 'ironman' && Boolean(c.ironman?.half) === half
+    && (c.ironman?.places || []).some(p => hasWholeWord(normalizedName, p)))
+  return hits.length === 1 ? hits[0] : null
+}
+
+/**
  * Match a race name to its config using alias + fuzzy matching.
  * @param {string} raceName - Name of the race
  * @returns {Object|null} The matched config, or null if none matches
@@ -383,7 +433,12 @@ function findConfigForRace(raceName) {
       }
     }
 
-    // 3. Try keyword-based fuzzy matching
+    // 3. An IRONMAN race, by place and distance
+    if (!config) {
+      config = findIronmanConfig(normalizedName)
+    }
+
+    // 4. Try keyword-based fuzzy matching
     if (!config) {
       config = findConfigByKeywords(normalizedName)
     }

@@ -25,6 +25,14 @@ function normalizePace(p) {
   return String(p).trim().replace(/\/(mi|mile|km)$/i, '').trim()
 }
 
+/** The first leg field that differs from the fixture, as text, or null. */
+function legsMismatch(want, got) {
+  for (const [k, v] of Object.entries(want)) {
+    if ((got?.[k] ?? null) !== v) return `${k} got ${got?.[k] ?? 'null'}, expected ${v ?? 'null'}`
+  }
+  return null
+}
+
 async function main() {
   console.log(`\nRunning ${CHIP_TIME_FIXTURES.length} chip-time fixtures...\n`)
 
@@ -61,6 +69,12 @@ async function main() {
       } else if (fx.expectedChipPace && gotPace !== wantPace) {
         console.log(`❌ PACE_MISMATCH (got ${gotPace || '<empty>'}, expected ${wantPace}) - likely gun-pace regression`)
         results.push({ ...fx, pass: false, reason: `Pace mismatch: got ${gotPace}, expected ${wantPace}` })
+      } else if (fx.noPace && result.officialPace) {
+        console.log(`❌ PACE_UNEXPECTED (got ${result.officialPace}; a triathlon has none)`)
+        results.push({ ...fx, pass: false, reason: `Pace ${result.officialPace} where none is expected` })
+      } else if (fx.expectedLegs && legsMismatch(fx.expectedLegs, result.legs)) {
+        console.log(`❌ LEGS_MISMATCH (${legsMismatch(fx.expectedLegs, result.legs)})`)
+        results.push({ ...fx, pass: false, reason: `Legs: ${legsMismatch(fx.expectedLegs, result.legs)}` })
       } else if (fx.expectedBib && result.bibNumber !== fx.expectedBib) {
         console.log(`❌ BIB_MISMATCH (got ${result.bibNumber}, expected ${fx.expectedBib})`)
         results.push({ ...fx, pass: false, reason: `Bib mismatch: got ${result.bibNumber}, expected ${fx.expectedBib}` })

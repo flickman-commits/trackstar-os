@@ -6,6 +6,7 @@
 import prisma from '../../db.js'
 import { resultsLinkForBib } from './resultsLink.js'
 import { typedTime, sameClock } from './timeReading.js'
+import { isTriathlon } from '../orders/triathlon.js'
 
 /** Wrong input or nothing found; `status` is the HTTP status the API answers with. */
 export class AcceptMatchError extends Error {
@@ -37,8 +38,12 @@ export async function acceptMatch({ orderNumber, match }) {
   let enrichedPace = match.pace || null
   let enrichedEventType = match.eventType || null
   let enrichedResultsUrl = match.resultsUrl || null
+  // A triathlon print needs each leg too: from the candidate when it carries
+  // them (IronmanScraper's do), else from the look-up below.
+  let legs = match.legs && typeof match.legs === 'object' ? match.legs : null
+  const triathlon = isTriathlon(order)
 
-  if (!enrichedTime && match.name) {
+  if ((!enrichedTime || (triathlon && !legs)) && match.name) {
     try {
       const { getScraperForRace } = await import('../../scrapers/index.js')
       const { ensureOverridesLoaded } = await import('../../scrapers/scraperOverrides.js')
@@ -61,7 +66,7 @@ export async function acceptMatch({ orderNumber, match }) {
         // Still several of that name: the one with the accepted bib, if it carries a time.
         if (!enriched.found && match.bib) {
           const same = (enriched.possibleMatches || []).find(c => String(c?.bib || '').trim() === String(match.bib).trim() && c.time)
-          if (same) enriched = { found: true, officialTime: same.time, officialPace: same.pace, eventType: same.eventType, resultsUrl: same.resultsUrl || enriched.resultsUrl }
+          if (same) enriched = { found: true, officialTime: same.time, officialPace: same.pace, eventType: same.eventType, resultsUrl: same.resultsUrl || enriched.resultsUrl, legs: same.legs || null }
         }
       }
       if (enriched.found) {
@@ -69,6 +74,7 @@ export async function acceptMatch({ orderNumber, match }) {
         enrichedPace = enriched.officialPace || enrichedPace
         enrichedEventType = enriched.eventType || enrichedEventType
         enrichedResultsUrl = enriched.resultsUrl || enrichedResultsUrl
+        if (triathlon && enriched.legs) legs = enriched.legs
         console.log(`[accept-match] Enriched: time=${enrichedTime} pace=${enrichedPace}`)
       } else {
         console.log(`[accept-match] Re-search did not return a unique match - saving with available data`)
@@ -100,6 +106,7 @@ export async function acceptMatch({ orderNumber, match }) {
       officialPace: keepTyped ? research.officialPace : enrichedPace,
       eventType: enrichedEventType || research.eventType || null,
       resultsUrl: enrichedResultsUrl || research.resultsUrl || null,
+      ...(triathlon && legs ? pickLegs(legs) : {}),
       researchStatus: 'found',
       // Keep the order's runnerName as the customer's original — don't change it.
       // The match name only goes in researchNotes for the audit trail.
@@ -118,4 +125,13 @@ export async function acceptMatch({ orderNumber, match }) {
 
   console.log(`[accept-match] Match accepted for order ${orderNumber}: ${match.name} (time: ${enrichedTime || 'n/a'})`)
   return updatedResearch
+}
+
+const LEG_FIELDS = ['swimTime', 'swimDistance', 'bikeTime', 'bikeDistance', 'runTime', 'runDistance']
+
+/** Only the leg fields, as short strings (a candidate came from the browser). */
+function pickLegs(legs) {
+  const out = {}
+  for (const k of LEG_FIELDS) out[k] = legs[k] ? String(legs[k]).trim().slice(0, 20) : null
+  return out
 }

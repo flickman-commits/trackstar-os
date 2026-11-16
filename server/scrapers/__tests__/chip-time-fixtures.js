@@ -1565,4 +1565,57 @@ export const CHIP_TIME_FIXTURES = [
     officialPage: { url: 'https://www.mtecresults.com/runner/show?rid=15487&race=12017', shows: '1:12:28', readOn: '2026-11-03' },
     notes: "Columbus 2021 Half Marathon (raceId 12017), women's winner. The page's Finish 'Pace Between' 5:42 is the last segment; overall 4348s / 13.1 = 331.9s, 5:32.",
   },
+  // ── IRONMAN (labs-v2.competitor.com, the results ironman.com embeds) ──
+  // A triathlon print has no pace (noPace); each leg is checked instead.
+  // officialPage is the ironman.com race's results page; its results are the
+  // embedded labs-v2 page, read there on 2026-11-16 (the address is in each
+  // ironman.com results page's source).
+  {
+    platform: 'ironman',
+    race: 'IRONMAN Wisconsin',
+    year: 2026,
+    runner: 'Nicholas Vento',
+    expectedChipTime: '14:31:35',
+    noPace: true,
+    expectedBib: '1021',
+    expectedLegs: { swimTime: '01:31:48', swimDistance: '2.4 mi', bikeTime: '07:35:07', bikeDistance: '112 mi', runTime: '05:00:41', runDistance: '26.2 mi' },
+    officialPage: { url: 'https://www.ironman.com/races/im-wisconsin/results', shows: '14:31:35', readOn: '2026-11-16' },
+    notes: 'Full IRONMAN. Page row: Swim 1:31:48, T1 0:15:41, Bike 7:35:07, T2 0:08:17, Run 5:00:41, Finish 14:31:35.',
+  },
+  {
+    platform: 'ironman',
+    race: 'IRONMAN 70.3 Wisconsin',
+    year: 2026,
+    runner: 'Jake Blanton',
+    expectedChipTime: '6:07:51',
+    noPace: true,
+    expectedBib: '568',
+    expectedLegs: { swimTime: '00:45:33', swimDistance: '1.2 mi', bikeTime: '03:11:14', bikeDistance: '56 mi', runTime: '02:00:15', runDistance: '13.1 mi' },
+    officialPage: { url: 'https://www.ironman.com/races/im703-wisconsin/results', shows: '6:07:51', readOn: '2026-11-16' },
+    notes: 'A 70.3 (half distances). The page lists him as Jacob Blanton; the order said Jake, so this also covers the nickname match. Swim 0:45:33, Bike 3:11:14, Run 2:00:15, Finish 6:07:51.',
+  },
+  {
+    platform: 'ironman',
+    race: 'IRONMAN 70.3 Waco',
+    year: 2026,
+    runner: 'Caiden Cole',
+    expectedChipTime: '5:13:39',
+    noPace: true,
+    expectedBib: '1406',
+    expectedLegs: { swimTime: null, swimDistance: null, bikeTime: '03:09:19', bikeDistance: '56 mi', runTime: '01:59:53', runDistance: '13.1 mi' },
+    officialPage: { url: 'https://www.ironman.com/races/im703-waco/results', shows: '5:13:39', readOn: '2026-11-16' },
+    notes: 'The 2026 swim was cancelled for the whole field: the page shows no swim and T1 "-", so the swim is left for a person. Bike 3:09:19, Run 1:59:53, Finish 5:13:39.',
+  },
+  {
+    platform: 'ironman',
+    race: 'IRONMAN 70.3 New York',
+    year: 2026,
+    runner: 'Brian Gyeski',
+    expectedChipTime: '6:00:49',
+    noPace: true,
+    expectedBib: '383',
+    expectedLegs: { swimTime: '00:28:26', swimDistance: null, bikeTime: '03:12:26', bikeDistance: '56 mi', runTime: '02:09:41', runDistance: '13.1 mi' },
+    officialPage: { url: 'https://www.ironman.com/races/im703-new-york/results', shows: '6:00:49', readOn: '2026-11-16' },
+    notes: 'The 2026 swim was shortened to 1.5 km for everyone, so the swim distance is not the 70.3 1.2 mi and is left for a person. Swim 0:28:26, Bike 3:12:26, Run 2:09:41, Finish 6:00:49.',
+  },
 ]

@@ -1082,6 +1082,8 @@ export class ResearchService {
       officialPace: results.officialPace
         || derivePace(results.officialTime, results.eventType),
       eventType: results.eventType,
+      // A triathlon (IronmanScraper) also brings each leg's time and distance.
+      ...(results.found && results.legs ? results.legs : {}),
       yearFound: results.yearFound,
       // Pass through the scraper's specific status if it returned one (e.g.
       // 'year_not_configured'), otherwise derive from found/ambiguous flags.
