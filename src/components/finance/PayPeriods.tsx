@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Check, ExternalLink, Loader2, Send, Undo2 } from 'lucide-react'
+import { Check, Copy, ExternalLink, Loader2, Send, Undo2 } from 'lucide-react'
 import ActionModal from '@/components/ActionModal'
 import { btnPrimary, btnGhost, fieldLabel, modalCancel, modalChip, modalInput, modalPrimary } from '@/lib/ui'
 import { financeApi, usd, dayLabel } from '@/lib/financeApi'
@@ -121,7 +121,11 @@ export function PayModal({ name, sub, cents, description, method: initial, onClo
   const [method, setMethod] = useState<PayoutMethod | null>(initial)
   const [ref, setRef] = useState('')
   const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState(false)
   const m = METHODS.find(x => x.key === method)
+  // The bare number (340.80, no $ or commas) pastes cleanly into Wise and Payoneer.
+  const plain = (cents / 100).toFixed(2)
+  const copy = () => navigator.clipboard.writeText(plain).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }, () => toast.error('Could not copy'))
   const pay = async () => {
     if (!method) return
     setBusy(true)
@@ -132,6 +136,15 @@ export function PayModal({ name, sub, cents, description, method: initial, onClo
       description={description}
       hint="Send it in Wise or Payoneer, then mark it paid here."
       footer={<><button onClick={onClose} className={modalCancel}>Cancel</button><button onClick={pay} disabled={busy || !method} className={modalPrimary}>{busy && <Loader2 className="w-4 h-4 animate-spin" />}Mark {usd(cents)} paid</button></>}>
+      <div>
+        <span className={fieldLabel}>Amount</span>
+        <button onClick={copy} title="Copy the amount" className="group flex w-full items-center justify-between rounded-xl border border-border-gray bg-subtle-gray/60 px-3.5 py-2.5 text-left hover:border-off-black/25">
+          <span className="text-xl font-semibold tabular-nums text-off-black">{usd(cents)}</span>
+          <span className={`inline-flex items-center gap-1 text-xs font-medium ${copied ? 'text-emerald-700' : 'text-blue-600 group-hover:underline'}`}>
+            {copied ? <><Check className="w-3.5 h-3.5" /> Copied {plain}</> : <><Copy className="w-3.5 h-3.5" /> Copy</>}
+          </span>
+        </button>
+      </div>
       <div>
         <span className={fieldLabel}>Paid with</span>
         <div className="flex flex-wrap items-center gap-1.5">

@@ -7,7 +7,7 @@ import RacePayouts from '@/components/finance/RacePayouts'
 import PayPeriods from '@/components/finance/PayPeriods'
 import DesignPay from '@/components/finance/DesignPay'
 import { btnPrimary, btnSecondary, btnGhost, inputBase, segment, segmentGroup } from '@/lib/ui'
-import { financeApi, usd, todayET } from '@/lib/financeApi'
+import { financeApi, usd, todayET, monthLabel } from '@/lib/financeApi'
 import type { MonthLine, MonthPayouts, Rate } from '@/types/finance'
 import { card, ErrorCard, Spinner, StatusChip, tableHead, num } from './bits'
 
@@ -89,7 +89,7 @@ function Month() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={() => data && setMonth(data.previous)} disabled={!data} className={btnSecondary} aria-label="Previous month"><ChevronLeft className="w-4 h-4" /></button>
-        <span className="min-w-[160px] text-center font-semibold text-off-black">{data?.label || month}</span>
+        <span className="min-w-[160px] text-center font-semibold text-off-black">{monthLabel(month)}</span>
         <button onClick={() => data?.next && setMonth(data.next)} disabled={!data?.next} className={btnSecondary} aria-label="Next month"><ChevronRight className="w-4 h-4" /></button>
         {month !== thisMonth && <button onClick={() => setMonth(thisMonth)} className={btnGhost}>This month</button>}
       </div>
