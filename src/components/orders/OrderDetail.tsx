@@ -1583,20 +1583,11 @@ Thank you!`
                   </div>
                   <OtherPrints others={siblings.others} count={siblings.count} />
 
-                  {/* Due, ordered, sent and rush, as tags. */}
+                  {/* Ordered, design due, final due (admin), sent and rush, as tags. */}
                   {selectedOrder.trackstarOrderType !== 'race_partner' && (
                     <div>
                       <h4 className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1.5">Tags</h4>
                       <div className="flex flex-wrap items-center gap-1.5">
-                      {!isProductionStage && <span className={`inline-flex items-center gap-1 px-2.5 py-1 bg-white border rounded text-sm ${isDueDateUrgent(designDueDate(selectedOrder), dueIsLive(selectedOrder)) ? 'border-red-200 text-red-600 font-medium' : 'border-border-gray text-off-black/70'}`}>
-                        <span>⏳</span>
-                        <span>{selectedOrder.trackstarOrderType === 'custom' ? 'Design due' : 'Due'} {formatDueDate(designDueDate(selectedOrder), dueIsLive(selectedOrder))}</span>
-                      </span>}
-                      {!isProductionStage && isAdmin && selectedOrder.trackstarOrderType === 'custom' && selectedOrder.dueDate && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-border-gray rounded text-sm text-off-black/55" title="The date the customer was promised. Designers see only the design due date, two days earlier.">
-                          Customer due {customerDueShort(selectedOrder.dueDate)}
-                        </span>
-                      )}
                       {selectedOrder.orderPlacedAt && (
                         <span
                           className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-border-gray rounded text-sm text-off-black/60"
@@ -1604,6 +1595,15 @@ Thank you!`
                         >
                           <span>📅</span>
                           <span>Ordered {formatOrderPlacedAt(selectedOrder.orderPlacedAt)}</span>
+                        </span>
+                      )}
+                      {!isProductionStage && <span className={`inline-flex items-center gap-1 px-2.5 py-1 bg-white border rounded text-sm ${isDueDateUrgent(designDueDate(selectedOrder), dueIsLive(selectedOrder)) ? 'border-red-200 text-red-600 font-medium' : 'border-border-gray text-off-black/70'}`}>
+                        <span>⏳</span>
+                        <span>{selectedOrder.trackstarOrderType === 'custom' ? 'Design Due Date' : 'Due'} {formatDueDate(designDueDate(selectedOrder), dueIsLive(selectedOrder))}</span>
+                      </span>}
+                      {!isProductionStage && isAdmin && selectedOrder.trackstarOrderType === 'custom' && selectedOrder.dueDate && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-border-gray rounded text-sm text-off-black/55" title="The date the customer was promised. Designers see only the design due date, two days earlier. Admins only.">
+                          Final Due Date {customerDueShort(selectedOrder.dueDate)}
                         </span>
                       )}
                       {/* Once sent, the dates that matter: ordered, and sent to production. */}

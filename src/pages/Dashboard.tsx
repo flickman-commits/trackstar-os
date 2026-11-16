@@ -1684,7 +1684,7 @@ export default function Dashboard() {
                                       ⚡ Rush
                                     </span>
                                   )}
-                                  <span>{order.trackstarOrderType === 'custom' ? 'Design due' : 'Due'}: {formatDueDate(designDueDate(order), dueIsLive(order))}{isAdmin && order.trackstarOrderType === 'custom' && order.dueDate ? ` · customer ${customerDueShort(order.dueDate)}` : ''}</span>
+                                  <span>{order.trackstarOrderType === 'custom' ? 'Design Due Date' : 'Due'}: {formatDueDate(designDueDate(order), dueIsLive(order))}{isAdmin && order.trackstarOrderType === 'custom' && order.dueDate ? ` · Final Due Date: ${customerDueShort(order.dueDate)}` : ''}</span>
                                 </span>
                                 <span className="text-xs text-off-black/40 truncate text-right max-w-[50%]">
                                   {order.effectiveRaceName || order.raceName || '-'}
@@ -2032,7 +2032,7 @@ export default function Dashboard() {
                                 )}
                                 <span className={`text-sm ${isDueDateUrgent(designDueDate(order), dueIsLive(order)) ? 'text-red-600 font-medium' : 'text-off-black'}`}>
                                   {formatDueDate(designDueDate(order), dueIsLive(order))}
-                                  {isAdmin && order.dueDate && <span className="block text-[11px] font-normal text-off-black/45">Customer {customerDueShort(order.dueDate)}</span>}
+                                  {isAdmin && order.dueDate && <span className="block text-[11px] font-normal text-off-black/45">Final Due Date: {customerDueShort(order.dueDate)}</span>}
                                 </span>
                               </div>
                             </td>
