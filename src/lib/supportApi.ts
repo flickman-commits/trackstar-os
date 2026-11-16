@@ -40,8 +40,9 @@ export interface OrderConversation { id: string; subject: string; status: Thread
 
 /** A saved playbook version: an edit, a taught lesson, a reset, a restore, or the weekly review. */
 export type PlaybookVersion = { id: string; source: 'edit' | 'lesson' | 'reset' | 'weekly' | 'restore'; summary: string | null; createdAt: string }
-/** What the weekly review would change (playbookReview.js). */
-export type PlaybookReview = { status: 'proposal' | 'unchanged' | 'skipped'; reason: string | null; line: string | null; changes: { what: string; why: string }[]; playbook: string | null }
+/** One change the weekly review proposes: exact edits to the playbook, approved or denied by itself (playbookReview.js). */
+export type PlaybookChange = { id: string; what: string; why: string; edits: { old: string; new: string }[]; warnings: string[]; status: 'pending' | 'approved' | 'denied' }
+export type PlaybookReview = { status: 'proposal' | 'unchanged' | 'skipped'; reason: string | null; at?: string; line: string | null; changes: PlaybookChange[] }
 type PlaybookSaved = { playbook: { text: string; edited: boolean }; playbookVersions?: PlaybookVersion[] }
 
 export type TeachRule = { line: string; text: string; author: string | null; date: string | null }
@@ -84,8 +85,9 @@ export const supportApi = {
   savePlaybook: (text: string) => post<PlaybookSaved>('/api/support/settings', { action: 'playbook', text }),
   resetPlaybook: () => post<PlaybookSaved>('/api/support/settings', { action: 'playbookReset' }),
   restorePlaybook: (versionId: string) => post<PlaybookSaved>('/api/support/settings', { action: 'playbookRestore', versionId }),
+  heldPlaybookReview: () => post<{ review: PlaybookReview | null }>('/api/support/playbook-review', { action: 'held' }),
   previewPlaybookReview: () => post<PlaybookReview>('/api/support/playbook-review', { action: 'preview' }),
-  applyPlaybookReview: (r: PlaybookReview) => post<PlaybookSaved>('/api/support/playbook-review', { action: 'apply', playbook: r.playbook, changes: r.changes, line: r.line }),
+  decidePlaybookChange: (id: string, decision: 'approve' | 'deny') => post<{ review: PlaybookReview; playbook: { text: string; edited: boolean } | null; playbookVersions?: PlaybookVersion[] }>('/api/support/playbook-review', { action: 'decide', id, decision }),
   /** Turn a correction to a draft into playbook rules, then save the approved ones. */
   proposeLessons: (noteId: string, feedback: string) => post<{ lessons: string[] }>('/api/support/teach', { action: 'propose', noteId, feedback }),
   saveLessons: (lessons: string[]) => post<{ playbook: { text: string; edited: boolean } }>('/api/support/teach', { action: 'save', lessons }),
