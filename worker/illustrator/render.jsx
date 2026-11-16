@@ -229,20 +229,14 @@ try {
       tri.title[1].contents = lines[1];
       for (var tx = 2; tx < tri.title.length; tx++) tri.title[tx].hidden = true;
     }
-    // A long place ("Alcúdia-Mallorca") must not run off the print: every
-    // title line steps down together, 5% at a time, until each one's letters
-    // end inside the right margin guide (or a half inch from the edge).
+    // Text is never shrunk or moved to make a title fit: a title whose letters
+    // run past the right margin guide (or a half inch from the edge) stops the
+    // render, and the print is made by hand.
     var titleRight = marginsOf(doc, ab).right;
     if (titleRight === null) titleRight = ab[2] - 36;
-    var size0t = [], tooWide = function () { for (var w = 0; w < tri.title.length; w++) if (!tri.title[w].hidden && inkBounds(tri.title[w])[2] > titleRight) return true; return false; };
-    for (var s0 = 0; s0 < tri.title.length; s0++) size0t.push(tri.title[s0].textRange.characterAttributes.size);
-    var tsteps = 0;
-    while (tooWide() && tsteps < 12) {
-      tsteps++;
-      for (var s1 = 0; s1 < tri.title.length; s1++) tri.title[s1].textRange.characterAttributes.size = size0t[s1] * (1 - 0.05 * tsteps);
+    for (var w = 0; w < tri.title.length; w++) {
+      if (!tri.title[w].hidden && inkBounds(tri.title[w])[2] > titleRight) throw new Error('The race title "' + String(tri.title[w].contents).replace(/\u0003/g, ' ') + '" runs past the margin on the ' + spec.size + ' artboard; make this print by hand');
     }
-    if (tooWide()) throw new Error('The race title does not fit even at ' + Math.round(100 - 5 * tsteps) + '% size');
-    if (tsteps) notes.push('title shrunk ' + tsteps + ' step' + (tsteps == 1 ? '' : 's'));
     notes.push('triathlon');
   }
 

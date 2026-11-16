@@ -19,7 +19,7 @@ test('an IRONMAN triathlon renders from the Triathlon design with its title and 
   assert.deepEqual(r.reasons, [])
   assert.equal(r.spec.template, 'Triathlon')
   assert.equal(r.spec.triathlon, true)
-  assert.equal(r.spec.title1, 'IRONMAN')
+  assert.equal(r.spec.title1, 'Ironman')
   assert.equal(r.spec.title2, 'California')
   assert.equal(r.spec.pace, null)
   assert.equal(r.spec.swimTime, '00:50:52')

@@ -62,8 +62,9 @@ Generic_Production.ai`, under the template key `Triathlon` with
 date and weather, the script fills (lib.jsx `triFrames`):
 
 - the title: the frames in the largest type on the artboard, top to bottom
-  ("IRONMAN 70.3" / "North Carolina"). All title lines shrink together, 5% at
-  a time, until each ends inside the right margin guide.
+  ("Ironman 70.3" / "North Carolina"). Nothing is shrunk to fit: a title that
+  runs past the right margin guide stops the render, and that print is made
+  by hand.
 - three legs: a label (`Swim:`, `Bike:`, `Run:`), the time on the same line to
   its right, and the distance (`1.2 mi`) under that time.
 

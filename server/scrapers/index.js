@@ -702,14 +702,15 @@ export function getRaceDatesForRace(raceName) {
  */
 /**
  * The two title lines a triathlon print carries for an IRONMAN race:
- * ["IRONMAN 70.3", "North Carolina"], ["IRONMAN", "Wisconsin"]. The second line
+ * ["Ironman 70.3", "North Carolina"], ["Ironman", "Wisconsin"]. The second line
  * is config.ironman.printPlace, else the race name after its IRONMAN prefix.
  * Null for a race with no IRONMAN config: its title is not ours to guess.
  */
 export function triathlonTitleFor(raceName) {
   const config = raceName ? findConfigForRace(raceName) : null
   if (config?.platform !== 'ironman') return null
-  const first = config.ironman.half ? 'IRONMAN 70.3' : 'IRONMAN'
+  // Not all caps on the print (Matt, 2026-11-16): "Ironman", "Ironman 70.3".
+  const first = config.ironman.half ? 'Ironman 70.3' : 'Ironman'
   const place = config.ironman.printPlace || String(config.raceName).replace(/^IRONMAN\s+(70\.3\s+)?/i, '').trim()
   return place ? [first, place] : null
 }
