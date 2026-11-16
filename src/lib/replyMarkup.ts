@@ -29,6 +29,14 @@ export function lineToEditorHtml(line: string): string {
   return s.replace(/\uE000(\d+)\uE000/g, (_, i: string) => held[Number(i)])
 }
 
+/** Markup as plain text, the way a DM goes out (format.js replyToPlain): marks dropped, links written out. */
+export function markupToPlain(text: string): string {
+  return String(text || '')
+    .replace(MD_LINK, (_, t: string, url: string) => (t.trim() === url ? url : `${t}: ${url}`))
+    .replace(BOLD, (_, t: string) => t)
+    .replace(ITALIC, (_, pre: string, t: string) => `${pre}${t}`)
+}
+
 /** Markup as the editor's HTML: a div per line, an empty line as <div><br></div>. */
 export function markupToEditorHtml(text: string): string {
   if (!text) return ''

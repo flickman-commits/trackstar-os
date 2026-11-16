@@ -33,7 +33,7 @@ export async function listMacros() {
   await seedDefaults()
   await addProductLinks()
   await addCollectionLinks().catch(err => console.warn(`[support.macros] collections: ${err.message}`))
-  await linkBareStoreMacros()
+  await unlinkStoreMacros()
   // Macros from before shortcuts existed get one from their name, once.
   const bare = await prisma.supportMacro.findMany({ where: { shortcut: null }, select: { id: true, name: true } })
   for (const m of bare) await prisma.supportMacro.update({ where: { id: m.id }, data: { shortcut: await freeShortcut(m.name, m.id) } })
@@ -44,8 +44,8 @@ export async function listMacros() {
  * "Link: Columbus Marathon" (/columbus): one link macro for every product the
  * shop sells (ShopifyProduct, ACTIVE, kept fresh by the catalog sync), added
  * for any product no macro links to yet, so a new race has one without anyone
- * writing it. The body is a link with words ([Columbus Marathon print](url)),
- * so the reply shows a hyperlink, not an address. The URL carries no UTM;
+ * writing it. The body is the plain address, so the reply shows the link
+ * itself, not words with a link on them (Matt, Nov 15). The URL carries no UTM;
  * tagStoreLinks adds it on insert.
  */
 export function productLinkMacro({ title, handle }) {
@@ -73,17 +73,8 @@ async function addProductLinks() {
   for (const p of products) {
     if (linked.has(p.handle.toLowerCase())) continue
     const { name, shortcut } = productLinkMacro(p)
-    await prisma.supportMacro.create({ data: { name, shortcut: await freeShortcut(shortcut), body: linkMarkup(labelOf(name), `https://www.trackstar.art/products/${p.handle}`) } })
+    await prisma.supportMacro.create({ data: { name, shortcut: await freeShortcut(shortcut), body: `https://www.trackstar.art/products/${p.handle}` } })
   }
-}
-
-/** "[Columbus Marathon](https://...)": the reply shows the words as a link (format.js). */
-export const linkMarkup = (label, url) => `[${String(label).replace(/[[\]]/g, '')}](${url})`
-/** "Link: Columbus Marathon" -> "Columbus Marathon print"; "Link: Marathons collection" -> "Marathons". */
-export function labelOf(name) {
-  const t = String(name || '').replace(/^Link:\s*/i, '').trim()
-  if (/ collection$/i.test(t)) return t.replace(/ collection$/i, '')
-  return /\b(print|poster)\b/i.test(t) ? t : `${t} print`
 }
 
 const COLLECTIONS_KEY = 'support_collection_links_at'
@@ -103,16 +94,19 @@ async function addCollectionLinks() {
   const linked = new Set(bodies.flatMap(m => [...m.body.matchAll(/trackstar\.art\/collections\/([a-z0-9-]+)/gi)].map(x => x[1].toLowerCase())))
   for (const c of nodes) {
     if (!c?.handle || linked.has(c.handle.toLowerCase())) continue
-    await prisma.supportMacro.create({ data: { name: `Link: ${c.title} collection`, shortcut: await freeShortcut(`collection ${c.handle}`), body: linkMarkup(c.title, `https://www.trackstar.art/collections/${c.handle}`) } })
+    await prisma.supportMacro.create({ data: { name: `Link: ${c.title} collection`, shortcut: await freeShortcut(`collection ${c.handle}`), body: `https://www.trackstar.art/collections/${c.handle}` } })
   }
 }
 
-/** Link macros from before (a bare address as the whole body) become words with the link on them, once. */
-async function linkBareStoreMacros() {
-  const bare = await prisma.supportMacro.findMany({ where: { name: { startsWith: 'Link: ' }, body: { startsWith: 'https://www.trackstar.art/' } }, select: { id: true, name: true, body: true } })
-  for (const m of bare) {
-    if (!/^https:\/\/www\.trackstar\.art\/\S+$/.test(m.body.trim())) continue
-    await prisma.supportMacro.update({ where: { id: m.id }, data: { body: linkMarkup(labelOf(m.name), m.body.trim()) } })
+/** A link macro that is words with a link on them ([Boston Marathon print](url)), nothing else. */
+export const STORE_LINK_MARKUP = /^\[[^\]\n]+\]\((https:\/\/www\.trackstar\.art\/[^\s)]+)\)$/
+
+/** Link macros from Nov 5 to 15 (words with the link on them) go back to the plain address, once. */
+async function unlinkStoreMacros() {
+  const linked = await prisma.supportMacro.findMany({ where: { name: { startsWith: 'Link: ' }, body: { startsWith: '[' } }, select: { id: true, body: true } })
+  for (const m of linked) {
+    const url = m.body.trim().match(STORE_LINK_MARKUP)?.[1]
+    if (url) await prisma.supportMacro.update({ where: { id: m.id }, data: { body: url } })
   }
 }
 

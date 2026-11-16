@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Archive, Bold, ChevronDown, Clock, Italic, Link as LinkIcon, Loader2, Mail, Paperclip, RotateCcw, Send, StickyNote, Trash2, Zap, X, Search } from 'lucide-react'
+import { AlertTriangle, Archive, Bold, ChevronDown, Clock, Copy, Italic, Link as LinkIcon, Loader2, Mail, Paperclip, RotateCcw, Send, StickyNote, Trash2, Zap, X, Search } from 'lucide-react'
 import { toast } from 'sonner'
+import { markupToPlain } from '@/lib/replyMarkup'
 import { btnGhost, btnPrimary, btnSecondary } from '@/lib/ui'
 import { supportApi } from '@/lib/supportApi'
 import { useArmed } from '@/lib/useArmed'
@@ -447,6 +448,11 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
     try { await supportApi.setProposal(thread.id, n.id, p.id, 'dismissed'); onRefresh() } catch (e) { toast.error((e as Error).message) }
   }
 
+  // Instagram's reply window is shut: the reply can still be written (macros too) and copied out.
+  const copyReply = async () => {
+    try { await navigator.clipboard.writeText(markupToPlain(text).trim()); toast.success('Copied') } catch { toast.error('Could not copy. Select the text and press ⌘C.') }
+  }
+
   const insertMacro = (m: Macro) => {
     macro.setOpen(false)
     placeInReply(fillMacro(m.body, { firstName: firstNameOf(thread), rep: me.firstName, channel: thread.channel }))
@@ -551,7 +557,7 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
             <span>
               {window.reason}
               {windowClosed && window.closesAt && window.mode === 'closed' && <> It closed {when(window.closesAt)}.</>}
-              {windowClosed && <> You can still leave a note for the team.</>}
+              {windowClosed && <> You can still write here and use macros, then copy the text, or leave a note for the team.</>}
             </span>
           </div>
         )}
@@ -577,9 +583,9 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
               </div>
               <RichReply
                 bare
-                ref={replyRef} value={text} onChange={onReplyChange} plain={ig} minHeight={ig ? 96 : 176} disabled={sending || windowClosed}
+                ref={replyRef} value={text} onChange={onReplyChange} plain={ig} minHeight={ig ? 96 : 176} disabled={sending}
                 onFiles={files => upload(files)}
-                placeholder={ig ? (windowClosed ? 'Replies are held until they write again' : 'Write the DM. Keep it short, like a text. / for a macro.') : 'Write the reply. / for a macro.'}
+                placeholder={ig ? (windowClosed ? 'Instagram won\'t send until they write again. Write here or pick a macro, then Copy.' : 'Write the DM. Keep it short, like a text. / for a macro.') : 'Write the reply. / for a macro.'}
                 onKeyDown={e => {
                   if (slashQ !== null && slashMatches.length) {
                     if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIdx(i => Math.min(slashMatches.length - 1, i + 1)); return }
@@ -637,6 +643,11 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
             </div>
             {/* One row, left to right: Send and wait (for a question), Send and close (the usual), Escalate, Close. Wraps in a narrow column. */}
             <div className="mt-2 flex flex-wrap items-center gap-2">
+              {windowClosed && (
+                <button onClick={copyReply} disabled={!wrote} className={`${btnPrimary} whitespace-nowrap`} title="Copy the reply as plain text, to paste into Instagram or anywhere else">
+                  <Copy className="w-3.5 h-3.5" /> Copy
+                </button>
+              )}
               <button onClick={() => send(false)} disabled={!canSend} className={`${btnSecondary} whitespace-nowrap`} title="Send and mark it waiting on the customer (⌘⇧↵)">
                 {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Send and wait
               </button>
