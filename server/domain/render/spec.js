@@ -13,11 +13,20 @@ import { formatRaceDate, formatTemp, formatTime, formatPace, formatCondition } f
 import { unpaidPhotoRows } from '../orders/photoPayment.js'
 import { awaitingLaterPhoto } from '../orders/photoLaterState.js'
 import { printBlockers } from '../races/verification.js'
-import { isMainEvent, getCanonicalRaceName, namedEventsFor } from '../../scrapers/index.js'
+import { isMainEvent, getCanonicalRaceName, namedEventsFor, triathlonTitleFor } from '../../scrapers/index.js'
+import { isTriathlon, TRI_FIELDS } from '../orders/triathlon.js'
 import { pickResearch } from '../research/pickResearch.js'
 import { originalKeyFor } from './designSwitch.js'
 
 export const SIZES = ['8x10', '12x18', '16x24']
+
+/**
+ * Every triathlon prints from one design, whatever the race: the Triathlon
+ * Generic production file, with the race's title and the three legs filled in
+ * (worker/illustrator lib.jsx triFrames). Its PrintTemplate row carries
+ * rules.triathlon so the worker reads it that way.
+ */
+export const TRI_TEMPLATE = 'Triathlon'
 
 /**
  * Which design a print uses. The World Majors edition is a different design
@@ -103,7 +112,7 @@ export const SPEC_SELECT = {
   runnerName: true, runnerNameOverride: true, productSize: true, hadNoTime: true, noBib: true,
   photoPath: true, photoAddedManually: true, photoFree: true, photoLater: true, photoLaterClosedAt: true, shopifyOrderData: true, arteloOrderData: true,
   bulkOrder: { select: { number: true, paidAt: true, printKind: true } },
-  runnerResearch: { orderBy: { id: 'desc' }, select: { researchStatus: true, bibNumber: true, officialTime: true, officialPace: true, eventType: true, race: { select: { id: true, raceName: true, year: true, raceDate: true, raceDateSource: true, raceDateSourceUrl: true, raceDateEvidence: true, raceDateVerifiedAt: true, raceDateConfirmedByPerson: true, location: true, weatherCondition: true, weatherTemp: true, weatherFetchedAt: true, weatherConfirmedAt: true, firstPrintedAt: true } } } },
+  runnerResearch: { orderBy: { id: 'desc' }, select: { researchStatus: true, bibNumber: true, officialTime: true, officialPace: true, eventType: true, swimTime: true, swimDistance: true, bikeTime: true, bikeDistance: true, runTime: true, runDistance: true, race: { select: { id: true, raceName: true, year: true, raceDate: true, raceDateSource: true, raceDateSourceUrl: true, raceDateEvidence: true, raceDateVerifiedAt: true, raceDateConfirmedByPerson: true, location: true, weatherCondition: true, weatherTemp: true, weatherFetchedAt: true, weatherConfirmedAt: true, firstPrintedAt: true } } } },
 }
 
 /**
@@ -131,7 +140,8 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
   const edition = editionOf(order)
   // Only research for the order's own race and year: a row left from before the race was corrected never prints.
   const research0 = pickResearch(order.runnerResearch, raceName, raceYear, getCanonicalRaceName)
-  const template = resolveTemplate(order, raceName, research0?.eventType, k => templates.includes(k))
+  const triathlon = isTriathlon(order)
+  const template = triathlon ? TRI_TEMPLATE : resolveTemplate(order, raceName, research0?.eventType, k => templates.includes(k))
   const eventTag = template.includes(' / ') && !edition && !isBulkCobranded(order) ? eventLabel(research0?.eventType) : null
   if (!templates.includes(template)) reasons.push(isBulkCobranded(order) ? `No checked co-branded production file for ${order.bulkOrder.number} yet` : `No prepared template for ${template}`)
   if (!name) reasons.push('No runner name')
@@ -144,7 +154,17 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
   const pace = formatPace(research?.officialPace)
   // No bib by choice: the bib frame prints empty.
   if (!bib && !order.noBib) reasons.push('No bib number yet')
-  if (!order.hadNoTime && (!time || !pace)) reasons.push('No finish time and pace yet')
+  // A triathlon print has no pace; it has a title and three legs instead.
+  const title = triathlon ? triathlonTitleFor(raceName) : null
+  const legs = {}
+  if (triathlon) {
+    if (order.hadNoTime) reasons.push('A triathlon print always has its times')
+    else if (!time) reasons.push('No finish time yet')
+    if (!title) reasons.push(`No print title for ${raceName}: only IRONMAN races have one, so this triathlon is made by hand`)
+    for (const k of TRI_FIELDS) legs[k] = research?.[k] ? String(research[k]).trim() : null
+    const noLeg = TRI_FIELDS.filter(k => !legs[k])
+    if (noLeg.length) reasons.push(`No ${noLeg.map(k => k.replace(/(Time|Distance)$/, ' $1').toLowerCase()).join(', ')} yet`)
+  } else if (!order.hadNoTime && (!time || !pace)) reasons.push('No finish time and pace yet')
   if (order.photoPath && noTimeGaps.has(`photo|${template}|${order.productSize}`)) reasons.push(`The ${order.productSize} design has no photo window, so a print with a customer photo is made by hand`)
   if (order.hadNoTime && noTimeGaps.has(`${template}|${order.productSize}`)) reasons.push(`This ${order.productSize} design has details to the right of pace, so a no-time print needs a NO TIME layer in the file first`)
 
@@ -190,6 +210,7 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
       condition,
       temp,
       photoPath: order.photoPath || null,
+      ...(triathlon ? { triathlon: true, pace: null, title1: title[0], title2: title[1], ...legs } : {}),
       raceId: race?.id || null,
       // Carried on the render so the review shows what the print was made from.
       dateSource: race?.raceDateSource || null,

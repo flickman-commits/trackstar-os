@@ -61,7 +61,15 @@ try {
       swappedNoTime = true;
     }
   }
-  var got = collectFrames(doc, ab, spec.race);
+  // A triathlon (spec.triathlon): the title and the three legs are read first,
+  // by where they sit (lib.jsx triFrames), and the usual reading skips them.
+  var tri = null;
+  if (spec.triathlon) {
+    if (spec.noTime) throw new Error('A triathlon print always has its times');
+    tri = triFrames(doc, ab);
+    if (tri.missing.length) throw new Error('Triathlon ' + spec.size + ' artboard: could not find the ' + tri.missing.join(', '));
+  }
+  var got = collectFrames(doc, ab, spec.race, tri ? tri.all : null);
   var frames = got.frames, dupes = got.dupes, hiddenLeftovers = got.leftovers.length;
   for (var hl = 0; hl < got.leftovers.length; hl++) got.leftovers[hl].hidden = true;
   var missing = [];
@@ -201,6 +209,41 @@ try {
       if (!/\/\s*mi/i.test(tail)) tail = ' / mi';
       frames.pace.contents = spec.pace + tail;
     }
+  }
+
+  if (tri) {
+    stage = 'triathlon';
+    for (var lg = 0; lg < TRI_LEGS.length; lg++) {
+      var legName = TRI_LEGS[lg], legTime = spec[legName + 'Time'], legDist = spec[legName + 'Distance'];
+      if (!legTime || !legDist) throw new Error('No ' + legName + ' time or distance on the order');
+      tri.legs[legName].time.contents = legTime;
+      tri.legs[legName].dist.contents = legDist;
+    }
+    // The title: one line per frame, top to bottom ("IRONMAN 70.3" / "North
+    // Carolina"); a design with one title frame takes both on two lines.
+    var lines = [spec.title1 || '', spec.title2 || ''];
+    if (!lines[0]) throw new Error('No race title for the print');
+    if (tri.title.length == 1) tri.title[0].contents = lines[1] ? lines[0] + BREAK + lines[1] : lines[0];
+    else {
+      tri.title[0].contents = lines[0];
+      tri.title[1].contents = lines[1];
+      for (var tx = 2; tx < tri.title.length; tx++) tri.title[tx].hidden = true;
+    }
+    // A long place ("Alcúdia-Mallorca") must not run off the print: every
+    // title line steps down together, 5% at a time, until each one's letters
+    // end inside the right margin guide (or a half inch from the edge).
+    var titleRight = marginsOf(doc, ab).right;
+    if (titleRight === null) titleRight = ab[2] - 36;
+    var size0t = [], tooWide = function () { for (var w = 0; w < tri.title.length; w++) if (!tri.title[w].hidden && inkBounds(tri.title[w])[2] > titleRight) return true; return false; };
+    for (var s0 = 0; s0 < tri.title.length; s0++) size0t.push(tri.title[s0].textRange.characterAttributes.size);
+    var tsteps = 0;
+    while (tooWide() && tsteps < 12) {
+      tsteps++;
+      for (var s1 = 0; s1 < tri.title.length; s1++) tri.title[s1].textRange.characterAttributes.size = size0t[s1] * (1 - 0.05 * tsteps);
+    }
+    if (tooWide()) throw new Error('The race title does not fit even at ' + Math.round(100 - 5 * tsteps) + '% size');
+    if (tsteps) notes.push('title shrunk ' + tsteps + ' step' + (tsteps == 1 ? '' : 's'));
+    notes.push('triathlon');
   }
 
   stage = 'photo';

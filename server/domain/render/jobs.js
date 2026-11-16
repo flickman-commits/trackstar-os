@@ -7,7 +7,8 @@
  * offer "Create Design" at all.
  */
 import prisma from '../../db.js'
-import { buildSpec, SPEC_SELECT, SIZES } from './spec.js'
+import { buildSpec, SPEC_SELECT, SIZES, TRI_TEMPLATE } from './spec.js'
+import { isTriathlon } from '../orders/triathlon.js'
 import { availableTemplateKeys, noTimeGaps, onlineWorkers as onlineWorkersList } from './templates.js'
 import { getCanonicalRaceName } from '../../scrapers/index.js'
 import { storage as sharedStorage, storedSince } from '../../lib/storage.js'
@@ -292,7 +293,8 @@ export async function autoQueueRenders({ limit = 25 } = {}) {
   let queued = 0, skipped = 0
   for (const o of candidates) {
     const name = o.raceNameOverride ?? o.raceName
-    if (!races.has(name) && !races.has(getCanonicalRaceName(name))) continue
+    // Every triathlon prints from the one Triathlon design (spec.js TRI_TEMPLATE).
+    if (!races.has(name) && !races.has(getCanonicalRaceName(name)) && !(isTriathlon(o) && races.has(TRI_TEMPLATE))) continue
     if (queued >= limit) break
     const { ok } = await checkOrder(o.id, { ...ctx, order: o })
     if (!ok) { skipped++; continue }

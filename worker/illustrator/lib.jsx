@@ -83,11 +83,13 @@ function sameItem(a, b) {
 
 function layerOf(item) { var p = item; while (p && p.typename != 'Layer') p = p.parent; while (p && p.parent && p.parent.typename == 'Layer') p = p.parent; return p; }
 
-function collectFrames(doc, ab, raceName) {
+function collectFrames(doc, ab, raceName, skip) {
   var frames = {}, leftovers = [], dupes = [];
   // doc.textFrames reaches frames inside groups too, which layer.textFrames does not.
   for (var t = 0; t < doc.textFrames.length; t++) {
     var tf = doc.textFrames[t];
+    // Frames another reader already claimed (a triathlon's title and legs, triFrames).
+    if (skip && isOneOf(tf, skip)) continue;
     var L = layerOf(tf);
     if (!L || L.name == 'GUIDES') continue;
     // A frame the designer hid, or a hidden layer, is not on the print and is not a field.
@@ -138,6 +140,70 @@ function collectFrames(doc, ab, raceName) {
     dupes = kept;
   }
   return { frames: frames, leftovers: leftovers, dupes: dupes };
+}
+
+function isOneOf(item, list) { for (var i = 0; i < list.length; i++) if (sameItem(item, list[i])) return true; return false; }
+
+// The visible text frames on an artboard, outside GUIDES.
+function visibleFrames(doc, ab) {
+  var out = [];
+  for (var t = 0; t < doc.textFrames.length; t++) {
+    var tf = doc.textFrames[t], L = layerOf(tf);
+    if (!L || L.name == 'GUIDES') continue;
+    var hid = false; try { hid = tf.hidden || !L.visible; } catch (e) {}
+    if (hid || !inside(tf.geometricBounds, ab)) continue;
+    out.push(tf);
+  }
+  return out;
+}
+
+function fontSizeOf(tf) { try { return tf.textRange.characterAttributes.size; } catch (e) { return 0; } }
+function midY(b) { return (b[1] + b[3]) / 2; }
+
+// A triathlon print (Triathlon Generic): the race's title in the largest type
+// ("Triathlon Race" / "Name Here", or a past order's "IRONMAN 70.3" / "North
+// Carolina"), and three legs, each a label ("Swim:"), a time to its right on
+// the same line and a distance ("1.2 mi") under that time. Leg times look like
+// the finish time and the title lines look like a name, so these are found
+// first, by where they sit, and collectFrames skips them.
+// Returns { title: [frames top to bottom], legs: { swim: { time, dist }, ... }, all: [every claimed frame], missing: [what was not found] }.
+var TRI_LEGS = ['swim', 'bike', 'run'];
+function triFrames(doc, ab) {
+  var vis = visibleFrames(doc, ab), legs = {}, all = [], missing = [];
+  for (var l = 0; l < TRI_LEGS.length; l++) {
+    var leg = TRI_LEGS[l], label = null;
+    for (var i = 0; i < vis.length; i++) if (new RegExp('^' + leg + ':?$', 'i').test(trim(vis[i].contents))) { label = vis[i]; break; }
+    if (!label) { missing.push(leg + ' label'); continue; }
+    var lb = label.geometricBounds, lh = lb[1] - lb[3], time = null, tDist = 1e9;
+    for (var j = 0; j < vis.length; j++) {
+      var b = vis[j].geometricBounds;
+      if (!/^\d{1,2}:\d{2}:\d{2}$/.test(trim(vis[j].contents)) || b[0] <= lb[0]) continue;
+      if (Math.abs(midY(b) - midY(lb)) > lh * 0.6) continue;
+      if (b[0] - lb[2] < tDist) { tDist = b[0] - lb[2]; time = vis[j]; }
+    }
+    if (!time) { missing.push(leg + ' time'); continue; }
+    var tb = time.geometricBounds, dist = null, dDist = 1e9;
+    for (var k = 0; k < vis.length; k++) {
+      var c = vis[k].geometricBounds;
+      if (!/^\d+(\.\d+)?\s*mi$/i.test(trim(vis[k].contents))) continue;
+      var below = tb[3] - c[1];   // gap from the time's bottom down to this frame's top
+      if (c[1] > tb[3] + lh * 0.5 || below > lh * 2) continue;
+      if (c[2] < tb[0] - lh || c[0] > tb[2] + lh) continue;
+      if (below < dDist) { dDist = below; dist = vis[k]; }
+    }
+    if (!dist) { missing.push(leg + ' distance'); continue; }
+    legs[leg] = { label: label, time: time, dist: dist };
+    all.push(label); all.push(time); all.push(dist);
+  }
+  // The title: the frames set in the largest type on the artboard, top to bottom.
+  var max = 0;
+  for (var m = 0; m < vis.length; m++) if (!isOneOf(vis[m], all)) max = Math.max(max, fontSizeOf(vis[m]));
+  var title = [];
+  for (var n = 0; n < vis.length; n++) if (!isOneOf(vis[n], all) && fontSizeOf(vis[n]) >= max * 0.9 && /[A-Za-z]/.test(vis[n].contents)) title.push(vis[n]);
+  title.sort(function (a, b) { return b.geometricBounds[1] - a.geometricBounds[1]; });
+  if (!title.length) missing.push('title');
+  for (var q = 0; q < title.length; q++) all.push(title[q]);
+  return { title: title, legs: legs, all: all, missing: missing };
 }
 
 // No-time orders. Hiding time and pace is only safe when nothing sits to the right of pace in

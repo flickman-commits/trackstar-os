@@ -161,7 +161,7 @@ async function checkChanged(templates, files) {
   const input = due.map((t, i) => {
     const copy = path.join(dir, `${i}.ai`)
     copyFile(localFile(t), copy)
-    return { key: t.key, path: copy, race: t.key.split(' / ')[0], artboard: t.rules?.artboard || null, artboardExclude: t.rules?.artboardExclude || null, photoArtboard: t.rules?.photoArtboard || null }
+    return { key: t.key, path: copy, race: t.key.split(' / ')[0], artboard: t.rules?.artboard || null, artboardExclude: t.rules?.artboardExclude || null, photoArtboard: t.rules?.photoArtboard || null, triathlon: Boolean(t.rules?.triathlon) }
   })
   log(`Checking ${due.length} template${due.length > 1 ? 's' : ''}: ${due.map(t => t.key).join(', ')}`)
   fs.writeFileSync(path.join(HERE, 'illustrator', 'check-input.json'), JSON.stringify({ files: input }))

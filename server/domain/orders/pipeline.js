@@ -23,9 +23,9 @@
  */
 import { printBlockers } from '../races/verification.js'
 import { isTriathlon, triathlonMissing } from './triathlon.js'
-import { resolveTemplate, SIZES } from '../render/spec.js'
+import { resolveTemplate, SIZES, TRI_TEMPLATE } from '../render/spec.js'
 import { sendStateOf } from '../render/sendState.js'
-import { noEditionFor } from '../../scrapers/index.js'
+import { noEditionFor, triathlonTitleFor } from '../../scrapers/index.js'
 import { awaitingLaterPhoto } from './photoLaterState.js'
 import { arteloHoldText } from '../../lib/arteloHolds.js'
 
@@ -165,7 +165,15 @@ function computePipeline({ order, research, race, render, hasScraper, templates,
     const blockers = printBlockers(race)
     if (blockers.length === 1 && /not confirmed/.test(blockers[0])) return stage('action', 'Confirm weather', { kind: 'data', fix: 'The weather for this race year is calculated but nobody has checked it. Open the breakdown (source), then Confirm.' })
     if (blockers.length) return stage('action', 'Needs race data', { kind: 'data', fix: `${blockers.join('. ')}.` })
-    return stage('action', 'Make by hand', { kind: 'setup', fix: 'Everything for this triathlon print is here. Make it from the triathlon design, then mark it complete.' })
+    // An IRONMAN race renders from the Triathlon design once its file is
+    // checked (render/spec.js TRI_TEMPLATE); any other triathlon has no title
+    // we can print, so it is made by hand.
+    if (!templates.has(TRI_TEMPLATE) || !triathlonTitleFor(raceName) || !SIZES.includes(order.productSize) || order.hadNoTime) return stage('action', 'Make by hand', { kind: 'setup', fix: 'Everything for this triathlon print is here. Make it from the triathlon design, then mark it complete.' })
+    if (awaitingLaterPhoto(order)) return stage('waiting', 'Waiting on photo', { fix: 'The customer chose to add their photo after the race. The print renders once it is in.' })
+    if (photoUnpaid) return stage('waiting', 'Photo not paid', { fix: 'The customer has not paid for the photo add-on yet. The print renders once Shopify reads paid.' })
+    if (!render) return stage('waiting', workerOnline ? 'Render queued' : 'Waiting for the renderer', { fix: workerOnline ? 'The print is queued for the next render run.' : 'No render worker is online. The print renders when one checks in.' })
+    if (render.status === 'done' && render.review === 'closed') return stage('waiting', 'Render queued', { fix: 'The last design was closed. A new one renders on the next run.' })
+    return stage('waiting', 'In progress')
   }
   // Render before race day (set by hand on the order): it moves on like a race that has run.
   if (!order.renderBeforeRace && !raceRun(race, year)) return stage('waiting', 'Race not run yet', { fix: `${raceName} ${year} has not happened yet. Results are looked up two days after race day.` })

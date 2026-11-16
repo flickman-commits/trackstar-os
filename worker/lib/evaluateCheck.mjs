@@ -26,6 +26,8 @@ export function evaluateCheck(r, { sizes: need = SIZES } = {}) {
     const have = Object.keys(fields)
     const missing = ['name', 'bib', 'time'].filter(k => !fields[k])
     if (missing.length) problems.push(`${size}: no ${missing.join(', ')} frame found`)
+    // A triathlon design (rules.triathlon): the title and all three legs must be found too.
+    if (b.triathlon?.missing?.length) problems.push(`${size}: triathlon ${b.triathlon.missing.join(', ')} not found`)
     if (b.ambiguous?.length) problems.push(`${size}: two ${b.ambiguous.join(', ')} frames and neither is a placeholder`)
     for (const k of have) if (!fields[k].placeholder && (k === 'name' || k === 'bib')) warnings.push(`${size}: ${k} frame holds a past order ("${fields[k].text}"); replaced at render time`)
     if (b.leftoverText?.length) warnings.push(`${size}: leftover text hidden at render time: ${b.leftoverText.map(t => `"${t}"`).join(', ')}`)

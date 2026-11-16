@@ -54,6 +54,24 @@ The script finds the frames itself from what they hold. Render a couple of
 past orders with `node worker/render-local.mjs "<race>" <order numbers>`
 and compare them with the designer's files before relying on it.
 
+## Triathlons
+
+Every triathlon prints from one file, `Triathlon/Illustrator Files/Triathlon
+Generic_Production.ai`, under the template key `Triathlon` with
+`rules: { "triathlon": true }`. On top of the usual name, bib, finish time,
+date and weather, the script fills (lib.jsx `triFrames`):
+
+- the title: the frames in the largest type on the artboard, top to bottom
+  ("IRONMAN 70.3" / "North Carolina"). All title lines shrink together, 5% at
+  a time, until each ends inside the right margin guide.
+- three legs: a label (`Swim:`, `Bike:`, `Run:`), the time on the same line to
+  its right, and the distance (`1.2 mi`) under that time.
+
+There is no pace. Only IRONMAN races have a title the tool knows
+(`triathlonTitleFor`), so any other triathlon is still made by hand. Check
+the file with
+`node worker/check-template.mjs --file "Triathlon/Illustrator Files/Triathlon Generic_Production.ai" --race Triathlon --triathlon`.
+
 ## No-time orders
 
 A no-time order hides the time and the pace. That is clean when pace is the

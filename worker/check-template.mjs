@@ -5,6 +5,7 @@
  *   node worker/check-template.mjs                      every template in the tool (Settings > Admin > Designs)
  *   node worker/check-template.mjs "Sydney Marathon"    one key
  *   node worker/check-template.mjs --file "Sydney Marathon/Illustrator Files/Sydney Marathon_Production.ai" --race "Sydney Marathon"
+ *   node worker/check-template.mjs --file "Triathlon/Illustrator Files/Triathlon Generic_Production.ai" --race Triathlon --triathlon
  *
  * The worker runs this same check on its own whenever a file changes; this
  * is for trying a file before it is added, or looking closer at a problem.
@@ -39,14 +40,15 @@ const templates = Object.fromEntries((await prisma.printTemplate.findMany()).map
 const args = process.argv.slice(2)
 let jobs = []
 if (args[0] === '--file') {
-  jobs = [{ key: args[3] || args[1], path: args[1], race: args[3] || null, artboard: args[5] || null }]
+  const opt = name => { const i = args.indexOf(name); return i > 0 ? args[i + 1] || null : null }
+  jobs = [{ key: opt('--race') || args[1], path: args[1], race: opt('--race'), artboard: opt('--artboard'), triathlon: args.includes('--triathlon') }]
 } else {
   const keys = args.length ? args : Object.keys(templates)
   for (const key of keys) {
     const t = templates[key]
     if (!t) { console.error(`No template key "${key}"`); process.exit(1) }
     const tpl = typeof t === 'string' ? { file: t } : t
-    jobs.push({ key, path: tpl.file, race: key.split(' / ')[0], artboard: tpl.artboard || null, artboardExclude: tpl.artboardExclude || null, photoArtboard: tpl.photoArtboard || null })
+    jobs.push({ key, path: tpl.file, race: key.split(' / ')[0], artboard: tpl.artboard || null, artboardExclude: tpl.artboardExclude || null, photoArtboard: tpl.photoArtboard || null, triathlon: Boolean(tpl.triathlon) })
   }
 }
 

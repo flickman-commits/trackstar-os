@@ -700,6 +700,20 @@ export function getRaceDatesForRace(raceName) {
  * Why a race did not run in a year (cancelled, moved), from the config's
  * `noEdition` map, or null. An order for such a year has the wrong year.
  */
+/**
+ * The two title lines a triathlon print carries for an IRONMAN race:
+ * ["IRONMAN 70.3", "North Carolina"], ["IRONMAN", "Wisconsin"]. The second line
+ * is config.ironman.printPlace, else the race name after its IRONMAN prefix.
+ * Null for a race with no IRONMAN config: its title is not ours to guess.
+ */
+export function triathlonTitleFor(raceName) {
+  const config = raceName ? findConfigForRace(raceName) : null
+  if (config?.platform !== 'ironman') return null
+  const first = config.ironman.half ? 'IRONMAN 70.3' : 'IRONMAN'
+  const place = config.ironman.printPlace || String(config.raceName).replace(/^IRONMAN\s+(70\.3\s+)?/i, '').trim()
+  return place ? [first, place] : null
+}
+
 export function noEditionFor(raceName, year) {
   const config = raceName && year ? findConfigForRace(raceName) : null
   return config?.noEdition?.[year] || null

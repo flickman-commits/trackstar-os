@@ -5,7 +5,8 @@
 import { sameDesign } from './designSwitch.js'
 
 // Two specs that agree on these would print the same.
-export const PRINTED = ['template', 'size', 'name', 'bib', 'time', 'pace', 'noTime', 'date', 'condition', 'temp', 'photoPath']
+// A triathlon's title and legs too; a marathon spec has none of them, so they agree there.
+export const PRINTED = ['template', 'size', 'name', 'bib', 'time', 'pace', 'noTime', 'date', 'condition', 'temp', 'photoPath', 'title1', 'title2', 'swimTime', 'swimDistance', 'bikeTime', 'bikeDistance', 'runTime', 'runDistance']
 
 /**
  * The printed fields where two specs disagree, in PRINTED order. `a` is what
@@ -22,7 +23,7 @@ export function printedDiffers(a, b, opts) {
 }
 
 /** Field names as a person reads them, for a note or a Slack line. */
-const WORDS = { template: 'design', size: 'size', name: 'name', bib: 'bib', time: 'time', pace: 'pace', noTime: 'no-time', date: 'race date', condition: 'weather', temp: 'temperature', photoPath: 'photo' }
+const WORDS = { template: 'design', size: 'size', name: 'name', bib: 'bib', time: 'time', pace: 'pace', noTime: 'no-time', date: 'race date', condition: 'weather', temp: 'temperature', photoPath: 'photo', title1: 'race title', title2: 'race title', swimTime: 'swim time', swimDistance: 'swim distance', bikeTime: 'bike time', bikeDistance: 'bike distance', runTime: 'run time', runDistance: 'run distance' }
 export function describeFields(fields) {
   return fields.map(f => WORDS[f] || f).join(', ')
 }
