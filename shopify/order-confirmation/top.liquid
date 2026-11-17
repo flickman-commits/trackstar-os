@@ -208,17 +208,6 @@
               </p>
             </td></tr>
 
-            {% if is_custom_order and has_pending_payment != true %}
-            {% comment %} Custom orders hinge on one email we send later: the mockup to approve. It comes from the support mailbox, which a new contact's inbox may file as spam. {% endcomment %}
-            <tr><td class="ts-in" style="padding: 12px 0 4px;">
-              <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate;"><tr>
-                <td class="ts-f13" style="padding: 12px 16px; background-color: #FEF4E6; border: 1px solid #F6D9B0; border-radius: 8px; font-size: 13px; line-height: 1.45; color: #1A1A1A;">
-                  <strong class="ts-f16" style="display: block; margin: 0 0 4px; font-size: 16px; font-weight: 700; color: #A8510C;">Don't miss your mockup</strong>
-                  Your mockup and approval link will be emailed to you from <a href="mailto:fast@trackstar.art" style="color: #1A1A1A !important; font-weight: 700; text-decoration: none;">fast@trackstar.art</a>. Please add that address to your contacts now so it lands in your inbox, not spam. On iPhone, tap the address and choose Add to VIPs.
-                </td>
-              </tr></table>
-            </td></tr>
-            {% endif %}
 
             {% unless has_pending_payment %}
             {% comment %} What happens next. Purple numbers on white, the only purple fill on the page. {% endcomment %}
@@ -256,6 +245,18 @@
               </table>
             </td></tr>
             {% endunless %}
+
+            {% if is_custom_order and has_pending_payment != true %}
+            {% comment %} Custom orders hinge on one email we send later: the mockup to approve. It comes from the support mailbox, which a new contact's inbox may file as spam. {% endcomment %}
+            <tr><td class="ts-in" style="padding: 12px 0 4px;">
+              <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate;"><tr>
+                <td class="ts-f13" style="padding: 12px 16px; background-color: #FEF4E6; border: 1px solid #F6D9B0; border-radius: 8px; font-size: 13px; line-height: 1.45; color: #1A1A1A;">
+                  <strong class="ts-f16" style="display: block; margin: 0 0 4px; font-size: 16px; font-weight: 700; color: #A8510C;">Don't miss your mockup</strong>
+                  Your mockup and approval link will be emailed to you from <a href="mailto:fast@trackstar.art" style="color: #1A1A1A !important; font-weight: 700; text-decoration: none;">fast@trackstar.art</a>. Please add that address to your contacts now so it lands in your inbox, not spam. On iPhone, tap the address and choose Add to VIPs.
+                </td>
+              </tr></table>
+            </td></tr>
+            {% endif %}
 
             {% comment %} The prints: the details that will be on them, from the order's line item properties. {% endcomment %}
             {% for line in line_items %}
