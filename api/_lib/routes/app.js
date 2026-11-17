@@ -52,4 +52,5 @@ export default {
   'samples': () => import('../../_routes/samples.js'),
   'search': () => import('../../_routes/search.js'),
   'surveys': () => import('../../_routes/surveys/index.js'),
+  'team/presence': () => import('../../_routes/team/presence.js'),
 }

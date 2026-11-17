@@ -1,3 +1,4 @@
+import OnlineNow from '@/components/OnlineNow'
 import { Fragment, useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { shortcutsPaused } from '@/lib/shortcuts'
 import Toast, { type ToastMessage } from '@/components/orders/Toast'
@@ -1498,6 +1499,8 @@ export default function Dashboard() {
             <div className="hidden md:block relative">
             {/* Floats above the switcher so the header keeps its height. */}
             <div className="absolute bottom-full right-0 mb-2.5 flex items-end gap-2">
+              {/* Admins: who is on right now (a glowing dot), and whose timer is running. */}
+              {isAdmin && <OnlineNow />}
               {/* The Hours Tracker, one click from the queue, left of the team (it is also under Tools in the rail). */}
               {can('hours') && (
                 <button onClick={openHours} title="Log your time and run the timer"
