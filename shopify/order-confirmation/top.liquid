@@ -139,6 +139,7 @@
       .ts-pad { padding-left: 20px !important; padding-right: 20px !important; }
       .ts-outer { padding-left: 12px !important; padding-right: 12px !important; }
       .ts-card-pad { padding-left: 20px !important; padding-right: 20px !important; }
+      .ts-hero { padding-bottom: 120px !important; }
       .section__cell .container > tbody > tr > td, .section__cell .container > tr > td { padding-left: 32px !important; padding-right: 32px !important; }
       .ts-in { padding-left: 0 !important; padding-right: 0 !important; }
       .ts-btn2 { display: block !important; width: 100% !important; padding: 0 0 10px !important; }
@@ -156,15 +157,19 @@
         <td>
           <center>
           <table class="container" cellpadding="0" cellspacing="0">
-            {% comment %} Masthead on the off-white page: the wordmark and the slogan, centred. {% endcomment %}
-            <tr><td style="padding: 36px 0 22px; text-align: center;">
-              <a href="{{ shop.url }}"><img src="https://www.trackstar.art/cdn/shop/files/Trackstar_Logo_Cropped.png" alt="Trackstar" width="150" style="display: inline-block; width: 150px; height: auto; border: 0;"></a>
-              <p class="ts-f14" style="margin: 8px 0 0; font-size: 14px; color: #666666;">Celebrating athletic achievement.</p>
-            </td></tr>
-
-            {% comment %} The card: everything about this order, on white. {% endcomment %}
-            <tr><td class="ts-outer" style="padding: 0;">
+            {% comment %}
+              The card: the home page's runner photo across the top, the white
+              wordmark and slogan over it, then everything about the order on
+              white. The photo is a cell background, so clients that drop
+              background images (Outlook on Windows) show the ink behind it,
+              and the white type still reads.
+            {% endcomment %}
+            <tr><td class="ts-outer" style="padding: 24px 0 0;">
             <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate; background-color: #FFFFFF; border-radius: 18px;">
+            <tr><td class="ts-hero" background="https://fast.trackstar.art/email/order-hero.jpg" bgcolor="#1A1A1A" style="background-color: #1A1A1A; background-image: url('https://fast.trackstar.art/email/order-hero.jpg'); background-image: linear-gradient(rgba(26,26,26,0.5), rgba(26,26,26,0) 65%), url('https://fast.trackstar.art/email/order-hero.jpg'); background-size: cover; background-position: center top; border-radius: 18px 18px 0 0; padding: 30px 24px 170px; text-align: center;">
+              <a href="{{ shop.url }}"><img src="https://www.trackstar.art/cdn/shop/files/Trackstar_White_Logo_Cropped.png" alt="Trackstar" width="150" style="display: inline-block; width: 150px; height: auto; border: 0;"></a>
+              <p class="ts-f14" style="margin: 8px 0 0; font-size: 14px; color: #FFFFFF;">Celebrating athletic achievement.</p>
+            </td></tr>
             <tr><td class="ts-card-pad" style="padding: 24px 28px 30px;">
             <table width="100%" cellpadding="0" cellspacing="0">
 
@@ -180,7 +185,7 @@
             </td></tr>
 
             <tr><td class="ts-in" style="padding: 0 0 8px;">
-              <h1 class="ts-h1" style="margin: 0 0 14px; font-size: 40px; font-weight: 700; line-height: 1.02; color: #1A1A1A;">{% if customer.first_name %}Thank you,<br><span style="color: #9A9A9A;">{{ customer.first_name }}.</span>{% else %}Thank you<br><span style="color: #9A9A9A;">for your order.</span>{% endif %}</h1>
+              <h1 class="ts-h1" style="margin: 0 0 14px; font-size: 40px; font-weight: 700; line-height: 1.02; color: #1A1A1A;">{% if customer.first_name %}Thank you,<br><span style="color: #4600D6;">{{ customer.first_name }}.</span>{% else %}Thank you<br><span style="color: #4600D6;">for your order.</span>{% endif %}</h1>
               <p class="ts-f16" style="margin: 0 0 8px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">
                 {% if has_pending_payment %}
                   {% if buyer_action_required %}
@@ -217,7 +222,7 @@
                 {% assign whose = 'your' %}
                 {% for line in line_items %}{% for prop in line.properties %}{% if prop.first == 'Gift' and prop.last != blank %}{% assign whose = 'their' %}{% endif %}{% endfor %}{% endfor %}
                 {% if is_custom_order %}
-                  {% assign steps = 'Today~Order confirmed|48 hrs~Change the name, frame or address. After that, our design team starts on your route|' | append: mockup_date | append: '~Your mockup arrives for approval|On approval~Printed, framed and shipped from Kentucky|7 to 10 days after approval~Delivered to ' | append: whose | append: ' doorstep' | split: '|' %}
+                  {% assign steps = 'Today~Order confirmed|Next~Our design team starts on your route|' | append: mockup_date | append: '~Your mockup arrives for approval|On approval~Printed, framed and shipped from Kentucky|7 to 10 days after approval~Delivered to ' | append: whose | append: ' doorstep' | split: '|' %}
                 {% elsif has_preorder %}
                   {% assign race_day = preorder_note | remove: 'Ships after race day, ' | strip %}
                   {% assign steps = 'Today~Order confirmed|Until race day~Change the name, frame or address any time before the race|' | append: race_day | append: '~After race day, we add the official results and send your print to production|Next 7 days~Printed, framed and shipped from Kentucky|10 to 12 days after race day~Delivered to ' | append: whose | append: ' doorstep' | split: '|' %}
@@ -330,7 +335,7 @@
             {% endfor %}
 
             <tr><td class="ts-in" style="padding: 28px 0 0;">
-              {% if can_manage %}
+              {% if can_manage and is_custom_order == false %}
               <p class="ts-f16" style="margin: 0 0 14px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">Need to fix a name, change the frame or update your address? You can {% if has_preorder %}any time before race day{% else %}for 48 hours after ordering{% endif %}.</p>
               {% endif %}
               <table width="100%" cellpadding="0" cellspacing="0"><tr>
