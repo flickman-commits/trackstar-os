@@ -149,6 +149,8 @@ export default function Overview() {
  * Revenue stepping down to contribution margin, one row per line: a bar on
  * a track as wide as revenue shows where each cost takes its bite, so the
  * eye reads top to bottom instead of across a chart with slanted labels.
+ * Costs eat in from the left, one after another, so what is left (gross
+ * profit, contribution margin) sits at the right and the margin ends bottom right.
  */
 function Waterfall({ lines }: { lines: WaterfallLine[] }) {
   const top = Math.max(1, ...lines.filter(l => l.kind === 'total' || l.kind === 'subtotal').map(l => Math.abs(l.cents)))
@@ -156,9 +158,11 @@ function Waterfall({ lines }: { lines: WaterfallLine[] }) {
     : (l.kind === 'subtotal') ? SERIES.muted : l.key === 'meta' || l.key === 'trybe' || l.key === 'google' ? SERIES.adSpend : l.key === 'designerFee' ? SERIES.designerFee : l.key === 'racePayouts' ? SERIES.racePayouts : SERIES.cogs
   let running = 0
   const rows = lines.map(l => {
-    if (l.kind === 'total' || l.kind === 'subtotal') { running = l.cents; return { l, from: 0, to: Math.max(0, l.cents) } }
+    // Worked out from the left as before, then mirrored so the costs start at the left edge.
+    const mirror = (from: number, to: number) => ({ l, from: Math.max(0, top - to), to: Math.max(0, top - from) })
+    if (l.kind === 'total' || l.kind === 'subtotal') { running = l.cents; return mirror(0, Math.max(0, l.cents)) }
     const before = running; running += l.cents
-    return { l, from: Math.max(0, Math.min(before, running)), to: Math.max(0, Math.max(before, running)) }
+    return mirror(Math.max(0, Math.min(before, running)), Math.max(0, Math.max(before, running)))
   })
   const pct = (v: number) => `${(v / top) * 100}%`
   return (
