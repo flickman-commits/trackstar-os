@@ -47,6 +47,7 @@ export const financeApi = {
   wisePayees: () => request<{ payees: WisePayee[] }>('/api/finance/wise?payees=1'),
   wiseRecipients: () => request<{ recipients: WiseRecipient[] }>('/api/finance/wise?recipients=1'),
   wiseLink: (userId: string, recipientId: string | null) => post<{ payees: WisePayee[] }>('/api/finance/wise', { action: 'link_recipient', userId, recipientId }),
+  wiseLinkContact: (userId: string, identifier: string, currency: string) => post<{ payees: WisePayee[] }>('/api/finance/wise', { action: 'link_contact', userId, identifier, currency }),
   wiseTaxForm: (userId: string, type: string | null, onFile: boolean) => post<{ payees: WisePayee[] }>('/api/finance/wise', { action: 'set_tax_form', userId, type, onFile }),
 }
 

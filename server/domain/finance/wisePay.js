@@ -53,6 +53,16 @@ const MONEY_LEFT = ['funded', 'sent']
 
 const name = u => [u?.firstName, u?.lastName].filter(Boolean).join(' ') || 'Someone'
 const usd = c => `$${(c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+/**
+ * A person's Wise link (User.wiseRecipientId): a recipient id (bank details
+ * added in Wise), or `contact:<uuid>` for someone paid to their own Wise
+ * account by Wisetag, email or phone. Wise lists no contacts, so those are
+ * linked by what Matt types and turned into a recipient on each quote.
+ */
+export const CONTACT = 'contact:'
+export const isContact = ref => String(ref || '').startsWith(CONTACT)
+const quoteTo = ref => (isContact(ref) ? { contactId: String(ref).slice(CONTACT.length) } : { recipientId: ref })
+
 const PAYEE_SELECT = { id: true, firstName: true, lastName: true, role: true, isActive: true, payoutMethod: true, wiseRecipientId: true, wiseRecipientName: true, payoutCurrency: true, payoutCountry: true, taxFormType: true, taxFormOnFile: true }
 
 /** Why a Wise recipient cannot be used, or null. */
@@ -161,7 +171,7 @@ export async function preview({ kind, periodStart, month, today = todayET(), api
     let quote = null
     if (!p.blockers.length) {
       try {
-        const q = await api.createQuote({ sourceCents: p.cents, targetCurrency: p.currency, recipientId: p.recipientId })
+        const q = await api.createQuote({ sourceCents: p.cents, targetCurrency: p.currency, ...quoteTo(p.recipientId) })
         quote = { rate: q.rate, targetMinor: q.targetMinor, feeCents: q.feeCents, expiresAt: q.expiresAt }
         if (q.disabled) p.blockers.push(q.disabled)
       } catch (e) { p.blockers.push(e.expose ? `Quote failed: ${e.message}` : 'Wise could not quote this payment') }
@@ -238,10 +248,14 @@ export async function advance(t, { api = wiseApi, db = prisma } = {}) {
   const save = data => db.wiseTransfer.update({ where: { id: t.id }, data }).then(r => { t = r; return r })
   try {
     if (t.status === 'prepared') {
-      const q = await api.createQuote({ sourceCents: t.sourceCents, targetCurrency: t.targetCurrency, recipientId: t.wiseRecipientId })
+      const q = await api.createQuote({ sourceCents: t.sourceCents, targetCurrency: t.targetCurrency, ...quoteTo(t.wiseRecipientId) })
       if (q.disabled) { await save({ status: 'failed', failureReason: q.disabled, traceId: q.traceId }); return t }
+      // A Wise account contact: Wise names the recipient it made in the quote.
+      // Nothing exists at Wise yet without it, so this fails cleanly (no money moved).
+      const to = isContact(t.wiseRecipientId) ? q.targetAccount : t.wiseRecipientId
+      if (!to) { await save({ status: 'failed', failureReason: 'Wise did not turn that Wise account into a recipient. Add them by bank details in Wise instead.', traceId: q.traceId }); return t }
       await save({ quoteId: q.quoteId, rate: q.rate, targetMinor: q.targetMinor, feeCents: q.feeCents, traceId: q.traceId })
-      const tr = await api.createTransfer({ recipientId: t.wiseRecipientId, quoteId: q.quoteId, customerTransactionId: t.customerTransactionId, reference: 'Trackstar' })
+      const tr = await api.createTransfer({ recipientId: to, quoteId: q.quoteId, customerTransactionId: t.customerTransactionId, reference: 'Trackstar' })
       if (!tr.transferId) throw new wiseApi.WiseError('Wise did not return a transfer', { unsure: true })
       await save({ wiseTransferId: tr.transferId, wiseState: tr.state, status: 'created', failureReason: null, traceId: tr.traceId })
     }
@@ -396,7 +410,7 @@ export async function refreshStatuses({ api = wiseApi, limit = 40 } = {}) {
 /** Everyone active with how they are paid, for Payouts > Rates. */
 export async function payees() {
   const users = await prisma.user.findMany({ where: { isActive: true }, select: PAYEE_SELECT, orderBy: [{ role: 'asc' }, { firstName: 'asc' }] })
-  return users.map(u => ({ userId: u.id, name: name(u), role: u.role, recipientId: u.wiseRecipientId, recipientName: u.wiseRecipientName, currency: u.payoutCurrency, country: u.payoutCountry, taxFormType: u.taxFormType, taxFormOnFile: u.taxFormOnFile }))
+  return users.map(u => ({ userId: u.id, name: name(u), role: u.role, recipientId: u.wiseRecipientId, recipientName: u.wiseRecipientName, wiseAccount: isContact(u.wiseRecipientId), currency: u.payoutCurrency, country: u.payoutCountry, taxFormType: u.taxFormType, taxFormOnFile: u.taxFormOnFile }))
 }
 
 /** The recipients on the Wise profile, to pick from (masked account summaries, never stored). */
@@ -418,6 +432,23 @@ export async function linkRecipient(userId, recipientId, { api = wiseApi } = {})
   const problem = recipientProblem(r)
   if (problem) throw new WisePayError(problem)
   await prisma.user.update({ where: { id: u.id }, data: { wiseRecipientId: r.id, wiseRecipientName: r.name || null, payoutCurrency: r.currency, payoutCountry: r.country } })
+  return payees()
+}
+
+/**
+ * Link a person who has their own Wise account, by Wisetag, email or phone,
+ * paid in `currency` (what lands in their Wise balance). Wise checks the
+ * account exists and is discoverable and gives back their name.
+ */
+export async function linkContact(userId, { identifier, currency }, { api = wiseApi } = {}) {
+  const u = await prisma.user.findUnique({ where: { id: String(userId || '') }, select: { id: true } })
+  if (!u) throw new WisePayError('No such person', 404)
+  const id = String(identifier || '').trim()
+  if (!id || id.length > 120) throw new WisePayError('Type their Wisetag, email or phone')
+  const cur = String(currency || '').trim().toUpperCase()
+  if (!/^[A-Z]{3}$/.test(cur)) throw new WisePayError('Currency is three letters, like USD or COP')
+  const c = await api.addContact({ identifier: id, targetCurrency: cur })
+  await prisma.user.update({ where: { id: u.id }, data: { wiseRecipientId: `${CONTACT}${c.contactId}`, wiseRecipientName: c.name || id, payoutCurrency: cur, payoutCountry: null } })
   return payees()
 }
 

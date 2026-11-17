@@ -13,6 +13,7 @@
  * POST { action: 'retry' | 'release', id }      one transfer
  * POST { action: 'refresh' }                    ask Wise for the latest states now
  * POST { action: 'link_recipient', userId, recipientId | null }
+ * POST { action: 'link_contact', userId, identifier, currency }   someone with their own Wise account (Wisetag, email or phone)
  * POST { action: 'set_tax_form', userId, type: 'W-9' | 'W-8BEN' | null, onFile }
  */
 import { setCors } from '../../_lib/auth.js'
@@ -50,6 +51,7 @@ export default async function handler(req, res) {
       case 'release': out = await wisePay.release(String(b.id || '')); summary = `Released a Wise payment on "${out.label}" so it can be paid another way`; break
       case 'refresh': out = await wisePay.refreshStatuses(); summary = out.changed.length ? `Wise states: ${out.changed.map(c => `${c.id} ${c.from} -> ${c.to}`).join(', ')}` : null; break
       case 'link_recipient': out = { payees: await wisePay.linkRecipient(b.userId, b.recipientId || null) }; summary = b.recipientId ? `Linked a Wise recipient (${b.recipientId})` : 'Unlinked a Wise recipient'; break
+      case 'link_contact': { out = { payees: await wisePay.linkContact(b.userId, { identifier: b.identifier, currency: b.currency }) }; const who = out.payees.find(p => p.userId === b.userId); summary = `Linked a Wise account for ${who?.name || b.userId} (${who?.recipientName || 'name not given'}, ${who?.currency || b.currency})`; detail = { action: b.action, userId: b.userId, currency: b.currency }; break }
       case 'set_tax_form': out = { payees: await wisePay.setTaxForm(b.userId, { type: b.type ?? null, onFile: b.onFile }) }; summary = `Tax form set to ${b.type || 'none'}${b.onFile ? ', on file' : ''}`; break
       default: return res.status(400).json({ error: 'Unknown action' })
     }

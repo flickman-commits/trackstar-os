@@ -162,11 +162,45 @@ export function shapeRecipient(r) {
   }
 }
 
-/** A quote for a fixed USD amount to a recipient: rate, what they get, the fee, when it expires. */
-export async function createQuote({ sourceCents, targetCurrency, recipientId }) {
+/**
+ * Add someone who has their own Wise account, by Wisetag, email or phone (a
+ * "Wise account" recipient in the Wise app). Wise has no list of these, so a
+ * person is linked by what Matt types. Returns { contactId, name }.
+ *
+ * Not documented for personal tokens (Nov 16, 2026: the docs show it with a
+ * partner token, and list no way to read contacts back), so the first send to
+ * a contact is a test: see wisePay.js. The path is tried on v2, then v1.
+ */
+export async function addContact({ identifier, targetCurrency }) {
+  const body = { identifier: String(identifier || '').trim(), targetCurrency }
+  let last
+  for (const v of ['v2', 'v1']) {
+    try {
+      const { data, traceId } = await wise(`/${v}/profiles/${await pid()}/contacts?isDirectIdentifierCreation=true`, { method: 'POST', body })
+      const contactId = data?.contactId || data?.id || null
+      if (!contactId) throw new WiseError('Wise did not return a contact for that Wise account', { status: 400, traceId })
+      return { contactId: String(contactId), name: data?.name || data?.fullName || '', traceId }
+    } catch (e) {
+      last = e
+      if (!(e instanceof WiseError) || e.status !== 404) break
+    }
+  }
+  if (last instanceof WiseError && last.status === 404) throw new WiseError('Wise found no Wise account for that Wisetag, email or phone (or it is not discoverable)', { status: 404, traceId: last.traceId })
+  // The token works elsewhere (Connections test), so a refusal here means contacts are off-limits to it.
+  if (last instanceof WiseError && last.message.startsWith('Wise refused the token')) throw new WiseError('Wise would not let this token add a Wise account contact. Add the person by bank details instead.', { status: 400, traceId: last.traceId })
+  throw last
+}
+
+/**
+ * A quote for a fixed USD amount to a recipient: rate, what they get, the fee,
+ * when it expires. For a Wise account contact pass `contactId` instead of
+ * `recipientId`; Wise turns it into a recipient, returned as `targetAccount`.
+ */
+export async function createQuote({ sourceCents, targetCurrency, recipientId = null, contactId = null }) {
+  const to = contactId ? { contactId } : { targetAccount: Number(recipientId) || recipientId, payOut: 'BANK_TRANSFER' }
   const { data, traceId } = await wise(`/v3/profiles/${await pid()}/quotes`, {
     method: 'POST',
-    body: { sourceCurrency: 'USD', targetCurrency, sourceAmount: toDollars(sourceCents), targetAccount: Number(recipientId) || recipientId, payOut: 'BANK_TRANSFER', preferredPayIn: 'BALANCE' },
+    body: { sourceCurrency: 'USD', targetCurrency, sourceAmount: toDollars(sourceCents), ...to, preferredPayIn: 'BALANCE' },
   })
   const option = (data?.paymentOptions || []).find(o => o.payIn === 'BALANCE' && !o.disabled) || (data?.paymentOptions || [])[0] || null
   return {
@@ -176,6 +210,7 @@ export async function createQuote({ sourceCents, targetCurrency, recipientId }) 
     feeCents: option?.fee?.total != null ? toCents(option.fee.total) : null,
     expiresAt: data?.expirationTime || data?.rateExpirationTime || null,
     disabled: option?.disabled ? 'Wise cannot send this one from the balance' : null,
+    targetAccount: data?.targetAccount != null ? String(data.targetAccount) : null,
     traceId,
   }
 }

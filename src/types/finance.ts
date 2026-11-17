@@ -96,7 +96,7 @@ export type WiseTransfer = {
 }
 export type WiseRun = { runId: string; label: string; status: string; totalCents: number; transfers: WiseTransfer[]; createdAt?: string; paidAt?: string | null }
 export type WisePayee = {
-  userId: string; name: string; role: string; recipientId: string | null; recipientName: string | null
+  userId: string; name: string; role: string; recipientId: string | null; recipientName: string | null; wiseAccount: boolean
   currency: string | null; country: string | null; taxFormType: string | null; taxFormOnFile: boolean
 }
 export type WiseRecipient = { id: string; name: string; currency: string | null; country: string | null; type: string | null; summary: string; problem: string | null }

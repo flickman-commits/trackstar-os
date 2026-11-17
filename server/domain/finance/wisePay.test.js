@@ -39,7 +39,7 @@ test("Wise's states map to ours", () => {
 })
 
 /** A fake Wise that records calls and dedupes on customerTransactionId, as Wise does. */
-function fakeWise({ fundStatus = 'COMPLETED', failCreateOnce = false, failFundOnce = false } = {}) {
+function fakeWise({ fundStatus = 'COMPLETED', failCreateOnce = false, failFundOnce = false, contactResolves = true } = {}) {
   const calls = []
   const byCtid = new Map()
   const state = new Map()
@@ -47,9 +47,9 @@ function fakeWise({ fundStatus = 'COMPLETED', failCreateOnce = false, failFundOn
   return {
     calls, state,
     wiseEnv: () => 'sandbox',
-    async createQuote(a) { calls.push(['quote', a.sourceCents]); return { quoteId: `q${calls.length}`, rate: '500.1', targetMinor: a.sourceCents * 500, feeCents: 120, traceId: 't' } },
+    async createQuote(a) { calls.push(['quote', a.sourceCents, a.contactId || a.recipientId]); return { quoteId: `q${calls.length}`, rate: '500.1', targetMinor: a.sourceCents * 500, feeCents: 120, targetAccount: a.contactId && contactResolves ? '5550' : null, traceId: 't' } },
     async createTransfer(a) {
-      calls.push(['create', a.customerTransactionId])
+      calls.push(['create', a.customerTransactionId, a.recipientId])
       if (!byCtid.has(a.customerTransactionId)) { byCtid.set(a.customerTransactionId, `w${byCtid.size + 1}`); state.set(byCtid.get(a.customerTransactionId), 'incoming_payment_waiting') }
       if (createFails) { createFails = false; const e = new Error('timeout'); e.unsure = true; throw e }
       return { transferId: byCtid.get(a.customerTransactionId), state: 'incoming_payment_waiting', traceId: 't' }
@@ -111,5 +111,21 @@ test('a short balance at Wise fails the transfer and pays no lines', async () =>
   await advance(t, { api, db })
   assert.equal(t.status, 'failed')
   assert.match(t.failureReason, /Not enough/)
+  assert.equal(db.lines[0].paidAt, null)
+})
+
+test('a Wise account contact is quoted by contactId and sent to the recipient Wise makes for it', async () => {
+  const api = fakeWise(); const t = { ...newTransfer(), targetCurrency: 'USD', wiseRecipientId: 'contact:7f3e' }; const db = fakeDb(t)
+  await advance(t, { api, db })
+  assert.deepEqual(api.calls.find(c => c[0] === 'quote'), ['quote', 34080, '7f3e'])
+  assert.deepEqual(api.calls.find(c => c[0] === 'create'), ['create', 'ctid-1', '5550'])
+  assert.equal(t.status, 'funded')
+})
+
+test('a contact Wise does not turn into a recipient fails before anything is made at Wise', async () => {
+  const api = fakeWise({ contactResolves: false }); const t = { ...newTransfer(), wiseRecipientId: 'contact:7f3e' }; const db = fakeDb(t)
+  await advance(t, { api, db })
+  assert.equal(t.status, 'failed')
+  assert.ok(!api.calls.some(c => c[0] === 'create' || c[0] === 'fund'))
   assert.equal(db.lines[0].paidAt, null)
 })

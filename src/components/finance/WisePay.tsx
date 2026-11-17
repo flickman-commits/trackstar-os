@@ -162,6 +162,26 @@ export function WiseSendButton({ target, title, onSent }: { target: Target; titl
   )
 }
 
+/** Link someone who has their own Wise account, by Wisetag, email or phone. */
+function WiseAccountForm({ payee, onDone, onCancel }: { payee: WisePayee; onDone: (payees: WisePayee[]) => void; onCancel: () => void }) {
+  const [identifier, setIdentifier] = useState('')
+  const [currency, setCurrency] = useState(payee.currency || 'USD')
+  const [busy, setBusy] = useState(false)
+  const submit = async () => {
+    setBusy(true)
+    try { onDone((await financeApi.wiseLinkContact(payee.userId, identifier, currency)).payees); toast.success('Wise account linked') } catch (e) { toast.error((e as Error).message) } finally { setBusy(false) }
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-1.5">
+      <input autoFocus value={identifier} onChange={e => setIdentifier(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && identifier.trim()) submit(); if (e.key === 'Escape') onCancel() }}
+        placeholder="@wisetag, email or phone" className={`${inputBase} py-1 w-48`} />
+      <input value={currency} onChange={e => setCurrency(e.target.value.toUpperCase().slice(0, 3))} title="Currency they receive in their Wise balance" className={`${inputBase} py-1 w-16 uppercase`} />
+      <button onClick={submit} disabled={busy || !identifier.trim() || currency.length !== 3} className={btnPrimary}>{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Link'}</button>
+      <button onClick={onCancel} className={btnGhost}>Cancel</button>
+    </span>
+  )
+}
+
 /**
  * Payouts > Rates: each person's Wise recipient (added in Wise, picked here)
  * and their tax form. Sending through Wise is blocked without both.
@@ -171,6 +191,7 @@ export function WisePayees() {
   const [recips, setRecips] = useState<WiseRecipient[] | null>(null)
   const [recipError, setRecipError] = useState<string | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
+  const [contactFor, setContactFor] = useState<string | null>(null)
   const loadRecips = useCallback(async () => {
     setRecipError(null)
     try { setRecips((await financeApi.wiseRecipients()).recipients) } catch (e) { setRecipError((e as Error).message) }
@@ -189,7 +210,7 @@ export function WisePayees() {
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
           <h3 className="text-sm font-semibold text-off-black mb-1">Paying through Wise</h3>
-          <p className="text-[11px] text-off-black/50">Add each person as a recipient in Wise first (bank details stay in Wise), then pick them here. A Costa Rica recipient needs a CRC IBAN starting with CR. Pay through Wise is blocked until there is a recipient and a tax form on file.</p>
+          <p className="text-[11px] text-off-black/50">Add each person as a recipient in Wise first (bank details stay in Wise), then pick them here. Someone with their own Wise account can be linked by Wisetag, email or phone instead. A Costa Rica recipient needs a CRC IBAN starting with CR. Pay through Wise is blocked until there is a recipient and a tax form on file.</p>
         </div>
         <button onClick={loadRecips} className={btnGhost} title="Read the recipient list from Wise again"><RefreshCw className="w-3.5 h-3.5" /></button>
       </div>
@@ -206,12 +227,19 @@ export function WisePayees() {
           <table className="w-full text-xs">
             <thead><tr className="border-b border-border-gray"><th className={`py-1.5 text-left ${tableHead}`}>Person</th><th className={`py-1.5 text-left ${tableHead}`}>Wise recipient</th><th className={`py-1.5 text-left ${tableHead}`}>Currency</th><th className={`py-1.5 text-left ${tableHead}`}>Tax form</th></tr></thead>
             <tbody>{rows.map(p => {
-              const linkedMissing = p.recipientId && recips && !recips.some(r => r.id === p.recipientId)
+              const linkedMissing = p.recipientId && !p.wiseAccount && recips && !recips.some(r => r.id === p.recipientId)
               return (
                 <tr key={p.userId} className="border-b border-border-gray/60 last:border-0">
                   <td className="py-1.5 pr-3 font-medium whitespace-nowrap">{p.name}</td>
                   <td className="py-1.5 pr-3">
-                    {recips ? (
+                    {contactFor === p.userId ? (
+                      <WiseAccountForm payee={p} onCancel={() => setContactFor(null)} onDone={list => { setPayees(list); setContactFor(null) }} />
+                    ) : p.wiseAccount ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span>{p.recipientName} <span className="text-off-black/45">· Wise account</span></span>
+                        <button title="Unlink" disabled={saving === p.userId} onClick={() => save(p.userId, () => financeApi.wiseLink(p.userId, null), 'Unlinked')} className={btnGhost}><Unlink className="w-3.5 h-3.5" /></button>
+                      </span>
+                    ) : recips ? (
                       <select value={p.recipientId || ''} disabled={saving === p.userId}
                         onChange={e => save(p.userId, () => financeApi.wiseLink(p.userId, e.target.value || null), e.target.value ? 'Recipient linked' : 'Recipient unlinked')}
                         className={`${inputBase} py-1 max-w-[280px]`}>
@@ -220,6 +248,9 @@ export function WisePayees() {
                         {recips.map(r => <option key={r.id} value={r.id} disabled={!!r.problem}>{r.name} · {r.currency} · {r.summary}{r.problem ? ' (not usable)' : ''}</option>)}
                       </select>
                     ) : <span className="text-off-black/60">{p.recipientName || 'Not linked'}</span>}
+                    {contactFor !== p.userId && !p.wiseAccount && (
+                      <button onClick={() => setContactFor(p.userId)} className={`${btnGhost} mt-1 text-[11px]`} title="They have their own Wise account: link them by Wisetag, email or phone">Has a Wise account?</button>
+                    )}
                   </td>
                   <td className="py-1.5 pr-3 text-off-black/60">{p.currency ? `${p.currency}${p.country ? ` · ${p.country}` : ''}` : '–'}</td>
                   <td className="py-1.5">
