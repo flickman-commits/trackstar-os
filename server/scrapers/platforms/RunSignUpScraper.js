@@ -537,9 +537,11 @@ export class RunSignUpScraper extends BaseScraper {
    * Extract standardized data from RunSignUp result object
    */
   extractRunnerData(result, eventType = 'Marathon') {
-    // Some RunSignUp timers (e.g. Competitive Timing / Missoula) report chip
-    // times with hundredths ("2:45:55.71") — round to the nearest second.
-    const time = this.formatTime(this.roundTime(result.chipTime))
+    // Some RunSignUp timers (Missoula, Kiawah, Louisiana) print chip times
+    // with tenths or hundredths ("2:45:55.71"). The print carries the whole
+    // seconds the page shows, fraction cut, never rounded up (Matt,
+    // 2026-11-17): 2:45:55.71 prints 2:45:55, as RaceRoster and ScoreThis do.
+    const time = this.formatTime(String(result.chipTime ?? '').trim().replace(/\.\d+$/, '') || null)
     const bib = result.bib || null
     // Pace is the "Pace" column the RunSignUp results page shows (the REST
     // row's `pace`; the browser path reads the same column). It is computed

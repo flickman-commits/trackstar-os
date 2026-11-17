@@ -16,8 +16,8 @@
  *     races/missoula-marathon page now 404s, so 2026 reads RunSignUp too.
  *     2026 chip times carry hundredths or tenths (Tyler O'Neill 2:55:06.9).
  *
- * Verified 2025 finishers (chip times rounded to the second, pace = chip ÷ dist):
- *   Marathon — Jacob Verrue, bib 178, 2:45:56, 6:20/mi (positive split:
+ * Verified 2025 finishers (chip fraction cut to the whole second, never rounded up):
+ *   Marathon — Jacob Verrue, bib 178, 2:45:55 (page 2:45:55.71), 6:20/mi (positive split:
  *     1st half 5:55/mi, 2nd half 6:45/mi — confirms the `pace` field is the
  *     OVERALL average, not a per-segment value).
  *   Half — Brett Rosauer, bib 55, 1:10:52, 5:25/mi.

@@ -735,10 +735,10 @@ export const CHIP_TIME_FIXTURES = [
     race: 'Missoula Marathon',
     year: 2025,
     runner: 'Jacob Verrue',
-    expectedChipTime: '2:45:56',
+    expectedChipTime: '2:45:55',
     expectedChipPace: '6:20',
     expectedBib: '178',
-    notes: 'Missoula 2025 Marathon (RunSignUp/Competitive Timing). Positive split - 1st half 5:55/mi, 2nd half 6:45/mi - so the OVERALL pace (6:20) ≠ final-segment pace. Chip 2:45:55.71 rounds to 2:45:56. https://runsignup.com/Race/Results/8029/562587',
+    notes: 'Missoula 2025 Marathon (RunSignUp/Competitive Timing). Positive split - 1st half 5:55/mi, 2nd half 6:45/mi - so the OVERALL pace (6:20) ≠ final-segment pace. Chip 2:45:55.71 prints 2:45:55 (fraction cut, never rounded up). https://runsignup.com/Race/Results/8029/562587',
   },
   {
     platform: 'runsignup',
@@ -880,10 +880,10 @@ export const CHIP_TIME_FIXTURES = [
     race: 'Louisiana Marathon',
     year: 2025,
     runner: 'John Barham',
-    expectedChipTime: '2:30:26',
+    expectedChipTime: '2:30:25',
     expectedChipPace: '5:45',
     expectedBib: '1726',
-    notes: 'Louisiana 2025 Marathon (result set 523599). Chip 2:30:25.98, Clock (gun) 2:34:53.08. First 10K 5:30/mi, final 10K 6:04/mi. 9026s ÷ 26.2 = 344.5 → 5:45; page pace 5:45. https://runsignup.com/Race/Results/100074/523599',
+    notes: 'Louisiana 2025 Marathon (result set 523599). Chip 2:30:25.98 prints 2:30:25 (fraction cut), Clock (gun) 2:34:53.08. First 10K 5:30/mi, final 10K 6:04/mi. 9026s ÷ 26.2 = 344.5 → 5:45; page pace 5:45. https://runsignup.com/Race/Results/100074/523599',
   },
   {
     platform: 'runsignup',
@@ -1057,10 +1057,10 @@ export const CHIP_TIME_FIXTURES = [
     race: 'Northshore Half Marathon',
     year: 2025,
     runner: 'Alexis Martinez',
-    expectedChipTime: '1:42:06',
+    expectedChipTime: '1:42:05',
     expectedChipPace: '10:13',
     expectedBib: '1616',
-    notes: 'Northshore 2025 10 Miler (result set 596381) - verifies the 10 mile distance (a 26.2 default gave 3:54). Chip 1:42:05.54, clock 1:42:39.04. 6126s / 10 = 612.6 -> 10:13.',
+    notes: 'Northshore 2025 10 Miler (result set 596381) - verifies the 10 mile distance (a 26.2 default gave 3:54). Chip 1:42:05.54 prints 1:42:05 (fraction cut), clock 1:42:39.04. 6126s / 10 = 612.6 -> 10:13.',
   },
   // ── Santa Barbara Half Marathon (RaceRoster, SVE Timing) ──────────────
   {
@@ -1142,10 +1142,10 @@ export const CHIP_TIME_FIXTURES = [
     race: 'Mississippi Gulf Coast Marathon',
     year: 2025,
     runner: 'Gage Bezoski',
-    expectedChipTime: '1:27:38',
+    expectedChipTime: '1:27:37',
     expectedChipPace: '6:41',
     expectedBib: '3342',
-    notes: 'Gulf Coast 2025 Half (set 616789). Chip 1:27:37.8 (rounds to :38), clock 1:27:40.41. 5258s / 13.1 = 401.4 -> 6:41.',
+    notes: 'Gulf Coast 2025 Half (set 616789). Chip 1:27:37.8 (prints :37, fraction cut), clock 1:27:40.41. 5258s / 13.1 = 401.4 -> 6:41.',
   },
   // ── Las Vegas Marathon (Brooksee, vegasmarathon.com) ─────────────────
   {
@@ -1216,10 +1216,10 @@ export const CHIP_TIME_FIXTURES = [
     race: 'Capital City Marathon',
     year: 2024,
     runner: 'Walter Smith',
-    expectedChipTime: '5:03:22',
+    expectedChipTime: '5:03:21',
     expectedChipPace: '11:35',
     expectedBib: '162',
-    notes: 'Capital City 2024 Marathon (RunSignUp 137375, set 459034). Chip 5:03:21.66 (rounds to :22), clock 5:03:30.83. Slowed: 20 mi at 3:39:08 (about 10:58/mi), final 10K about 13:33/mi. 18202s / 26.2 = 694.7 -> 11:35, page 11:35.',
+    notes: 'Capital City 2024 Marathon (RunSignUp 137375, set 459034). Chip 5:03:21.66 (prints :21, fraction cut), clock 5:03:30.83. Slowed: 20 mi at 3:39:08 (about 10:58/mi), final 10K about 13:33/mi. 18202s / 26.2 = 694.7 -> 11:35, page 11:35.',
   },
   {
     platform: 'runsignup',
@@ -1257,10 +1257,10 @@ export const CHIP_TIME_FIXTURES = [
     race: 'Carmel Marathon',
     year: 2022,
     runner: 'Grey Rogers',
-    expectedChipTime: '3:22:01',
+    expectedChipTime: '3:22:00',
     expectedChipPace: '7:43',
     expectedBib: '1899',
-    notes: 'Carmel 2022 Marathon on the separate RunSignUp race 124312 (set 310473), checks the per-year raceId. 12121s / 26.2 = 462.6 -> 7:43.',
+    notes: 'Carmel 2022 Marathon on the separate RunSignUp race 124312 (set 310473), checks the per-year raceId. Chip 3:22:00.82 prints 3:22:00 (fraction cut), clock 3:22:51.94. 12120s / 26.2 = 462.6 -> 7:43, page pace 7:43.',
   },
   // ── Coast Guard Marathon (RunSignUp) ──────────────────────────────────
   {
