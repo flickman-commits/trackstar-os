@@ -244,7 +244,8 @@ export default async function handler(req, res) {
               id: true, orderNumber: true, parentOrderNumber: true,
               customerName: true, customerEmail: true, raceName: true,
               designStatus: true, trackstarOrderType: true, shopifyOrderData: true,
-              designerNote: true, runnerName: true, raceYear: true, featureConsent: true
+              designerNote: true, runnerName: true, raceYear: true, featureConsent: true,
+              proofSentAt: true
             }
           }
         }
