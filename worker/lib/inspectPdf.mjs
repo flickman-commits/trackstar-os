@@ -37,7 +37,7 @@ export function inspectPdf(file) {
   const cmykOps = count(new RegExp(String.raw`(?<![\w.-])${num}\s+${num}\s+${num}\s+${num}\s+(?:k|K)(?![\w.])`, 'g'))
   const rgbSpaces = count(/\/DeviceRGB|\/ICCBased[^>]*\/N\s+3|\/N\s+3\b[^>]*\/ICCBased/g)
   return {
-    images: imagesOf(all),
+    images: imagesOf(buf),
     trimIn: trim ? `${inches(trim[2] - trim[0])}x${inches(trim[3] - trim[1])}` : null,
     bleedIn: trim && bleed ? {
       left: inches(trim[0] - bleed[0]), bottom: inches(trim[1] - bleed[1]),
@@ -51,29 +51,57 @@ export function inspectPdf(file) {
 /**
  * Each image as printed: its pixel width over the width it is drawn at, in
  * ppi. Illustrator draws an image as "a b c d e f cm /Im0 Do"; the name maps
- * to an object through the page's /XObject resources. A blurry logo shows up
+ * to an object through the /XObject resources. Content on a hidden layer
+ * (/AIType /HiddenLayer) never prints and is left out. A blurry logo shows up
  * here as a low number (BULK-0001's printed at 71 ppi, 2026-11-17).
  */
-export function imagesOf(all) {
-  const size = new Map()
-  // The dictionary up to its stream (it may nest << >>, e.g. DecodeParms).
-  for (const m of all.matchAll(/(\d+)\s+0\s+obj\s*<<((?:(?!endobj)[\s\S])*?)\bstream\b/g)) {
-    const d = m[2]
-    if (!/\/Subtype\s*\/Image/.test(d)) continue
-    const w = /\/Width\s+(\d+)/.exec(d), h = /\/Height\s+(\d+)/.exec(d)
-    if (w && h) size.set(m[1], { w: Number(w[1]), h: Number(h[1]) })
+export function imagesOf(input) {
+  const buf = Buffer.isBuffer(input) ? input : Buffer.from(String(input), 'latin1')
+  const raw = buf.toString('latin1')
+  const objs = []
+  for (const m of raw.matchAll(/(\d+)\s+0\s+obj\b/g)) {
+    const from = m.index + m[0].length
+    const end = raw.indexOf('endobj', from)
+    const s = raw.indexOf('stream', from)
+    const hasStream = s >= 0 && (end < 0 || s < end) && raw.slice(s - 3, s) !== 'end'
+    const dict = raw.slice(from, hasStream ? s : end < 0 ? raw.length : end)
+    let body = null
+    if (hasStream) {
+      const at = s + (raw[s + 6] === '\r' ? 8 : 7)
+      const stop = raw.indexOf('endstream', at)
+      const bytes = buf.subarray(at, stop < 0 ? buf.length : stop)
+      if (/FlateDecode/.test(dict)) { try { body = zlib.inflateSync(bytes).toString('latin1') } catch { body = null } }
+      else if (!/\/Subtype\s*\/Image/.test(dict)) body = bytes.toString('latin1')
+    }
+    objs.push({ num: m[1], dict, body })
   }
-  const named = new Map()
-  for (const block of all.matchAll(/\/XObject\s*<<([^>]*)>>/g)) for (const r of block[1].matchAll(/\/([^\s/<>]+)\s+(\d+)\s+0\s+R/g)) named.set(r[1], r[2])
+  const hidden = new Set()
+  for (const o of objs) if (/\/AIType\s*\/HiddenLayer/.test(o.dict)) {
+    hidden.add(o.num)
+    for (const c of o.dict.matchAll(/\/Contents\s+(\d+)\s+0\s+R/g)) hidden.add(c[1])
+  }
+  const size = new Map(), named = new Map()
+  for (const o of objs) {
+    if (/\/Subtype\s*\/Image/.test(o.dict)) {
+      const w = /\/Width\s+(\d+)/.exec(o.dict), h = /\/Height\s+(\d+)/.exec(o.dict)
+      if (w && h) size.set(o.num, { w: Number(w[1]), h: Number(h[1]) })
+    }
+    if (hidden.has(o.num)) continue
+    for (const block of o.dict.matchAll(/\/XObject\s*<<([^>]*)>>/g)) for (const r of block[1].matchAll(/\/([^\s/<>]+)\s+(\d+)\s+0\s+R/g)) named.set(r[1], r[2])
+  }
   const n = String.raw`(-?(?:\d+\.?\d*|\.\d+))`
+  const draw = new RegExp(String.raw`${n}\s+${n}\s+${n}\s+${n}\s+${n}\s+${n}\s+cm\s*\/([^\s/<>\[\]()]+)\s+Do`, 'g')
   const out = []
-  for (const m of all.matchAll(new RegExp(String.raw`${n}\s+${n}\s+${n}\s+${n}\s+${n}\s+${n}\s+cm\s*\/([^\s/<>\[\]()]+)\s+Do`, 'g'))) {
-    const px = size.get(named.get(m[7]))
-    if (!px) continue
-    const [a, b, c, d] = m.slice(1, 5).map(Number)
-    const wIn = Math.hypot(a, b) / 72, hIn = Math.hypot(c, d) / 72
-    if (wIn < 0.05 || hIn < 0.05) continue
-    out.push({ ppi: Math.round(Math.min(px.w / wIn, px.h / hIn)), widthIn: Math.round(wIn * 100) / 100, heightIn: Math.round(hIn * 100) / 100 })
+  for (const o of objs) {
+    if (!o.body || hidden.has(o.num)) continue
+    for (const m of o.body.matchAll(draw)) {
+      const px = size.get(named.get(m[7]))
+      if (!px) continue
+      const [a, b, c, d] = m.slice(1, 5).map(Number)
+      const wIn = Math.hypot(a, b) / 72, hIn = Math.hypot(c, d) / 72
+      if (wIn < 0.05 || hIn < 0.05) continue
+      out.push({ ppi: Math.round(Math.min(px.w / wIn, px.h / hIn)), widthIn: Math.round(wIn * 100) / 100, heightIn: Math.round(hIn * 100) / 100 })
+    }
   }
   return out
 }

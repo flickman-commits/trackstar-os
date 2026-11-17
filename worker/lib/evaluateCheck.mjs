@@ -20,8 +20,8 @@ export function evaluateCheck(r, { sizes: need = SIZES, cobranded = false } = {}
   // A linked image whose file is not on this Mac renders as Illustrator's low-res preview: never print that.
   for (const img of r.images || []) {
     const what = `${img.widthIn}" wide image on ${img.layer}${img.name ? ` (${img.name})` : ''}`
-    // The check reads a copy of the file, so a race template's link relative to its own folder can look missing here; only a co-branded upload (one file, nothing beside it) fails on it. The render refuses a missing link either way (render.jsx).
-    if (img.missing) { (cobranded ? problems : warnings).push(`a ${what} is linked to a file this Mac does not have, so it would print as a blurry preview: embed it in Illustrator (Links panel > Embed Image) and upload the file again`); continue }
+    // The render opens a copy of the file too (render-worker.mjs), so what is missing here is missing at render time.
+    if (img.missing) { problems.push(`a ${what} is linked to a file this Mac does not have, so it would print as a blurry preview: embed it in Illustrator (Links panel > Embed Image) and upload the file again`); continue }
     if (img.kind === 'linked') warnings.push(`a ${what} is linked, not embedded: embed it so the file prints the same on any Mac`)
     if (img.ppi && img.ppi < MIN_IMAGE_PPI) (cobranded ? problems : warnings).push(`a ${what} is only ${img.ppi} ppi and will print soft (needs ${MIN_IMAGE_PPI}+): use a larger or vector version`)
   }
