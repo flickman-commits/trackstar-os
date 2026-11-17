@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Upload, X, Copy, ExternalLink, Send, Receipt, Flag, HeartHandshake, Building2 } from 'lucide-react'
+import { Loader2, Upload, Download, X, Copy, ExternalLink, Send, Receipt, Flag, HeartHandshake, Building2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -316,6 +316,14 @@ export function ProductionFile({ order, onChanged }: { order: Billing; onChanged
       onChanged()
     } catch (err) { toast.error((err as Error).message) } finally { setBusy(false) }
   }
+  const download = async () => {
+    try {
+      const r = await apiFetch(`${API_BASE}/api/bulk/billing?id=${encodeURIComponent(order.id)}&template=1`)
+      const out = await r.json().catch(() => ({}))
+      if (!r.ok || !out.url) throw new Error(out.error || 'Could not get the file')
+      window.location.href = out.url
+    } catch (err) { toast.error((err as Error).message) }
+  }
   const status = !t ? { text: 'No file yet', cls: 'text-off-black/45' }
     : t.ok === null || !t.checkedAt ? { text: 'Waiting for the worker to check it', cls: 'text-amber-700' }
     : t.ok ? { text: 'Checked, ready to render', cls: 'text-emerald-700' }
@@ -325,6 +333,7 @@ export function ProductionFile({ order, onChanged }: { order: Billing; onChanged
       <span className="font-medium text-off-black min-w-0 truncate">{order.raceName} {order.raceYear}</span>
       <span className="font-mono text-[11px] text-off-black/40">{order.number}</span>
       <span className={`flex-1 min-w-0 truncate ${status.cls}`} title={status.text}>{status.text}</span>
+      {t && <button type="button" onClick={download} className={`${btnSecondary} shrink-0`}><Download className="w-3.5 h-3.5" />Download .ai</button>}
       <label className={`${btnSecondary} cursor-pointer shrink-0 ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
         {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}{t ? 'Replace .ai' : 'Upload .ai'}
         <input type="file" accept=".ai" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload(f) }} />

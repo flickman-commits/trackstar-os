@@ -48,8 +48,9 @@ export async function templatesForWorker() {
 // Production files uploaded in the tool: private, read by the worker through a signed link.
 export const TEMPLATE_BUCKET = 'print-templates'
 
-async function templateDownloadUrl(path) {
-  const { data, error } = await storage().storage.from(TEMPLATE_BUCKET).createSignedUrl(path, 3600)
+/** A signed link to an uploaded file; with downloadAs, the browser saves it under that name. */
+export async function templateDownloadUrl(path, { ttl = 3600, downloadAs } = {}) {
+  const { data, error } = await storage().storage.from(TEMPLATE_BUCKET).createSignedUrl(path, ttl, downloadAs ? { download: downloadAs } : undefined)
   if (error) return null
   return data.signedUrl
 }

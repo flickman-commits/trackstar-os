@@ -12,6 +12,7 @@
  *     create        { partnerType, partnerName, contact..., billingAddress, printKind, newDesign?, partnerOrderId?, discount..., shipping, shipToAddress?, raceName, raceYear, quantity, productSize, frameType, eventNote?, fulfillmentDate }
  *     update        { id, ...terms }
  *     template-upload / template-saved { id, fileName | path }   a co-branded order's production file
+ *   GET ?id&template=1   a short-lived link that downloads that file
  *     invoice       { id }               admin: build or rebuild the Shopify draft order
  *     send-invoice  { id, message? }     admin: Shopify emails it to the contact
  */
@@ -22,7 +23,7 @@ import { openRacePartnerOrders } from '../../../server/domain/orders/racePartner
 import { publicPrintCatalog } from '../../../server/domain/catalog/printCatalog.js'
 import { sendPublicError } from '../../../server/lib/publicError.js'
 import { FRAME_OPTIONS, SIZE_OPTIONS } from '../../../server/domain/bulk/bulkOrders.js'
-import { EVENT_OPTIONS, PRINT_KINDS, createBulkOrder, updateBulkOrder, loadBilling, quote, buildInvoice, sendInvoice, productionFileUpload, productionFileSaved, pastDetails } from '../../../server/domain/bulk/billing.js'
+import { EVENT_OPTIONS, PRINT_KINDS, createBulkOrder, updateBulkOrder, loadBilling, quote, buildInvoice, sendInvoice, productionFileUpload, productionFileSaved, productionFileDownload, pastDetails } from '../../../server/domain/bulk/billing.js'
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, POST, OPTIONS' })) return
@@ -40,6 +41,7 @@ export default async function handler(req, res) {
       if (req.query?.catalog) return res.status(200).json({ products: await publicPrintCatalog() })
       if (req.query?.designs) return res.status(200).json({ designs: await openRacePartnerOrders() })
       if (req.query?.options) return res.status(200).json({ events: EVENT_OPTIONS, sizes: SIZE_OPTIONS, frames: FRAME_OPTIONS, printKinds: PRINT_KINDS })
+      if (req.query?.template) return res.status(200).json(await productionFileDownload(req.query.id))
       if (req.query?.quote) {
         if (!money) return res.status(403).json({ error: 'Prices are for admins.' })
         return res.status(200).json(await quote(req.query.id))

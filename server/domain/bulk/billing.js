@@ -13,7 +13,7 @@
  * its number (never by partner name). Prices are Shopify's, read live; money
  * here is integer cents (CLAUDE.md).
  */
-import { templateKey, uploadTemplateUrl, saveUploadedTemplate } from '../render/templates.js'
+import { templateKey, uploadTemplateUrl, saveUploadedTemplate, templateDownloadUrl } from '../render/templates.js'
 import prisma from '../../db.js'
 import { Prisma } from '@prisma/client'
 import { shopifyAdminUrl, shopifyDraftAdminUrl } from '../../lib/links.js'
@@ -218,6 +218,18 @@ export async function productionFileSaved(id, path) {
   if (!order) throw new BulkError('Bulk order not found', 404)
   if (!String(path || '').startsWith(`cobranded/${order.number}/`)) throw new BulkError('That upload is not for this order')
   return saveUploadedTemplate({ raceName: order.raceName, runNumber: order.number, path })
+}
+
+/** A five-minute link that downloads the order's uploaded production file, named for the order. */
+export async function productionFileDownload(id) {
+  const order = await prisma.bulkOrder.findUnique({ where: { id: String(id || '') }, select: { number: true, raceName: true, raceYear: true } })
+  if (!order) throw new BulkError('Bulk order not found', 404)
+  const t = await prisma.printTemplate.findUnique({ where: { key: templateKey(order.raceName, order.number) }, select: { storagePath: true } })
+  if (!t?.storagePath) throw new BulkError('This order has no uploaded production file', 404)
+  const name = `${order.raceName} ${order.raceYear} ${order.number}.ai`.replace(/[^A-Za-z0-9 .-]/g, '')
+  const url = await templateDownloadUrl(t.storagePath, { ttl: 300, downloadAs: name })
+  if (!url) throw new BulkError('Could not make a download link for the file', 502)
+  return { url }
 }
 
 /** The race's storefront product, and the variant for a size and frame. */
