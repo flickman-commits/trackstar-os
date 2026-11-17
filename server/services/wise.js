@@ -116,17 +116,30 @@ export async function listRecipients({ currency = null } = {}) {
     if (currency) q.set('currency', currency)
     if (seek != null) q.set('seekPosition', String(seek))
     const { data } = await wise(`/v2/accounts?${q}`)
-    const rows = data?.content || []
+    const rows = Array.isArray(data) ? data : (data?.content || [])
     out.push(...rows.map(shapeRecipient))
-    seek = data?.seekPositionForNext ?? null
+    seek = Array.isArray(data) ? null : (data?.seekPositionForNext ?? null)
     if (!rows.length || seek == null) break
   }
-  return out
+  if (out.length) return out
+  // Nothing from the v2 list: ask the v1 list too (Nov 16, 2026: a recipient
+  // Matt added in the Wise app did not show), so one listing's quirks never
+  // hide a recipient.
+  const q1 = new URLSearchParams({ profile: await resolveProfileId() })
+  if (currency) q1.set('currency', currency)
+  const { data } = await wise(`/v1/accounts?${q1}`)
+  return (Array.isArray(data) ? data : (data?.content || [])).map(shapeRecipient)
 }
 
 export async function getRecipient(id) {
-  const { data } = await wise(`/v2/accounts/${encodeURIComponent(id)}`)
-  return shapeRecipient(data)
+  try {
+    const { data } = await wise(`/v2/accounts/${encodeURIComponent(id)}`)
+    return shapeRecipient(data)
+  } catch (e) {
+    if (!(e instanceof WiseError) || e.status !== 404) throw e
+    const { data } = await wise(`/v1/accounts/${encodeURIComponent(id)}`)
+    return shapeRecipient(data)
+  }
 }
 
 /**
