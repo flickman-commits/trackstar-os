@@ -1,9 +1,9 @@
-import OnlineNow from '@/components/OnlineNow'
+import HoursButton from '@/components/hours/HoursButton'
+import { usePresence } from '@/lib/presence'
 import { Fragment, useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { shortcutsPaused } from '@/lib/shortcuts'
 import Toast, { type ToastMessage } from '@/components/orders/Toast'
-import { Search, Plus, Loader2, ChevronDown as ChevronDownIcon, ImagePlus, MessageSquareText, SlidersHorizontal, Clock } from 'lucide-react'
-import { openHours } from '@/lib/openHours'
+import { Search, Plus, Loader2, ChevronDown as ChevronDownIcon, ImagePlus, MessageSquareText, SlidersHorizontal, RefreshCw } from 'lucide-react'
 import { apiFetch, lastWriteAt } from '@/lib/api'
 import { segment, segmentGroup } from '@/lib/ui'
 import BulkView from '@/components/bulk/BulkView'
@@ -105,36 +105,27 @@ type OnTime = { pct: number; goalHours: number; due: number; onTime: number; lat
  */
 function OnTimeStat({ stat, lateActive, onLate }: { stat: OnTime; lateActive: boolean; onLate: () => void }) {
   const { pct } = stat
-  const days = `${stat.goalHours / 24}-day`
-  const color = pct >= GOAL_PCT ? 'bg-green-500' : pct >= 75 ? 'bg-amber-400' : 'bg-red-400'
+  const days = stat.goalHours / 24
+  // The two numbers that matter: the share out on time, and what is late now. The rest is in the tooltips.
+  const tone = pct >= GOAL_PCT ? 'text-[#2E7D5B]' : pct >= 75 ? 'text-amber-600' : 'text-red-600'
+  const onTimeTip = `On time: out within ${days} days. Past 7 days, ${stat.onTime} of the ${stat.due} standard orders whose deadline came up went out in time (the goal is ${GOAL_PCT}%). The clock starts at the order, or race day if it was ordered before the race, and pauses while results are not up yet (up to 3 days) and while we wait on the customer's reply.`
+  const lateTip = stat.lateNow
+    ? `${stat.lateNow} open order${stat.lateNow === 1 ? '' : 's'} past the ${days}-day deadline${stat.oldestLateDays != null ? `, the oldest ${stat.oldestLateDays === 1 ? '1 day' : `${stat.oldestLateDays} days`} old` : ''}. ${lateActive ? 'Click to show every order again.' : 'Click to show only these.'}`
+    : 'Nothing is past its deadline.'
   return (
-    <div className="ml-5 flex items-end gap-5">
-      <div className="flex flex-col gap-1" title={`Past 7 days: ${stat.onTime} of the ${stat.due} standard orders whose ${days} deadline came up went out in time. The clock starts at the order, or race day if it was ordered before the race, and pauses while results are not up yet (up to 3 days) and while we wait on the customer's reply.`}>
-        <span className="text-xs text-off-black/60 whitespace-nowrap">Out within {stat.goalHours / 24} days</span>
-        <div className="flex items-start gap-2.5">
-          <div className="flex flex-col gap-1 pt-1.5">
-            <div className="relative w-32 h-2 rounded-full bg-off-black/10 overflow-hidden">
-              <div className={`h-full ${color}`} style={{ width: `${Math.min(100, pct)}%` }} />
-              {/* The goal, marked on the bar. */}
-              <div className="absolute top-0 bottom-0 w-px bg-off-black/40" style={{ left: `${GOAL_PCT}%` }} />
-            </div>
-            <span className="text-[11px] text-off-black/45 whitespace-nowrap">Goal is {GOAL_PCT}%</span>
-          </div>
-          <div className="flex flex-col items-start leading-tight">
-            <span className="text-sm font-semibold text-off-black tabular-nums">{pct}%</span>
-            <span className="text-[11px] text-off-black/45 whitespace-nowrap">past 7d</span>
-          </div>
-        </div>
+    <div className="flex items-center gap-1">
+      <div className="flex items-baseline gap-1.5 px-2 py-1 cursor-help" title={onTimeTip}>
+        <span className={`text-xl font-bold tabular-nums leading-none ${tone}`}>{pct}%</span>
+        <span className="text-xs text-off-black/55">on time</span>
       </div>
       <button
         onClick={onLate}
         disabled={!stat.lateNow}
-        title={stat.lateNow ? (lateActive ? 'Show every order again' : `Show only the open orders past their ${days} deadline`) : 'Nothing is past its deadline'}
-        className={`flex flex-col items-start gap-0.5 rounded-md px-2 py-1 -mb-1 text-left transition-colors ${lateActive ? 'bg-red-50 ring-1 ring-red-200' : 'hover:bg-off-black/5'} disabled:cursor-default disabled:hover:bg-transparent`}
+        title={lateTip}
+        className={`flex items-baseline gap-1.5 rounded-md px-2 py-1 transition-colors ${lateActive ? 'bg-red-50 ring-1 ring-red-200' : 'hover:bg-off-black/5'} disabled:cursor-default disabled:hover:bg-transparent`}
       >
-        <span className="text-xs text-off-black/60 whitespace-nowrap">Late now</span>
-        <span className={`text-sm font-semibold tabular-nums ${stat.lateNow ? 'text-red-600' : 'text-off-black'}`}>{stat.lateNow}</span>
-        <span className="text-[11px] text-off-black/45 whitespace-nowrap">{stat.lateNow && stat.oldestLateDays != null ? `oldest ${stat.oldestLateDays === 1 ? '1 day' : `${stat.oldestLateDays} days`}` : 'past deadline'}</span>
+        <span className={`text-xl font-bold tabular-nums leading-none ${stat.lateNow ? 'text-red-600' : 'text-off-black'}`}>{stat.lateNow}</span>
+        <span className="text-xs text-off-black/55">late</span>
       </button>
     </div>
   )
@@ -228,6 +219,8 @@ const actionGroup = (o: Order, late?: Map<string, number>): (typeof ACTION_GROUP
 
 export default function Dashboard() {
   const { user: currentUser, isAdmin, can } = useAuth()
+  // Admins: who is online and on the clock, for the team faces.
+  const presence = usePresence(isAdmin)
   // The "Email customer" modal on an order: a new Support conversation about it.
   const [emailing, setEmailing] = useState<{ order: Order; preset?: EmailPreset | null } | null>(null)
   const emailingOrder = emailing?.order || null
@@ -1228,6 +1221,8 @@ export default function Dashboard() {
   const toolbar = (
     <div className="p-3 md:p-4 border-b border-border-gray flex-shrink-0">
       <div className="flex flex-col md:flex-row md:items-end gap-2 md:gap-3">
+        {/* Clock in sits where everyone starts work, first in the toolbar, so nobody misses it. */}
+        {can('hours') && <div className="hidden md:flex shrink-0"><HoursButton /></div>}
         <div className="relative flex-1">
           <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-off-black/40" />
           <input
@@ -1282,7 +1277,6 @@ export default function Dashboard() {
         )}
         {activeView === 'standard' && (
         <div>
-          <div className="hidden md:block text-[10px] font-semibold uppercase tracking-wider text-off-black/40 mb-1">Queue</div>
           <div className="flex md:inline-flex w-full md:w-auto rounded-md border border-border-gray bg-subtle-gray p-0.5">
             {([
               ['', 'All', fulfillable.length, 'Every open order that can be worked now. Races not run yet are left out.'],
@@ -1433,85 +1427,18 @@ export default function Dashboard() {
             }
           />
         )}
-        <div className={`pt-4 md:pt-5 pb-3 items-center justify-between gap-3 md:gap-6 flex-shrink-0 hidden md:flex`}>
-          {/* Left side: logo, greeting, and summary */}
-          <div className="flex flex-col md:flex-row md:items-center gap-3">
-            <div className="flex items-center gap-2.5">
-              <img
-                src="/trackstar-stars-transparent.png"
-                alt="Trackstar"
-                className="h-8 md:h-[34px] w-auto shrink-0 object-contain"
-              />
-            </div>
-            <div className="hidden md:block">
-              <h1 className="text-[29px] font-bold text-off-black">
-                {getGreeting()}, {greetingName(currentUser)}
-              </h1>
-
-            </div>
+        {/* The title row, the same as every tool's (Finance, Support, Sales): the stars and
+            the tool's name, then its controls. The greeting stays, quieter, beside the name. */}
+        <div className="pt-4 md:pt-5 pb-3 hidden md:flex items-center justify-between gap-4 flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <img src="/trackstar-stars-transparent.png" alt="Trackstar" className="h-7 md:h-8 w-auto shrink-0 object-contain" />
+            <h1 className="text-2xl md:text-[28px] font-bold text-off-black leading-none">Fulfillment</h1>
+            <span className="hidden lg:inline text-lg font-medium text-off-black/60 truncate">{getGreeting()}, {greetingName(currentUser)}</span>
+            {isRefreshing && <Loader2 className="w-4 h-4 animate-spin text-off-black/30" />}
           </div>
-
-        </div>
-
-        {/* Orders to Personalize Section. While an order is open, its header
-            stays and the order takes the table's place (inlineDetail). */}
-        {openingFromLink && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-2 py-16 text-sm text-off-black/50">
-            <Loader2 className="w-6 h-6 animate-spin text-off-black/40" />
-            Opening order {urlOrderRef}…
-          </div>
-        )}
-        {!isLoading && !openingFromLink && (
-        <section className={inlineDetail ? 'flex-shrink-0 flex flex-col' : `flex-1 flex flex-col min-h-0 pb-4 ${activeView === 'race_partner' && completedOrders.length > 0 ? '' : 'md:pb-6'}`}>
-          {/* Section Header */}
-          <div className={`items-center justify-between mb-3 md:mb-4 flex-shrink-0 hidden md:flex`}>
-            <div>
-            <div className="flex items-center gap-3 md:gap-6">
-              <h2 className="text-base md:text-lg font-semibold text-off-black uppercase tracking-tight">
-                <span className="hidden md:inline-block relative">
-                  {activeView === 'standard' ? 'Standard Orders' : activeView === 'custom' ? 'Custom Orders' : activeView === 'bulk' ? 'Bulk Orders' : 'Partners'}
-                  {/* Notification bubble, overlapping the end of the heading. */}
-                  <span className="absolute -top-3 -right-6 z-10 inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#4600D6] text-white text-[11px] font-bold leading-none tracking-normal shadow-[0_2px_6px_rgba(70,0,214,0.45)] ring-2 ring-white">
-                    {activeView === 'bulk' ? (bulkCount ?? '') : fulfillable.length}
-                  </span>
-                </span>
-              </h2>
-              {isRefreshing && <Loader2 className="w-4 h-4 animate-spin text-off-black/30" />}
-              {activeView === 'standard' && onTime && <OnTimeStat stat={onTime} lateActive={stageFilter === 'late'} onLate={() => setStageFilter(stageFilter === 'late' ? '' : 'late')} />}
-            </div>
-            {lastImportedAt && (
-              <button
-                onClick={importOrders}
-                disabled={isImporting}
-                className="mt-1 inline-flex items-center gap-1.5 text-xs text-off-black/45 hover:text-off-black/70 disabled:cursor-default"
-                title="Orders import on their own every 10 minutes. Click to check now."
-              >
-                {isImporting && <Loader2 className="w-3 h-3 animate-spin" />}
-                {isImporting ? 'Checking for new orders…' : `Last refreshed ${new Date(lastImportedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`}
-              </button>
-            )}
-            </div>
-            {/* View Switcher - Desktop. A segmented control rather than three
-                free-standing pills: these are three views of one list, not three
-                separate actions, and grouping them says so. Matches the channel
-                switcher in the pricing panel. Mobile keeps its dropdown, which
-                is the right control when the options do not fit side by side. */}
-            <div className="hidden md:block relative">
-            {/* Floats above the switcher so the header keeps its height. */}
-            <div className="absolute bottom-full right-0 mb-2.5 flex items-end gap-2">
-              {/* Admins: who is on right now (a glowing dot), and whose timer is running. */}
-              {isAdmin && <OnlineNow />}
-              {/* The Hours Tracker, one click from the queue, left of the team (it is also under Tools in the rail). */}
-              {can('hours') && (
-                <button onClick={openHours} title="Log your time and run the timer"
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-border-gray bg-white text-sm font-medium text-off-black/70 hover:text-off-black hover:bg-subtle-gray whitespace-nowrap">
-                  <Clock className="w-4 h-4" />Hours
-                </button>
-              )}
-              {activeView === 'standard' && sentToday
-                ? <TeamPanel team={team} sent={sentToday.byPerson} toApprove={toApprove} selected={person} onSelect={(id) => setPersonFilter(f => f === id ? '' : id)} />
-                : <QueuePill people={teamQueue} team={team} selected={person} onSelect={scoped ? (id) => setPersonFilter(f => f === id ? '' : id) : undefined} />}
-            </div>
+          <div className="flex items-center gap-3 shrink-0">
+            {/* View Switcher. A segmented control rather than free-standing pills: these are
+                views of one list. Mobile keeps its dropdown (PageHeader). */}
             <div className={`inline-flex ${segmentGroup}`}>
               {([
                 ['standard', 'Standard'],
@@ -1530,7 +1457,51 @@ export default function Dashboard() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* Orders to Personalize Section. While an order is open, its header
+            stays and the order takes the table's place (inlineDetail). */}
+        {openingFromLink && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 py-16 text-sm text-off-black/50">
+            <Loader2 className="w-6 h-6 animate-spin text-off-black/40" />
+            Opening order {urlOrderRef}…
+          </div>
+        )}
+        {!isLoading && !openingFromLink && (
+        <section className={inlineDetail ? 'flex-shrink-0 flex flex-col' : `flex-1 flex flex-col min-h-0 pb-4 ${activeView === 'race_partner' && completedOrders.length > 0 ? '' : 'md:pb-6'}`}>
+          {/* The health strip: which list and how many, how we are doing on getting
+              orders out, and the team (one face each, with what is left for them and,
+              for admins, who is online and on the clock). */}
+          <div className="hidden md:flex flex-wrap items-center justify-between gap-x-6 gap-y-2 mb-3 flex-shrink-0">
+            <div className="flex items-center gap-6 min-w-0">
+              <div className="min-w-0">
+              <h2 className="text-base font-semibold text-off-black uppercase tracking-tight whitespace-nowrap mr-6">
+                <span className="relative inline-block">
+                  {activeView === 'standard' ? 'Standard orders' : activeView === 'custom' ? 'Custom orders' : activeView === 'bulk' ? 'Bulk orders' : 'Partners'}
+                  {/* Notification bubble, overlapping the end of the heading. */}
+                  <span className="absolute -top-3 -right-6 z-10 inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-[#4600D6] text-white text-[11px] font-bold leading-none tracking-normal shadow-[0_2px_6px_rgba(70,0,214,0.45)] ring-2 ring-white">
+                    {activeView === 'bulk' ? (bulkCount ?? '') : fulfillable.length}
+                  </span>
+                </span>
+              </h2>
+              {lastImportedAt && (
+                <button
+                  onClick={importOrders}
+                  disabled={isImporting}
+                  className="mt-1 inline-flex items-center gap-1.5 text-xs text-off-black/45 hover:text-off-black/70 disabled:cursor-default"
+                  title="Orders import on their own every 10 minutes. Click to check now."
+                >
+                  {isImporting ? 'Checking for new orders…' : `Last refreshed ${new Date(lastImportedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`}
+                  <RefreshCw className={`w-3 h-3 ${isImporting ? 'animate-spin' : ''}`} />
+                </button>
+              )}
+              </div>
+              {activeView === 'standard' && onTime && <OnTimeStat stat={onTime} lateActive={stageFilter === 'late'} onLate={() => setStageFilter(stageFilter === 'late' ? '' : 'late')} />}
             </div>
+            {activeView === 'standard' && sentToday
+              ? <TeamPanel team={team} sent={sentToday.byPerson} toApprove={toApprove} presence={presence} selected={person} onSelect={(id) => setPersonFilter(f => f === id ? '' : id)} />
+              : <QueuePill people={teamQueue} team={team} presence={presence} selected={person} onSelect={scoped ? (id) => setPersonFilter(f => f === id ? '' : id) : undefined} />}
           </div>
 
           {/* Bulk is its own screen: a table of runs, not a list of orders. The

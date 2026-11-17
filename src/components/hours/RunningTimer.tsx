@@ -3,9 +3,12 @@ import { toast } from 'sonner'
 import { GripVertical, Loader2, Pause, Play, Square } from 'lucide-react'
 import { financeApi, mondayOf, todayET } from '@/lib/financeApi'
 import type { HoursPayload, TimeEntry } from '@/types/finance'
+import { tell, type HoursState } from '@/lib/hoursState'
 
 /** Fired by the Hours modal after a start, stop or edit, so this card catches up at once. */
 export const HOURS_CHANGED = 'hours:changed'
+
+const stateOf = (d: HoursPayload): HoursState => ({ running: Boolean(d.running?.startedAt), startedAt: d.running?.startedAt || null, carriedMinutes: d.running ? d.carriedMinutes || 0 : 0, paused: Boolean(!d.running && d.paused) })
 
 const clock = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000))
@@ -81,7 +84,7 @@ export default function RunningTimer({ onOpen }: { onOpen?: () => void }) {
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
-    try { const d = await financeApi.hours(mondayOf(todayET())); setRunning(d.running); setPaused(d.running ? null : d.paused || null); setCarried(d.carriedMinutes || 0) } catch { /* keep what we had */ }
+    try { const d = await financeApi.hours(mondayOf(todayET())); setRunning(d.running); setPaused(d.running ? null : d.paused || null); setCarried(d.carriedMinutes || 0); tell(stateOf(d)) } catch { /* keep what we had */ }
   }, [])
   useEffect(() => {
     load()
@@ -100,7 +103,7 @@ export default function RunningTimer({ onOpen }: { onOpen?: () => void }) {
     setBusy(true)
     try {
       const d = await financeApi.hoursAction({ weekStart: mondayOf(todayET()), action })
-      setRunning(d.running); setPaused(d.running ? null : d.paused || null); setCarried(d.carriedMinutes || 0)
+      setRunning(d.running); setPaused(d.running ? null : d.paused || null); setCarried(d.carriedMinutes || 0); tell(stateOf(d))
       toast.success(ok)
       window.dispatchEvent(new Event(HOURS_CHANGED))
     } catch (e) { toast.error((e as Error).message) } finally { setBusy(false) }
