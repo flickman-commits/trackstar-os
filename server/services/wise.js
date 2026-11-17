@@ -61,7 +61,7 @@ export async function wise(path, { method = 'GET', body, timeoutMs = 30_000 } = 
   if (!res.ok) {
     const code = data?.errors?.[0]?.code || data?.error || data?.errorCode || null
     console.warn(`[wise] ${method} ${path.replace(/\d{5,}/g, '…')} -> ${res.status}${code ? ` ${code}` : ''}${traceId ? ` trace ${traceId}` : ''}`)
-    const words = res.status === 401 || res.status === 403 ? 'Wise refused the token: check WISE_API_TOKEN and WISE_PROFILE_ID'
+    const words = res.status === 401 || res.status === 403 ? 'Wise refused the token: check WISE_API_TOKEN'
       : res.status === 404 ? 'Wise could not find that'
       : res.status === 429 ? 'Wise asked us to slow down; try again in a minute'
       : res.status >= 500 ? 'Wise had a problem on their side'
@@ -71,17 +71,38 @@ export async function wise(path, { method = 'GET', body, timeoutMs = 30_000 } = 
   return { data, traceId }
 }
 
-const pid = () => {
-  const p = profileId()
-  if (!p) throw new WiseError('WISE_PROFILE_ID is not set', { status: 503 })
-  return encodeURIComponent(p)
+const profileType = x => String(x?.type || '').toLowerCase()
+const profileName = x => x.businessName || x.fullName || x.details?.name || `Profile ${x.id}`
+let foundProfile = null
+
+/**
+ * The profile we pay from: WISE_PROFILE_ID when it is set, otherwise the one
+ * business profile this token can see (Matt, Nov 16, 2026: the id is hard to
+ * find in Wise, the token is enough). Two business profiles and no
+ * WISE_PROFILE_ID is an error, never a guess.
+ */
+export async function resolveProfileId() {
+  const set = profileId()
+  if (set) return set
+  if (foundProfile) return foundProfile
+  const { data } = await wise('/v2/profiles')
+  const businesses = (data || []).filter(x => profileType(x) === 'business')
+  if (businesses.length !== 1) {
+    throw new WiseError(businesses.length
+      ? `This token sees ${businesses.length} business profiles (${businesses.map(x => `${x.id} ${profileName(x)}`).join(', ')}): set WISE_PROFILE_ID to the one to pay from`
+      : 'This token sees no business profile: make the token on the business account', { status: 400 })
+  }
+  foundProfile = String(businesses[0].id)
+  return foundProfile
 }
+
+const pid = async () => encodeURIComponent(await resolveProfileId())
 const toCents = v => Math.round(Number(v || 0) * 100)
 const toDollars = cents => Math.round(cents) / 100
 
 /** The profile's USD balance available to send, in cents (null when it has none). */
 export async function usdBalanceCents() {
-  const { data } = await wise(`/v4/profiles/${pid()}/balances?types=STANDARD`)
+  const { data } = await wise(`/v4/profiles/${await pid()}/balances?types=STANDARD`)
   const usd = (data || []).find(b => b.currency === 'USD')
   return usd ? toCents(usd.amount?.value) : null
 }
@@ -91,7 +112,7 @@ export async function listRecipients({ currency = null } = {}) {
   const out = []
   let seek = null
   for (let page = 0; page < 20; page++) {
-    const q = new URLSearchParams({ profileId: profileId(), size: '20' })
+    const q = new URLSearchParams({ profileId: await resolveProfileId(), size: '20' })
     if (currency) q.set('currency', currency)
     if (seek != null) q.set('seekPosition', String(seek))
     const { data } = await wise(`/v2/accounts?${q}`)
@@ -129,7 +150,7 @@ export function shapeRecipient(r) {
 
 /** A quote for a fixed USD amount to a recipient: rate, what they get, the fee, when it expires. */
 export async function createQuote({ sourceCents, targetCurrency, recipientId }) {
-  const { data, traceId } = await wise(`/v3/profiles/${pid()}/quotes`, {
+  const { data, traceId } = await wise(`/v3/profiles/${await pid()}/quotes`, {
     method: 'POST',
     body: { sourceCurrency: 'USD', targetCurrency, sourceAmount: toDollars(sourceCents), targetAccount: Number(recipientId) || recipientId, payOut: 'BANK_TRANSFER', preferredPayIn: 'BALANCE' },
   })
@@ -156,7 +177,7 @@ export async function createTransfer({ recipientId, quoteId, customerTransaction
 
 /** Pay for a transfer from the USD balance. */
 export async function fundTransfer(transferId) {
-  const { data, traceId } = await wise(`/v3/profiles/${pid()}/transfers/${encodeURIComponent(transferId)}/payments`, { method: 'POST', body: { type: 'BALANCE' } })
+  const { data, traceId } = await wise(`/v3/profiles/${await pid()}/transfers/${encodeURIComponent(transferId)}/payments`, { method: 'POST', body: { type: 'BALANCE' } })
   return { status: data?.status || null, errorCode: data?.errorCode || null, traceId }
 }
 
@@ -173,8 +194,9 @@ export async function cancelTransfer(transferId) {
 
 /** For Settings > Connections: who we are connected as, read only. */
 export async function whoAmI() {
+  const id = await resolveProfileId()
   const { data } = await wise('/v2/profiles')
-  const p = (data || []).find(x => String(x.id) === profileId())
-  if (!p) throw new WiseError(`WISE_PROFILE_ID ${profileId()} is not one of this token's profiles`, { status: 400 })
-  return { name: p.businessName || p.fullName || p.details?.name || `Profile ${p.id}`, type: p.type }
+  const p = (data || []).find(x => String(x.id) === id)
+  if (!p) throw new WiseError(`WISE_PROFILE_ID ${id} is not one of this token's profiles`, { status: 400 })
+  return { id, name: profileName(p), type: p.type, pinned: Boolean(profileId()) }
 }

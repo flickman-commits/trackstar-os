@@ -38,7 +38,7 @@ const TESTS = {
     const { whoAmI, usdBalanceCents, wiseEnv } = await import('../services/wise.js')
     const me = await whoAmI()
     const cents = await usdBalanceCents()
-    return `${wiseEnv() === 'production' ? 'Production' : 'Sandbox'}: ${me.name}, USD balance ${cents == null ? 'none' : `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}`
+    return `${wiseEnv() === 'production' ? 'Production' : 'Sandbox'}: ${me.name}, profile ${me.id}${me.pinned ? '' : ' (found from the token)'}, USD balance ${cents == null ? 'none' : `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}`
   },
   async gelato() {
     const { gelatoOrders } = await import('../services/gelato.js')
