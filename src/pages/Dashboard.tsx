@@ -212,8 +212,11 @@ const queueOf = (o: Order): 'review' | 'action' | 'waiting' | 'approved' | 'not_
   return 'waiting'
 }
 // Action, grouped so the quick ones sit above the digging. Artelo first: those are usually a minute in Artelo (Matt, 2026-11-14).
-const ACTION_GROUPS = ['Artelo', 'Quick decisions', 'Fix in the tool', 'Research', 'Needs a designer or developer'] as const
-const actionGroup = (o: Order): (typeof ACTION_GROUPS)[number] => {
+// Above them all, every order past the on-time goal, oldest first, whatever its kind: a long Research
+// group pushed late ones further down out of sight (fulfillment, 2026-11-17).
+const ACTION_GROUPS = ['Late', 'Artelo', 'Quick decisions', 'Fix in the tool', 'Research', 'Needs a designer or developer'] as const
+const actionGroup = (o: Order, late?: Map<string, number>): (typeof ACTION_GROUPS)[number] => {
+  if (late?.has(o.orderNumber)) return 'Late'
   const r = o.pipeline?.reason || '', k = o.pipeline?.kind
   if (/^(Confirm weather|Confirm race date|Pick a match|Enter the time)$/.test(r)) return 'Quick decisions'
   if (/^(Design rejected|Render failed|Email bounced|Held|Flagged)$/.test(r)) return 'Fix in the tool'
@@ -281,6 +284,8 @@ export default function Dashboard() {
   const [showCompleted, setShowCompleted] = useState(false)
   // Header stat: share of standard orders out by their deadline (2 days, the hold window), past 7 days (goal 90%), and the ones late now.
   const [onTime, setOnTime] = useState<OnTime | null>(null)
+  // Late orders, oldest first (the server sorts them): their rank tops the Action list.
+  const lateRank = useMemo(() => new Map((onTime?.lateOrders || []).map((n, i) => [n, i] as [string, number])), [onTime])
   // And standard orders sent to production in the last 24 hours. Read again
   // every five minutes while the tab is visible.
   const [sentToday, setSentToday] = useState<{ count: number; byPerson: { name: string; count: number }[] } | null>(null)
@@ -1060,7 +1065,9 @@ export default function Dashboard() {
     } else if (stageFilter && activeView === 'standard') {
       base = base.filter(o => queueOf(o) === stageFilter)
       // Action reads top to bottom: the 30-second decisions, then the digging. Stable, so the usual order holds inside a group.
-      if (stageFilter === 'action') base = [...base].sort((a, b) => ACTION_GROUPS.indexOf(actionGroup(a)) - ACTION_GROUPS.indexOf(actionGroup(b)))
+      if (stageFilter === 'action') base = [...base].sort((a, b) =>
+        ACTION_GROUPS.indexOf(actionGroup(a, lateRank)) - ACTION_GROUPS.indexOf(actionGroup(b, lateRank))
+        || (lateRank.get(a.orderNumber) ?? 0) - (lateRank.get(b.orderNumber) ?? 0))
     } else if (activeView === 'standard') {
       // "All" is everything that can be fulfilled; races not yet run sit under their own chip.
       base = base.filter(o => !isNotRun(o))
@@ -1068,7 +1075,7 @@ export default function Dashboard() {
     if (!searchQuery) return base
     const query = searchQuery.trim().toLowerCase()
     return base.filter(o => matchesSearch(o, query))
-  }, [ordersToFulfill, raceFilter, customStatus, stageFilter, searchQuery, matchesSearch, activeView, onTime])
+  }, [ordersToFulfill, raceFilter, customStatus, stageFilter, searchQuery, matchesSearch, activeView, onTime, lateRank])
 
   const filteredCompletedOrders = useMemo(() => {
     let base = completedOrders
@@ -1553,11 +1560,11 @@ export default function Dashboard() {
                     {filteredOrders.map((order, index) => {
                       const statusDisplay = getStatusDisplay(order)
                       const itemCount = getOrderItemCount(order.parentOrderNumber)
-                      const group = stageFilter === 'action' ? actionGroup(order) : null
-                      const newGroup = group && (index === 0 || actionGroup(filteredOrders[index - 1]) !== group)
+                      const group = stageFilter === 'action' ? actionGroup(order, lateRank) : null
+                      const newGroup = group && (index === 0 || actionGroup(filteredOrders[index - 1], lateRank) !== group)
                       return (
                         <Fragment key={order.id}>
-                        {newGroup && <div className="px-4 py-1.5 bg-subtle-gray/60 text-[10px] font-semibold uppercase tracking-wider text-off-black/45">{group}</div>}
+                        {newGroup && <div className={`px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider ${group === 'Late' ? 'bg-red-50 text-red-700' : 'bg-subtle-gray/60 text-off-black/45'}`}>{group === 'Late' ? 'Late, oldest first' : group}</div>}
                         <div
                           onClick={() => setSelectedOrder(order)}
                           className="px-4 py-3 active:bg-subtle-gray cursor-pointer"
@@ -1778,13 +1785,13 @@ export default function Dashboard() {
                       {filteredOrders.map((order, index) => {
                         const statusDisplay = getStatusDisplay(order)
                         const itemCount = getOrderItemCount(order.parentOrderNumber)
-                        const group = stageFilter === 'action' ? actionGroup(order) : null
-                        const newGroup = group && (index === 0 || actionGroup(filteredOrders[index - 1]) !== group)
+                        const group = stageFilter === 'action' ? actionGroup(order, lateRank) : null
+                        const newGroup = group && (index === 0 || actionGroup(filteredOrders[index - 1], lateRank) !== group)
                         return (
                           <Fragment key={order.id}>
                           {newGroup && (
-                            <tr className="bg-subtle-gray/60">
-                              <td colSpan={6} className="px-6 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-off-black/45">{group}</td>
+                            <tr className={group === 'Late' ? 'bg-red-50' : 'bg-subtle-gray/60'}>
+                              <td colSpan={6} className={`px-6 py-1.5 text-[10px] font-semibold uppercase tracking-wider ${group === 'Late' ? 'text-red-700' : 'text-off-black/45'}`}>{group === 'Late' ? 'Late, oldest first' : group}</td>
                             </tr>
                           )}
                           <tr
