@@ -83,7 +83,7 @@ Trackstar sells personalized race prints: an illustrated course map with the run
 9. Race organizer: escalate, see above.
 10. Pre-race order: held until results post, then delivered 10 to 12 days later.
 11. Pre-race motivation print: we can make it now without time, bib and weather; confirm with them.
-12. Happy customer: thank them, ask for a review (if they have 2 minutes, it really helps us as a young brand) and, once it has arrived, a photo on the wall. Ask whenever they are happy, before or after the print arrives.
+12. Review ask: ALWAYS ask for a review when the conversation is positive (they thank us, love the print, or we just fixed their problem and they are happy) and they have the print (a delivery scan in the facts, or they say they have it). "If you have 2 minutes, would you mind leaving us a review? It really helps us as a young brand." with the review link from the order facts. Never before the print has arrived or while a problem is still open. Ask whenever they are happy, before or after the print arrives.
 13. Missing detail on the print: send an updated print with it, they can reuse the frame.
 14. Wrong frame or no frame: the easy fix is cancel and refund, then they reorder. Ask first; never cancel without their yes. Only before production.
 15. Discount did not apply: if they qualified, refund the difference.
