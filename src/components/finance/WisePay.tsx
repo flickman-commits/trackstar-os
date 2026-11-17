@@ -194,6 +194,13 @@ export function WisePayees() {
         <button onClick={loadRecips} className={btnGhost} title="Read the recipient list from Wise again"><RefreshCw className="w-3.5 h-3.5" /></button>
       </div>
       {recipError && <p className="mb-2 text-xs text-amber-800">Could not read recipients from Wise: {recipError}</p>}
+      {recips && (
+        <p className={`mb-2 text-[11px] ${recips.length ? 'text-off-black/50' : 'text-amber-800'}`}>
+          {recips.length
+            ? `${recips.length} recipient${recips.length === 1 ? '' : 's'} on the Wise business profile: ${recips.map(r => r.name).join(', ')}.`
+            : 'Wise has no recipients on the business profile yet. Add them while switched to the business account in Wise (not your personal one), then refresh.'}
+        </p>
+      )}
       {!payees ? <Loader2 className="w-4 h-4 animate-spin text-off-black/30" /> : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
