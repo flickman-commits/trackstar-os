@@ -284,16 +284,16 @@ function CancelForm({ o, thread, onDone, onCancel }: FormProps) {
     try {
       const out = await supportApi.action<{ display: string; arteloUrl: string | null }>('cancelOrder', { id: thread.id, shopifyOrderId: o.shopifyOrderId, reason, customerConfirmed: yes, idempotencyKey: pressKey })
       setDone(out)
-      toast.success(`#${o.number} cancelled and ${out.display} refunded`)
+      toast.success(`#${o.number} canceled and ${out.display} refunded`)
       onDone()
     } catch (e) { setFailed((e as Error).message); toast.error((e as Error).message) }
     finally { setBusy(false); setConfirming(false) }
   }
   if (done) {
     return (
-      <ActionModal icon={Ban} title="Cancelled" sub={`#${o.number}`} onClose={onCancel}
+      <ActionModal icon={Ban} title="Canceled" sub={`#${o.number}`} onClose={onCancel}
         footer={<>{done.arteloUrl && <OpenInArtelo href={done.arteloUrl} />}<button onClick={onCancel} className={modalPrimary}>Done</button></>}>
-        <Done title={`Cancelled, ${done.display} refunded`}>It is off the fulfillment queue.</Done>
+        <Done title={`Canceled, ${done.display} refunded`}>It is off the fulfillment queue.</Done>
       </ActionModal>
     )
   }
@@ -302,7 +302,7 @@ function CancelForm({ o, thread, onDone, onCancel }: FormProps) {
       hint="Only with the customer's yes, only before production."
       footer={info && <>
         <button onClick={() => (confirming ? setConfirming(false) : onCancel())} disabled={busy} className={modalCancel}>Back</button>
-        <button onClick={save} disabled={busy || !yes || over} className={modalDanger}>{busy && <Spin />}{busy ? 'Cancelling in Shopify' : confirming ? `Yes, cancel and refund ${dollars(info.availableCents)}` : `Cancel and refund ${dollars(info.availableCents)}`}</button>
+        <button onClick={save} disabled={busy || !yes || over} className={modalDanger}>{busy && <Spin />}{busy ? 'Canceling in Shopify' : confirming ? `Yes, cancel and refund ${dollars(info.availableCents)}` : `Cancel and refund ${dollars(info.availableCents)}`}</button>
       </>}>
       {err ? <div className={bad}>{err}</div> : !info ? <Loading>Reading the order from Shopify</Loading> : (
         <>

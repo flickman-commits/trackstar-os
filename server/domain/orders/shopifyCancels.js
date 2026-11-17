@@ -60,7 +60,7 @@ export async function closeShopifyCancels() {
       })
     }
     await prisma.orderComment.createMany({
-      data: rows.map(r => ({ orderId: r.id, text: `Cancelled in Shopify on ${when}${reason}, so marked complete here.`, authorName: 'TrackstarOS' })),
+      data: rows.map(r => ({ orderId: r.id, text: `Canceled in Shopify on ${when}${reason}, so marked complete here.`, authorName: 'TrackstarOS' })),
     })
   }
 

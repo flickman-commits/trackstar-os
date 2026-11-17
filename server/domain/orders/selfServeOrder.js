@@ -317,9 +317,9 @@ export async function manageChange(shopifyOrderId, signature, body = {}) {
     open(ctx)
     let o
     try { o = await cancellable(ctx.id) } catch (e) { throw new ManageError('unavailable', 409, friendly(e)) }
-    const out = await cancelAndRefund({ order: o, why: 'the customer cancelled from Manage your order', by: 'Cancelled by the customer from Manage your order' })
+    const out = await cancelAndRefund({ order: o, why: 'the customer canceled from Manage your order', by: 'Canceled by the customer from Manage your order' })
     // The Shopify cancel carries over to Artelo on its own; this is for the record.
-    await slackTo('alerts', `:x: Customer cancelled *${slackLink(orderAppUrl(out.number), `#${out.number}`)}* from Manage your order; ${slackText(out.display)} refunded in Shopify${shopifyAdminUrl(ctx.id) ? ` (${shopifyAdminUrl(ctx.id)})` : ''}`, { timeoutMs: 8000 }).catch(() => {})
+    await slackTo('alerts', `:x: Customer canceled *${slackLink(orderAppUrl(out.number), `#${out.number}`)}* from Manage your order; ${slackText(out.display)} refunded in Shopify${shopifyAdminUrl(ctx.id) ? ` (${shopifyAdminUrl(ctx.id)})` : ''}`, { timeoutMs: 8000 }).catch(() => {})
     return { ok: true, refunded: out.display }
   }
 
@@ -330,7 +330,7 @@ export async function manageChange(shopifyOrderId, signature, body = {}) {
 function friendly(e) {
   const m = String(e?.message || '')
   if (/already gone to production|has gone to production|fulfilled/i.test(m)) return 'in_production'
-  if (/cancelled/i.test(m)) return 'cancelled'
+  if (/cancell?ed/i.test(m)) return 'cancelled'
   if (/does not come in/i.test(m)) return 'no_such_frame'
   if (/already is/i.test(m)) return 'same_frame'
   if (/still saving/i.test(m)) return 'still_saving'

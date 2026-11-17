@@ -1253,7 +1253,7 @@ export default function OrderDetail({
       if (!res.ok) throw new Error(d.error || 'Could not cancel the sample')
       setOrders(prev => prev.filter(o => o.id !== order.id))
       setSelectedOrder(null)
-      setToast({ message: 'Creator sample cancelled', type: 'success' })
+      setToast({ message: 'Creator sample canceled', type: 'success' })
       loadTeam()
     } catch (e) {
       setToast({ message: e instanceof Error ? e.message : 'Could not cancel the sample', type: 'error' })

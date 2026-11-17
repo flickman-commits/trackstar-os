@@ -126,7 +126,7 @@ export default function Sales({ active = true }: { active?: boolean }) {
     const g = params.get('gmail')
     if (!g) return
     if (g === 'connected') toast.success(`Gmail connected${params.get('account') ? ` as ${params.get('account')}` : ''}`)
-    else if (g === 'denied') toast.error('Gmail connection was cancelled')
+    else if (g === 'denied') toast.error('Gmail connection was canceled')
     else toast.error(`Gmail connection failed: ${GMAIL_REASONS[params.get('reason') || ''] || GMAIL_REASONS.failed}`, { duration: 10000 })
     navigate('/sales', { replace: true })
   }, [location.search, navigate])
@@ -388,7 +388,7 @@ export default function Sales({ active = true }: { active?: boolean }) {
   }, [pickAddress, loadToday])
 
   const cancelScheduled = useCallback(async (item: ScheduledEmail) => {
-    try { await salesApi.cancelScheduled(item.id); setOpenScheduled(null); toast.message('Cancelled. It is back in the queue.'); loadToday() }
+    try { await salesApi.cancelScheduled(item.id); setOpenScheduled(null); toast.message('Canceled. It is back in the queue.'); loadToday() }
     catch (e) { toast.error((e as Error).message) }
   }, [loadToday])
 

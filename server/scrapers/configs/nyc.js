@@ -36,7 +36,7 @@ export default {
    */
   // Years the race did not run (pipeline.js flags an order for one as the wrong year).
   noEdition: {
-    2012: 'It was cancelled in 2012 (Hurricane Sandy).',
+    2012: 'It was canceled in 2012 (Hurricane Sandy).',
   },
   raceDates: {
     2006: '2006-11-05',

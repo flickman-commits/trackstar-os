@@ -176,7 +176,7 @@ export default function AssignmentPanel() {
                         title={on ? 'End now: their unfinished orders go back to the regular' : 'Cancel this shift'}
                         onClick={async () => {
                           const d = await post(`end-${s.id}`, { action: 'end-shift', id: s.id })
-                          if (d) { toast.success(on ? `Ended. ${d.handedBack} unfinished order${d.handedBack === 1 ? '' : 's'} back to ${name(regular)}` : 'Shift cancelled'); load() }
+                          if (d) { toast.success(on ? `Ended. ${d.handedBack} unfinished order${d.handedBack === 1 ? '' : 's'} back to ${name(regular)}` : 'Shift canceled'); load() }
                         }}
                       >
                         <X className="w-3 h-3" /> {on ? 'End' : 'Cancel'}

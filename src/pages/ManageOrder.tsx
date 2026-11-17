@@ -45,7 +45,7 @@ const CLOSED: Record<string, string> = {
   window: 'The window for making changes online has closed.',
   in_production: 'Your print is already being made, so changes can no longer be made online.',
   shipped: 'This order has already shipped.',
-  cancelled: 'This order was cancelled.',
+  cancelled: 'This order was canceled.',
 }
 const ERR: Record<string, string> = {
   needs_full_name: 'Please enter a first and last name.',
@@ -181,8 +181,9 @@ export default function ManageOrder() {
 
         {state === 'cancelled' && (
           <div className={card}>
-            <p className="flex items-center gap-2 text-[22px] font-bold"><CheckCircle2 className="w-6 h-6 text-[#2E7D5B]" />Order cancelled</p>
-            <p className="text-[17px] text-[#666666] mt-2 leading-snug">We've refunded {refunded}. {REFUND_TIME}</p>
+            <p className="flex items-center gap-2 text-[22px] font-bold"><CheckCircle2 className="w-6 h-6 text-[#2E7D5B]" />Order canceled</p>
+            {/* A free order (a 100% code) has nothing to refund: "We've refunded $0.00" read like a mistake (#10420). */}
+            <p className="text-[17px] text-[#666666] mt-2 leading-snug">{/^\$0(\.00)?$/.test(refunded) ? 'Nothing was charged, so there is nothing to refund.' : `We've refunded ${refunded}. ${REFUND_TIME}`}</p>
           </div>
         )}
 

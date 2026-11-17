@@ -470,20 +470,20 @@ export async function refundOverpaid({ shopifyOrderId, cents, note }) {
  * Shopify cancel carries over to Artelo on its own (9181, Nov 9).
  */
 export async function cancelOrder({ thread, shopifyOrderId, reason, customerConfirmed, actor }) {
-  if (!customerConfirmed) throw new UserError('Only after the customer says yes to cancelling. Ask them first.')
+  if (!customerConfirmed) throw new UserError('Only after the customer says yes to canceling. Ask them first.')
   const why = String(reason || '').trim() || 'Customer asked to cancel'
   const o = await cancellable(shopifyOrderId)
   guardLimit(o.availableCents, actor, { alreadyCents: o.refundedCents })
   const out = await cancelAndRefund({ order: o, why, by: `support: ${why}`, actor })
-  await event(thread.id, `${actorName(actor)} cancelled #${o.name} and refunded ${money(o.availableCents)}: ${why}.`, actor)
+  await event(thread.id, `${actorName(actor)} canceled #${o.name} and refunded ${money(o.availableCents)}: ${why}.`, actor)
   return out
 }
 
 /** The Shopify order, or why it cannot be cancelled (already cancelled, shipped, in production). */
 export async function cancellable(shopifyOrderId) {
   const o = await refundable(shopifyOrderId)
-  if (o.cancelled) throw new UserError(`#${o.name} is already cancelled in Shopify.`)
-  if (o.fulfillment === 'FULFILLED' || o.fulfillment === 'PARTIALLY_FULFILLED') throw new UserError(`#${o.name} has shipped. It cannot be cancelled; a refund is Matt's call.`)
+  if (o.cancelled) throw new UserError(`#${o.name} is already canceled in Shopify.`)
+  if (o.fulfillment === 'FULFILLED' || o.fulfillment === 'PARTIALLY_FULFILLED') throw new UserError(`#${o.name} has shipped. It cannot be canceled; a refund is Matt's call.`)
   const rows = await prisma.order.findMany({ where: { source: 'shopify', parentOrderNumber: o.id }, select: { id: true, status: true, designStatus: true, trackingNumber: true, arteloOrderData: true } })
   const produced = rows.find(r => r.status === 'completed' || r.designStatus === 'sent_to_production' || r.trackingNumber)
   if (produced) throw new UserError(`#${o.name} has gone to production. Too late to cancel; see the playbook's "too late" reply.`)
@@ -508,7 +508,7 @@ export async function cancelAndRefund({ order: o, why, by, actor = null }) {
   if (!cancelled) throw new UserError(`Shopify accepted the cancel for #${o.name} but has not finished it yet. Check the order in Shopify in a minute before trying again.`)
 
   const rows = o.rows || []
-  const note = `Cancelled and refunded ${money(o.availableCents)} ${actor ? 'by support' : 'by the customer from Manage your order'}: ${why}.`
+  const note = `Canceled and refunded ${money(o.availableCents)} ${actor ? 'by support' : 'by the customer from Manage your order'}: ${why}.`
   if (rows.length) {
     await prisma.order.updateMany({ where: { id: { in: rows.map(r => r.id) } }, data: { status: 'completed' } })
     await prisma.orderComment.createMany({ data: rows.map(r => ({ orderId: r.id, text: note, authorId: actor?.id || null, authorName: actor ? actorName(actor) : 'Customer' })) })

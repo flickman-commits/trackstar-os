@@ -108,7 +108,7 @@ export default async function handler(req, res) {
       }
       case 'cancelOrder': {
         const out = await cancelOrder({ thread, shopifyOrderId: body.shopifyOrderId, reason: body.reason, customerConfirmed: body.customerConfirmed === true, actor: user })
-        await audit(`Cancelled #${out.number} and refunded ${out.display}`, { shopifyOrderId: body.shopifyOrderId, cents: out.cents, currency: 'USD', reason: body.reason || null })
+        await audit(`Canceled #${out.number} and refunded ${out.display}`, { shopifyOrderId: body.shopifyOrderId, cents: out.cents, currency: 'USD', reason: body.reason || null })
         return res.status(200).json(out)
       }
       case 'invoiceLimit': return res.status(200).json({ limitCents: INVOICE_LIMIT_CENTS, isAdmin: user.role === 'admin', email: thread.customerEmail || '' })

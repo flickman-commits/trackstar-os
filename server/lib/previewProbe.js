@@ -143,7 +143,7 @@ export async function probePreview({ ref, races, years = null }) {
     throw new ToolError('That deployment was not built from a sweep/* branch, so it will not be probed.')
   }
   if (info.state === 'ERROR' || info.state === 'CANCELED') {
-    return { ok: false, deployment: info, error: `The preview build ${info.state === 'ERROR' ? 'failed' : 'was cancelled'}. Run npm run build locally; it runs the same steps.` }
+    return { ok: false, deployment: info, error: `The preview build ${info.state === 'ERROR' ? 'failed' : 'was canceled'}. Run npm run build locally; it runs the same steps.` }
   }
   if (info.state !== 'READY') {
     return { ok: false, retry: true, deployment: info, error: `Preview is still ${info.state}. Call probe_preview again in a minute.` }

@@ -192,7 +192,7 @@ const DEFAULTS = [
   ['Happy customer: ask for a review', 'So glad you love it!! If you have 2 seconds, would you mind leaving us a review? It really helps us as a young brand.\n\nLink here: [YOTPO REVIEW LINK]\n\nAnd send me a pic once it\'s on the wall!'],
   ['Missing detail on print', 'Apologies about that! We meant to include that. We\'ll send an updated print with the [MISSING DETAIL]. You can reuse the same frame.'],
   ['Wrong frame: offer cancel and reorder', 'The easiest way to do this is for me to cancel and refund your current order, then you can reorder with the [FRAME THEY WANTED]. Want me to go ahead and do that?'],
-  ['Wrong frame: cancelled and refunded', 'Done! I\'ve canceled and refunded your order (5 to 10 business days to hit your account depending on your bank). Reorder with the [FRAME] whenever you\'re ready, and let me know if you need anything!'],
+  ['Wrong frame: canceled and refunded', 'Done! I\'ve canceled and refunded your order (5 to 10 business days to hit your account depending on your bank). Reorder with the [FRAME] whenever you\'re ready, and let me know if you need anything!'],
   ['Discount applied retroactively', 'You\'re right, that [welcome discount / Buy 2 promo] should\'ve been applied. I\'ve refunded the [AMOUNT] difference back to your original payment method (5 to 10 business days depending on your bank). Sorry for the mix-up!'],
   ['Note from owner: thank you', 'Thanks so much for the feedback!! So stoked for [recipient] to get it.'],
   ['Note from owner: 15% code', 'Thanks for the feedback, really appreciate it. You can use code [FIRSTNAME-15] to get 15% off another print!'],

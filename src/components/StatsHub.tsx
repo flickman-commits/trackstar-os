@@ -121,7 +121,7 @@ function cardsFor(p: Period, label: string): Card[] {
     out.push({
       key: 'replacements', line: 'Replacements we paid for', tag: 'Finance', value: usd(sp.replacements.cents),
       facts: [{ k: 'Sent', v: String(sp.replacements.count) }, { k: 'Each', v: sp.replacements.count ? usd(Math.round(sp.replacements.cents / sp.replacements.count)) : '–' }],
-      title: 'Replacements made from Support, at what Artelo billed. Cancelled and paid-back ones are left out. Finance > Replacements has each one.',
+      title: 'Replacements made from Support, at what Artelo billed. Canceled and paid-back ones are left out. Finance > Replacements has each one.',
     })
   }
   for (const m of p.shop?.metrics || []) {

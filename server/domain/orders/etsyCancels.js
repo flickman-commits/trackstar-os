@@ -49,7 +49,7 @@ export async function closeEtsyCancels() {
       .toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })
     await prisma.$transaction([
       prisma.order.update({ where: { id: o.id }, data: { status: 'completed', etsyOrderData: { ...(o.etsyOrderData || {}), status: r.status } } }),
-      prisma.orderComment.create({ data: { orderId: o.id, text: `Cancelled on Etsy (${when}), so marked complete here.`, authorName: 'TrackstarOS' } }),
+      prisma.orderComment.create({ data: { orderId: o.id, text: `Canceled on Etsy (${when}), so marked complete here.`, authorName: 'TrackstarOS' } }),
     ])
     done.add(rid)
     closed++

@@ -30,7 +30,7 @@ export default {
     2026: "labs-v2.competitor.com subevent \"2026 IRONMAN 70.3 Augusta\" wtc_eventdate 2026-09-27",
   },
   noEdition: {
-    2024: "IRONMAN 70.3 Augusta 2024 was cancelled (Hurricane Helene); IRONMAN lists no 2024 race.",
+    2024: "IRONMAN 70.3 Augusta 2024 was canceled (Hurricane Helene); IRONMAN lists no 2024 race.",
   },
   eventIds: {
     2022: '64085fc2-d99f-4aff-ac3e-3c8a5c7777fd',

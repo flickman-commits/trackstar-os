@@ -41,7 +41,7 @@ function arteloLabel(status) {
     Produced: 'Printed',
     Shipped: 'Shipped',
     Delivered: 'Delivered',
-    Cancelled: 'Cancelled',
+    Cancelled: 'Canceled',
     Ignored: 'Test order',
   }[s] || s.replace(/([a-z])([A-Z])/g, '$1 $2') || null
 }
@@ -86,7 +86,7 @@ export async function productionStatus(orderId) {
   const fulfillment = shopify ? { status: shopify.displayFulfillmentStatus || null, financial: shopify.displayFinancialStatus || null, cancelled: Boolean(shopify.cancelledAt) } : null
 
   // One line for where it is now, furthest along first.
-  const stage = fulfillment?.cancelled || fulfillment?.financial === 'REFUNDED' ? 'Refunded or cancelled'
+  const stage = fulfillment?.cancelled || fulfillment?.financial === 'REFUNDED' ? 'Refunded or canceled'
     : tracking.some(t => t.deliveredAt || t.status === 'DELIVERED') ? 'Delivered'
     : tracking.some(t => t.status === 'OUT_FOR_DELIVERY') ? 'Out for delivery'
     : tracking.some(t => t.status === 'IN_TRANSIT') ? 'In transit'

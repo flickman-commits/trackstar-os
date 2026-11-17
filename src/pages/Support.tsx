@@ -132,10 +132,10 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
     const i = params.get('instagram')
     if (!active || (!g && !i)) return
     if (g === 'connected') toast.success(`Mailbox connected as ${params.get('account') || 'the support account'}`)
-    else if (g === 'denied') toast.error('Mailbox connection was cancelled')
+    else if (g === 'denied') toast.error('Mailbox connection was canceled')
     else if (g) toast.error(`Mailbox connection failed: ${CONNECT_REASONS[params.get('reason') || ''] || CONNECT_REASONS.failed}`, { duration: 10000 })
     if (i === 'connected') toast.success(`Instagram connected as ${params.get('account') || 'the Trackstar account'}`)
-    else if (i === 'denied') toast.error('Instagram connection was cancelled')
+    else if (i === 'denied') toast.error('Instagram connection was canceled')
     else if (i) toast.error(`Instagram connection failed: ${CONNECT_REASONS[params.get('reason') || ''] || CONNECT_REASONS.failed}`, { duration: 10000 })
     navigate('/support', { replace: true })
   }, [location.search, navigate, active])

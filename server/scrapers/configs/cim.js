@@ -51,7 +51,7 @@ export default {
    */
   // Years the race did not run (pipeline.js flags an order for one as the wrong year).
   noEdition: {
-    2020: 'It was cancelled in 2020 (COVID).',
+    2020: 'It was canceled in 2020 (COVID).',
   },
   raceDates: {
     // 2017: marathonguide.com MIDD=687171203 + chronotrack event-31790 live results

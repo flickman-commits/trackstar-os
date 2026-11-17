@@ -131,7 +131,7 @@ export function WiseChip({ status }: { status: WiseStatus }) {
 export function WiseActions({ wise, onChanged }: { wise: NonNullable<MonthLine['wise']>; onChanged: () => void }) {
   const [busy, setBusy] = useState<string | null>(null)
   const act = async (action: 'retry' | 'release') => {
-    if (action === 'release' && !window.confirm('Release this payment? It is cancelled at Wise if it was made, and the hours or month can be paid again another way.')) return
+    if (action === 'release' && !window.confirm('Release this payment? It is canceled at Wise if it was made, and the hours or month can be paid again another way.')) return
     setBusy(action)
     try {
       const out = await financeApi.wiseTransfer(action, wise.id)

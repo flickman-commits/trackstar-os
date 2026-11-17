@@ -25,7 +25,7 @@ export default async function handler(req, res) {
       select: { id: true, orderNumber: true, source: true, status: true, runnerName: true },
     })
     if (!order) return res.status(404).json({ error: 'Order not found' })
-    if (order.source !== 'creator_sample') return res.status(400).json({ error: 'Only creator samples can be cancelled here' })
+    if (order.source !== 'creator_sample') return res.status(400).json({ error: 'Only creator samples can be canceled here' })
     if (order.status === 'completed') return res.status(409).json({ error: 'This sample is already completed and sent to Artelo. Cancel it there instead.' })
 
     const creator = await prisma.creator.findUnique({ where: { sampleOrderId: order.id }, select: { id: true, name: true } })
@@ -44,7 +44,7 @@ export default async function handler(req, res) {
     ])
     await recordAudit({
       action: 'creator.sample-cancelled',
-      summary: `Cancelled creator sample ${order.orderNumber}${creator?.name ? ` (${creator.name})` : ''}`,
+      summary: `Canceled creator sample ${order.orderNumber}${creator?.name ? ` (${creator.name})` : ''}`,
       detail: { orderId: order.id, orderNumber: order.orderNumber, creatorId: creator?.id || null },
       actor: admin,
     })
