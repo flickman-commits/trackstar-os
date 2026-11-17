@@ -93,17 +93,19 @@ test('periods and weeks', () => {
   assert.deepEqual([custom.compare.first, custom.compare.last], ['2026-09-24', '2026-09-30'])
 })
 
-test('race payouts come out of CM on the day of the sale, after the fee, which they leave alone', () => {
+test('race payouts come out on the day of the sale, before the designer fee from Nov 2026', () => {
   const base = { day: '2026-11-01', shopifyNetCents: 1000000, shopifyOrders: 80, shopifyFeesCents: 30000, productionCents: 250000, shippingCostCents: 60000, metaSpendCents: 400000, googleSpendCents: 0 }
   const without = computeDay(base, RULES)
   const withRaces = computeDay({ ...base, racePayoutCents: 25000 }, RULES)
   assert.equal(withRaces.racePayouts, 25000)
-  assert.equal(withRaces.designerFee, without.designerFee)
+  // Fee = 7.5% of (gross profit - ads - race payouts): $250 of payouts takes $18.75 off the fee.
+  assert.equal(withRaces.designerFee, without.designerFee - 1875)
   assert.equal(withRaces.grossProfit, without.grossProfit)
   assert.equal(withRaces.breakevenCpa, without.breakevenCpa)
-  assert.equal(withRaces.cm, without.cm - 25000)
-  // The old base (fee inside COGS) too.
+  assert.equal(withRaces.cm, without.cm - 25000 + 1875)
+  // The old base (fee on gross profit, months already paid): the fee is untouched.
   const oct = { ...base, day: '2026-10-01' }
+  assert.equal(computeDay({ ...oct, racePayoutCents: 25000 }, RULES).designerFee, computeDay(oct, RULES).designerFee)
   assert.equal(computeDay({ ...oct, racePayoutCents: 25000 }, RULES).cm, computeDay(oct, RULES).cm - 25000)
   // Summed over a period like any other line.
   const s = summarize([{ ...base, racePayoutCents: 25000 }, { ...base, day: '2026-11-02', racePayoutCents: 5000 }], RULES)

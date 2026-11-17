@@ -47,8 +47,8 @@ export async function overview({ period = 'today', now = new Date() } = {}) {
     { key: 'meta', label: 'Meta ads', cents: -s.meta },
     { key: 'trybe', label: 'Trybe creators', cents: -s.trybe },
     { key: 'google', label: 'Google ads', cents: -s.google },
-    ...(feeBase === 'cm' ? [{ key: 'designerFee', label: 'Designer fee', cents: -s.designerFee }] : []),
     { key: 'racePayouts', label: 'Race payouts', cents: -s.racePayouts },
+    ...(feeBase === 'cm' ? [{ key: 'designerFee', label: 'Designer fee', cents: -s.designerFee }] : []),
     { key: 'cm', label: 'Contribution margin', cents: s.cm, kind: 'total' },
   ].map(w => ({ ...w, pctOfRevenue: s.revenue ? (Math.abs(w.cents) / s.revenue) * 100 : null }))
 

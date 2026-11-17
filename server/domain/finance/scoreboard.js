@@ -21,9 +21,11 @@
  * attributed sales are already in revenue: only the cost is added.
  *
  * Race payouts (partner races' share of their prints, racePayouts.js) come
- * out of contribution margin on the day of the sale, after the designer fee:
- * the fee is worked out exactly as it was before they were counted, so the
- * line changes no one's pay. Gross profit and break-even CPA leave them out.
+ * out on the day of the sale, below gross profit with the ad spend: a cost of
+ * getting those sales. Under base 'cm' they come out before the designer fee,
+ * so the fee is 7.5% of what is left after them. Under base 'gp' (to Oct
+ * 2026, months already paid) the fee stays on gross profit as it was paid.
+ * Gross profit and break-even CPA leave them out.
  */
 import { ruleFor } from './rules.js'
 
@@ -88,9 +90,9 @@ export function computeDay(rawRow, rules) {
   } else {
     cogs = direct
     grossProfit = revenue - cogs
-    const before = grossProfit - adSpend
+    const before = grossProfit - adSpend - racePayouts
     designerFee = Math.round(before * (fee.pct / 100))
-    cm = before - designerFee - racePayouts
+    cm = before - designerFee
   }
   const metaPurchases = n0(row.metaPurchases)
   const googleConversions = n0(row.googleConversions)

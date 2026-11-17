@@ -20,7 +20,7 @@ const SCOREBOARD: Col[] = [
   { key: 'shopifyRevenue', label: 'Shopify', fmt: money('shopifyRevenue'), group: 'Revenue' }, { key: 'etsyRevenue', label: 'Etsy', fmt: money('etsyRevenue'), group: 'Revenue' }, { key: 'revenue', label: 'Revenue', fmt: money('revenue'), strong: true, group: 'Revenue' },
   { key: 'shopifyFees', label: 'Shopify fees', fmt: money('shopifyFees'), group: 'Costs' }, { key: 'etsyFees', label: 'Etsy fees', fmt: money('etsyFees'), group: 'Costs' }, { key: 'production', label: 'Production', fmt: money('production'), group: 'Costs' }, { key: 'shipping', label: 'Shipping', fmt: money('shipping'), group: 'Costs' }, { key: 'cogs', label: 'COGS', fmt: money('cogs'), strong: true, group: 'Costs' },
   { key: 'meta', label: 'Meta', fmt: money('meta'), group: 'Ad spend' }, { key: 'trybe', label: 'Trybe', fmt: money('trybe'), group: 'Ad spend' }, { key: 'google', label: 'Google', fmt: money('google'), group: 'Ad spend' }, { key: 'adSpend', label: 'Ads', fmt: money('adSpend'), strong: true, group: 'Ad spend' }, { key: 'trybeAllInPct', label: 'Trybe all-in', fmt: pct('trybeAllInPct'), group: 'Ad spend' },
-  { key: 'grossProfit', label: 'Gross profit', fmt: money('grossProfit'), strong: true, group: 'Profit' }, { key: 'grossMarginPct', label: 'GM %', fmt: pct('grossMarginPct'), group: 'Profit' }, { key: 'designerFee', label: 'Designer', fmt: money('designerFee'), group: 'Profit' }, { key: 'racePayouts', label: 'Races', fmt: money('racePayouts'), group: 'Profit' }, { key: 'cm', label: 'CM', fmt: money('cm'), strong: true, group: 'Profit' }, { key: 'cmPct', label: 'CM %', fmt: pct('cmPct'), group: 'Profit' },
+  { key: 'grossProfit', label: 'Gross profit', fmt: money('grossProfit'), strong: true, group: 'Profit' }, { key: 'grossMarginPct', label: 'GM %', fmt: pct('grossMarginPct'), group: 'Profit' }, { key: 'racePayouts', label: 'Races', fmt: money('racePayouts'), group: 'Profit' }, { key: 'designerFee', label: 'Designer', fmt: money('designerFee'), group: 'Profit' }, { key: 'cm', label: 'CM', fmt: money('cm'), strong: true, group: 'Profit' }, { key: 'cmPct', label: 'CM %', fmt: pct('cmPct'), group: 'Profit' },
   { key: 'roas', label: 'ROAS', fmt: x('roas'), group: 'Ratios' }, { key: 'aov', label: 'AOV', fmt: money('aov'), group: 'Ratios' }, { key: 'cpa', label: 'CPA', fmt: money('cpa'), group: 'Ratios' }, { key: 'orders', label: 'Orders', fmt: int('orders'), group: 'Ratios' }, { key: 'breakevenCpa', label: 'BE CPA', fmt: money('breakevenCpa'), group: 'Ratios' }, { key: 'organicOrders', label: 'Organic', fmt: int('organicOrders'), group: 'Ratios' }, { key: 'organicPct', label: 'Organic %', fmt: pct('organicPct'), group: 'Ratios' },
 ]
 const LEVERS: Col[] = [
@@ -48,7 +48,7 @@ const TONE: Record<string, { band: string; head: string; tint: string; edge: str
   Ratios: { band: '#1F2A44', head: '#3A4766', tint: 'rgba(31,42,68,0.05)', edge: '#1F2A44' },
 }
 const tone = (g?: string) => TONE[g || ''] || TONE.Ratios
-const WEEK_COLS: [string, string][] = [['Revenue', 'Revenue'], ['COGS', 'Costs'], ['Gross profit', 'Profit'], ['Ad spend', 'Ad spend'], ['Designer', 'Profit'], ['Races', 'Profit'], ['CM', 'Profit'], ['CM %', 'Profit'], ['ROAS', 'Ratios'], ['Orders', 'Ratios'], ['AOV', 'Ratios'], ['CPA', 'Ratios']]
+const WEEK_COLS: [string, string][] = [['Revenue', 'Revenue'], ['COGS', 'Costs'], ['Gross profit', 'Profit'], ['Ad spend', 'Ad spend'], ['Races', 'Profit'], ['Designer', 'Profit'], ['CM', 'Profit'], ['CM %', 'Profit'], ['ROAS', 'Ratios'], ['Orders', 'Ratios'], ['AOV', 'Ratios'], ['CPA', 'Ratios']]
 
 const FIELD_LABEL: Record<string, string> = {
   shopifyGrossCents: 'Gross sales', shopifyDiscountsCents: 'Discounts', shopifyReturnsCents: 'Returns', shopifyShippingCents: 'Shipping charged', shopifyTaxCents: 'Taxes', shopifyNetCents: 'Net sales', shopifyOrders: 'Orders', shopifySessions: 'Sessions', shopifyAddToCart: 'Add to cart', shopifyReachedCheckout: 'Reached checkout', shopifyCompletedCheckout: 'Completed checkout', shopifyFeesCents: 'Shopify fees',
@@ -141,7 +141,7 @@ export default function Daily() {
                 {data.weeks.map(w => (
                   <tr key={w.weekStart} className="border-b border-border-gray/60">
                     <td className="px-3 py-1.5">{dayLabel(w.weekStart)} to {dayLabel(w.weekEnd)} <span className="text-off-black/40">· {w.dayCount}d</span></td>
-                    {[usd(w.revenue), usd(w.cogs), usd(w.grossProfit), usd(w.adSpend), usd(w.designerFee), usd(w.racePayouts), usd(w.cm), pctText(w.cmPct), xText(w.roas), intText(w.orders), usd(w.aov), usd(w.cpa)].map((v, i) => <td key={i} className={`px-2 py-1.5 ${num} ${[0, 2, 6].includes(i) ? 'font-semibold' : ''}`} style={[0, 1, 2, 3, 6].includes(i) ? { background: tone(WEEK_COLS[i][1]).tint } : undefined}>{v}</td>)}
+                    {[usd(w.revenue), usd(w.cogs), usd(w.grossProfit), usd(w.adSpend), usd(w.racePayouts), usd(w.designerFee), usd(w.cm), pctText(w.cmPct), xText(w.roas), intText(w.orders), usd(w.aov), usd(w.cpa)].map((v, i) => <td key={i} className={`px-2 py-1.5 ${num} ${[0, 2, 6].includes(i) ? 'font-semibold' : ''}`} style={[0, 1, 2, 3, 6].includes(i) ? { background: tone(WEEK_COLS[i][1]).tint } : undefined}>{v}</td>)}
                   </tr>
                 ))}
               </tbody>
