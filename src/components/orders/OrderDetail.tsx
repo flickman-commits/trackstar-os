@@ -112,7 +112,7 @@ export default function OrderDetail({
   const getOrderItemCount = (parentOrderNumber: string) => orderItemCount(orders, parentOrderNumber)
   const getOrderItemPosition = (o: Order) => orderItemPosition(orders, o)
   // The other prints on the same order, from the server (a completed one is not in the queue).
-  const siblings = useSiblings(selectedOrder)
+  const siblings = useSiblings(selectedOrder, orders)
   const notifySameRunner = (o: Order, others: Parameters<typeof sameRunnerEmail>[1]) => setEmailingOrder(o, sameRunnerEmail(o, others, user?.firstName || ''))
 
   const [isResearching, setIsResearching] = useState(false)
