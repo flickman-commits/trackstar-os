@@ -7,17 +7,26 @@ import prisma from '../../db.js'
 import { loadRules } from './rules.js'
 import { computeDay, summarize, effective, landed } from './scoreboard.js'
 import { FIELDS } from './sheetSync.js'
+import { accruedByDay } from './racePayouts.js'
 import { eachDay, todayET, isValidMonth, firstOfMonth, lastOfMonth, mondayOf, addDays, isValidDay } from './periods.js'
 
 export class FinanceError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; this.expose = true }
 }
 
-/** One row per day from first to last, empty where the ledger has none. */
+/**
+ * One row per day from first to last, empty where the ledger has none. Each
+ * row carries racePayoutCents: what partnered races earned on that day's
+ * sales (racePayouts.js accruedByDay). It is not a sheet column and cannot be
+ * typed over.
+ */
 export async function rowsBetween(first, last) {
-  const found = await prisma.financeDay.findMany({ where: { day: { gte: first, lte: last } } })
+  const [found, races] = await Promise.all([
+    prisma.financeDay.findMany({ where: { day: { gte: first, lte: last } } }),
+    accruedByDay(first, last).catch(err => { console.warn('[finance] race payouts by day failed:', err?.message); return {} }),
+  ])
   const byDay = new Map(found.map(r => [r.day, r]))
-  return eachDay(first, last).map(d => byDay.get(d) || { day: d, overrides: null })
+  return eachDay(first, last).map(d => ({ ...(byDay.get(d) || { day: d, overrides: null }), racePayoutCents: races[d] || 0 }))
 }
 
 export async function summaryBetween(first, last, rules) {

@@ -3,10 +3,10 @@
 export type Totals = {
   revenue: number; shopifyRevenue: number; etsyRevenue: number; cm: number; cmPct: number | null; grossProfit: number; grossMarginPct: number | null
   adSpend: number; meta: number; trybe: number; google: number; roas: number | null; orders: number; aov: number | null; cpa: number | null; breakevenCpa: number | null
-  cogs: number; designerFee: number; organicOrders: number; organicPct: number | null; units: number; dayCount: number; lastLanded: string | null; first: string | null; last: string | null
+  cogs: number; designerFee: number; racePayouts: number; organicOrders: number; organicPct: number | null; units: number; dayCount: number; lastLanded: string | null; first: string | null; last: string | null
 }
 
-export type TrendDay = { day: string; landed: boolean; revenue: number; cogs: number; adSpend: number; cm: number; designerFee: number; orders: number; roas: number | null; races: string[] }
+export type TrendDay = { day: string; landed: boolean; revenue: number; cogs: number; adSpend: number; cm: number; designerFee: number; racePayouts: number; orders: number; roas: number | null; races: string[] }
 export type WaterfallLine = { key: string; label: string; cents: number; kind?: 'total' | 'subtotal'; pctOfRevenue: number | null }
 export type Need = { key: string; kind: string; tone: 'due' | 'soon' | 'alert'; title: string; detail?: string; text: string; cents?: number | null; due?: string; action?: { label: string; to: string } }
 export type SyncInfo = { at: string; read: number; created: number; updated: number; latest: Record<string, string>; missingTabs: string[] } | null

@@ -11,7 +11,7 @@ import { lastSync } from './sheetSync.js'
 import { resolvePeriod, todayET, addDays, PERIODS, monthOf, shiftMonth, lastOfMonth, firstOfMonth, dayLabel } from './periods.js'
 import { moneyNeeds, needCard } from './needs.js'
 
-const HEADLINE = ['revenue', 'shopifyRevenue', 'etsyRevenue', 'cm', 'cmPct', 'grossProfit', 'grossMarginPct', 'adSpend', 'meta', 'trybe', 'google', 'roas', 'orders', 'aov', 'cpa', 'breakevenCpa', 'cogs', 'designerFee', 'organicOrders', 'organicPct', 'units', 'dayCount', 'lastLanded', 'first', 'last']
+const HEADLINE = ['revenue', 'shopifyRevenue', 'etsyRevenue', 'cm', 'cmPct', 'grossProfit', 'grossMarginPct', 'adSpend', 'meta', 'trybe', 'google', 'roas', 'orders', 'aov', 'cpa', 'breakevenCpa', 'cogs', 'designerFee', 'racePayouts', 'organicOrders', 'organicPct', 'units', 'dayCount', 'lastLanded', 'first', 'last']
 const CM_ALERT_PCT = 10
 const pick = (s, keys) => Object.fromEntries(keys.map(k => [k, s[k]]))
 
@@ -48,6 +48,7 @@ export async function overview({ period = 'today', now = new Date() } = {}) {
     { key: 'trybe', label: 'Trybe creators', cents: -s.trybe },
     { key: 'google', label: 'Google ads', cents: -s.google },
     ...(feeBase === 'cm' ? [{ key: 'designerFee', label: 'Designer fee', cents: -s.designerFee }] : []),
+    { key: 'racePayouts', label: 'Race payouts', cents: -s.racePayouts },
     { key: 'cm', label: 'Contribution margin', cents: s.cm, kind: 'total' },
   ].map(w => ({ ...w, pctOfRevenue: s.revenue ? (Math.abs(w.cents) / s.revenue) * 100 : null }))
 
@@ -87,7 +88,7 @@ export async function overview({ period = 'today', now = new Date() } = {}) {
     today, through: s.lastLanded, partial: s.lastLanded !== p.last,
     totals: pick(s, HEADLINE), compare: pick(c, HEADLINE),
     waterfall, feeBase, breakevenRoas: breakeven,
-    trend: trend.days.map(d => ({ day: d.day, landed: d.landed, revenue: d.revenue, cogs: d.cogs, adSpend: d.adSpend, cm: d.cm, designerFee: d.designerFee, orders: d.orders, roas: d.roas, races: raceDays[d.day] || [] })),
+    trend: trend.days.map(d => ({ day: d.day, landed: d.landed, revenue: d.revenue, cogs: d.cogs, adSpend: d.adSpend, cm: d.cm, designerFee: d.designerFee, racePayouts: d.racePayouts, orders: d.orders, roas: d.roas, races: raceDays[d.day] || [] })),
     levers: pick(s, ['metaRoas', 'metaCpa', 'metaCpc', 'metaCtr', 'googleRoas', 'googleCpa', 'googleCpc', 'googleCtr', 'cvr', 'atcPct', 'atcToCheckoutPct', 'checkoutToPurchasePct', 'costPerUnit', 'cogsPct', 'adSpendPct', 'shopifyPct', 'etsyPct', 'shopifyAov', 'etsyAov', 'sessions', 'metaPurchases', 'googleConversions']),
     pacing, needs, sync: syncInfo,
   }

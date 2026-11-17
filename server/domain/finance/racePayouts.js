@@ -17,6 +17,11 @@
  * Postgres keeps machinery only, in SystemConfig under race_payout:<dealId>:
  * the last computed sales and the status (pending -> sent -> paid). Nothing
  * here duplicates an Attio field.
+ *
+ * The sales also keep a split by the day each order was placed (sales.byDay,
+ * Eastern), so the scoreboard can take each race's payout out of contribution
+ * margin on the days the sales happened (accruedByDay), not on the day the
+ * payout is due.
  */
 import prisma from '../../db.js'
 import { loadDeals, getDeal, patchDeal, isAttioConfigured } from '../sales/attio.js'
@@ -136,29 +141,52 @@ export async function ordersIn(window) {
   return all.filter(o => !o.cancelled_at && !o.test)
 }
 
-/** A race's sales in a set of Shopify orders: its own products' lines, net of discounts and refunds. */
+/** The Eastern day an instant falls on, YYYY-MM-DD. */
+export function etDay(instant) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(instant))
+}
+
+/**
+ * A race's sales in a set of Shopify orders: its own products' lines, net of
+ * discounts and refunds. byDay splits the same numbers by the day the order
+ * was placed; a refund counts against the order's day, so the days add up to
+ * the total.
+ */
 export function tally(productIds, orders) {
   // The catalog stores the GraphQL id (gid://shopify/Product/123); a REST line item carries the number.
   const ids = new Set(productIds.map(id => String(id).split('/').pop()))
   let grossCents = 0, discountCents = 0, refundCents = 0, units = 0, refundedUnits = 0
   const orderIds = new Set()
+  const byDay = {}
   for (const o of orders) {
     const mine = (o.line_items || []).filter(li => ids.has(String(li.product_id)))
     if (!mine.length) continue
     orderIds.add(o.id)
+    let net = 0, sold = 0
     for (const li of mine) {
-      grossCents += Math.round(Number(li.price || 0) * 100) * Number(li.quantity || 0)
-      discountCents += Math.round(Number(li.total_discount || 0) * 100)
+      const gross = Math.round(Number(li.price || 0) * 100) * Number(li.quantity || 0)
+      const discount = Math.round(Number(li.total_discount || 0) * 100)
+      grossCents += gross
+      discountCents += discount
       units += Number(li.quantity || 0)
+      net += gross - discount
+      sold += Number(li.quantity || 0)
     }
     const mineIds = new Set(mine.map(li => li.id))
     for (const r of o.refunds || []) for (const rli of r.refund_line_items || []) {
       if (!mineIds.has(rli.line_item_id)) continue
-      refundCents += Math.round(Number(rli.subtotal || 0) * 100)
+      const refund = Math.round(Number(rli.subtotal || 0) * 100)
+      refundCents += refund
       refundedUnits += Number(rli.quantity || 0)
+      net -= refund
+      sold -= Number(rli.quantity || 0)
     }
+    const day = etDay(o.created_at)
+    const slot = byDay[day] || (byDay[day] = { netSalesCents: 0, unitsSold: 0 })
+    slot.netSalesCents += net
+    slot.unitsSold += sold
   }
-  return { grossCents, discountCents, refundCents, netSalesCents: grossCents - discountCents - refundCents, unitsSold: units - refundedUnits, orders: orderIds.size }
+  return { grossCents, discountCents, refundCents, netSalesCents: grossCents - discountCents - refundCents, unitsSold: units - refundedUnits, orders: orderIds.size, byDay }
 }
 
 const inWindow = (orders, window) => {
@@ -166,10 +194,35 @@ const inWindow = (orders, window) => {
   return orders.filter(o => { const t = new Date(o.created_at).getTime(); return t >= since && t < until })
 }
 
-async function saveSales(deal, { canonical, products }, orders) {
+async function saveSales(deal, { canonical, products }, orders, { daysOnly = false } = {}) {
   const sales = { ...tally(products.map(p => p.productId), orders), computedAt: new Date().toISOString(), products: products.map(p => p.title), canonical }
   const prev = (await loadState([deal.id]))[deal.id] || {}
+  // Sales pulled before byDay existed, on a race already final, sent or paid:
+  // add the split by day and leave the figures it was reported and paid on alone.
+  if (daysOnly && prev.sales) return saveState(deal.id, { ...prev, sales: { ...prev.sales, byDay: sales.byDay } })
   return saveState(deal.id, { ...prev, status: prev.status || 'pending', sales, termsUsed: termsFor(deal) })
+}
+
+/**
+ * What the partnered races earn on each day from first to last: each race's
+ * sales that day priced at its terms. The scoreboard takes this out of
+ * contribution margin on the day of the sale (ledger.js rowsBetween).
+ */
+export async function accruedByDay(first, last) {
+  const rows = await prisma.systemConfig.findMany({ where: { key: { startsWith: 'race_payout:' } }, select: { value: true } })
+  const out = {}
+  for (const r of rows) {
+    let st
+    try { st = JSON.parse(r.value) } catch { continue }
+    const byDay = st?.sales?.byDay
+    if (!byDay) continue
+    const terms = st.termsUsed || { structure: 'percent', pct: DEFAULT_PCT }
+    for (const [day, sales] of Object.entries(byDay)) {
+      if (day < first || day > last) continue
+      out[day] = (out[day] || 0) + payoutCents(terms, sales)
+    }
+  }
+  return out
 }
 
 /** Pull the race's sales from Shopify and keep them. */
@@ -205,11 +258,15 @@ export async function refreshLive({ today = todayET(), maxAgeMinutes = 30 } = {}
   for (const deal of deals) {
     const date = raceDay(deal.raceDate)
     const st = state[deal.id]
-    if (!date || (st?.status && st.status !== 'pending')) continue
+    if (!date) continue
     const window = { start: addDays(date, -DAYS_BEFORE), end: addDays(date, DAYS_AFTER) }
-    if (window.start > today || isFinal(st?.sales, window)) continue
-    if (st?.sales?.computedAt && new Date(st.sales.computedAt).getTime() > cutoff) continue
-    due.push({ deal, window })
+    if (window.start > today) continue
+    // Sales pulled before they were split by day: pull once more for the split.
+    const needsDays = Boolean(st?.sales && !st.sales.byDay)
+    const settled = (st?.status && st.status !== 'pending') || isFinal(st?.sales, window)
+    if (settled && !needsDays) continue
+    if (!needsDays && st?.sales?.computedAt && new Date(st.sales.computedAt).getTime() > cutoff) continue
+    due.push({ deal, window, daysOnly: settled })
   }
   if (!due.length) return { refreshed: 0, failed: [] }
   // Overlapping windows become one read: sort by start, merge while they touch.
@@ -227,11 +284,11 @@ export async function refreshLive({ today = todayET(), maxAgeMinutes = 30 } = {}
     let orders
     try { orders = await ordersIn({ start: c.start, end }) }
     catch (err) { for (const { deal } of c.items) failed.push({ name: deal.name, error: 'Could not read Shopify orders' }); console.warn('[race-payouts] Shopify read failed:', err?.message); continue }
-    for (const { deal, window } of c.items) {
+    for (const { deal, window, daysOnly } of c.items) {
       try {
         const found = await productsFor(deal)
         if (!found.products.length) { failed.push({ name: deal.name, error: 'No Shopify product matches the deal name' }); continue }
-        await saveSales(deal, found, inWindow(orders, window))
+        await saveSales(deal, found, inWindow(orders, window), { daysOnly })
         refreshed++
       } catch (err) { failed.push({ name: deal.name, error: err?.expose ? err.message : 'Could not tally sales' }) }
     }

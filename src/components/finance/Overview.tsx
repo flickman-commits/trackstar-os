@@ -153,7 +153,7 @@ export default function Overview() {
 function Waterfall({ lines }: { lines: WaterfallLine[] }) {
   const top = Math.max(1, ...lines.filter(l => l.kind === 'total' || l.kind === 'subtotal').map(l => Math.abs(l.cents)))
   const colorOf = (l: WaterfallLine) => l.key === 'revenue' ? SERIES.revenue : l.key === 'cm' ? SERIES.cm
-    : (l.kind === 'subtotal') ? SERIES.muted : l.key === 'meta' || l.key === 'trybe' || l.key === 'google' ? SERIES.adSpend : l.key === 'designerFee' ? SERIES.designerFee : SERIES.cogs
+    : (l.kind === 'subtotal') ? SERIES.muted : l.key === 'meta' || l.key === 'trybe' || l.key === 'google' ? SERIES.adSpend : l.key === 'designerFee' ? SERIES.designerFee : l.key === 'racePayouts' ? SERIES.racePayouts : SERIES.cogs
   let running = 0
   const rows = lines.map(l => {
     if (l.kind === 'total' || l.kind === 'subtotal') { running = l.cents; return { l, from: 0, to: Math.max(0, l.cents) } }
@@ -202,6 +202,7 @@ function Trend({ days }: { days: TrendDay[] }) {
                   <div className="flex justify-between gap-4"><span className="flex items-center gap-1"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: SERIES.cogs }} />COGS</span><span className="tabular-nums">{usd(d.cogs)}</span></div>
                   <div className="flex justify-between gap-4"><span className="flex items-center gap-1"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: SERIES.adSpend }} />Ad spend</span><span className="tabular-nums">{usd(d.adSpend)}</span></div>
                   <div className="flex justify-between gap-4"><span className="flex items-center gap-1"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: SERIES.designerFee }} />Designer fee</span><span className="tabular-nums">{usd(d.designerFee)}</span></div>
+                  {d.racePayouts > 0 && <div className="flex justify-between gap-4"><span className="flex items-center gap-1"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: SERIES.racePayouts }} />Race payouts</span><span className="tabular-nums">{usd(d.racePayouts)}</span></div>}
                   <div className="flex justify-between gap-4 font-semibold"><span className="flex items-center gap-1"><i className="w-2 h-2 rounded-sm inline-block" style={{ background: SERIES.cm }} />Contribution margin</span><span className="tabular-nums">{usd(d.cm)}</span></div>
                   <div className="flex justify-between gap-4 text-off-black/60"><span>Orders · ROAS</span><span className="tabular-nums">{intText(d.orders)} · {xText(d.roas)}</span></div>
                 </>}
@@ -212,6 +213,7 @@ function Trend({ days }: { days: TrendDay[] }) {
           <Bar dataKey="cogs" stackId="a" fill={SERIES.cogs} isAnimationActive={false} />
           <Bar dataKey="adSpend" stackId="a" fill={SERIES.adSpend} isAnimationActive={false} />
           <Bar dataKey="designerFee" stackId="a" fill={SERIES.designerFee} isAnimationActive={false} />
+          <Bar dataKey="racePayouts" stackId="a" fill={SERIES.racePayouts} isAnimationActive={false} />
           <Bar dataKey="cmPos" stackId="a" fill={SERIES.cm} isAnimationActive={false} radius={[3, 3, 0, 0]} />
           <Line type="monotone" dataKey="revenue" stroke={SERIES.revenue} strokeWidth={2} dot={false} isAnimationActive={false} />
           {raceDots.map(d => <ReferenceDot key={d.day} x={d.label} y={d.revenue} r={4} fill="#fff" stroke={SERIES.revenue} strokeWidth={2} />)}
@@ -221,7 +223,7 @@ function Trend({ days }: { days: TrendDay[] }) {
       {/* Below the chart, not inside its fixed-height box, so it never spills into the next card. */}
       <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3 text-xs text-off-black/65">
         <span className="inline-flex items-center gap-1.5"><span className="shrink-0 w-4 h-[3px] rounded-full" style={{ background: SERIES.revenue }} />Revenue</span>
-        {[['COGS', SERIES.cogs], ['Ad spend', SERIES.adSpend], ['Designer fee', SERIES.designerFee], ['Contribution margin', SERIES.cm]].map(([l, c]) => <span key={l} className="inline-flex items-center gap-1.5"><span className="shrink-0 w-2.5 h-2.5 rounded-[3px]" style={{ background: c }} />{l}</span>)}
+        {[['COGS', SERIES.cogs], ['Ad spend', SERIES.adSpend], ['Designer fee', SERIES.designerFee], ['Race payouts', SERIES.racePayouts], ['Contribution margin', SERIES.cm]].map(([l, c]) => <span key={l} className="inline-flex items-center gap-1.5"><span className="shrink-0 w-2.5 h-2.5 rounded-[3px]" style={{ background: c }} />{l}</span>)}
         <span className="inline-flex items-center gap-1.5"><span className="shrink-0 w-2.5 h-2.5 rounded-full bg-white" style={{ border: `2px solid ${SERIES.revenue}` }} />Race day</span>
       </div>
     </div>

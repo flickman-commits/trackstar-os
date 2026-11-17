@@ -66,3 +66,19 @@ test('the partner email gives net sales, the share and the payout, asks how to p
   assert.ok(rep.email.indexOf('gift') < rep.email.indexOf('post-mortem'))
   assert.equal(rep.to, 'pat@example.com')
 })
+
+test('splits sales by the Eastern day each order was placed, refunds on the order\'s day', () => {
+  const orders = [
+    // 11:30pm Eastern on Oct 31 is already Nov 1 in UTC: it counts on Oct 31.
+    { ...order(1, [line(11, 100, '80.00')]), created_at: '2026-11-01T03:30:00Z' },
+    { ...order(2, [line(21, 100, '80.00', 2)], [{ refund_line_items: [{ line_item_id: 21, quantity: 1, subtotal: '80.00' }] }]), created_at: '2026-11-01T15:00:00Z' },
+  ]
+  const s = tally(['100'], orders)
+  assert.deepEqual(s.byDay, { '2026-10-31': { netSalesCents: 8000, unitsSold: 1 }, '2026-11-01': { netSalesCents: 8000, unitsSold: 1 } })
+  const days = Object.values(s.byDay)
+  assert.equal(days.reduce((n, d) => n + d.netSalesCents, 0), s.netSalesCents)
+  assert.equal(days.reduce((n, d) => n + d.unitsSold, 0), s.unitsSold)
+  // Priced per day: 20% of each day, or $10 a print.
+  assert.equal(payoutCents(termsFor({ revSharePct: 20 }), s.byDay['2026-11-01']), 1600)
+  assert.equal(payoutCents(termsFor({ payoutPerOrder: 10 }), s.byDay['2026-10-31']), 1000)
+})

@@ -19,6 +19,11 @@
  * (commission, platform fee, card processing; see trybeSync.js). Its ads run
  * on our Meta account, so the spend on them is already in Meta and Trybe's
  * attributed sales are already in revenue: only the cost is added.
+ *
+ * Race payouts (partner races' share of their prints, racePayouts.js) come
+ * out of contribution margin on the day of the sale, after the designer fee:
+ * the fee is worked out exactly as it was before they were counted, so the
+ * line changes no one's pay. Gross profit and break-even CPA leave them out.
  */
 import { ruleFor } from './rules.js'
 
@@ -70,6 +75,7 @@ export function computeDay(rawRow, rules) {
   const meta = n0(row.metaSpendCents)
   const google = n0(row.googleSpendCents)
   const trybe = n0(row.trybeCostCents)
+  const racePayouts = n0(row.racePayoutCents)
   const adSpend = meta + trybe + google
   const direct = shopifyFees + etsyFees + production + shipping
 
@@ -78,13 +84,13 @@ export function computeDay(rawRow, rules) {
     designerFee = Math.round((revenue - direct) * (fee.pct / 100))
     cogs = direct + designerFee
     grossProfit = revenue - cogs
-    cm = grossProfit - adSpend
+    cm = grossProfit - adSpend - racePayouts
   } else {
     cogs = direct
     grossProfit = revenue - cogs
     const before = grossProfit - adSpend
     designerFee = Math.round(before * (fee.pct / 100))
-    cm = before - designerFee
+    cm = before - designerFee - racePayouts
   }
   const metaPurchases = n0(row.metaPurchases)
   const googleConversions = n0(row.googleConversions)
@@ -93,7 +99,7 @@ export function computeDay(rawRow, rules) {
   return {
     day, landed: any, has,
     // money, cents
-    shopifyRevenue, etsyRevenue, revenue, shopifyFees, etsyFees, production, shipping, designerFee, designerFeeBase: fee.base,
+    shopifyRevenue, etsyRevenue, revenue, shopifyFees, etsyFees, production, shipping, designerFee, designerFeeBase: fee.base, racePayouts,
     cogs, adSpend, meta, trybe, google, grossProfit, cm, trybeSales: n0(row.trybeSalesCents), trybeEarnings: n0(row.trybeEarningsCents),
     // counts
     orders, shopifyOrders, etsyOrders, units, metaPurchases, googleConversions, organicOrders, trybeConversions: n0(row.trybeConversions),
@@ -142,7 +148,7 @@ function ratios(s) {
   }
 }
 
-const SUM_KEYS = ['shopifyRevenue', 'etsyRevenue', 'revenue', 'shopifyFees', 'etsyFees', 'production', 'shipping', 'designerFee', 'cogs', 'adSpend', 'meta', 'trybe', 'google', 'grossProfit', 'cm', 'trybeSales', 'trybeEarnings', 'trybeConversions',
+const SUM_KEYS = ['shopifyRevenue', 'etsyRevenue', 'revenue', 'shopifyFees', 'etsyFees', 'production', 'shipping', 'designerFee', 'racePayouts', 'cogs', 'adSpend', 'meta', 'trybe', 'google', 'grossProfit', 'cm', 'trybeSales', 'trybeEarnings', 'trybeConversions',
   'orders', 'shopifyOrders', 'etsyOrders', 'units', 'metaPurchases', 'googleConversions', 'organicOrders', 'sessions', 'addToCart', 'reachedCheckout', 'completedCheckout',
   'metaImpressions', 'metaClicks', 'metaPurchaseValue', 'googleImpressions', 'googleClicks', 'googleConversionValue']
 
