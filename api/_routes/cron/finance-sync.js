@@ -5,12 +5,14 @@
  * (trybeSync.js), then read the Daily Tracker's raw tabs into the ledger
  * (server/domain/finance/sheetSync.js). The whole year every time; only
  * changed days are written. Then keep each partner race's payout current
- * while its window is open (racePayouts.refreshLive). Cron only.
+ * while its window is open (racePayouts.refreshLive), and write what they
+ * earn each day to the sheet's Race Payouts tab (racePayoutSheet.js). Cron only.
  */
 import { isCronRequest } from '../../_lib/auth.js'
 import { syncFromSheet } from '../../../server/domain/finance/sheetSync.js'
 import { refreshLive } from '../../../server/domain/finance/racePayouts.js'
 import { syncTrybe } from '../../../server/domain/finance/trybeSync.js'
+import { syncRacePayoutSheet } from '../../../server/domain/finance/racePayoutSheet.js'
 import { alertError } from '../../_lib/alerts.js'
 
 export default async function handler(req, res) {
@@ -25,6 +27,8 @@ export default async function handler(req, res) {
     // The races second, and on their own: a Shopify or Attio hiccup must not fail the sheet sync.
     try { out.races = await refreshLive({ maxAgeMinutes: 45 }) }
     catch (err) { console.warn('[cron/finance-sync] race payouts:', err?.message); out.races = { error: 'refresh failed' } }
+    try { out.racesSheet = await syncRacePayoutSheet() }
+    catch (err) { console.warn('[cron/finance-sync] race payouts sheet:', err?.message); out.racesSheet = { error: 'sheet write failed' } }
     console.log(`[cron/finance-sync] ${JSON.stringify(out)}`)
     return res.status(200).json(out)
   } catch (error) {

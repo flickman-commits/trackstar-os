@@ -199,8 +199,8 @@ async function saveSales(deal, { canonical, products }, orders, { daysOnly = fal
   const prev = (await loadState([deal.id]))[deal.id] || {}
   // Sales pulled before byDay existed, on a race already final, sent or paid:
   // add the split by day and leave the figures it was reported and paid on alone.
-  if (daysOnly && prev.sales) return saveState(deal.id, { ...prev, sales: { ...prev.sales, byDay: sales.byDay } })
-  return saveState(deal.id, { ...prev, status: prev.status || 'pending', sales, termsUsed: termsFor(deal) })
+  if (daysOnly && prev.sales) return saveState(deal.id, { ...prev, name: deal.name, sales: { ...prev.sales, byDay: sales.byDay } })
+  return saveState(deal.id, { ...prev, name: deal.name, status: prev.status || 'pending', sales, termsUsed: termsFor(deal) })
 }
 
 /**
@@ -209,6 +209,12 @@ async function saveSales(deal, { canonical, products }, orders, { daysOnly = fal
  * contribution margin on the day of the sale (ledger.js rowsBetween).
  */
 export async function accruedByDay(first, last) {
+  const detail = await accruedDetail(first, last)
+  return Object.fromEntries(Object.entries(detail).map(([day, d]) => [day, d.cents]))
+}
+
+/** The same, with each race's part: { day: { cents, races: [{ name, cents }] } }, biggest race first. */
+export async function accruedDetail(first, last) {
   const rows = await prisma.systemConfig.findMany({ where: { key: { startsWith: 'race_payout:' } }, select: { value: true } })
   const out = {}
   for (const r of rows) {
@@ -217,11 +223,17 @@ export async function accruedByDay(first, last) {
     const byDay = st?.sales?.byDay
     if (!byDay) continue
     const terms = st.termsUsed || { structure: 'percent', pct: DEFAULT_PCT }
+    const name = st.name || st.sales.canonical || 'A partner race'
     for (const [day, sales] of Object.entries(byDay)) {
       if (day < first || day > last) continue
-      out[day] = (out[day] || 0) + payoutCents(terms, sales)
+      const cents = payoutCents(terms, sales)
+      if (!cents) continue
+      const d = out[day] || (out[day] = { cents: 0, races: [] })
+      d.cents += cents
+      d.races.push({ name, cents })
     }
   }
+  for (const d of Object.values(out)) d.races.sort((a, b) => b.cents - a.cents)
   return out
 }
 
