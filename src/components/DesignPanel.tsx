@@ -512,6 +512,13 @@ export function DesignDetailsTags({ d }: { d: Design }) {
             <Tag tone={ok(o.trimIn ? o.trimIn === job.spec.size : null)} title="Measured from the PDF's trim box">{o.trimIn ? o.trimIn === job.spec.size ? '✓ ' : '✕ ' : ''}{o.trimIn || job.spec.size} trim</Tag>
             <Tag tone={ok(bleedOk)} title="Measured from the PDF's bleed box">{bleedOk === null ? '' : bleedOk ? '✓ ' : '✕ '}{b && !bleedOk ? `bleed ${b.left}/${b.right}/${b.top}/${b.bottom}"` : '0.25" bleed'}</Tag>
             <Tag tone={ok(o.color ? o.color === 'CMYK' : null)} title="Read from the PDF's color">{o.color === 'CMYK' ? '✓ ' : o.color ? '✕ ' : ''}{o.color || 'Color'}</Tag>
+            {(() => {
+              // Each logo or photo's pixels over its printed size (worker/lib/inspectPdf.mjs). Renders made before 2026-11-17 were not measured.
+              if (!o.images) return null
+              if (!o.images.length) return <Tag tone="gray" title="The PDF has no images, only vector artwork">No images</Tag>
+              const low = Math.min(...o.images.map(i => i.ppi))
+              return <Tag tone={ok(low >= 200)} title={o.images.map(i => `${i.widthIn}" x ${i.heightIn}" at ${i.ppi} ppi`).join('\n')}>{low >= 200 ? `✓ Images ${low}+ ppi` : `✕ Blurry image (${low} ppi)`}</Tag>
+            })()}
           </>
         ) : <Tag title="Made before the PDF check">Not measured</Tag>}
       </div>

@@ -105,6 +105,16 @@ try {
   strip(doc.rasterItems);
   if (removed) notes.push(removed + ' leftover image' + (removed > 1 ? 's' : '') + ' removed');
 
+  stage = 'links';
+  // A linked image whose file is not on this Mac exports as Illustrator's 72 ppi
+  // preview: BULK-0001's logo printed blurry that way (2026-11-17). Refuse it.
+  for (var li = 0; li < doc.placedItems.length; li++) {
+    var lnk = doc.placedItems[li], lnkLayer = layerNameOf(lnk);
+    if (lnkLayer == 'PHOTO LAYER') continue;
+    var gone = false; try { gone = !lnk.file || !lnk.file.exists; } catch (e) { gone = true; }
+    if (gone) throw new Error('an image on ' + lnkLayer + ' is linked to a file this Mac does not have and would print blurry; embed it in the production file and upload it again');
+  }
+
   stage = 'margin';
   var margins = marginsOf(doc, ab), marginL = margins.left, marginR = margins.right;
 

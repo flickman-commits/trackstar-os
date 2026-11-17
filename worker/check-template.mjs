@@ -70,7 +70,7 @@ fs.rmSync(WORK, { recursive: true, force: true })
 let failures = 0
 for (const f of files) {
   if (f.missing) { console.log(`\n${f.key}\n  FAIL  file not found: ${f.path}`); failures++; continue }
-  const v = evaluateCheck(results.find(x => x.key === f.key))
+  const v = evaluateCheck(results.find(x => x.key === f.key), { cobranded: / \/ BULK-/.test(f.key) })
   const lines = []
   for (const m of v.problems) lines.push(`  FAIL  ${m}`)
   for (const m of v.warnings) lines.push(`  WARN  ${m}`)

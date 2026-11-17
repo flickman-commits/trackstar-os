@@ -158,18 +158,23 @@ async function checkChanged(templates, files) {
   if (!due.length) return
   const dir = path.join(WORK, 'check')
   fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true })
+  // A file Drive cannot hand over (not downloaded, "-11") is skipped and retried next time;
+  // it used to throw here and stall every check behind it (Richmond, 2026-11-17).
+  const skipped = new Set()
   const input = due.map((t, i) => {
     const copy = path.join(dir, `${i}.ai`)
-    copyFile(localFile(t), copy)
+    try { copyFile(localFile(t), copy) } catch (e) { skipped.add(t.key); log(`  could not read ${t.key}: ${e.message}`); return null }
     return { key: t.key, path: copy, race: t.key.split(' / ')[0], artboard: t.rules?.artboard || null, artboardExclude: t.rules?.artboardExclude || null, photoArtboard: t.rules?.photoArtboard || null, triathlon: Boolean(t.rules?.triathlon) }
   })
-  log(`Checking ${due.length} template${due.length > 1 ? 's' : ''}: ${due.map(t => t.key).join(', ')}`)
-  fs.writeFileSync(path.join(HERE, 'illustrator', 'check-input.json'), JSON.stringify({ files: input }))
+  const ready = due.filter(t => !skipped.has(t.key))
+  if (!ready.length) return
+  log(`Checking ${ready.length} template${ready.length > 1 ? 's' : ''}: ${ready.map(t => t.key).join(', ')}`)
+  fs.writeFileSync(path.join(HERE, 'illustrator', 'check-input.json'), JSON.stringify({ files: input.filter(Boolean) }))
   fs.rmSync(path.join(HERE, 'illustrator', 'check-result.json'), { force: true })
   await runIllustrator(CHECK_SCRIPT, CHECK_TIMEOUT_MS)
   const results = JSON.parse(fs.readFileSync(path.join(HERE, 'illustrator', 'check-result.json'), 'utf8'))
-  for (const t of due) {
-    const verdict = evaluateCheck(results.find(r => r.key === t.key), { sizes: Array.isArray(t.rules?.sizes) && t.rules.sizes.length ? t.rules.sizes : undefined })
+  for (const t of ready) {
+    const verdict = evaluateCheck(results.find(r => r.key === t.key), { sizes: Array.isArray(t.rules?.sizes) && t.rules.sizes.length ? t.rules.sizes : undefined, cobranded: / \/ BULK-/.test(t.key) })
     await api('check', { key: t.key, mtime: files[t.key].mtime, ok: verdict.ok, report: verdict })
     t.lastCheckMtime = files[t.key].mtime; t.lastCheckOk = verdict.ok
     log(`  ${verdict.ok ? 'ok  ' : 'FAIL'} ${t.key}${verdict.problems.length ? ': ' + verdict.problems.join('; ') : ''}`)

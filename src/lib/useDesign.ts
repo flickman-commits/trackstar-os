@@ -13,7 +13,7 @@ export type Job = {
   arteloUploadedAt: string | null; arteloUrl: string | null; arteloError: string | null
   // On its way to Artelo production (server/domain/render/arteloSend.js); null when approved without sending.
   send: { state: 'queued' | 'held' | 'support' | 'waiting' | 'blocked' | 'manual' | 'sent'; at?: string | null; by?: string | null; reason?: string; next?: string | null; inHold?: boolean; threadId?: string | null } | null
-  output: { trimIn: string | null; bleedIn: { left: number; right: number; top: number; bottom: number } | null; color: 'CMYK' | 'RGB' | 'mixed' | null } | null
+  output: { trimIn: string | null; bleedIn: { left: number; right: number; top: number; bottom: number } | null; color: 'CMYK' | 'RGB' | 'mixed' | null; images?: { ppi: number; widthIn: number; heightIn: number }[] } | null
   pdfUrl: string | null; previewUrl: string | null
 }
 type State = { eligible: boolean; reasons: string[]; job: Job | null; workersOnline: string[]; autoSend?: boolean }

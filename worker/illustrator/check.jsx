@@ -27,6 +27,22 @@ for (var i = 0; i < input.files.length; i++) {
     for (var pi = 0; pi < doc.placedItems.length; pi++) { var ln = layerNameOf(doc.placedItems[pi]); if (ln != 'LOCKED ASSETS' && ln != 'GUIDES') stray++; }
     for (var ri = 0; ri < doc.rasterItems.length; ri++) { var ln2 = layerNameOf(doc.rasterItems[ri]); if (ln2 != 'LOCKED ASSETS' && ln2 != 'GUIDES') stray++; }
     out.push('"strayImages":' + stray);
+    // Every image in the artwork (not the photo window): a linked file this Mac cannot open prints
+    // Illustrator's 72 ppi preview, which is how BULK-0001's logo went out blurry (2026-11-17).
+    // ppi is the image's own pixels over its placed size, read off its matrix.
+    var imgs = [];
+    function imageOf(it, kind) {
+      var ln3 = layerNameOf(it);
+      if (ln3 == 'PHOTO LAYER' || ln3 == 'GUIDES') return;
+      var missing = false, name = '';
+      if (kind == 'linked') { try { name = it.file.name; } catch (e) { missing = true; } }
+      var mx = it.matrix, sc = Math.sqrt(mx.mValueA * mx.mValueA + mx.mValueB * mx.mValueB);
+      var gb = it.geometricBounds;
+      imgs.push('{"kind":' + q(kind) + ',"layer":' + q(ln3) + ',"name":' + q(name) + ',"missing":' + missing + ',"ppi":' + (sc ? Math.round(72 / sc) : 'null') + ',"widthIn":' + r1((gb[2] - gb[0]) / 72) + '}');
+    }
+    for (var pj = 0; pj < doc.placedItems.length; pj++) imageOf(doc.placedItems[pj], 'linked');
+    for (var rj = 0; rj < doc.rasterItems.length; rj++) imageOf(doc.rasterItems[rj], doc.rasterItems[rj].embedded ? 'embedded' : 'linked');
+    out.push('"images":[' + imgs.join(',') + ']');
     // Checked as an order with a time prints: the NO TIME layer off, as render.jsx does.
     var ntOff = noTimeLayerOf(doc);
     if (ntOff && ntOff.visible) { if (ntOff.locked) ntOff.locked = false; ntOff.visible = false; }

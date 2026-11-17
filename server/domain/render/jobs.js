@@ -173,6 +173,9 @@ export async function uploadSlots(job) {
   return { pdfUploadUrl: pdf.data.signedUrl, previewUploadUrl: preview.data.signedUrl, pdfPath: paths.pdf, previewPath: paths.preview, photoUrl }
 }
 
+// Below this an image in the print is visibly soft at arm's length.
+export const LOW_PPI = 200
+
 /** What is wrong with the PDF the worker measured, in plain words. Empty when it is print ready. */
 export function outputProblems(output, size) {
   if (!output) return []
@@ -181,6 +184,8 @@ export function outputProblems(output, size) {
   const b = output.bleedIn
   if (b && [b.left, b.right, b.top, b.bottom].some(v => Math.abs(v - 0.25) > 0.01)) out.push('bleed is not 0.25" on every side')
   if (output.color && output.color !== 'CMYK') out.push(`color is ${output.color}, not CMYK`)
+  // A logo or photo with too few pixels for its printed size prints soft (BULK-0001's logo went out at 71 ppi).
+  for (const img of output.images || []) if (img.ppi < LOW_PPI) out.push(`a ${img.widthIn}" x ${img.heightIn}" image prints at only ${img.ppi} ppi and will look blurry (needs ${LOW_PPI}+)`)
   return out
 }
 
@@ -201,6 +206,7 @@ export async function completeJob({ jobId, workerId, notes, output }) {
     trimIn: output.trimIn ? String(output.trimIn).slice(0, 20) : null,
     bleedIn: output.bleedIn && typeof output.bleedIn === 'object' ? { left: Number(output.bleedIn.left), right: Number(output.bleedIn.right), top: Number(output.bleedIn.top), bottom: Number(output.bleedIn.bottom) } : null,
     color: ['CMYK', 'RGB', 'mixed'].includes(output.color) ? output.color : null,
+    images: Array.isArray(output.images) ? output.images.slice(0, 20).map(i => ({ ppi: Number(i.ppi) || 0, widthIn: Number(i.widthIn) || 0, heightIn: Number(i.heightIn) || 0 })) : undefined,
   } : null
   // A print that is not print ready says so where the reviewer reads it.
   const problems = outputProblems(measured, job.spec?.size)
