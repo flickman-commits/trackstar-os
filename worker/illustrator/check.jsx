@@ -51,7 +51,11 @@ for (var i = 0; i < input.files.length; i++) {
       var abName = doc.artboards[a].name, size = sizeKey(abName), ab = doc.artboards[a].artboardRect;
       var rules = { artboard: f.artboard, artboardExclude: f.artboardExclude, photoArtboard: f.photoArtboard };
       var chosen = size && (pickArtboard(doc, size, rules, false) == a || (rules.photoArtboard && pickArtboard(doc, size, rules, true) == a));
-      var b = ['"name":' + q(abName), '"size":' + q(size), '"inches":' + q(r1((ab[2]-ab[0])/72) + 'x' + r1((ab[1]-ab[3])/72)), '"chosen":' + chosen, '"photoVariant":' + (rules.photoArtboard ? (abName.toLowerCase().indexOf(String(rules.photoArtboard).toLowerCase()) >= 0) : false)];
+      // Would the rules let this artboard print, chosen or not? Two for one size means
+      // pickArtboard silently takes the last (Kiawah's Full and Half, 2026-11-17).
+      var lowerAb = abName.toLowerCase();
+      var candidate = !!size && !(rules.artboard && lowerAb.indexOf(String(rules.artboard).toLowerCase()) < 0) && !(rules.artboardExclude && lowerAb.indexOf(String(rules.artboardExclude).toLowerCase()) >= 0);
+      var b = ['"name":' + q(abName), '"size":' + q(size), '"inches":' + q(r1((ab[2]-ab[0])/72) + 'x' + r1((ab[1]-ab[3])/72)), '"chosen":' + chosen, '"candidate":' + candidate, '"photoVariant":' + (rules.photoArtboard ? (abName.toLowerCase().indexOf(String(rules.photoArtboard).toLowerCase()) >= 0) : false)];
       if (chosen && size) {
         var tri = f.triathlon ? triFrames(doc, ab) : null;
         if (tri) {

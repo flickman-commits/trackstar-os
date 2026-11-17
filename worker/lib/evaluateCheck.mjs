@@ -28,12 +28,17 @@ export function evaluateCheck(r, { sizes: need = SIZES, cobranded = false } = {}
   if (r.strayImages) warnings.push(`${r.strayImages} image${r.strayImages > 1 ? 's' : ''} outside the locked artwork (a past order's photo; removed at render time)`)
   if (!r.layers?.['GUIDES']) warnings.push('no GUIDES layer: long names cannot grow to a margin, only shrink')
   const chosen = (r.artboards || []).filter(a => a.chosen && a.size)
+  // A key for a race's main event (no "/ Half Marathon") must not print a half design.
+  const halfKey = /half/i.test(String(r.key || ''))
   for (const size of need) {
     const boards = chosen.filter(a => a.size === size && !a.photoVariant)
     const photoBoards = chosen.filter(a => a.size === size && a.photoVariant)
     if (!boards.length) { problems.push(`${size}: no artboard`); continue }
-    if (boards.length > 1) { problems.push(`${size}: ${boards.length} artboards match (${boards.map(b => b.name).join(', ')}); set "artboard" or "artboardExclude" to pick one`); continue }
+    // Every artboard the rules allow, not only the one picked: the render takes the last of them, which may be the wrong design.
+    const allowed = (r.artboards || []).filter(a => a.candidate && a.size === size && !a.photoVariant)
+    if (boards.length > 1 || allowed.length > 1) { const list = allowed.length > 1 ? allowed : boards; problems.push(`${size}: ${list.length} artboards match (${list.map(b => b.name).join(', ')}); set "artboard" or "artboardExclude" to pick one`); continue }
     const b = boards[0], fields = b.fields || {}
+    if (r.key && !halfKey && /half/i.test(b.name)) { problems.push(`${size}: prints the "${b.name}" artboard, a half marathon design, for ${r.key}; set "artboardExclude": "Half", and map the half to "${r.key} / Half Marathon"`); continue }
     const have = Object.keys(fields)
     const missing = ['name', 'bib', 'time'].filter(k => !fields[k])
     if (missing.length) problems.push(`${size}: no ${missing.join(', ')} frame found`)
