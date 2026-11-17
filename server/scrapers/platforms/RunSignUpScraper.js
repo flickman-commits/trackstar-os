@@ -130,7 +130,7 @@ export class RunSignUpScraper extends BaseScraper {
       if (useApi && yearEventIds[eventKey]) {
         result = await this.searchEventTypeViaApi(runnerName, eventLabel, resultSetId, yearEventIds[eventKey])
       } else {
-        result = await this.searchEventType(runnerName, eventLabel, resultSetId)
+        result = await this.searchEventTypeViaPage(runnerName, eventLabel, resultSetId)
       }
       answers.push({ result, label: eventLabel })
     }
@@ -273,53 +273,76 @@ export class RunSignUpScraper extends BaseScraper {
         })
       }
 
-      if (results.length === 0) {
-        return this.notFoundResult()
-      }
-
-      // Filter for exact name matches
-      const matches = this.filterNameMatches(runnerName, results, r => r.name)
-      console.log(`[${this.tag} ${this.year}] Exact matches: ${matches.length}`)
-
-      if (matches.length === 0) {
-        console.log(`[${this.tag} ${this.year}] No exact match. Surfacing ${Math.min(results.length, 10)} candidates as possibleMatches:`)
-        results.slice(0, 10).forEach(r => console.log(`  - ${r.name} (${r.chipTime})`))
-        return this.notFoundResult(null, results.slice(0, 10).map(r => ({
-          name: r.name,
-          bib: r.bib,
-          time: r.chipTime,
-          pace: r.pace,
-          city: r.city,
-          state: r.state,
-          eventType
-        })))
-      }
-
-      if (matches.length > 1) {
-        console.log(`[${this.tag} ${this.year}] Multiple matches:`)
-        matches.forEach(m => console.log(`  - ${m.name}, Bib: ${m.bib}, Time: ${m.chipTime}`))
-        return this.ambiguousResult(matches.map(m => ({
-          name: m.name,
-          bib: m.bib,
-          time: m.chipTime
-        })))
-      }
-
-      const match = matches[0]
-      console.log(`\n[${this.tag} ${this.year}] FOUND RUNNER (via API):`)
-      console.log(`  Name: ${match.name}`)
-      console.log(`  Bib: ${match.bib}`)
-      console.log(`  Chip Time: ${match.chipTime}`)
-      console.log(`  Pace: ${match.pace}`)
-      console.log(`  Place: ${match.placeOverall}`)
-
-      const resultsUrl = this.runnerPageUrl(resultSetId, match.bib)
-      return { ...this.extractRunnerData(match, eventType), resultsUrl }
+      return this.pickResult(runnerName, eventType, resultSetId, results, 'API')
 
     } catch (error) {
       console.error(`[${this.tag} ${this.year}] API error: ${error.message}, falling back to Puppeteer`)
       return await this.searchEventType(runnerName, eventType, resultSetId)
     }
+  }
+
+  /**
+   * A year with no event ids (Kiawah, Louisiana): the public results page's
+   * own search, read as JSON, the same read the API path uses when a race
+   * switches its API off. The headless browser runs only if the page cannot
+   * be read: on the server it found nobody (Nov 2026, Kiawah 2024/2025 and
+   * Louisiana 2026 orders came back "not found" while the page's search
+   * returned their rows).
+   */
+  async searchEventTypeViaPage(runnerName, eventType, resultSetId) {
+    const lastName = runnerName.trim().split(/\s+/).pop()
+    const results = await this.pageResults(lastName, resultSetId)
+    if (!results) return await this.searchEventType(runnerName, eventType, resultSetId)
+    return this.pickResult(runnerName, eventType, resultSetId, results, 'results page')
+  }
+
+  /** The runner among rows already read (chip time only), or candidates. */
+  pickResult(runnerName, eventType, resultSetId, results, via) {
+    if (results.length === 0) {
+      return this.notFoundResult()
+    }
+
+    // Filter for exact name matches
+    const matches = this.filterNameMatches(runnerName, results, r => r.name)
+    console.log(`[${this.tag} ${this.year}] Exact matches: ${matches.length}`)
+
+    if (matches.length === 0) {
+      console.log(`[${this.tag} ${this.year}] No exact match. Surfacing ${Math.min(results.length, 10)} candidates as possibleMatches:`)
+      results.slice(0, 10).forEach(r => console.log(`  - ${r.name} (${r.chipTime})`))
+      return this.notFoundResult(null, results.slice(0, 10).map(r => ({
+        name: r.name,
+        bib: r.bib,
+        time: r.chipTime,
+        pace: r.pace,
+        city: r.city,
+        state: r.state,
+        eventType
+      })))
+    }
+
+    if (matches.length > 1) {
+      console.log(`[${this.tag} ${this.year}] Multiple matches:`)
+      matches.forEach(m => console.log(`  - ${m.name}, Bib: ${m.bib}, Time: ${m.chipTime}`))
+      return this.ambiguousResult(matches.map(m => ({
+        name: m.name,
+        bib: m.bib,
+        time: m.chipTime
+      })))
+    }
+
+    const match = matches[0]
+    if (!match.chipTime) {
+      return this.notFoundResult(`${match.name} has no chip time on the results page; clock (gun) time is not used`)
+    }
+    console.log(`\n[${this.tag} ${this.year}] FOUND RUNNER (via ${via}):`)
+    console.log(`  Name: ${match.name}`)
+    console.log(`  Bib: ${match.bib}`)
+    console.log(`  Chip Time: ${match.chipTime}`)
+    console.log(`  Pace: ${match.pace}`)
+    console.log(`  Place: ${match.placeOverall}`)
+
+    const resultsUrl = this.runnerPageUrl(resultSetId, match.bib)
+    return { ...this.extractRunnerData(match, eventType), resultsUrl }
   }
 
   /**

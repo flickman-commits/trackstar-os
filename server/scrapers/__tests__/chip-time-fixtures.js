@@ -751,7 +751,11 @@ export const CHIP_TIME_FIXTURES = [
     notes: 'Missoula 2025 Half Marathon - verifies half pace is computed against 13.1, not 26.2. Chip 1:10:52.48 → 1:10:52. https://runsignup.com/Race/Results/8029/562511',
   },
 
-  // ── Competitive Timing (LivePlanIt) — Missoula 2026 (not yet on RunSignUp) ──
+  // ── Missoula 2026 — first read off Competitive Timing (LivePlanIt) ──
+  // Since 2026-11-17 the config reads 2026 from RunSignUp (CT's page 404s), so
+  // these run through RunSignUpScraper: same bib, chip and pace (4:26:50.28,
+  // 10:11; 1:06:21.2, 5:04). Kept under competitivetiming so that platform
+  // keeps a fixture.
   {
     platform: 'competitivetiming',
     race: 'Missoula Marathon',
@@ -866,10 +870,11 @@ export const CHIP_TIME_FIXTURES = [
     officialPage: { url: 'https://results2.xacte.com/#/e/2426', shows: '3:18:30', readOn: '2026-10-27' },
     notes: 'Pace is the figure the official page shows (its own rule). LA 2022 Charity Challenge (Xacte 2426, subevent 6043, finish split 69218 ft = 13.11 mi). chip 11909130 ms shows 3:18:30 (Xacte rounds up), clock 3:18:38. Paced against 21097 m (13.109 mi): 11910s -> 15:08.5, rounded 15:09. Pacing against 26.2 would give 7:35, so a wrong-distance regression fails.',
   },
-  // ── RunSignUp browser fallback (Louisiana, Kiawah) ───────────────────
-  // These configs have no eventIds, so the Puppeteer table read runs. Their
-  // tables put split columns ahead of "Clock Time" (gun) and "Chip Time";
-  // every runner below has gun != chip and uneven splits.
+  // ── RunSignUp results-page read (Louisiana, Kiawah) ──────────────────
+  // These configs have no eventIds, so the public results page's own JSON
+  // search runs (columns by heading key: chip_time, never clock_time). The
+  // Puppeteer table read is only the fallback when that page cannot be read.
+  // Every runner below has gun != chip and uneven splits.
   {
     platform: 'runsignup',
     race: 'Louisiana Marathon',

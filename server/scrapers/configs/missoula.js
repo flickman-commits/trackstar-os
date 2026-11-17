@@ -9,6 +9,12 @@
  *   2023: M event=643879 rsid=389373  ·  H event=643880 rsid=389374
  *   2024: M event=762190 rsid=469183  ·  H event=762191 rsid=469182
  *   2025: M event=890492 rsid=562587  ·  H event=890493 rsid=562511
+ *   2026: M event=1029017 rsid=666091 ·  H event=1029018 rsid=666093
+ *     (read 2026-11-17 from /Rest/race/8029?most_recent_events_only=F, both
+ *     events start 6/28/2026, and get-result-sets per event). 2026 first ran
+ *     off Competitive Timing's own site before it synced here; that site's
+ *     races/missoula-marathon page now 404s, so 2026 reads RunSignUp too.
+ *     2026 chip times carry hundredths or tenths (Tyler O'Neill 2:55:06.9).
  *
  * Verified 2025 finishers (chip times rounded to the second, pace = chip ÷ dist):
  *   Marathon — Jacob Verrue, bib 178, 2:45:56, 6:20/mi (positive split:
@@ -21,7 +27,7 @@ export default {
   raceName: 'Missoula Marathon',
   tag: 'Missoula',
   raceId: 8029,
-  // Competitive Timing slug (used by the 2026 yearOverride below).
+  // Competitive Timing slug (no year reads it now; kept for its fixtures).
   raceSlug: 'missoula-marathon',
   location: 'Missoula, MT',
   raceDates: {
@@ -55,16 +61,12 @@ export default {
     2023: { marathon: 643879, half: 643880 },
     2024: { marathon: 762190, half: 762191 },
     2025: { marathon: 890492, half: 890493 },
+    2026: { marathon: 1029017, half: 1029018 },
   },
   resultSets: {
     2023: { marathon: 389373, half: 389374 },
     2024: { marathon: 469183, half: 469182 },
     2025: { marathon: 562587, half: 562511 },
+    2026: { marathon: 666091, half: 666093 },
   },
-  // 2026 hasn't synced to RunSignUp yet, but it's live on Competitive Timing's
-  // own site — pull it from there. Event ids resolve automatically off the
-  // raceSlug, so no per-event config is needed.
-  yearOverrides: {
-    2026: { platform: 'competitivetiming' },
-  }
 }
