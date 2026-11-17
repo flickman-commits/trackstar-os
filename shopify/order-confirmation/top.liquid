@@ -137,8 +137,8 @@
       .ts-pad { padding-left: 20px !important; padding-right: 20px !important; }
       .ts-outer { padding-left: 12px !important; padding-right: 12px !important; }
       .ts-card-pad { padding-left: 20px !important; padding-right: 20px !important; }
-      .ts-hero { padding-left: 12px !important; padding-right: 12px !important; }
-      .ts-hero-gap { height: 56px !important; line-height: 56px !important; }
+      .ts-hero { padding-top: 40px !important; padding-left: 12px !important; padding-right: 12px !important; }
+      .ts-hero-gap { height: 40px !important; line-height: 40px !important; }
       .section__cell > center > .container > tbody > tr > td, .section__cell > center > .container > tr > td { padding-left: 32px !important; padding-right: 32px !important; }
       .ts-in { padding-left: 0 !important; padding-right: 0 !important; }
       .ts-btn2 { display: block !important; width: 100% !important; padding: 0 0 10px !important; }
@@ -165,10 +165,10 @@
               Clients that drop background images (Outlook on Windows) show
               ink behind it instead, so the white type still reads.
             {% endcomment %}
-            <tr><td class="ts-hero" background="https://fast.trackstar.art/email/order-hero.jpg" bgcolor="#1A1A1A" style="background-color: #1A1A1A; background-image: url('https://fast.trackstar.art/email/order-hero.jpg'); background-image: linear-gradient(rgba(26,26,26,0.55), rgba(26,26,26,0) 45%, rgba(246,245,242,0) 70%, #F6F5F2 100%), url('https://fast.trackstar.art/email/order-hero.jpg'); background-size: cover; background-position: center center; padding: 28px 16px 0; text-align: center;">
+            <tr><td class="ts-hero" background="https://fast.trackstar.art/email/order-hero.jpg" bgcolor="#1A1A1A" style="background-color: #1A1A1A; background-image: url('https://fast.trackstar.art/email/order-hero.jpg'); background-image: linear-gradient(rgba(26,26,26,0.55), rgba(26,26,26,0) 45%, rgba(246,245,242,0) 70%, #F6F5F2 100%), url('https://fast.trackstar.art/email/order-hero.jpg'); background-size: cover; background-position: center center; padding: 52px 16px 0; text-align: center;">
               <a href="{{ shop.url }}"><img src="https://www.trackstar.art/cdn/shop/files/Trackstar_White_Logo_Cropped.png" alt="Trackstar" width="150" style="display: inline-block; width: 150px; height: auto; border: 0;"></a>
               <p class="ts-f14" style="margin: 8px 0 0; font-size: 14px; color: #FFFFFF;">Celebrating athletic achievement.</p>
-              <div class="ts-hero-gap" style="height: 80px; line-height: 80px; font-size: 1px;">&nbsp;</div>
+              <div class="ts-hero-gap" style="height: 52px; line-height: 52px; font-size: 1px;">&nbsp;</div>
               <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate; background-color: #FFFFFF; border-radius: 18px 18px 0 0;"><tr>
                 <td class="ts-card-pad" style="padding: 24px 28px 0; text-align: left;">
                   <table width="100%" cellpadding="0" cellspacing="0"><tr>
@@ -212,9 +212,9 @@
             {% comment %} Custom orders hinge on one email we send later: the mockup to approve. It comes from the support mailbox, which a new contact's inbox may file as spam. {% endcomment %}
             <tr><td class="ts-in" style="padding: 12px 0 4px;">
               <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate;"><tr>
-                <td class="ts-f15" style="padding: 14px 16px; background-color: #FEF4E6; border: 1px solid #F6D9B0; border-radius: 8px; font-size: 15px; line-height: 1.45; color: #1A1A1A;">
+                <td class="ts-f13" style="padding: 12px 16px; background-color: #FEF4E6; border: 1px solid #F6D9B0; border-radius: 8px; font-size: 13px; line-height: 1.45; color: #1A1A1A;">
                   <strong class="ts-f16" style="display: block; margin: 0 0 4px; font-size: 16px; font-weight: 700; color: #A8510C;">Don't miss your mockup</strong>
-                  Your mockup and approval link come from <a href="mailto:fast@trackstar.art" style="color: #1A1A1A !important; font-weight: 700; text-decoration: none;">fast@trackstar.art</a>. Add that address to your contacts now so it lands in your inbox, not spam. On iPhone, tap the address and choose Add to VIPs.
+                  Your mockup and approval link will be emailed to you from <a href="mailto:fast@trackstar.art" style="color: #1A1A1A !important; font-weight: 700; text-decoration: none;">fast@trackstar.art</a>. Please add that address to your contacts now so it lands in your inbox, not spam. On iPhone, tap the address and choose Add to VIPs.
                 </td>
               </tr></table>
             </td></tr>
@@ -227,7 +227,7 @@
                 {% assign whose = 'your' %}
                 {% for line in line_items %}{% for prop in line.properties %}{% if prop.first == 'Gift' and prop.last != blank %}{% assign whose = "your runner's" %}{% endif %}{% endfor %}{% endfor %}
                 {% if is_custom_order %}
-                  {% assign steps = 'Today~Order confirmed|Before ' | append: mockup_date | append: '~You receive design options from our team|On your approval~We print, frame & ship your order|7 to 10 days after approval~Delivered to ' | append: whose | append: ' doorstep' | split: '|' %}
+                  {% assign steps = 'Today~Order confirmed|Before ' | append: mockup_date | append: '~You’ll receive design options from our team via email|On your approval~We print, frame & ship your order|7 to 10 days after approval~Delivered to ' | append: whose | append: ' doorstep' | split: '|' %}
                 {% elsif has_preorder %}
                   {% assign race_day = preorder_note | remove: 'Ships after race day, ' | strip %}
                   {% assign steps = 'Today~Order confirmed|Until race day~Change the name, frame or address any time before the race|' | append: race_day | append: '~After race day, we add the official results and send your print to production|Next 7 days~Printed, framed and shipped from Kentucky|10 to 12 days after race day~Delivered to ' | append: whose | append: ' doorstep' | split: '|' %}
