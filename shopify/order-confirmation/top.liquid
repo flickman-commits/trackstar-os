@@ -79,13 +79,17 @@
     /* Shopify's summary and customer blocks sit on the page, not in the card.
        Inset them by the card's own padding so every left and right edge lines
        up, top to bottom. Subtotals start at the left edge too, not halfway in. */
-    .section__cell .container > tbody > tr > td, .section__cell .container > tr > td { padding-left: 28px !important; padding-right: 28px !important; }
+    .section__cell > center > .container > tbody > tr > td, .section__cell > center > .container > tr > td { padding-left: 44px !important; padding-right: 44px !important; }
+    /* Shopify nests a container inside the section's; only the outer one is inset. */
+    .container .container > tbody > tr > td, .container .container > tr > td { padding-left: 0 !important; padding-right: 0 !important; }
     .subtotal-spacer { width: 0 !important; padding: 0 !important; }
     .subtotal-table { width: 100% !important; }
     h3 { font-size: 20px !important; font-weight: 700 !important; color: #1A1A1A !important; margin: 36px 0 12px !important; line-height: 1.15 !important; }
     h4 { font-size: 14px !important; font-weight: 500 !important; color: #666666 !important; margin: 0 0 4px !important; }
-    .order-list__item { border-bottom: 1px solid #E0E0E0 !important; }
-    .order-list__item-title { font-size: 16px !important; font-weight: 700 !important; color: #1A1A1A !important; }
+    .order-list__item { border-bottom: 0 !important; }
+    .order-list__item__cell { padding: 6px 0 14px !important; }
+    .order-list__product-description-cell { padding-left: 14px !important; }
+    .order-list__item-title { font-size: 16px !important; font-weight: 700 !important; color: #1A1A1A !important; line-height: 1.3 !important; }
     .order-list__item-variant, .order-list__item-discount-allocation { font-size: 14px !important; color: #666666 !important; }
     .order-list__item-price { font-size: 16px !important; font-weight: 700 !important; color: #1A1A1A !important; }
     .order-list__item-original-price { font-size: 14px !important; color: #666666 !important; }
@@ -129,18 +133,25 @@
       .ts-mock-img { width: 72px !important; }
       .ts-btn-a { font-size: 18px !important; padding: 18px 32px !important; }
       .order-list__item-title { font-size: 18px !important; }
+      /* Smaller thumbnails so a line item fits a phone beside its price. */
+      .order-list__image-cell, .order-list__image-cell > * { width: 52px !important; }
+      .order-list__product-image { width: 48px !important; height: auto !important; }
+      .order-list__product-description-cell { padding-left: 10px !important; }
       .order-list__item-variant, .order-list__item-discount-allocation, .order-list__item-original-price { font-size: 16px !important; }
       .order-list__item-price { font-size: 18px !important; }
       .subtotal-line__title p, .subtotal-line__title span, .subtotal-line__value strong { font-size: 17px !important; }
       .subtotal-table--total .subtotal-line__title span, .subtotal-table--total .subtotal-line__value strong { font-size: 20px !important; }
       .customer-info__item p, .customer-info__item-content { font-size: 17px !important; }
+      /* One column of customer details on a phone. */
+      .customer-info__item { display: block !important; width: 100% !important; }
       h3 { font-size: 24px !important; }
       h4 { font-size: 16px !important; }
       .ts-pad { padding-left: 20px !important; padding-right: 20px !important; }
       .ts-outer { padding-left: 12px !important; padding-right: 12px !important; }
       .ts-card-pad { padding-left: 20px !important; padding-right: 20px !important; }
-      .ts-hero { padding-bottom: 120px !important; }
-      .section__cell .container > tbody > tr > td, .section__cell .container > tr > td { padding-left: 32px !important; padding-right: 32px !important; }
+      .ts-hero { padding-left: 12px !important; padding-right: 12px !important; }
+      .ts-hero-gap { height: 90px !important; line-height: 90px !important; }
+      .section__cell > center > .container > tbody > tr > td, .section__cell > center > .container > tr > td { padding-left: 32px !important; padding-right: 32px !important; }
       .ts-in { padding-left: 0 !important; padding-right: 0 !important; }
       .ts-btn2 { display: block !important; width: 100% !important; padding: 0 0 10px !important; }
       .ts-btn2 a { display: block !important; text-align: center !important; }
@@ -158,31 +169,37 @@
           <center>
           <table class="container" cellpadding="0" cellspacing="0">
             {% comment %}
-              The card: the home page's runner photo across the top, the white
-              wordmark and slogan over it, then everything about the order on
-              white. The photo is a cell background, so clients that drop
-              background images (Outlook on Windows) show the ink behind it,
-              and the white type still reads.
+              The photo sits behind the top of the card: the home page's runner
+              photo with the white wordmark and slogan over it, and the white
+              card starts on top of it (the card's top half is drawn inside the
+              photo cell, the rest continues below on the page, so they read as
+              one card). The photo fades into the page colour at the bottom.
+              Clients that drop background images (Outlook on Windows) show
+              ink behind it instead, so the white type still reads.
             {% endcomment %}
-            <tr><td class="ts-outer" style="padding: 24px 0 0;">
-            <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate; background-color: #FFFFFF; border-radius: 18px;">
-            <tr><td class="ts-hero" background="https://fast.trackstar.art/email/order-hero.jpg" bgcolor="#1A1A1A" style="background-color: #1A1A1A; background-image: url('https://fast.trackstar.art/email/order-hero.jpg'); background-image: linear-gradient(rgba(26,26,26,0.5), rgba(26,26,26,0) 65%), url('https://fast.trackstar.art/email/order-hero.jpg'); background-size: cover; background-position: center top; border-radius: 18px 18px 0 0; padding: 30px 24px 170px; text-align: center;">
+            <tr><td class="ts-hero" background="https://fast.trackstar.art/email/order-hero.jpg" bgcolor="#1A1A1A" style="background-color: #1A1A1A; background-image: url('https://fast.trackstar.art/email/order-hero.jpg'); background-image: linear-gradient(rgba(26,26,26,0.55), rgba(26,26,26,0) 45%, rgba(246,245,242,0) 70%, #F6F5F2 100%), url('https://fast.trackstar.art/email/order-hero.jpg'); background-size: cover; background-position: center top; padding: 32px 16px 0; text-align: center;">
               <a href="{{ shop.url }}"><img src="https://www.trackstar.art/cdn/shop/files/Trackstar_White_Logo_Cropped.png" alt="Trackstar" width="150" style="display: inline-block; width: 150px; height: auto; border: 0;"></a>
               <p class="ts-f14" style="margin: 8px 0 0; font-size: 14px; color: #FFFFFF;">Celebrating athletic achievement.</p>
-            </td></tr>
-            <tr><td class="ts-card-pad" style="padding: 24px 28px 30px;">
-            <table width="100%" cellpadding="0" cellspacing="0">
-
-            <tr><td class="ts-in" style="padding: 0 0 24px;">
-              <table width="100%" cellpadding="0" cellspacing="0"><tr>
-                <td style="vertical-align: middle;">
-                  <span class="ts-f13" style="display: inline-block; padding: 6px 12px; border: 1px solid #E0E0E0; border-radius: 999px; font-size: 13px; font-weight: 700; color: #1A1A1A; white-space: nowrap;"><span style="color: {% if has_pending_payment %}#F28C28{% else %}#2E7D5B{% endif %};">&#9679;</span>&nbsp; {% if has_pending_payment %}Payment pending{% else %}Order confirmed{% endif %}</span>
-                </td>
-                <td style="vertical-align: middle; text-align: right;">
-                  <span class="ts-f13" style="display: inline-block; padding: 6px 12px; border: 1px solid #E0E0E0; border-radius: 999px; font-size: 13px; font-weight: 700; color: #1A1A1A; white-space: nowrap;">Order {{ order_name }}</span>
+              <div class="ts-hero-gap" style="height: 130px; line-height: 130px; font-size: 1px;">&nbsp;</div>
+              <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate; background-color: #FFFFFF; border-radius: 18px 18px 0 0;"><tr>
+                <td class="ts-card-pad" style="padding: 24px 28px 0; text-align: left;">
+                  <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                    <td style="vertical-align: middle;">
+                      <span class="ts-f13" style="display: inline-block; padding: 6px 12px; border: 1px solid #E0E0E0; border-radius: 999px; font-size: 13px; font-weight: 700; color: #1A1A1A; white-space: nowrap;"><span style="color: {% if has_pending_payment %}#F28C28{% else %}#2E7D5B{% endif %};">&#9679;</span>&nbsp; {% if has_pending_payment %}Payment pending{% else %}Order confirmed{% endif %}</span>
+                    </td>
+                    <td style="vertical-align: middle; text-align: right;">
+                      <span class="ts-f13" style="display: inline-block; padding: 6px 12px; border: 1px solid #E0E0E0; border-radius: 999px; font-size: 13px; font-weight: 700; color: #1A1A1A; white-space: nowrap;">Order {{ order_name }}</span>
+                    </td>
+                  </tr></table>
                 </td>
               </tr></table>
             </td></tr>
+
+            {% comment %} The rest of the card, on the page. {% endcomment %}
+            <tr><td class="ts-outer" style="padding: 0 16px;">
+            <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate; background-color: #FFFFFF; border-radius: 0 0 18px 18px;">
+            <tr><td class="ts-card-pad" style="padding: 24px 28px 30px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
 
             <tr><td class="ts-in" style="padding: 0 0 8px;">
               <h1 class="ts-h1" style="margin: 0 0 14px; font-size: 40px; font-weight: 700; line-height: 1.02; color: #1A1A1A;">{% if customer.first_name %}Thank you,<br><span style="color: #4600D6;">{{ customer.first_name }}.</span>{% else %}Thank you<br><span style="color: #4600D6;">for your order.</span>{% endif %}</h1>
