@@ -93,7 +93,7 @@ written):
   the server.
 - Support: `triage_support` (write, the `support` capability) stars the urgent
   open conversations.
-- Finance: `finance_overview` and `payouts_owed` (read, admins only);
+- Finance: `finance_overview`, `payouts_owed` and `payouts_status` (Wise payments, read only; no tool sends money) (read, admins only);
   `timesheet_week` (read), `timesheet_log` and `timesheet_submit` (write), all
   with the `hours` capability, for the key holder's own hours;
   `timesheet_review` (admin scope, admins only) approves or rejects a week.

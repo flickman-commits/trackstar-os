@@ -30,4 +30,5 @@ export default {
   'finance/replacements': () => import('../../_routes/finance/replacements.js'),
   'finance/timesheets': () => import('../../_routes/finance/timesheets.js'),
   'finance/trybe': () => import('../../_routes/finance/trybe.js'),
+  'finance/wise': () => import('../../_routes/finance/wise.js'),
 }

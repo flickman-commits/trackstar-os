@@ -6,6 +6,7 @@ import CustomCounter, { RatesEditor } from '@/components/CustomCounter'
 import RacePayouts from '@/components/finance/RacePayouts'
 import PayPeriods from '@/components/finance/PayPeriods'
 import DesignPay from '@/components/finance/DesignPay'
+import { WisePayees } from '@/components/finance/WisePay'
 import { btnPrimary, btnSecondary, btnGhost, inputBase, segment, segmentGroup } from '@/lib/ui'
 import { financeApi, usd, todayET, monthLabel } from '@/lib/financeApi'
 import type { MonthLine, MonthPayouts, Rate } from '@/types/finance'
@@ -37,7 +38,7 @@ export default function Payouts() {
 const SECTIONS: { kind: MonthLine['kind']; title: string; blurb: string }[] = [
   { kind: 'customs', title: 'Customs', blurb: 'Per designer, at their rate. Paid the last day of the month.' },
   { kind: 'designer_fee', title: 'Head designer fee', blurb: 'The share of the month, from the scoreboard.' },
-  { kind: 'hours', title: 'Hours', blurb: 'By two-week pay period, paid the Sunday it ends.' },
+  { kind: 'hours', title: 'Hours', blurb: 'By two-week pay period, paid the Monday after it ends.' },
   { kind: 'race', title: 'Race partners', blurb: 'Revenue share due this month.' },
 ]
 
@@ -161,7 +162,8 @@ const BUCKETS = [
   { key: 'approved', label: 'Approved', note: 'Approved, not paid yet', cls: 'bg-blue-50 border-blue-200', text: 'text-blue-900', sub: 'text-blue-800/70' },
   { key: 'paid', label: 'Paid', note: 'Marked paid', cls: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-900', sub: 'text-emerald-800/70' },
 ] as const
-const bucketOf = (l: MonthLine) => (l.paid ? 'paid' : l.status === 'approved' ? 'approved' : 'in_progress')
+// A line on a Wise payment still on its way (or failed) counts as approved, not paid, until the money has left.
+const bucketOf = (l: MonthLine) => (l.paid && (!l.wise || l.wise.status === 'funded' || l.wise.status === 'sent') ? 'paid' : l.paid || l.status === 'approved' ? 'approved' : 'in_progress')
 
 function Totals({ data }: { data: MonthPayouts }) {
   const sums = { in_progress: 0, approved: 0, paid: 0 }
@@ -223,6 +225,7 @@ function Rates() {
           })}</tbody>
         </table>
       </div>
+      <WisePayees />
       <RatesEditor onSaved={load} />
     </div>
   )

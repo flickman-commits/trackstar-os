@@ -868,8 +868,19 @@ model User {
   // Rates). Null = not paid by the hour.
   hourlyRateCents       Int?
   // How Matt pays this person: wise | payoneer | other. Remembered from the
-  // last Pay on Finance > Payouts; only a label and a link, nothing moves money.
+  // last Pay on Finance > Payouts (Mark paid, or a send through Wise).
   payoutMethod          String?
+  // Their Wise recipient, added by Matt in Wise and linked on Finance >
+  // Payouts > Rates. Only Wise's id and what it reports back (the account
+  // holder's name, the currency and country); bank details stay in Wise.
+  wiseRecipientId       String?
+  wiseRecipientName     String?
+  payoutCurrency        String?   // CRC | COP | USD ..., the recipient's currency
+  payoutCountry         String?   // ISO country of the recipient account
+  // Tax form: W-9 (US) | W-8BEN (outside the US). Paying through Wise is
+  // blocked until one is on file; filing 1099s is out of scope.
+  taxFormType           String?
+  taxFormOnFile         Boolean   @default(false)
   isActive     Boolean   @default(true)
   // Bumped to sign this person out everywhere: on deactivation, a password
   // change or reset, or an admin's "Sign out everywhere". Carried in the
@@ -1719,15 +1730,19 @@ model PayRun {
   periodStart String    // YYYY-MM-DD
   periodEnd   String    // YYYY-MM-DD
   label       String
-  status      String    @default("draft") // draft | approved | paid
+  // draft | approved | paid, and for a send through Wise:
+  // sending | paid | partial (some transfers failed) | failed
+  status      String    @default("draft")
   note        String?
   createdById String?
   approvedAt  DateTime?
   paidAt      DateTime?
+  via         String?   // "wise" for a run sent through the Wise API
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  lines PayoutLine[]
+  lines     PayoutLine[]
+  transfers WiseTransfer[]
 
   @@index([kind, periodStart])
 }
@@ -1745,12 +1760,53 @@ model PayoutLine {
   note        String?
   paidAt      DateTime?
   paidRef     String?
+  // The Wise transfer that pays this line, when it went through Wise. A line
+  // with one is spoken for: it is never paid again by hand or by another send.
+  wiseTransferId String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  payRun PayRun @relation(fields: [payRunId], references: [id], onDelete: Cascade)
-  user   User   @relation("PayoutRecipient", fields: [userId], references: [id], onDelete: Restrict)
+  payRun       PayRun        @relation(fields: [payRunId], references: [id], onDelete: Cascade)
+  user         User          @relation("PayoutRecipient", fields: [userId], references: [id], onDelete: Restrict)
+  wiseTransfer WiseTransfer? @relation(fields: [wiseTransferId], references: [id], onDelete: SetNull)
 
+  @@index([userId, createdAt])
+  @@index([wiseTransferId])
+}
+
+// One payment to one person through the Wise API: their lines on a run, added
+// up, sent from the USD balance (server/domain/finance/wisePay.js). The
+// customerTransactionId is made and saved before Wise is called, and every
+// retry sends the same one, so Wise never makes a second transfer.
+model WiseTransfer {
+  id                    String    @id @default(cuid())
+  payRunId              String
+  userId                String
+  customerTransactionId String    @unique
+  sourceCents           Int       // USD cents sent
+  targetCurrency        String
+  wiseRecipientId       String
+  quoteId               String?
+  rate                  String?   // as Wise gave it, e.g. "502.31"
+  targetMinor           Int?      // estimated amount received, in hundredths of targetCurrency
+  feeCents              Int?
+  wiseTransferId        String?   @unique
+  // prepared (saved, Wise not called yet) | created (transfer made, not
+  // funded) | funded | sent (outgoing_payment_sent) | failed | cancelled
+  status                String    @default("prepared")
+  wiseState             String?   // Wise's own state, e.g. outgoing_payment_sent
+  failureReason         String?
+  traceId               String?   // Wise's x-trace-id from the last call, for Wise support
+  fundedAt              DateTime?
+  sentAt                DateTime?
+  checkedAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  payRun PayRun       @relation(fields: [payRunId], references: [id], onDelete: Restrict)
+  lines  PayoutLine[]
+
+  @@index([status])
   @@index([userId, createdAt])
 }
 

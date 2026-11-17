@@ -1,6 +1,6 @@
 /** Typed client for /api/finance/*, and the money and time spellings the pages share. */
 import { apiFetch } from '@/lib/api'
-import type { ForecastPayload, MonthPayouts, DailyPayload, DayInput, HoursPayload, OverviewPayload, PayRun, Person, RacePayout, RacePayoutsPayload, Rate, SyncInfo, Timesheet, TrybeCheck } from '@/types/finance'
+import type { ForecastPayload, MonthPayouts, WisePayee, WisePreview, WiseRecipient, WiseRun, DailyPayload, DayInput, HoursPayload, OverviewPayload, PayRun, Person, RacePayout, RacePayoutsPayload, Rate, SyncInfo, Timesheet, TrybeCheck } from '@/types/finance'
 
 export class FinanceApiError extends Error {}
 
@@ -39,6 +39,15 @@ export const financeApi = {
   payoutsMonth: (month: string) => request<MonthPayouts>(`/api/finance/payouts?month=${month}`),
   payoutRates: () => request<{ rates: Rate[] }>('/api/finance/payouts?rates=1'),
   setHourlyRate: (userId: string, cents: number | null) => post<{ rates: Rate[] }>('/api/finance/payouts', { action: 'set_hourly_rate', userId, cents }),
+  wisePreview: (q: { kind: 'period'; periodStart: string } | { kind: 'month'; month: string }) =>
+    request<WisePreview>(`/api/finance/wise?preview=${q.kind}&${q.kind === 'period' ? `periodStart=${q.periodStart}` : `month=${q.month}`}`),
+  wiseSend: (body: { kind: 'period' | 'month'; periodStart?: string; month?: string; userIds: string[] }) => post<WiseRun>('/api/finance/wise', { action: 'send', ...body }),
+  wiseTransfer: (action: 'retry' | 'release', id: string) => post<WiseRun>('/api/finance/wise', { action, id }),
+  wiseRefresh: () => post<{ checked: number; changed: unknown[] }>('/api/finance/wise', { action: 'refresh' }),
+  wisePayees: () => request<{ payees: WisePayee[] }>('/api/finance/wise?payees=1'),
+  wiseRecipients: () => request<{ recipients: WiseRecipient[] }>('/api/finance/wise?recipients=1'),
+  wiseLink: (userId: string, recipientId: string | null) => post<{ payees: WisePayee[] }>('/api/finance/wise', { action: 'link_recipient', userId, recipientId }),
+  wiseTaxForm: (userId: string, type: string | null, onFile: boolean) => post<{ payees: WisePayee[] }>('/api/finance/wise', { action: 'set_tax_form', userId, type, onFile }),
 }
 
 /** "$50,064" above a thousand dollars, "$845.00" under it; negatives in parentheses. */

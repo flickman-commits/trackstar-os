@@ -11,7 +11,7 @@
  *                 the same three states as customs.
  *   Hours         per person per week, grouped by two-week pay period
  *                 (periods.js payPeriodOf), in the month the period is paid
- *                 (its last Sunday), at the person's rate (frozen on
+ *                 (the Monday after it ends), at the person's rate (frozen on
  *                 approval). The week's own state: In progress (being
  *                 filled in, or sent back), Submitted, Approved; then paid
  *                 with Pay (payouts.js payPeriod).
@@ -42,7 +42,8 @@ const usdText = c => `$${(c / 100).toLocaleString('en-US', { minimumFractionDigi
 /** The month's run: where approved customs and fee lines are kept. */
 async function monthRun(month, { create = false, actor = null } = {}) {
   const periodStart = `${month}-01`
-  const found = await prisma.payRun.findFirst({ where: { kind: 'monthly', periodStart }, orderBy: { createdAt: 'asc' } })
+  // Not a run sent through Wise: those hold only what they paid.
+  const found = await prisma.payRun.findFirst({ where: { kind: 'monthly', periodStart, via: null }, orderBy: { createdAt: 'asc' } })
   if (found || !create) return found
   return prisma.payRun.create({ data: { kind: 'monthly', periodStart, periodEnd: lastOfMonth(periodStart), label: monthLabel(month), status: 'approved', approvedAt: new Date(), createdById: actor?.id || null } })
 }
@@ -62,16 +63,18 @@ export async function monthPayouts(month, { today = todayET() } = {}) {
     customCounter(month),
     loadRules(),
     prisma.user.findMany({ where: { isActive: true, OR: [{ role: 'head_designer' }, { extraRoles: { has: 'head_designer' } }] }, select: { id: true, firstName: true, lastName: true } }),
-    prisma.payoutLine.findMany({ where: { OR: prefixes.map(p => ({ sourceRef: { startsWith: p } })) }, select: { id: true, sourceRef: true, amountCents: true, paidAt: true, paidRef: true } }),
+    prisma.payoutLine.findMany({ where: { OR: prefixes.map(p => ({ sourceRef: { startsWith: p } })) }, select: { id: true, sourceRef: true, amountCents: true, paidAt: true, paidRef: true, wiseTransferId: true, wiseTransfer: { select: { id: true, status: true, failureReason: true, wiseTransferId: true } } } }),
     // Weeks of the pay periods paid this month: a period starts up to 13 days before the 1st.
     prisma.timesheet.findMany({ where: { weekStart: { gte: addDays(first, -13), lte: last } }, include: { user: { select: { id: true, firstName: true, lastName: true, role: true, hourlyRateCents: true, payoutMethod: true } }, entries: { select: { minutes: true, day: true, startedAt: true, endedAt: true } } }, orderBy: { weekStart: 'asc' } }),
   ])
-  const paidLines = new Map((await prisma.payoutLine.findMany({ where: { id: { in: sheets.map(t => t.payoutLineId).filter(Boolean) } }, select: { id: true, paidAt: true, paidRef: true } })).map(l => [l.id, l]))
+  const paidLines = new Map((await prisma.payoutLine.findMany({ where: { id: { in: sheets.map(t => t.payoutLineId).filter(Boolean) } }, select: { id: true, paidAt: true, paidRef: true, wiseTransfer: { select: { id: true, status: true, failureReason: true, wiseTransferId: true } } } })).map(l => [l.id, l]))
   const approvedBy = new Map(approvedLines.map(l => [l.sourceRef, l]))
   const stateFor = ref => (approvedBy.has(ref) ? 'approved' : payday ? 'submitted' : 'in_progress')
   const designerIds = [...new Set([...counter.designers.map(d => d.userId), ...heads.map(h => h.id)].filter(Boolean))]
   const methodOf = new Map((await prisma.user.findMany({ where: { id: { in: designerIds } }, select: { id: true, payoutMethod: true } })).map(u => [u.id, u.payoutMethod]))
-  const paidBits = done => ({ paid: Boolean(done?.paidAt), paidAt: done?.paidAt || null, paidRef: done?.paidRef || null })
+  // A line on a Wise payment is spoken for (paid, or on its way): never offered for Pay again.
+  const wiseOf = l => (l?.wiseTransfer ? { id: l.wiseTransfer.id, status: l.wiseTransfer.status, failureReason: l.wiseTransfer.failureReason, wiseTransferId: l.wiseTransfer.wiseTransferId } : null)
+  const paidBits = done => ({ paid: Boolean(done?.paidAt || done?.wiseTransferId), paidAt: done?.paidAt || null, paidRef: done?.paidRef || null, wise: wiseOf(done) })
   const lines = []
 
   for (const d of counter.designers) {
@@ -100,7 +103,7 @@ export async function monthPayouts(month, { today = todayET() } = {}) {
 
   for (const t of sheets) {
     const period = payPeriodOf(t.weekStart)
-    if (period.end < first || period.end > last) continue
+    if (period.payday < first || period.payday > last) continue
     if (t.user?.role === 'admin') continue // an admin testing the timer (Matt is not hourly) is never a payout line
     const minutes = summarizeEntries(t.entries).totalMinutes
     if (!minutes && t.status === 'draft') continue
@@ -110,7 +113,7 @@ export async function monthPayouts(month, { today = todayET() } = {}) {
       key: `timesheet:${t.id}`, kind: 'hours', userId: t.userId, name: name(t.user), timesheetId: t.id,
       status: t.status === 'submitted' ? 'submitted' : t.status === 'approved' ? 'approved' : 'in_progress',
       sentBack: t.status === 'rejected', paid: Boolean(t.payoutLineId),
-      paidAt: paidLine?.paidAt || null, paidRef: paidLine?.paidRef || null,
+      paidAt: paidLine?.paidAt || null, paidRef: paidLine?.paidRef || null, wise: wiseOf(paidLine),
       period, weekStart: t.weekStart, minutes, rateCents: rate, payoutMethod: t.user.payoutMethod || null,
       amountCents: rate == null ? null : Math.round((minutes * rate) / 60),
       detail: `Week of ${dayLabel(t.weekStart)}: ${hoursText(minutes)}${rate == null ? ', no rate set' : ` at ${usdText(rate)}/h`}`,

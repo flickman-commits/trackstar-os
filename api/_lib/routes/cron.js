@@ -13,4 +13,5 @@ export default {
   'cron/support-playbook': () => import('../../_routes/cron/support-playbook.js'),
   'cron/support-triage': () => import('../../_routes/cron/support-triage.js'),
   'cron/watchdog': () => import('../../_routes/cron/watchdog.js'),
+  'cron/wise-status': () => import('../../_routes/cron/wise-status.js'),
 }

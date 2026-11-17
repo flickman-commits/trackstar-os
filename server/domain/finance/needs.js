@@ -13,7 +13,7 @@
 import prisma from '../../db.js'
 import { unpaidWeeks, unpaidMonths } from './payouts.js'
 import { listRacePayouts, RACE_PAYOUTS_CACHE } from './racePayouts.js'
-import { dayLabel, monthOf, payPeriodOf, lastOfMonth, monthLabel } from './periods.js'
+import { dayLabel, monthOf, payPeriodOf, lastOfMonth, monthLabel, addDays } from './periods.js'
 
 const RACE_SOON_DAYS = 7
 const usd = c => `$${(c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -24,8 +24,8 @@ const card = c => ({ key: c.key || `${c.kind}:${c.title}`, ...c, text: `${c.titl
 const within = (p, ms, fallback) => Promise.race([p, new Promise(r => setTimeout(() => r(fallback), ms))])
 
 /**
- * The team's pay: hourly people are paid every two weeks, on the Sunday a
- * period ends (periods.js payPeriodOf), each on their own from Finance >
+ * The team's pay: hourly people are paid every two weeks, on the Monday after
+ * a period ends (periods.js payPeriodOf), each on their own from Finance >
  * Payouts. Approved, unpaid weeks of a period whose payday has come are due;
  * the period running now is coming up.
  */
@@ -50,12 +50,12 @@ async function teamPay(today) {
     periods.set(p.start, g)
   }
   for (const g of [...periods.values()].sort((a, b) => a.start.localeCompare(b.start))) {
-    const due = today >= g.end
+    const due = today >= g.payday
     const people = [...g.byPerson].map(([n, m]) => `${n.split(' ')[0]} ${hrs(m)}`).join(', ')
-    const to = `/finance/payouts?month=${monthOf(g.end)}`
+    const to = `/finance/payouts?month=${monthOf(g.payday)}`
     out.push(card(due
-      ? { key: `payouts:${g.start}:due`, kind: 'payouts', tone: 'due', title: 'Pay the team', detail: `Hours for ${dayLabel(g.start)} to ${dayLabel(g.end)}: ${people}`, cents: g.cents, due: g.end, action: { label: 'Pay', to } }
-      : { key: `payouts:${g.start}:soon`, kind: 'payouts', tone: 'soon', title: 'Team pay coming up', detail: `${people} approved so far. Payday is ${dayLabel(g.end)}.`, cents: g.cents, due: g.end, action: { label: 'See payouts', to } }))
+      ? { key: `payouts:${g.start}:due`, kind: 'payouts', tone: 'due', title: 'Pay the team', detail: `Hours for ${dayLabel(g.start)} to ${dayLabel(g.end)}: ${people}`, cents: g.cents, due: g.payday, action: { label: 'Pay', to } }
+      : { key: `payouts:${g.start}:soon`, kind: 'payouts', tone: 'soon', title: 'Team pay coming up', detail: `${people} approved so far. Payday is ${dayLabel(g.payday)}.`, cents: g.cents, due: g.payday, action: { label: 'See payouts', to } }))
   }
   return out
 }
@@ -106,7 +106,7 @@ async function racePay(today) {
 async function monthlyPay(today) {
   const [months, approved] = await Promise.all([
     unpaidMonths({ today, back: 2, includeCurrent: today === lastOfMonth(today) }).catch(() => []),
-    prisma.payoutLine.findMany({ where: { paidAt: null, OR: [{ sourceRef: { startsWith: 'customs:' } }, { sourceRef: { startsWith: 'fee:' } }] }, select: { sourceRef: true, amountCents: true, user: { select: { firstName: true } } } }),
+    prisma.payoutLine.findMany({ where: { paidAt: null, wiseTransferId: null, OR: [{ sourceRef: { startsWith: 'customs:' } }, { sourceRef: { startsWith: 'fee:' } }] }, select: { sourceRef: true, amountCents: true, user: { select: { firstName: true } } } }),
   ])
   const byMonth = new Map()
   const add = (month, who, cents) => {
@@ -124,17 +124,38 @@ async function monthlyPay(today) {
   }))
 }
 
+/**
+ * Wise payments that need Matt: failed before money moved, came back from the
+ * bank, or stuck without an answer from Wise for over an hour. One card; it
+ * changes key (and shows again) when the set of payments changes.
+ */
+async function wiseTrouble() {
+  const hourAgo = new Date(Date.now() - 3600000)
+  const ts = await prisma.wiseTransfer.findMany({
+    where: { OR: [{ status: { in: ['failed', 'returned'] } }, { status: { in: ['prepared', 'created'] }, updatedAt: { lt: hourAgo } }] },
+    select: { id: true, status: true, sourceCents: true, userId: true, payRun: { select: { kind: true, periodStart: true, periodEnd: true } } }, orderBy: { createdAt: 'asc' },
+  }).catch(() => [])
+  if (!ts.length) return []
+  const users = new Map((await prisma.user.findMany({ where: { id: { in: ts.map(t => t.userId) } }, select: { id: true, firstName: true } })).map(u => [u.id, u.firstName]))
+  const word = { failed: 'failed', returned: 'came back', prepared: 'stuck', created: 'stuck' }
+  return [card({
+    key: `wise:${ts.map(t => `${t.id}${t.status}`).join(',')}`, kind: 'wise', tone: 'due', title: ts.length === 1 ? 'A Wise payment needs you' : `${ts.length} Wise payments need you`,
+    detail: ts.map(t => `${users.get(t.userId) || 'Someone'} ${usd(t.sourceCents)} ${word[t.status]}`).join(', '), cents: ts.reduce((n, t) => n + t.sourceCents, 0),
+    action: { label: 'Retry or release', to: `/finance/payouts?month=${monthOf(ts[0].payRun.kind === 'hours' ? addDays(ts[0].payRun.periodEnd, 1) : ts[0].payRun.periodStart)}` },
+  })]
+}
+
 export async function moneyNeeds({ today }) {
-  const [submitted, team, races, monthly] = await Promise.all([
+  const [submitted, team, races, monthly, wise] = await Promise.all([
     prisma.timesheet.findMany({ where: { status: 'submitted' }, select: { weekStart: true, user: { select: { firstName: true } } }, orderBy: { weekStart: 'asc' } }),
-    teamPay(today), racePay(today), monthlyPay(today),
+    teamPay(today), racePay(today), monthlyPay(today), wiseTrouble(),
   ])
   const out = []
   if (submitted.length) {
     const who = [...new Set(submitted.map(t => t.user.firstName))].join(', ')
     out.push(card({ key: `timesheets:${submitted.map(t => `${t.user.firstName}${new Date(t.weekStart).toISOString().slice(0, 10)}`).join(',')}`, kind: 'timesheets', tone: 'due', title: `Approve ${submitted.length} week${submitted.length === 1 ? '' : 's'} of hours`, detail: `${who} submitted, oldest the week of ${dayLabel(submitted[0].weekStart)}.`, action: { label: 'Review timesheets', to: '/finance/timesheets' } }))
   }
-  out.push(...team, ...races, ...monthly)
+  out.push(...wise, ...team, ...races, ...monthly)
   const rank = { due: 0, soon: 1, alert: 2 }
   return out.sort((a, b) => rank[a.tone] - rank[b.tone] || String(a.due || '9999').localeCompare(String(b.due || '9999')))
 }

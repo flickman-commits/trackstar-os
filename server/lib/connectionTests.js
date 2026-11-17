@@ -34,6 +34,12 @@ const TESTS = {
     if (!res.ok) throw new Error(`Artelo answered ${res.status}`)
     return 'Orders API answering'
   },
+  async wise() {
+    const { whoAmI, usdBalanceCents, wiseEnv } = await import('../services/wise.js')
+    const me = await whoAmI()
+    const cents = await usdBalanceCents()
+    return `${wiseEnv() === 'production' ? 'Production' : 'Sandbox'}: ${me.name}, USD balance ${cents == null ? 'none' : `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}`
+  },
   async gelato() {
     const { gelatoOrders } = await import('../services/gelato.js')
     const orders = await gelatoOrders({ limit: 1 })

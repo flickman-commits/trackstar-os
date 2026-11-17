@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { ToolError } from '../server.js'
 import { overview } from '../../../domain/finance/overview.js'
 import { owed } from '../../../domain/finance/payouts.js'
+import { latestRuns } from '../../../domain/finance/wisePay.js'
 import * as hours from '../../../domain/finance/timesheets.js'
 import { todayET, mondayOf, isValidDay, dayLabel } from '../../../domain/finance/periods.js'
 
@@ -48,6 +49,20 @@ export const financeTools = [
         total: usd(o.totalCents),
         hours: o.hours.map(p => ({ name: p.name, hours: h(p.minutes), amount: usd(p.amountCents), weeks: p.weeks.map(w => `${dayLabel(w.weekStart)}: ${h(w.minutes)}h at ${usd(w.rateCents)}`) })),
         months: o.months.map(m => ({ month: m.label, total: usd(m.totalCents), lines: m.items.map(i => ({ name: i.name, kind: i.kind, amount: usd(i.amountCents), note: i.note })) })),
+      }
+    },
+  },
+  {
+    name: 'payouts_status', title: 'Wise payouts status', scope: 'read', adminOnly: true, readOnly: true,
+    description: 'The latest team payments sent through Wise and where each transfer is: sending, funded (money left the balance), sent (paid out), failed, returned or released. Read only: there is no tool that sends or funds a payment; Matt sends them from Finance > Payouts.',
+    input: { runs: z.number().int().min(1).max(10).default(3) },
+    handler: async ({ runs }) => {
+      const list = await latestRuns({ take: runs })
+      return {
+        runs: list.map(r => ({
+          label: r.label, status: r.status, total: usd(r.totalCents), started: r.createdAt, paidAt: r.paidAt,
+          transfers: r.transfers.map(t => ({ name: t.name, amount: usd(t.cents), currency: t.currency, status: t.status, wiseState: t.wiseState, wiseTransferId: t.wiseTransferId, problem: t.failureReason })),
+        })),
       }
     },
   },

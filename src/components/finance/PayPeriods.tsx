@@ -7,10 +7,11 @@ import { btnPrimary, btnGhost, fieldLabel, modalCancel, modalChip, modalInput, m
 import { financeApi, usd, dayLabel } from '@/lib/financeApi'
 import type { MonthLine, PayoutMethod } from '@/types/finance'
 import { StatusChip, num } from './bits'
+import { WiseActions, WiseChip, WiseSendButton } from './WisePay'
 
 /**
- * Hours on Finance > Payouts, by two-week pay period (Monday to the Sunday
- * it is paid; server/domain/finance/periods.js payPeriodOf). One row per
+ * Hours on Finance > Payouts, by two-week pay period (Monday to Sunday, paid
+ * the Monday after; server/domain/finance/periods.js payPeriodOf). One row per
  * person per period: their weeks, the total, and the next step: approve the
  * submitted weeks, then on payday Pay, which records the payment made in
  * Wise or Payoneer (nothing moves money from here).
@@ -25,7 +26,7 @@ const hm = (m = 0) => { const h = Math.floor(m / 60), r = Math.round(m % 60); re
 const rateText = (c?: number | null) => (c == null ? 'no rate set' : `$${(c / 100).toFixed(c % 100 ? 2 : 0)}/h`)
 
 type Person = { userId: string; name: string; weeks: MonthLine[]; cents: number; method: PayoutMethod | null }
-type Period = { start: string; end: string; people: Person[]; cents: number }
+type Period = { start: string; end: string; payday: string; people: Person[]; cents: number }
 
 function group(lines: MonthLine[]): Period[] {
   const periods = new Map<string, Period>()
@@ -52,15 +53,18 @@ export default function PayPeriods({ lines, today, busy, onApprove, onUndo, onCh
   return (
     <>
       {periods.map(p => {
-        const payday = today >= p.end
+        const payday = today >= p.payday
         const allPaid = p.people.every(x => x.weeks.every(w => w.paid))
         return (
           <div key={p.start} className="border-b border-border-gray last:border-0">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-2 bg-subtle-gray/60">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-subtle-gray/60">
               <span className="text-xs font-semibold text-off-black">{dayLabel(p.start)} to {dayLabel(p.end)}
-                <span className={`ml-2 font-normal ${!allPaid && payday ? 'text-amber-700' : 'text-off-black/45'}`}>{allPaid ? 'Paid' : today === p.end ? 'Payday today' : payday ? `Payday was ${dayLabel(p.end, 'weekday')}` : `Payday ${dayLabel(p.end, 'weekday')}`}</span>
+                <span className={`ml-2 font-normal ${!allPaid && payday ? 'text-amber-700' : 'text-off-black/45'}`}>{allPaid ? 'Paid' : today === p.payday ? 'Payday today' : payday ? `Payday was ${dayLabel(p.payday, 'weekday')}` : `Payday ${dayLabel(p.payday, 'weekday')}`}</span>
               </span>
-              <span className="text-xs font-semibold tabular-nums">{usd(p.cents)}</span>
+              <span className="inline-flex items-center gap-3">
+                {payday && p.people.some(x => x.weeks.some(w => !w.paid && w.status === 'approved')) && <WiseSendButton target={{ kind: 'period', periodStart: p.start }} title={`${dayLabel(p.start)} to ${dayLabel(p.end)}`} onSent={onChanged} />}
+                <span className="text-xs font-semibold tabular-nums">{usd(p.cents)}</span>
+              </span>
             </div>
             <table className="w-full text-xs"><tbody>
               {p.people.map(person => {
@@ -68,6 +72,8 @@ export default function PayPeriods({ lines, today, busy, onApprove, onUndo, onCh
                 const submitted = unpaid.filter(w => w.status === 'submitted')
                 const open = unpaid.filter(w => w.status === 'in_progress')
                 const paidWeek = person.weeks.find(w => w.paid)
+                const wise = person.weeks.find(w => w.wise && w.wise.status !== 'cancelled')?.wise || null
+                const wiseDone = wise && (wise.status === 'funded' || wise.status === 'sent')
                 const state = !unpaid.length ? 'paid' : submitted.length ? 'submitted' : open.length ? 'in_progress' : 'approved'
                 return (
                   <tr key={person.userId} className="border-b border-border-gray/60 last:border-0">
@@ -75,12 +81,14 @@ export default function PayPeriods({ lines, today, busy, onApprove, onUndo, onCh
                     <td className="py-2 text-off-black/65">{person.weeks.map(w => `${dayLabel(w.weekStart || '')} week ${hm(w.minutes)}`).join(', ')} at {rateText(person.weeks[0]?.rateCents)}</td>
                     <td className={`py-2 px-3 ${num} font-semibold whitespace-nowrap w-28`}>{usd(person.cents)}</td>
                     <td className="py-2 whitespace-nowrap w-40">
-                      <StatusChip status={state} />
+                      {wise && !wiseDone ? <WiseChip status={wise.status} /> : <StatusChip status={state} />}
                       {state === 'paid' && paidWeek?.paidRef && <span className="ml-1.5 text-[11px] text-off-black/50">{paidWeek.paidRef}</span>}
+                      {wise?.failureReason && !wiseDone && <span className="block text-[11px] text-rose-700 whitespace-normal">{wise.failureReason}</span>}
                       {person.weeks.some(w => w.sentBack) && <span className="ml-1.5 text-[11px] text-rose-700">sent back</span>}
                     </td>
                     <td className="py-2 pr-4 whitespace-nowrap text-right w-44">
-                      {state === 'submitted' ? <button onClick={() => onApprove(submitted)} disabled={busy} className={btnPrimary}><Check className="w-3.5 h-3.5" /> Approve{submitted.length > 1 ? ` ${submitted.length} weeks` : ''}</button>
+                      {wise && !wiseDone ? <WiseActions wise={wise} onChanged={onChanged} />
+                        : state === 'submitted' ? <button onClick={() => onApprove(submitted)} disabled={busy} className={btnPrimary}><Check className="w-3.5 h-3.5" /> Approve{submitted.length > 1 ? ` ${submitted.length} weeks` : ''}</button>
                         : state === 'in_progress' ? <Link to="/finance/timesheets" className="text-[11px] text-blue-600 hover:underline">Timesheets</Link>
                         : state === 'approved' ? (
                           <span className="inline-flex items-center gap-1">

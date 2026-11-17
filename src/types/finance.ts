@@ -68,10 +68,38 @@ export type MonthLine = {
   key: string; kind: 'customs' | 'designer_fee' | 'hours' | 'race'; name: string; detail: string; amountCents: number | null; status: PayoutState
   paid?: boolean; sentBack?: boolean; userId?: string; timesheetId?: string; dealId?: string
   // Hours only: the two-week pay period the week is paid in, and how it was paid.
-  period?: { start: string; end: string }; weekStart?: string; minutes?: number; rateCents?: number | null
+  period?: { start: string; end: string; payday: string }; weekStart?: string; minutes?: number; rateCents?: number | null
   paidAt?: string | null; paidRef?: string | null; payoutMethod?: PayoutMethod | null
+  /** The Wise payment this line is on, if it went through Wise. */
+  wise?: { id: string; status: WiseStatus; failureReason: string | null; wiseTransferId: string | null } | null
 }
 export type PayoutMethod = 'wise' | 'payoneer' | 'other'
+
+// ── Paying through Wise (server/domain/finance/wisePay.js) ──
+export type WiseStatus = 'prepared' | 'created' | 'funded' | 'sent' | 'failed' | 'returned' | 'cancelled'
+export type WisePreviewPerson = {
+  userId: string; name: string; cents: number; currency: string | null; country: string | null
+  recipientId: string | null; recipientName: string | null; taxFormType: string | null; taxFormOnFile: boolean
+  items: { kind: string; label: string; amountCents: number }[]
+  blockers: string[]
+  quote: { rate: string | null; targetMinor: number | null; feeCents: number | null; expiresAt: string | null } | null
+}
+export type WisePreview = {
+  kind: 'period' | 'month'; key: string; label: string; env: 'sandbox' | 'production'
+  balanceCents: number | null; balanceError: string | null; totalCents: number; shortfallCents: number | null
+  people: WisePreviewPerson[]
+}
+export type WiseTransfer = {
+  id: string; userId: string; name: string | null; status: WiseStatus; wiseState: string | null; cents: number; currency: string
+  targetMinor: number | null; rate: string | null; feeCents: number | null; wiseTransferId: string | null; failureReason: string | null
+  traceId: string | null; fundedAt: string | null; sentAt: string | null; createdAt: string
+}
+export type WiseRun = { runId: string; label: string; status: string; totalCents: number; transfers: WiseTransfer[]; createdAt?: string; paidAt?: string | null }
+export type WisePayee = {
+  userId: string; name: string; role: string; recipientId: string | null; recipientName: string | null
+  currency: string | null; country: string | null; taxFormType: string | null; taxFormOnFile: boolean
+}
+export type WiseRecipient = { id: string; name: string; currency: string | null; country: string | null; type: string | null; summary: string; problem: string | null }
 export type MonthPayouts = {
   month: string; label: string; closed: boolean; current: boolean; today: string; designPayday: string; previous: string; next: string | null; lines: MonthLine[]
   totals: { totalCents: number; inProgressCents: number; submittedCents: number; approvedCents: number; customsCents: number; designerFeeCents: number; hoursCents: number; racesCents: number; unpriced: number }

@@ -5,6 +5,7 @@ import { financeApi, usd, dayLabel } from '@/lib/financeApi'
 import type { MonthLine, PayoutMethod } from '@/types/finance'
 import { card, StatusChip, num } from './bits'
 import { PayModal } from './PayPeriods'
+import { WiseActions, WiseChip, WiseSendButton } from './WisePay'
 
 /**
  * The design team's pay for the month, one row per designer: their customs
@@ -41,23 +42,30 @@ export default function DesignPay({ month, label, lines, today, payday, onChange
             {allPaid ? `Paid for ${label}` : today === payday ? 'Payday today, for the whole month' : isPayday ? `Payday was ${dayLabel(payday, 'weekday')}` : `Paid ${dayLabel(payday, 'weekday')}, the last day of the month`}
           </span>
         </div>
-        <span className="text-sm font-semibold tabular-nums">{usd(list.reduce((n, d) => n + total(d.lines), 0))}</span>
+        <span className="inline-flex items-center gap-3">
+          {isPayday && list.some(d => d.lines.some(l => !l.paid)) && <WiseSendButton target={{ kind: 'month', month }} title={label} onSent={onChanged} />}
+          <span className="text-sm font-semibold tabular-nums">{usd(list.reduce((n, d) => n + total(d.lines), 0))}</span>
+        </span>
       </div>
       <table className="w-full text-xs"><tbody>
         {list.map(d => {
           const unpaid = d.lines.filter(l => !l.paid)
           const paidLine = d.lines.find(l => l.paid)
+          const wise = d.lines.find(l => l.wise && l.wise.status !== 'cancelled')?.wise || null
+          const wiseOpen = wise && wise.status !== 'funded' && wise.status !== 'sent'
           return (
             <tr key={d.userId} className="border-b border-border-gray/60 last:border-0">
               <td className="px-4 py-2 font-medium whitespace-nowrap w-44">{d.name}</td>
               <td className="py-2 text-off-black/65">{what(d.lines)}</td>
               <td className={`py-2 px-3 ${num} font-semibold whitespace-nowrap w-28`}>{usd(total(d.lines))}</td>
               <td className="py-2 whitespace-nowrap w-40">
-                <StatusChip status={!unpaid.length ? 'paid' : isPayday ? 'submitted' : 'in_progress'} />
+                {wiseOpen ? <WiseChip status={wise.status} /> : <StatusChip status={!unpaid.length ? 'paid' : isPayday ? 'submitted' : 'in_progress'} />}
+                {wiseOpen && wise.failureReason && <span className="block text-[11px] text-rose-700 whitespace-normal">{wise.failureReason}</span>}
                 {!unpaid.length && paidLine?.paidRef && <span className="ml-1.5 text-[11px] text-off-black/50">{paidLine.paidRef}</span>}
               </td>
               <td className="py-2 pr-4 whitespace-nowrap text-right w-44">
-                {unpaid.length > 0 && isPayday && <button onClick={() => setPaying(d)} className={btnPrimary}><Send className="w-3.5 h-3.5" /> Pay {usd(total(unpaid))}</button>}
+                {wiseOpen && <WiseActions wise={wise} onChanged={onChanged} />}
+                {!wiseOpen && unpaid.length > 0 && isPayday && <button onClick={() => setPaying(d)} className={btnPrimary}><Send className="w-3.5 h-3.5" /> Pay {usd(total(unpaid))}</button>}
               </td>
             </tr>
           )

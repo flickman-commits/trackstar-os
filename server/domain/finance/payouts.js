@@ -6,7 +6,8 @@
  * covers a closed month's customs per designer (the custom counter) and the
  * head designer's fee (the scoreboard's designer fee for the month). Lines
  * can also be typed by hand (bonus, reimbursement). A run goes draft ->
- * approved -> paid; Mark paid records when and how. Nothing moves money.
+ * approved -> paid; Mark paid records when and how. Nothing here moves
+ * money; paying through the Wise API is wisePay.js.
  *
  * A source (a timesheet, a designer's month) can be on one line only:
  * Timesheet.payoutLineId and PayoutLine.sourceRef are unique.
@@ -202,9 +203,9 @@ export const METHOD_LABEL = { wise: 'Wise', payoneer: 'Payoneer', other: 'Other'
  */
 export async function payPeriod({ userId, periodStart, method, paidRef = '', actor = null, today = todayET() }) {
   if (!isValidDay(periodStart)) throw new PayoutError('Which pay period?')
-  const { start, end } = payPeriodOf(periodStart)
+  const { start, end, payday } = payPeriodOf(periodStart)
   if (start !== periodStart) throw new PayoutError('That is not the first day of a pay period')
-  if (today < end) throw new PayoutError(`Payday for this period is ${dayLabel(end)}`)
+  if (today < payday) throw new PayoutError(`Payday for this period is ${dayLabel(payday)}`)
   if (!PAYOUT_METHODS.includes(method)) throw new PayoutError('Pick how you paid: Wise, Payoneer or other')
   const user = await prisma.user.findUnique({ where: { id: String(userId || '') }, select: USER_SELECT })
   if (!user) throw new PayoutError('No such person', 404)
@@ -232,8 +233,14 @@ async function runOr404(id) {
   return r
 }
 
+/** A run sent through Wise, or holding a line on a Wise payment, changes only through Wise (wisePay.js). */
+function notWise(r) {
+  if (r.via === 'wise' || r.lines?.some(l => l.wiseTransferId)) throw new PayoutError('This run is paid through Wise: retry or release it on Payouts instead', 409)
+}
+
 export async function approveRun(id) {
   const r = await runOr404(id)
+  notWise(r)
   if (r.status !== 'draft') throw new PayoutError(`This run is ${r.status}`)
   if (!r.lines.length) throw new PayoutError('Nothing on this run')
   return shapeRun(await prisma.payRun.update({ where: { id }, data: { status: 'approved', approvedAt: new Date() }, include: RUN_INCLUDE }))
@@ -241,6 +248,7 @@ export async function approveRun(id) {
 
 export async function markPaid(id, { paidRef = '', paidAt = null } = {}) {
   const r = await runOr404(id)
+  notWise(r)
   if (r.status === 'paid') throw new PayoutError('Already paid')
   const at = paidAt ? new Date(paidAt) : new Date()
   if (Number.isNaN(at.getTime())) throw new PayoutError('paidAt is not a date')
@@ -254,6 +262,7 @@ export async function markPaid(id, { paidRef = '', paidAt = null } = {}) {
 
 export async function deleteRun(id) {
   const r = await runOr404(id)
+  notWise(r)
   if (r.status === 'paid') throw new PayoutError('A paid run stays on the record')
   await prisma.$transaction([
     prisma.timesheet.updateMany({ where: { payoutLineId: { in: r.lines.map(l => l.id) } }, data: { payoutLineId: null } }),
@@ -264,6 +273,7 @@ export async function deleteRun(id) {
 
 export async function addLine(runId, { userId, kind, amountCents, note }) {
   const r = await runOr404(runId)
+  if (r.via === 'wise') notWise(r)
   if (r.status === 'paid') throw new PayoutError('A paid run cannot change')
   if (!LINE_KINDS.includes(kind) || kind === 'hours' || kind === 'customs') throw new PayoutError('kind must be designer_fee, bonus, reimbursement or other')
   if (!(Number.isInteger(amountCents) && amountCents !== 0 && Math.abs(amountCents) < 1e9)) throw new PayoutError('amount must be whole cents')
@@ -277,6 +287,7 @@ export async function deleteLine(lineId) {
   const l = await prisma.payoutLine.findUnique({ where: { id: lineId }, include: { payRun: true } })
   if (!l) throw new PayoutError('No such line', 404)
   if (l.payRun.status === 'paid') throw new PayoutError('A paid run cannot change')
+  if (l.wiseTransferId || l.payRun.via === 'wise') throw new PayoutError('This line is on a Wise payment: release it on Payouts instead', 409)
   await prisma.$transaction([
     prisma.timesheet.updateMany({ where: { payoutLineId: lineId }, data: { payoutLineId: null } }),
     prisma.payoutLine.delete({ where: { id: lineId } }),
