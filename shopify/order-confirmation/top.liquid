@@ -65,15 +65,16 @@
       font-family: Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
       letter-spacing: -0.04em !important;
     }
-    body, .body { background-color: #FFFFFF !important; color: #1A1A1A !important; }
-    .body > tbody > tr > td { background-color: #FFFFFF !important; }
+    /* Off-white page, one white card for the news, ink footer: the site's panel system. */
+    body, .body { background-color: #F6F5F2 !important; color: #1A1A1A !important; }
+    .body > tbody > tr > td { background-color: #F6F5F2 !important; }
     .container { width: 560px; max-width: 100%; }
     /* Shopify inlines this sheet and sets border-collapse: collapse on every table, which squares off bordered cells in Apple Mail. */
     .ts-round { border-collapse: separate !important; }
     a, a:hover, a:active, a:visited { color: #4600D6 !important; }
 
     /* Shopify's own blocks, restyled. */
-    .header__cell, .content__cell, .section__cell, .footer__cell { padding: 0 !important; background: #FFFFFF !important; border: 0 !important; }
+    .header__cell, .content__cell, .section__cell, .footer__cell { padding: 0 !important; background: transparent !important; border: 0 !important; }
     .row.section { border-top: 0 !important; }
     h3 { font-size: 20px !important; font-weight: 700 !important; color: #1A1A1A !important; margin: 36px 0 12px !important; line-height: 1.15 !important; }
     h4 { font-size: 14px !important; font-weight: 500 !important; color: #666666 !important; margin: 0 0 4px !important; }
@@ -116,7 +117,7 @@
       .ts-f13, .ts-f14 { font-size: 16px !important; }
       .ts-f15, .ts-f16 { font-size: 18px !important; line-height: 1.4 !important; }
       .ts-f22 { font-size: 26px !important; }
-      .ts-h1 { font-size: 32px !important; line-height: 1.1 !important; }
+      .ts-h1 { font-size: 40px !important; line-height: 1.02 !important; }
       .ts-mock { width: 72px !important; }
       .ts-photo-cell { width: 72px !important; }
       .ts-mock-img { width: 72px !important; }
@@ -130,6 +131,11 @@
       h3 { font-size: 24px !important; }
       h4 { font-size: 16px !important; }
       .ts-pad { padding-left: 20px !important; padding-right: 20px !important; }
+      .ts-outer { padding-left: 12px !important; padding-right: 12px !important; }
+      .ts-card-pad { padding-left: 20px !important; padding-right: 20px !important; }
+      .ts-in { padding-left: 0 !important; padding-right: 0 !important; }
+      .ts-btn2 { display: block !important; width: 100% !important; padding: 0 0 10px !important; }
+      .ts-btn2 a { display: block !important; text-align: center !important; }
       .ts-btn { display: block !important; width: 100% !important; }
       .ts-btn a { display: block !important; text-align: center !important; }
       .ts-photo { width: 72px !important; height: 72px !important; }
@@ -143,15 +149,31 @@
         <td>
           <center>
           <table class="container" cellpadding="0" cellspacing="0">
-            <tr><td class="ts-pad" style="padding: 36px 0 18px; border-bottom: 1px solid #E0E0E0;">
+            {% comment %} Masthead on the off-white page: the wordmark and the slogan, centred. {% endcomment %}
+            <tr><td style="padding: 36px 0 22px; text-align: center;">
+              <a href="{{ shop.url }}"><img src="https://www.trackstar.art/cdn/shop/files/Trackstar_Logo_Cropped.png" alt="Trackstar" width="150" style="display: inline-block; width: 150px; height: auto; border: 0;"></a>
+              <p class="ts-f14" style="margin: 8px 0 0; font-size: 14px; color: #666666;">Celebrating athletic achievement.</p>
+            </td></tr>
+
+            {% comment %} The card: everything about this order, on white. {% endcomment %}
+            <tr><td class="ts-outer" style="padding: 0;">
+            <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate; background-color: #FFFFFF; border-radius: 18px;">
+            <tr><td class="ts-card-pad" style="padding: 24px 28px 30px;">
+            <table width="100%" cellpadding="0" cellspacing="0">
+
+            <tr><td class="ts-in" style="padding: 0 0 24px;">
               <table width="100%" cellpadding="0" cellspacing="0"><tr>
-                <td style="vertical-align: middle;"><a href="{{ shop.url }}"><img src="https://www.trackstar.art/cdn/shop/files/Trackstar_Logo_Cropped.png" alt="Trackstar" width="140" style="display: block; width: 140px; height: auto; border: 0;"></a></td>
-                <td class="ts-f15" style="vertical-align: middle; text-align: right; font-size: 15px; font-weight: 500; color: #666666;">Order {{ order_name }}</td>
+                <td style="vertical-align: middle;">
+                  <span class="ts-f13" style="display: inline-block; padding: 6px 12px; border: 1px solid #E0E0E0; border-radius: 999px; font-size: 13px; font-weight: 700; color: #1A1A1A; white-space: nowrap;"><span style="color: {% if has_pending_payment %}#F28C28{% else %}#2E7D5B{% endif %};">&#9679;</span>&nbsp; {% if has_pending_payment %}Payment pending{% else %}Order confirmed{% endif %}</span>
+                </td>
+                <td style="vertical-align: middle; text-align: right;">
+                  <span class="ts-f13" style="display: inline-block; padding: 6px 12px; border: 1px solid #E0E0E0; border-radius: 999px; font-size: 13px; font-weight: 700; color: #1A1A1A; white-space: nowrap;">Order {{ order_name }}</span>
+                </td>
               </tr></table>
             </td></tr>
 
-            <tr><td class="ts-pad" style="padding: 28px 0 8px;">
-              <h1 class="ts-f32 ts-h1" style="margin: 0 0 12px; font-size: 32px; font-weight: 700; line-height: 1.05; color: #1A1A1A;">{{ email_title | strip }}{% if customer.first_name %}, {{ customer.first_name }}{% endif %}.</h1>
+            <tr><td class="ts-in" style="padding: 0 0 8px;">
+              <h1 class="ts-h1" style="margin: 0 0 14px; font-size: 40px; font-weight: 700; line-height: 1.02; color: #1A1A1A;">{% if customer.first_name %}Thank you,<br><span style="color: #9A9A9A;">{{ customer.first_name }}.</span>{% else %}Thank you<br><span style="color: #9A9A9A;">for your order.</span>{% endif %}</h1>
               <p class="ts-f16" style="margin: 0 0 8px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">
                 {% if has_pending_payment %}
                   {% if buyer_action_required %}
@@ -169,9 +191,21 @@
               </p>
             </td></tr>
 
+            {% if is_custom_order and has_pending_payment != true %}
+            {% comment %} Custom orders hinge on one email we send later: the mockup to approve. It comes from the support mailbox, which a new contact's inbox may file as spam. {% endcomment %}
+            <tr><td class="ts-in" style="padding: 12px 0 4px;">
+              <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate;"><tr>
+                <td class="ts-f15" style="padding: 14px 16px; background-color: #FEF4E6; border: 1px solid #F6D9B0; border-radius: 8px; font-size: 15px; line-height: 1.45; color: #1A1A1A;">
+                  <strong class="ts-f16" style="display: block; margin: 0 0 4px; font-size: 16px; font-weight: 700; color: #A8510C;">Don't miss your mockup</strong>
+                  Your mockup and approval link come from <a href="mailto:fast@trackstar.art" style="color: #1A1A1A !important; font-weight: 700; text-decoration: none;">fast@trackstar.art</a>. Add that address to your contacts now so it lands in your inbox, not spam. On iPhone, tap the address and choose Add to VIPs.
+                </td>
+              </tr></table>
+            </td></tr>
+            {% endif %}
+
             {% unless has_pending_payment %}
             {% comment %} What happens next. Purple numbers on white, the only purple fill on the page. {% endcomment %}
-            <tr><td class="ts-pad" style="padding: 16px 0 8px;">
+            <tr><td class="ts-in" style="padding: 16px 0 8px;">
               <table cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
                 {% assign whose = 'your' %}
                 {% for line in line_items %}{% for prop in line.properties %}{% if prop.first == 'Gift' and prop.last != blank %}{% assign whose = 'their' %}{% endif %}{% endfor %}{% endfor %}
@@ -235,8 +269,8 @@
               {% comment %} In order emails line.title carries the variant ("... - 12x18 / Natural Oak"); the product's own title does not. {% endcomment %}
               {% assign race_title = line.product.title | default: line.title | split: ' - ' | first | remove: 'Personalized Race Print' | remove: 'Personalized Race Poster' | strip %}
               {% assign v = line.variant.title | split: ' / ' %}
-              <tr><td class="ts-pad" style="padding: 16px 0 0;">
-                <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate; background-color: #FFFFFF; border: 1px solid #E0E0E0; border-radius: 12px;">
+              <tr><td class="ts-in" style="padding: 16px 0 0;">
+                <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate; background-color: #F6F5F2; border-radius: 12px;">
                   <tr>
                     <td class="ts-mock" style="padding: 16px 0 16px 16px; vertical-align: top; width: 96px;">
                       {% if line.image %}<img src="{{ line | img_url: 'medium' }}" class="ts-mock-img" alt="{{ race_title | escape }}" width="96" style="display: block; width: 96px; height: auto; border-radius: 4px; border: 0;">{% endif %}
@@ -245,8 +279,8 @@
                       <p class="ts-f13" style="margin: 0 0 6px; font-size: 13px; font-weight: 500; color: #666666;">Order details</p>
                       <p class="ts-f22" style="margin: 0 0 10px; font-size: 22px; font-weight: 700; line-height: 1.1; color: #1A1A1A;">{{ race_title }}</p>
                       <div style="line-height: 44px;">
-                        {% if p_year != blank %}<span class="ts-f15" style="display: inline-block; margin: 0 4px 0 0; padding: 6px 12px; line-height: 1.3; border: 1px solid #E0E0E0; border-radius: 8px; white-space: nowrap; font-size: 15px; font-weight: 700; color: #1A1A1A;">{{ p_year }}</span>{% endif %}
-                        {% if v[0] != blank and line.variant.title != 'Default Title' %}<span class="ts-f15" style="display: inline-block; margin: 0 4px 0 0; padding: 6px 12px; line-height: 1.3; border: 1px solid #E0E0E0; border-radius: 8px; white-space: nowrap; font-size: 15px; font-weight: 700; color: #1A1A1A;">{{ v[0] }}</span>{% endif %}
+                        {% if p_year != blank %}<span class="ts-f15" style="display: inline-block; margin: 0 4px 0 0; padding: 6px 12px; line-height: 1.3; border: 1px solid #E0E0E0; border-radius: 8px; background-color: #FFFFFF; white-space: nowrap; font-size: 15px; font-weight: 700; color: #1A1A1A;">{{ p_year }}</span>{% endif %}
+                        {% if v[0] != blank and line.variant.title != 'Default Title' %}<span class="ts-f15" style="display: inline-block; margin: 0 4px 0 0; padding: 6px 12px; line-height: 1.3; border: 1px solid #E0E0E0; border-radius: 8px; background-color: #FFFFFF; white-space: nowrap; font-size: 15px; font-weight: 700; color: #1A1A1A;">{{ v[0] }}</span>{% endif %}
                         {% if v[1] != blank %}<span class="ts-f15" style="display: inline-block; margin: 0 4px 0 0; padding: 6px 12px; line-height: 1.3; border: 1px solid #1A1A1A; border-radius: 8px; background-color: #1A1A1A; white-space: nowrap; font-size: 15px; font-weight: 700; color: #FFFFFF;">{{ v[1] }}</span>{% endif %}
                       </div>
                     </td>
@@ -288,24 +322,40 @@
               {% endif %}
             {% endfor %}
 
-            {% if can_manage %}
-            <tr><td class="ts-pad" style="padding: 28px 0 0;">
-              <p class="ts-f16" style="margin: 0 0 12px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">Need to fix a name, change the frame or update your address? You can {% if has_preorder %}any time before race day{% else %}for 48 hours after ordering{% endif %}.</p>
-              <table class="ts-btn ts-round" cellpadding="0" cellspacing="0"><tr><td>
-                <a class="ts-f16 ts-btn-a" href="https://fast.trackstar.art/order/{{ ship_order_id }}/{{ ship_sig }}" style="display: inline-block; padding: 16px 32px; border: 1.5px solid #4600D6; border-radius: 5px; font-size: 16px; font-weight: 700; color: #4600D6; text-decoration: none;">Manage your order</a>
-              </td></tr></table>
+            <tr><td class="ts-in" style="padding: 28px 0 0;">
+              {% if can_manage %}
+              <p class="ts-f16" style="margin: 0 0 14px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">Need to fix a name, change the frame or update your address? You can {% if has_preorder %}any time before race day{% else %}for 48 hours after ordering{% endif %}.</p>
+              {% endif %}
+              <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                {% if can_manage %}
+                <td class="ts-btn2" style="padding: 0 10px 0 0; width: 50%;">
+                  <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate;"><tr><td style="background-color: #4600D6; border-radius: 5px; text-align: center;">
+                    <a class="ts-f16 ts-btn-a" href="https://fast.trackstar.art/order/{{ ship_order_id }}/{{ ship_sig }}" style="display: block; padding: 16px 12px; font-size: 16px; font-weight: 700; color: #FFFFFF !important; text-decoration: none;">Manage your order</a>
+                  </td></tr></table>
+                </td>
+                {% endif %}
+                {% if order_status_url %}
+                <td class="ts-btn2" style="padding: 0; width: 50%;">
+                  <table class="ts-round" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate;"><tr><td style="border: 1.5px solid #4600D6; border-radius: 5px; text-align: center;{% unless can_manage %} background-color: #4600D6;{% endunless %}">
+                    <a class="ts-f16 ts-btn-a" href="{{ order_status_url }}" style="display: block; padding: 14.5px 12px; font-size: 16px; font-weight: 700; color: {% if can_manage %}#4600D6{% else %}#FFFFFF{% endif %} !important; text-decoration: none;">View your order</a>
+                  </td></tr></table>
+                </td>
+                {% endif %}
+              </tr></table>
+              {% if shop.url %}
+              <p class="ts-f15" style="margin: 16px 0 0; font-size: 15px; text-align: center; color: #666666;">or <a href="{{ shop.url }}" style="color: #1A1A1A !important; text-decoration: underline; text-underline-offset: 3px;">keep browsing the store</a></p>
+              {% endif %}
             </td></tr>
-            {% endif %}
 
             {% if delivery_instructions != blank %}
-            <tr><td class="ts-f15 ts-pad" style="padding: 16px 0 0; font-size: 15px; color: #1A1A1A;"><b>Delivery information:</b> {{ delivery_instructions }}</td></tr>
+            <tr><td class="ts-f15 ts-in" style="padding: 16px 0 0; font-size: 15px; color: #1A1A1A;"><b>Delivery information:</b> {{ delivery_instructions }}</td></tr>
             {% endif %}
 
             {% assign transaction_count = transactions | size %}
             {% if transaction_count > 0 %}
               {% for transaction in transactions %}
                 {% if transaction.show_buyer_pending_payment_instructions? %}
-                  <tr><td class="ts-pad" style="padding: 16px 0 0;">
+                  <tr><td class="ts-in" style="padding: 16px 0 0;">
                   <p class="ts-f15" style="font-size: 15px;">{{ transaction.buyer_pending_payment_notice }}</p>
                   <table class="row">
                     <tr>
@@ -324,12 +374,12 @@
 
             {% assign gift_card_line_items = line_items | where: "gift_card" %}
             {% if gift_card_line_items.first %}
-            <tr><td class="ts-f15 ts-pad" style="padding: 16px 0 0; font-size: 15px; color: #1A1A1A;">You'll receive separate emails for any gift cards.</td></tr>
+            <tr><td class="ts-f15 ts-in" style="padding: 16px 0 0; font-size: 15px; color: #1A1A1A;">You'll receive separate emails for any gift cards.</td></tr>
             {% endif %}
 
-            <tr><td class="ts-f15 ts-pad" style="padding: 20px 0 8px; font-size: 15px; color: #666666;">
-              {% if order_status_url %}<a href="{{ order_status_url }}" style="color: #4600D6; font-weight: 700; text-decoration: underline; text-underline-offset: 4px;">View your order</a>{% if shop.url %} &nbsp;&middot;&nbsp; {% endif %}{% endif %}
-              {% if shop.url %}<a href="{{ shop.url }}" style="color: #4600D6; font-weight: 700; text-decoration: underline; text-underline-offset: 4px;">Visit our store</a>{% endif %}
+            </table>
+            </td></tr>
+            </table>
             </td></tr>
           </table>
           </center>
