@@ -8,13 +8,15 @@
  * never reads it back.
  *
  * Every run rewrites the days whose figure changed, including days that drop
- * back to nothing, so a refund or a change of terms reaches the sheet.
+ * back to nothing, so a refund or a change of terms reaches the sheet. Only
+ * complete days, through yesterday: the other raw tabs land a day behind, and
+ * a part day here would run the month's totals ahead of its revenue.
  */
 import prisma from '../../db.js'
 import { readRanges, writeRanges } from '../../services/googleSheets.js'
 import { accruedDetail } from './racePayouts.js'
 import { SHEET_ID } from './sheetSync.js'
-import { isValidDay, todayET } from './periods.js'
+import { addDays, isValidDay, todayET } from './periods.js'
 
 export const TAB = 'Race Payouts'
 const FIRST_ROW = 4
@@ -37,7 +39,7 @@ export function plan(grid, detail, { today }) {
   const data = []
   grid.forEach((cells, i) => {
     const day = sheetDay(cells?.[0])
-    if (!day || day > today) return
+    if (!day || day >= today) return
     const d = detail[day]
     const want = d ? [dollars(d.cents), d.races.map(r => `${r.name} ${usd(r.cents)}`).join('; ')] : ['', '']
     const haveAmount = String(cells?.[1] ?? '').replace(/[$,]/g, '').trim()
@@ -52,7 +54,7 @@ export async function syncRacePayoutSheet({ today = todayET() } = {}) {
   const [grid] = await readRanges([`'${TAB}'!A${FIRST_ROW}:C${LAST_ROW}`], { spreadsheetId: SHEET_ID })
   const days = grid.map(c => sheetDay(c?.[0])).filter(Boolean)
   if (!days.length) return { skipped: `The ${TAB} tab has no dates in column A` }
-  const detail = await accruedDetail(days[0], today)
+  const detail = await accruedDetail(days[0], addDays(today, -1))
   const data = plan(grid, detail, { today })
   const { updatedCells } = await writeRanges(data, { spreadsheetId: SHEET_ID })
   const result = { at: new Date().toISOString(), written: data.length, updatedCells }
