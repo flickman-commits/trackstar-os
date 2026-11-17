@@ -3,6 +3,21 @@ import assert from 'node:assert/strict'
 import { plan } from './dailyTab.js'
 import { asRows } from './racePayoutSheet.js'
 import { laborByDay } from './hourlyLaborSheet.js'
+import { customsByDay } from './customPayoutSheet.js'
+
+test('custom payouts: each design on the day its proof went out, at its rate; unpaid people left out; older rows untouched', () => {
+  const detail = customsByDay({ designers: [
+    { name: 'Dan Currie', orders: [{ completedAt: '2026-11-02T03:30:00Z', rateCents: 5000 }, { completedAt: '2026-11-01T18:00:00Z', rateCents: 2500 }] },
+    { name: 'Creed Smith', orders: [{ completedAt: '2026-11-01T20:00:00Z', rateCents: 5000 }] },
+    { name: 'Matt F', orders: [{ completedAt: '2026-11-01T20:00:00Z', rateCents: 0 }] },
+  ] })
+  // 03:30 UTC on Nov 2 is still Nov 1 in the East.
+  assert.deepEqual(detail, { '2026-11-01': { cents: 12500, text: 'Dan 2 customs $75.00; Creed 1 custom $50.00' } })
+  const grid = [['10/31/2026', '$40.00', 'typed by hand'], ['11/01/2026', '', '']]
+  assert.deepEqual(plan('Custom Payouts', grid, detail, { today: '2026-11-17', since: '2026-11-01' }), [
+    { range: "'Custom Payouts'!B5:C5", values: [[125, 'Dan 2 customs $75.00; Creed 1 custom $50.00']] },
+  ])
+})
 
 test('writes the complete days that changed, names each race, and clears a day that dropped to nothing', () => {
   const grid = [

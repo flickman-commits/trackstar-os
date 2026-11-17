@@ -8,8 +8,8 @@
  * complete days, through yesterday: the other raw tabs land a day behind, and
  * a part day would run the month's totals ahead of its revenue.
  *
- * Used by the Race Payouts tab (racePayoutSheet.js) and the Hourly Labor tab
- * (hourlyLaborSheet.js). sheetSync never reads these back: the tool works the
+ * Used by the Race Payouts tab (racePayoutSheet.js), the Hourly Labor tab
+ * (hourlyLaborSheet.js) and the Custom Payouts tab (customPayoutSheet.js). sheetSync never reads these back: the tool works the
  * same numbers out itself.
  */
 import prisma from '../../db.js'
@@ -34,11 +34,11 @@ const dollars = cents => Math.round(cents) / 100
  * What each row should hold, against what it holds: the writes that differ.
  * detail is { day: { cents, text } }.
  */
-export function plan(tab, grid, detail, { today }) {
+export function plan(tab, grid, detail, { today, since = null }) {
   const data = []
   grid.forEach((cells, i) => {
     const day = sheetDay(cells?.[0])
-    if (!day || day >= today) return
+    if (!day || day >= today || (since && day < since)) return
     const d = detail[day]
     const want = d && d.cents ? [dollars(d.cents), d.text] : ['', '']
     const haveAmount = String(cells?.[1] ?? '').replace(/[$,]/g, '').trim()
@@ -49,13 +49,16 @@ export function plan(tab, grid, detail, { today }) {
   return data
 }
 
-/** Read the tab, work out each complete day with detailFor(first, last), write what changed. */
-export async function syncDailyTab(tab, detailFor, { today = todayET(), statusKey } = {}) {
+/**
+ * Read the tab, work out each complete day with detailFor(first, last), write
+ * what changed. With `since`, earlier rows are left as they are.
+ */
+export async function syncDailyTab(tab, detailFor, { today = todayET(), statusKey, since = null } = {}) {
   const [grid] = await readRanges([`'${tab}'!A${FIRST_ROW}:C${LAST_ROW}`], { spreadsheetId: SHEET_ID })
   const days = grid.map(c => sheetDay(c?.[0])).filter(Boolean)
   if (!days.length) return { skipped: `The ${tab} tab has no dates in column A` }
-  const detail = await detailFor(days[0], addDays(today, -1))
-  const data = plan(tab, grid, detail, { today })
+  const detail = await detailFor(since && since > days[0] ? since : days[0], addDays(today, -1))
+  const data = plan(tab, grid, detail, { today, since })
   const { updatedCells } = await writeRanges(data, { spreadsheetId: SHEET_ID })
   const result = { at: new Date().toISOString(), written: data.length, updatedCells }
   if (statusKey) await prisma.systemConfig.upsert({ where: { key: statusKey }, update: { value: JSON.stringify(result) }, create: { key: statusKey, value: JSON.stringify(result) } })
