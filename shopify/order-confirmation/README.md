@@ -10,13 +10,15 @@ blocks are kept untouched in the middle; `top.liquid` restyles them with CSS.
 ## Where the two files go
 
 The template is one long file in Shopify. Replace two parts of it and leave
-the middle alone:
+Shopify's middle (Order summary, Customer information) alone:
 
 1. **`top.liquid`** replaces everything from the first line down to, but not
    including, the first `<table class="row section">` (the one whose `<h3>`
-   reads "Order summary").
-2. **`footer.liquid`** replaces everything from `<table class="row footer">`
-   (the "If you have any questions" line) to the end of the file.
+   reads "Order summary"). Copy the live `link_secret` value out first.
+2. **`footer.liquid`** replaces everything from the footer to the end of the
+   file. On a stock template that starts at `<table class="row footer">` (the
+   "If you have any questions" line); once this footer is installed, it starts
+   at the `{% comment %}` that reads "Trackstar order confirmation, the footer".
 
 Subject line: `Your Trackstar Order {{ order_name }} is Confirmed`
 
@@ -35,6 +37,7 @@ order id, the signature and the line item's index.
 
 ## Testing
 
-Shopify's "Send test email" uses a recent order. Check iPhone Mail (the
-timeline animates there), Gmail (static timeline, Inter falls back to
-Helvetica) and Outlook.
+Shopify's "Send test email" uses a recent order. Check iPhone Mail, Gmail (Inter falls back to
+Helvetica) and Outlook (no background photo: the top shows ink behind the
+white wordmark). The photo is `public/email/order-hero.jpg`, served from
+fast.trackstar.art.
