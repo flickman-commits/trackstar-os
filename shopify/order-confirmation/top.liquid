@@ -199,7 +199,7 @@
                     Your payment is being processed, and you'll get an email when your order is confirmed.
                   {% endif %}
                 {% elsif is_custom_order %}
-                  We're excited to draw your custom print. Our team reviews the race details you sent and starts on the design, and you'll see a mockup to approve before anything prints.
+                  Our team is stoked to get started on your custom order. Our team will get started this week and you'll see a mockup to approve before anything prints. Here's the timeline:
                 {% elsif has_preorder %}
                   The race hasn't happened yet, so your print waits for race day. Once the official results are posted we add the finish time, pace and bib, then print it.
                 {% else %}
@@ -345,7 +345,7 @@
 
             <tr><td class="ts-in" style="padding: 28px 0 0;">
               {% if can_manage and is_custom_order == false %}
-              <p class="ts-f16" style="margin: 0 0 14px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">Need to fix a name, change the frame or update your address? Click Manage your order below.</p>
+              <p class="ts-f16" style="margin: 0 0 14px; font-size: 16px; line-height: 1.4; color: #1A1A1A;">Need to fix a name, change the frame or update your address? Click “Manage your order” below.</p>
               {% endif %}
               <table width="100%" cellpadding="0" cellspacing="0"><tr>
                 {% if can_manage %}
