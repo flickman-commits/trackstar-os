@@ -104,8 +104,8 @@ interface OrderInfo {
   designerNote: string | null
   /** A custom's answer to "Can we feature this?"; null until they say. */
   featureConsent?: boolean | null
-  /** When the latest round of proofs was emailed. */
-  proofSentAt?: string | null
+  /** When the first round of proofs was emailed; later rounds do not change it. */
+  firstProofSentAt?: string | null
 }
 
 /** "Nov 14 (2 days ago)", counted in calendar days where the customer is. */
@@ -679,9 +679,7 @@ export default function ApprovalPortal() {
   }
   const pastProofs = proofs.filter(p => p.status !== 'pending')
   const hasPendingProofs = pendingProofs.length > 0
-  // The send stamps the order; a round sent another way falls back to when its newest proof was made.
-  const proofsSentAt = order?.proofSentAt
-    || pendingProofs.reduce<string | null>((latest, p) => (!latest || p.createdAt > latest ? p.createdAt : latest), null)
+  const proofsSentAt = order?.firstProofSentAt || null
 
   // Race organizers, charities, and anyone else we co-brand with all land here.
   // The stored type is still 'race_partner' - it predates the charities - but
@@ -837,11 +835,14 @@ export default function ApprovalPortal() {
               Presented by Trackstar
             </span>
           )}
-          {/* When this round went out, so a customer coming back days later knows how long it has waited. */}
+          {/* When proofs first went out, so a customer coming back days later knows how long it has been. */}
           {hasPendingProofs && !isPartner && proofsSentAt && (
-            <p style={{ color: '#999999', fontSize: '13px', lineHeight: 1.4, margin: 0 }}>
-              Proofs Sent: {sentLabel(proofsSentAt)}
-            </p>
+            <span
+              className="inline-flex items-center gap-1.5"
+              style={{ backgroundColor: T.card, color: '#1A1A1A', border: `1px solid ${T.line}`, borderRadius: 999, padding: '5px 12px', fontSize: '14px', lineHeight: 1.3 }}
+            >
+              <span style={{ fontWeight: 600 }}>Proofs Sent:</span> {sentLabel(proofsSentAt)}
+            </span>
           )}
           {hasPendingProofs ? (
             <p style={{ color: '#1A1A1A', fontSize: '18px', lineHeight: 1.4, marginTop: 8 }}>

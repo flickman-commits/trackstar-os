@@ -280,8 +280,21 @@ export default async function handler(req, res) {
           ? String(shopifyData.name).replace('#', '')
           : approvalToken.order.parentOrderNumber
 
+        // The first time proofs went out, which later rounds do not move (Matt, Nov 16):
+        // the first send in the audit log; for an order sent before that was kept, the
+        // order's send stamp if it only had one round, else when the first proof was made.
+        const firstSend = await prisma.auditEvent.findFirst({
+          where: { action: 'proof.send', detail: { path: ['orderId'], equals: approvalToken.orderId } },
+          orderBy: { createdAt: 'asc' },
+          select: { createdAt: true },
+        })
+        const oneRound = proofs.every(p => (p.batch || 1) === 1)
+        const firstProofSentAt = firstSend?.createdAt
+          || (oneRound && approvalToken.order.proofSentAt)
+          || proofs.reduce((min, p) => (!min || p.createdAt < min ? p.createdAt : min), null)
+
         return res.status(200).json({
-          order: { ...approvalToken.order, displayOrderNumber, shopifyOrderData: undefined },
+          order: { ...approvalToken.order, displayOrderNumber, shopifyOrderData: undefined, proofSentAt: undefined, firstProofSentAt },
           proofs,
           messages
         })
