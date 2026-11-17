@@ -59,6 +59,7 @@ const PAYEE_SELECT = { id: true, firstName: true, lastName: true, role: true, is
 export function recipientProblem(r) {
   if (!r?.id) return 'Wise has no such recipient'
   if (!r.active) return 'That recipient is switched off in Wise'
+  if (r.own) return "That is the business's own Wise account, not a person's"
   if (!r.currency) return 'Wise did not say which currency that recipient takes'
   if (r.currency === 'CRC' && r.ibanPrefix !== 'CR') return 'A Costa Rica (CRC) recipient needs a CRC IBAN starting with CR, not a USD account. Add it again in Wise.'
   return null
@@ -401,7 +402,8 @@ export async function payees() {
 /** The recipients on the Wise profile, to pick from (masked account summaries, never stored). */
 export async function recipients({ api = wiseApi } = {}) {
   const list = await api.listRecipients()
-  return list.filter(r => r.active).map(r => ({ ...r, problem: recipientProblem(r) }))
+  // own: the business's own accounts (Wise lists them as recipients); never a person's pay.
+  return list.filter(r => r.active && !r.own).map(r => ({ ...r, problem: recipientProblem(r) }))
 }
 
 /** Link a person to a Wise recipient (checked against Wise), or unlink with null. */

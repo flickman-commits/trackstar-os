@@ -158,6 +158,7 @@ export function shapeRecipient(r) {
     summary: r?.longAccountSummary || r?.accountSummary || '',
     ibanPrefix: iban ? iban.slice(0, 2) : (/\bCR\d{2}/.test(String(r?.accountSummary || '')) ? 'CR' : null),
     active: r?.active !== false,
+    own: r?.ownedByCustomer === true,
   }
 }
 
