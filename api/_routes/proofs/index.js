@@ -582,9 +582,14 @@ export default async function handler(req, res) {
       ].join('\n')
       try {
         if (await customerMailReady()) {
+          // Sent closed: the customer answers in the portal, not by email, and
+          // any conversation that is not closed holds the order from Artelo
+          // (support/holdsPrint.js), so a "waiting" thread held approved
+          // designs. A reply by email, or a change request or reply in the
+          // portal (mirrorPortalReply), opens it again.
           await sendOrderEmail({
             order: { id: orderId, customerEmail: order.customerEmail, customerName: order.customerName },
-            subject, html: emailHtml, text: emailText, actor, waiting: true,
+            subject, html: emailHtml, text: emailText, actor, waiting: false,
             event: `Proofs emailed for ${displayNum}: ${proofCount} design${proofCount === 1 ? '' : 's'} to approve`,
             comment: `Emailed ${proofCount} proof${proofCount === 1 ? '' : 's'} to the customer from fast@: "${subject}"`,
           })

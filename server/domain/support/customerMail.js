@@ -103,6 +103,21 @@ export async function mirrorPortalReply({ orderId, kind, text }) {
         },
       }),
     ])
+    // An approval answers every conversation that was waiting on this
+    // customer. A revised design goes out as a new email, so the change
+    // request's conversation (reopened, then marked waiting by the team)
+    // stayed waiting after the approval closed the newest one, and held the
+    // approved print from Artelo (6748, 6821, 7190, 7649 in Nov 2026). Open
+    // and escalated ones stay: there we still owe the customer something.
+    if (kind === 'approve') {
+      const waiting = threads.filter(t => t.id !== thread.id && t.status === 'waiting').map(t => t.id)
+      if (waiting.length) {
+        await prisma.$transaction([
+          prisma.supportThread.updateMany({ where: { id: { in: waiting }, status: 'waiting' }, data: { status: 'closed', snoozedUntil: null } }),
+          ...waiting.map(id => prisma.supportNote.create({ data: { threadId: id, kind: 'event', body: `Closed: ${order.customerName || 'the customer'} approved the design for #${number} in the portal`, authorId: null, authorName: 'Trackstar' } })),
+        ])
+      }
+    }
     return thread.id
   } catch (err) {
     console.warn('[customerMail] portal reply not mirrored:', err.message)
