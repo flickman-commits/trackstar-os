@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Upload, Download, X, Copy, ExternalLink, Send, Receipt, Flag, HeartHandshake, Building2 } from 'lucide-react'
+import { Loader2, Upload, Download, X, Copy, AlertTriangle, ExternalLink, Send, Receipt, Flag, HeartHandshake, Building2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
@@ -327,8 +327,25 @@ export function ProductionFile({ order, onChanged }: { order: Billing; onChanged
   const status = !t ? { text: 'No file yet', cls: 'text-off-black/45' }
     : t.ok === null || !t.checkedAt ? { text: 'Waiting for the worker to check it', cls: 'text-amber-700' }
     : t.ok ? { text: 'Checked, ready to render', cls: 'text-emerald-700' }
-    : { text: `Check found problems: ${t.problems.slice(0, 2).join('; ') || 'see Settings > Print Templates'}`, cls: 'text-red-600' }
+    : { text: 'Check found problems (above)', cls: 'text-red-600 font-medium' }
+  const failed = Boolean(t && t.checkedAt && t.ok === false)
   return (
+    <div className="space-y-2">
+    {/* A failed check is the one thing on this card that must not be missed:
+        prints made from this file come out wrong (a missing or low-res logo
+        printed blurry on NYC BULK-0001), so every problem is listed in full. */}
+    {failed && (
+      <div role="alert" className="flex gap-3 rounded-md border border-red-300 bg-red-50 p-3 text-red-900">
+        <AlertTriangle className="w-5 h-5 shrink-0 text-red-600 mt-0.5" />
+        <div className="min-w-0 space-y-1">
+          <div className="text-sm font-semibold">This file can't print yet</div>
+          {t!.problems.length > 0
+            ? <ul className="text-sm list-disc pl-4 space-y-0.5 break-words">{t!.problems.map((p, i) => <li key={i}>{p}</li>)}</ul>
+            : <p className="text-sm">See Settings &gt; Print Templates for what the check found.</p>}
+          <p className="text-xs text-red-800/80">Fix the file in Illustrator (embed every logo, at least 250 ppi at print size), then Replace .ai. No runner's print renders until it passes.</p>
+        </div>
+      </div>
+    )}
     <div className="flex items-center gap-2 text-xs">
       <span className="font-medium text-off-black min-w-0 truncate">{order.raceName} {order.raceYear}</span>
       <span className="font-mono text-[11px] text-off-black/40">{order.number}</span>
@@ -338,6 +355,7 @@ export function ProductionFile({ order, onChanged }: { order: Billing; onChanged
         {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}{t ? 'Replace .ai' : 'Upload .ai'}
         <input type="file" accept=".ai" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload(f) }} />
       </label>
+    </div>
     </div>
   )
 }
