@@ -417,6 +417,41 @@ export class BaseScraper {
   }
 
   /**
+   * The surname spellings to search a results site by, most likely first.
+   * Search boxes match the surname as typed, so a spelling the page does not
+   * use finds nobody, and the match rules never get to see the row:
+   *   - Apostrophes: RunSignUp found Missoula 2026's "Tyler O’neill" (bib
+   *     1153) only for O’Neill with a curly apostrophe; the order had a
+   *     straight one. Both forms are tried, and the form with none.
+   *   - A particle before the surname: Louisiana 2026's page lists "Zachary
+   *     Divincent"; searching "Vincent" (the last word of "Di Vincent") or
+   *     "Di Vincent" finds nobody, "DiVincent" finds him.
+   * The surname as typed always comes first. A generational suffix is not a
+   * surname ("Cox IV" searches "Cox").
+   *
+   * @param {string} runnerName
+   * @returns {string[]}
+   */
+  surnameSearchTerms(runnerName) {
+    const words = String(runnerName || '').trim().split(/\s+/).filter(Boolean)
+    while (words.length > 2 && GENERATIONAL_SUFFIXES.has(words[words.length - 1].toLowerCase().replace(/[.,]/g, ''))) words.pop()
+    const last = (words[words.length - 1] || '').replace(/,$/, '')
+    if (!last) return []
+    const bases = [last]
+    const before = words.length >= 3 ? words[words.length - 2] : null
+    if (before && SURNAME_PARTICLES.has(before.toLowerCase())) bases.push(`${before}${last}`, `${before} ${last}`)
+    const terms = []
+    for (const base of bases) {
+      terms.push(base)
+      if (/['’‘ʼ`]/.test(base)) {
+        terms.push(base.replace(/['’‘ʼ`]/g, '’'), base.replace(/['’‘ʼ`]/g, "'"), base.replace(/['’‘ʼ`]/g, ''))
+      }
+    }
+    const seen = new Set()
+    return terms.filter(t => { const k = t.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true })
+  }
+
+  /**
    * Normalize runner name for comparison (see parseRunnerName). Returns
    * "first [middle] last", lowercase, no accents, periods or generational
    * suffix.
@@ -487,6 +522,18 @@ export class BaseScraper {
     const parts1 = n1.split(' ')
     const parts2 = n2.split(' ')
     if (parts1.length < 2 || parts2.length < 2) return null
+
+    // The same surname written as one word or two: "Zachary Di Vincent" is
+    // "Zachary Divincent" on Louisiana 2026's page (bib 1662). The letters
+    // after the first name agree, ignoring spaces and hyphens; the first
+    // names are then judged as for any shared surname.
+    const joined = parts => parts.slice(1).join('').replace(/-/g, '')
+    if (joined(parts1) === joined(parts2)) {
+      const [a, b] = [parts1[0], parts2[0]]
+      if (a === b) return 0
+      if (firstNamesEquivalent(a, b) || (a.length >= 3 && b.startsWith(a))) return 1
+      return null
+    }
 
     const first1 = parts1[0]
     const last1 = parts1[parts1.length - 1]

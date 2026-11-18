@@ -49,6 +49,17 @@ function poolEventAnswers(scraper, runnerName, answers) {
   return scraper.ambiguousResult(list.map(p => p.candidate))
 }
 
+/** One row per runner when several surname searches return the same one. */
+function uniqueRows(rows) {
+  const seen = new Set()
+  return rows.filter(r => {
+    const key = `${r.bib || ''}|${r.name}|${r.chipTime || ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export class RunSignUpScraper extends BaseScraper {
   /**
    * @param {number} year
@@ -217,36 +228,38 @@ export class RunSignUpScraper extends BaseScraper {
    */
   async searchEventTypeViaApi(runnerName, eventType, resultSetId, eventId) {
     try {
-      // Extract last name for the API query
-      const nameParts = runnerName.trim().split(/\s+/)
-      const lastName = nameParts[nameParts.length - 1]
+      // The API matches last_name as typed, so every spelling of the surname
+      // is asked for (surnameSearchTerms: apostrophes, "Di Vincent"/"DiVincent").
+      const terms = this.surnameSearchTerms(runnerName)
+      const results = []
+      for (const lastName of terms) {
+        const apiUrl = `https://runsignup.com/Rest/race/${this.raceId}/results/get-results` +
+          `?format=json&resultSetId=${resultSetId}&individual_result_set_id=${resultSetId}&event_id=${eventId}` +
+          `&last_name=${encodeURIComponent(lastName)}&page=1&num=50`
 
-      const apiUrl = `https://runsignup.com/Rest/race/${this.raceId}/results/get-results` +
-        `?format=json&resultSetId=${resultSetId}&individual_result_set_id=${resultSetId}&event_id=${eventId}` +
-        `&last_name=${encodeURIComponent(lastName)}&page=1&num=50`
+        console.log(`[${this.tag} ${this.year}] API request: ${apiUrl}`)
 
-      console.log(`[${this.tag} ${this.year}] API request: ${apiUrl}`)
+        const response = await fetchWithTimeout(apiUrl, {
+          headers: { 'User-Agent': USER_AGENT }
+        })
 
-      const response = await fetchWithTimeout(apiUrl, {
-        headers: { 'User-Agent': USER_AGENT }
-      })
+        if (!response.ok) {
+          console.log(`[${this.tag} ${this.year}] API returned ${response.status}, falling back to Puppeteer`)
+          return await this.searchEventType(runnerName, eventType, resultSetId)
+        }
 
-      if (!response.ok) {
-        console.log(`[${this.tag} ${this.year}] API returned ${response.status}, falling back to Puppeteer`)
-        return await this.searchEventType(runnerName, eventType, resultSetId)
-      }
+        const data = await response.json()
+        // A race can switch its results API off: RunSignUp still answers 200,
+        // with {"error":{"error_msg":"Permission Denied"}} as the body. Read as
+        // zero rows, every runner came back not found (Richmond, Nov 2026). The
+        // public results page serves the same rows as JSON, so read those.
+        if (data?.error) {
+          console.log(`[${this.tag} ${this.year}] API error "${data.error.error_msg || 'unknown'}", reading the results page instead`)
+          const pageRows = await this.pageResultsForTerms(terms, resultSetId)
+          if (!pageRows) return await this.searchEventType(runnerName, eventType, resultSetId)
+          return this.pickResult(runnerName, eventType, resultSetId, pageRows, 'results page')
+        }
 
-      const data = await response.json()
-      // A race can switch its results API off: RunSignUp still answers 200,
-      // with {"error":{"error_msg":"Permission Denied"}} as the body. Read as
-      // zero rows, every runner came back not found (Richmond, Nov 2026). The
-      // public results page serves the same rows as JSON, so read those.
-      let results
-      if (data?.error) {
-        console.log(`[${this.tag} ${this.year}] API error "${data.error.error_msg || 'unknown'}", reading the results page instead`)
-        results = await this.pageResults(lastName, resultSetId)
-        if (!results) return await this.searchEventType(runnerName, eventType, resultSetId)
-      } else {
         const resultSet = data?.individual_results_sets?.[0]
         const rawResults = resultSet?.results || []
         console.log(`[${this.tag} ${this.year}] API returned ${rawResults.length} results`)
@@ -254,7 +267,7 @@ export class RunSignUpScraper extends BaseScraper {
         // IMPORTANT: ONLY use chip_time. RunSignUp's `clock_time` is gun time —
         // never fall back to it. If chip_time is missing, we'd rather report
         // a missing time than the wrong (gun) time and have the order printed wrong.
-        results = rawResults.map(r => {
+        results.push(...rawResults.map(r => {
           const chip = (r.chip_time && String(r.chip_time).trim()) || null
           if (!chip && r.clock_time) {
             console.warn(`[${this.tag} ${this.year}] Runner ${r.first_name} ${r.last_name} has clock_time but no chip_time - refusing to use gun time`)
@@ -270,10 +283,10 @@ export class RunSignUpScraper extends BaseScraper {
             city: r.city || null,
             state: r.state || null
           }
-        })
+        }))
       }
 
-      return this.pickResult(runnerName, eventType, resultSetId, results, 'API')
+      return this.pickResult(runnerName, eventType, resultSetId, uniqueRows(results), 'API')
 
     } catch (error) {
       console.error(`[${this.tag} ${this.year}] API error: ${error.message}, falling back to Puppeteer`)
@@ -290,10 +303,20 @@ export class RunSignUpScraper extends BaseScraper {
    * returned their rows).
    */
   async searchEventTypeViaPage(runnerName, eventType, resultSetId) {
-    const lastName = runnerName.trim().split(/\s+/).pop()
-    const results = await this.pageResults(lastName, resultSetId)
+    const results = await this.pageResultsForTerms(this.surnameSearchTerms(runnerName), resultSetId)
     if (!results) return await this.searchEventType(runnerName, eventType, resultSetId)
     return this.pickResult(runnerName, eventType, resultSetId, results, 'results page')
+  }
+
+  /** pageResults for every surname spelling, merged; null if the page cannot be read. */
+  async pageResultsForTerms(terms, resultSetId) {
+    const rows = []
+    for (const term of terms) {
+      const found = await this.pageResults(term, resultSetId)
+      if (!found) return null
+      rows.push(...found)
+    }
+    return uniqueRows(rows)
   }
 
   /** The runner among rows already read (chip time only), or candidates. */

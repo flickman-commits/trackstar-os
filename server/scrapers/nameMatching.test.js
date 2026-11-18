@@ -201,3 +201,28 @@ test('apostrophes: O’Connor, O\'Connor and Oconnor are one name (MCM 2026, bib
   assert.equal(tier('Kyle Vitale-O’Sullivan', "Kyle Vitale-O'Sullivan"), 0)
   assert.equal(tier('Stephanie O’Connor', 'Stephanie Connor'), null)
 })
+
+// Surname spelling: apostrophes and a particle written apart or together
+
+test('surname joined: "Zachary Di Vincent" is "Zachary Divincent" (Louisiana 2026, bib 1662)', () => {
+  assert.equal(tier('Zachary Di Vincent', 'Zachary Divincent'), 0)
+  assert.equal(tier('Zachary DiVincent', 'Zachary Di Vincent'), 0)
+  assert.equal(tier('Zachary Di-Vincent', 'Zachary Divincent'), 0)
+  // Same letters only counts with the same first name.
+  assert.equal(tier('Zach Di Vincent', 'Zachary Divincent'), 1)
+  assert.equal(tier('Paul Di Vincent', 'Zachary Divincent'), null)
+})
+
+test('apostrophe: straight and curly match (Missoula 2026, "Tyler O’neill", bib 1153)', () => {
+  assert.equal(tier("Tyler O'Neill", 'Tyler O’neill'), 0)
+  assert.equal(tier("Tyler O'Neill", 'Tyler ONeill'), 0)
+})
+
+test('surnameSearchTerms: apostrophe variants and a joined particle', () => {
+  assert.deepEqual(s.surnameSearchTerms("Tyler O'Neill"), ["O'Neill", 'O’Neill', 'ONeill'])
+  assert.deepEqual(s.surnameSearchTerms('Zachary Di Vincent'), ['Vincent', 'DiVincent', 'Di Vincent'])
+  assert.deepEqual(s.surnameSearchTerms('William Cox IV'), ['Cox'])
+  assert.deepEqual(s.surnameSearchTerms('Jane Smith'), ['Smith'])
+  assert.deepEqual(s.surnameSearchTerms('Jane'), ['Jane'])
+  assert.deepEqual(s.surnameSearchTerms(''), [])
+})
