@@ -200,7 +200,8 @@ export function nameCase(name) {
 export async function gatherFacts(threadId) {
   const t = await prisma.supportThread.findUnique({
     where: { id: threadId },
-    include: { messages: { orderBy: { sentAt: 'asc' } }, assignee: { select: { firstName: true } } },
+    // Our automatic "we got your message" is not part of the conversation Claude answers (autoReply.js).
+    include: { messages: { where: { NOT: { direction: 'out', auto: true } }, orderBy: { sentAt: 'asc' } }, assignee: { select: { firstName: true } } },
   })
   if (!t) throw new UserError('No such thread')
   const recent = t.messages.slice(-6)

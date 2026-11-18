@@ -375,6 +375,21 @@ export function senderCheck(headers, fromEmail) {
   return 'none'
 }
 
+/**
+ * Whether a message's headers say a machine sent it: an auto-reply or
+ * out-of-office (Auto-Submitted, X-Autoreply, Outlook's
+ * X-Auto-Response-Suppress), or a mailing (Precedence bulk/list/junk,
+ * List-Id, List-Unsubscribe). `h` is the headers by lowercase name. Pure.
+ */
+export function isAutomated(h = {}) {
+  const v = k => String(h[k] || '').trim().toLowerCase()
+  if (v('auto-submitted') && v('auto-submitted') !== 'no') return true
+  if (/^(bulk|list|junk|auto_reply)$/.test(v('precedence'))) return true
+  if (h['list-id'] || h['list-unsubscribe']) return true
+  if (h['x-autoreply'] || h['x-autorespond'] || h['x-auto-response-suppress']) return true
+  return false
+}
+
 /** One Gmail message (format=full) as the row it becomes. */
 export function parseMessage(msg, mailbox) {
   const h = Object.fromEntries((msg.payload?.headers || []).map(x => [String(x.name).toLowerCase(), x.value]))
@@ -401,6 +416,8 @@ export function parseMessage(msg, mailbox) {
     sentAt: msg.internalDate ? new Date(Number(msg.internalDate)) : (h.date ? new Date(h.date) : new Date()),
     labels,
     senderCheck: direction === 'in' ? senderCheck(msg.payload?.headers, from.email) : null,
+    // An out-of-office, newsletter or notification: never auto-replied to (autoReply.js).
+    auto: direction === 'in' && isAutomated(h),
   }
   // A teammate forwarding a customer's email to fast@: it becomes the customer's message (forwards.js).
   const fwd = unwrapForward(parsed, { isOurs: e => isOurs(e, mailbox || mailboxEmail()) })
@@ -453,7 +470,7 @@ function counterpart(m, mailbox) {
  * ever set, never cleared, so the sync re-reading a message we sent keeps
  * the name of who sent it.
  */
-export async function importMessage(parsed, { sentById = null, backfill = false, mailbox, threadId = null } = {}) {
+export async function importMessage(parsed, { sentById = null, backfill = false, mailbox, threadId = null, auto = false } = {}) {
   const mb = mailbox || mailboxEmail()
   // Drafts show up in history as they are typed; they are not mail yet.
   if (parsed.labels?.includes('DRAFT')) return null
@@ -513,6 +530,8 @@ export async function importMessage(parsed, { sentById = null, backfill = false,
     attachments: parsed.attachments,
     sentAt: parsed.sentAt,
     senderCheck: parsed.senderCheck ?? null,
+    // Only ever set, never cleared: the sync re-reading our auto-reply keeps it marked.
+    ...(auto || parsed.auto ? { auto: true } : {}),
   }
   const existed = await prisma.supportMessage.findUnique({ where: { gmailMessageId: parsed.gmailMessageId }, select: { id: true, direction: true, fromEmail: true } })
   // A forward already unwrapped into the customer's message stays unwrapped: a later read
@@ -553,10 +572,11 @@ async function noteForward(threadId, { note, by }) {
 export async function refreshThread(thread, stored, { backfill = false, mailbox = '', replay = false } = {}) {
   const [agg, newest, oldest, lastIn, lastOut] = await Promise.all([
     prisma.supportMessage.aggregate({ where: { threadId: thread.id }, _count: { _all: true }, _max: { sentAt: true } }),
-    prisma.supportMessage.findFirst({ where: { threadId: thread.id }, orderBy: { sentAt: 'desc' }, select: { id: true, direction: true, bodyText: true, sentAt: true } }),
+    // Our automatic "we got your message" is not an answer: it never sets the snippet, the last reply or the status.
+    prisma.supportMessage.findFirst({ where: { threadId: thread.id, NOT: { direction: 'out', auto: true } }, orderBy: { sentAt: 'desc' }, select: { id: true, direction: true, bodyText: true, sentAt: true } }),
     prisma.supportMessage.findFirst({ where: { threadId: thread.id }, orderBy: { sentAt: 'asc' }, select: { subject: true, direction: true, fromEmail: true, fromName: true, toEmails: true } }),
     prisma.supportMessage.findFirst({ where: { threadId: thread.id, direction: 'in', ...NOT_BOUNCE_SENDER }, orderBy: { sentAt: 'desc' }, select: { sentAt: true } }),
-    prisma.supportMessage.findFirst({ where: { threadId: thread.id, direction: 'out' }, orderBy: { sentAt: 'desc' }, select: { sentAt: true } }),
+    prisma.supportMessage.findFirst({ where: { threadId: thread.id, direction: 'out', auto: false }, orderBy: { sentAt: 'desc' }, select: { sentAt: true } }),
   ])
   const bounce = isBounce(stored)
   const data = {
@@ -773,7 +793,7 @@ export const currentAddress = to => String(to || '').split(',').map(a => {
  * stored at once, with who sent it, so the page shows it without waiting
  * for the next sync. UNREAD comes off the thread in Gmail too.
  */
-export async function sendReply({ userId, thread, html, text, attachments = [] }) {
+export async function sendReply({ userId, thread, html, text, attachments = [], auto = false }) {
   const gmail = await client()
   const mailbox = mailboxEmail()
   const last = await prisma.supportMessage.findFirst({ where: { threadId: thread.id }, orderBy: { sentAt: 'desc' } })
@@ -793,14 +813,14 @@ export async function sendReply({ userId, thread, html, text, attachments = [] }
   let stored = null
   try {
     const full = await gmail.users.messages.get({ userId: 'me', id: sent.data.id, format: 'full' })
-    stored = await importMessage(parseMessage(full.data, mailbox), { sentById: userId, mailbox, threadId: thread.id })
+    stored = await importMessage(parseMessage(full.data, mailbox), { sentById: userId, mailbox, threadId: thread.id, auto })
   } catch (err) {
     console.warn(`[support] sent ${sent.data.id} but could not read it back: ${err.message}`)
     stored = await importMessage({
       gmailMessageId: sent.data.id, gmailThreadId: thread.gmailThreadId, rfcMessageId: messageId, inReplyTo: lastIn?.rfcMessageId || null,
       direction: 'out', fromEmail: mailbox, fromName: 'Trackstar', toEmails: to, ccEmails: '', subject, bodyText: text, bodyHtml: html,
       attachments: [], sentAt: new Date(), labels: ['SENT'],
-    }, { sentById: userId, mailbox, threadId: thread.id })
+    }, { sentById: userId, mailbox, threadId: thread.id, auto })
   }
   try {
     await gmail.users.threads.modify({ userId: 'me', id: thread.gmailThreadId, requestBody: { removeLabelIds: ['UNREAD'] } })

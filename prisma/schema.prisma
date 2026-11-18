@@ -1341,6 +1341,8 @@ model SupportThread {
   priority        Boolean   @default(false)
   priorityReason  String    @default("")
   // When triage last read this thread; it reads it again once the customer writes after that.
+  // When the automatic "we got your message" reply went out (support/autoReply.js); set before sending, so it goes once.
+  autoRepliedAt   DateTime?
   triagedAt       DateTime?
   // Free-form labels; the playbook's scenario names are offered as suggestions.
   tags            String[]  @default([])
@@ -1432,6 +1434,11 @@ model SupportMessage {
   // A conversation whose latest message did not pass gets no order details or
   // one-click actions in its draft (support/draft.js).
   senderCheck     String?
+  // Written by a machine, not a person. Outbound: our automatic "we got your
+  // message" reply (support/autoReply.js), which never counts as answering
+  // the customer. Inbound: an out-of-office, newsletter or notification
+  // (its headers say so), which never gets an automatic reply.
+  auto            Boolean   @default(false)
   sentAt          DateTime
   // Who pressed Send here. Null for inbound mail, for anything sent in Gmail
   // itself, and for everything the backfill found.

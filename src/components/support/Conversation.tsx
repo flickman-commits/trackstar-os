@@ -59,9 +59,23 @@ function typoDistance(a: string, b: string): number {
   return row[b.length]
 }
 
+/** Our automatic "we got your message" (autoReply.js): a quiet line, since it is not an answer. */
+function AutoReplyLine({ m }: { m: Message }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button onClick={() => setOpen(v => !v)} className="inline-flex items-center gap-1 text-[11px] text-off-black/40 hover:text-off-black/70">
+        Auto-reply sent {when(m.sentAt)}<ChevronDown className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && <div className="max-w-[88%] md:max-w-[72%] rounded-xl border border-border-gray bg-white px-3 py-2 text-xs text-off-black/60 whitespace-pre-wrap">{m.text}</div>}
+    </div>
+  )
+}
+
 function Bubble({ m }: { m: Message }) {
   const [showQuoted, setShowQuoted] = useState(false)
   const out = m.direction === 'out'
+  if (out && m.auto) return <AutoReplyLine m={m} />
   const who = out ? (m.sentBy ? `${m.sentBy.firstName} from Trackstar` : (m.fromName || 'Trackstar')) : (m.fromName || m.fromEmail || 'Instagram user')
   return (
     <div className={`flex items-end gap-2 ${out ? 'justify-end' : 'justify-start'}`}>

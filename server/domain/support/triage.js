@@ -77,7 +77,7 @@ Reply as JSON: {"urgent": true or false, "category": one of "before_ship", "not_
 
 /** The conversation and where their orders stand, in as few lines as the decision needs. */
 export async function triageFacts(t) {
-  const messages = await prisma.supportMessage.findMany({ where: { threadId: t.id }, orderBy: { sentAt: 'desc' }, take: 5, select: { direction: true, bodyText: true, sentAt: true, attachments: true } })
+  const messages = await prisma.supportMessage.findMany({ where: { threadId: t.id, NOT: { direction: 'out', auto: true } }, orderBy: { sentAt: 'desc' }, take: 5, select: { direction: true, bodyText: true, sentAt: true, attachments: true } })
   // The customer's words are fenced (untrusted.js), so a message cannot pass for a TRACKSTAR turn.
   const conversation = messages.reverse().map(m => {
     const body = clip(stripQuoted(m.bodyText) || '(no text)', 1500)

@@ -72,6 +72,8 @@ export interface Message {
   attachments: Attachment[]
   sentAt: string
   sentBy: Teammate | null
+  /** Outbound: our automatic "we got your message". Inbound: an out-of-office or mailing. */
+  auto?: boolean
 }
 
 /** An internal note, or an event the system wrote (assigned, closed, snoozed). */

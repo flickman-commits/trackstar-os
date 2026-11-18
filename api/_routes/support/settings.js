@@ -8,6 +8,7 @@
  *   POST { action:'routing', routing, applyToOpen? }   admin: who new conversations go to, per channel (routing.js)
  *   POST { action:'forwarders', emails }            admin: other inboxes whose forwards to fast@ become the customer's conversation
  *   POST { action:'draftModel', model }             admin: which Claude model drafts replies (draftModel.js)
+ *   POST { action:'autoReply', enabled, text }      admin: the automatic "we got your message" (autoReply.js)
  */
 import { setCors } from '../../_lib/auth.js'
 import { requireCapability, requireAdminOnly, recordAudit } from '../../_lib/users.js'
@@ -16,6 +17,7 @@ import { getPlaybook, savePlaybook, resetPlaybook, playbookVersions, restorePlay
 import { listForwarders, saveForwarders } from '../../../server/domain/support/forwarders.js'
 import { publicMessage, publicStatus } from '../../../server/domain/support/errors.js'
 import { DRAFT_MODELS, getDraftModel, setDraftModel } from '../../../server/domain/support/draftModel.js'
+import { getAutoReply, saveAutoReply } from '../../../server/domain/support/autoReply.js'
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, POST, OPTIONS' })) return
@@ -23,7 +25,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const user = await requireCapability(req, res, 'support')
       if (!user) return
-      return res.status(200).json({ defaultAssigneeId: await defaultAssigneeId(), routing: await getRouting(), playbook: await getPlaybook(), playbookVersions: await playbookVersions(), forwarders: await listForwarders(), draftModel: await getDraftModel(), draftModels: DRAFT_MODELS, draftModelPinned: Boolean(process.env.SUPPORT_LLM_MODEL) })
+      return res.status(200).json({ defaultAssigneeId: await defaultAssigneeId(), routing: await getRouting(), playbook: await getPlaybook(), playbookVersions: await playbookVersions(), forwarders: await listForwarders(), draftModel: await getDraftModel(), draftModels: DRAFT_MODELS, draftModelPinned: Boolean(process.env.SUPPORT_LLM_MODEL), autoReply: await getAutoReply() })
     }
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
     const user = await requireAdminOnly(req, res)
@@ -44,6 +46,11 @@ export default async function handler(req, res) {
       const model = await setDraftModel(String(body.model || ''))
       await recordAudit({ action: 'support.draft_model', summary: `Support drafts now use ${DRAFT_MODELS.find(m => m.id === model)?.label || model}`, detail: { model }, actor: user })
       return res.status(200).json({ draftModel: model })
+    }
+    if (body.action === 'autoReply') {
+      const autoReply = await saveAutoReply({ enabled: body.enabled === true, text: body.text })
+      await recordAudit({ action: 'support.auto_reply', summary: `Auto-reply ${autoReply.enabled ? 'on' : 'off'}`, detail: { enabled: autoReply.enabled, chars: autoReply.text.length }, actor: user })
+      return res.status(200).json({ autoReply })
     }
     if (body.action === 'playbook' || body.action === 'playbookReset') {
       const pb = body.action === 'playbook' ? await savePlaybook(body.text, { source: 'edit', actor: user }) : await resetPlaybook({ actor: user })

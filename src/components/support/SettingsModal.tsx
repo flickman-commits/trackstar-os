@@ -6,6 +6,7 @@ import { FilterList } from './SenderFilter'
 import PlaybookEditor from './PlaybookEditor'
 import ForwardersCard from './ForwardersCard'
 import DraftModelCard from './DraftModelCard'
+import AutoReplyCard from './AutoReplyCard'
 import RulesCard from './RulesCard'
 import type { InstagramStatus, MailboxStatus, SenderFilter, Teammate } from '@/types/support'
 
@@ -30,6 +31,7 @@ export default function SettingsModal({ team, unassignedCount, status, instagram
       {isAdmin && <RoutingRules team={team} unassignedCount={unassignedCount} onChanged={onChanged} />}
       <FilterList filters={filters} onChanged={onChanged} />
       <ForwardersCard isAdmin={isAdmin} />
+      <AutoReplyCard isAdmin={isAdmin} />
       <RulesCard isAdmin={isAdmin} />
       <DraftModelCard isAdmin={isAdmin} />
       <PlaybookEditor isAdmin={isAdmin} />

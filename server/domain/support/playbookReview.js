@@ -79,13 +79,13 @@ function kept(draft, sent) {
 export async function weekCases({ days = 7 } = {}) {
   const since = new Date(Date.now() - days * 86400000)
   const sent = await prisma.supportMessage.findMany({
-    where: { direction: 'out', channel: 'email', fromEmail: MAILBOX, sentAt: { gte: since } },
+    where: { direction: 'out', channel: 'email', fromEmail: MAILBOX, auto: false, sentAt: { gte: since } },
     orderBy: { sentAt: 'asc' },
     select: { threadId: true, sentAt: true, bodyText: true, sentBy: { select: { firstName: true } } },
   })
   const cases = []
   for (const m of sent) {
-    const before = await prisma.supportMessage.findMany({ where: { threadId: m.threadId, sentAt: { lt: m.sentAt } }, orderBy: { sentAt: 'desc' }, take: 2, select: { direction: true, bodyText: true } })
+    const before = await prisma.supportMessage.findMany({ where: { threadId: m.threadId, sentAt: { lt: m.sentAt }, NOT: { direction: 'out', auto: true } }, orderBy: { sentAt: 'desc' }, take: 2, select: { direction: true, bodyText: true } })
     // Outreach we started (a note from the owner, a proof) is not a reply to anything.
     if (!before.some(b => b.direction === 'in')) continue
     const [draft, notes] = await Promise.all([

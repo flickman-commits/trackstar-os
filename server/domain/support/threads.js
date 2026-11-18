@@ -211,6 +211,7 @@ export async function getThread(id, { userId, money = false } = {}) {
         attachments: Array.isArray(m.attachments) ? m.attachments : [],
         sentAt: m.sentAt,
         sentBy: m.sentBy || null,
+        auto: Boolean(m.auto),
       }
     }),
     notes: t.notes.map(noteRow),

@@ -45,6 +45,9 @@ export type PlaybookChange = { id: string; what: string; why: string; edits: { o
 export type PlaybookReview = { status: 'proposal' | 'unchanged' | 'skipped'; reason: string | null; at?: string; line: string | null; changes: PlaybookChange[] }
 type PlaybookSaved = { playbook: { text: string; edited: boolean }; playbookVersions?: PlaybookVersion[] }
 
+/** The automatic "we got your message" to new email conversations (autoReply.js). */
+export type AutoReply = { enabled: boolean; text: string }
+
 export type TeachRule = { line: string; text: string; author: string | null; date: string | null }
 
 export const supportApi = {
@@ -78,8 +81,9 @@ export const supportApi = {
   deleteNote: (id: string, noteId: string) => act<{ id: string }>(id, 'deleteNote', { noteId }),
   markUnread: (id: string) => act<{ ok: boolean }>(id, 'unread'),
   reply: (id: string, text: string, close = false, attachments: string[] = []) => post<ThreadDetail>('/api/support/reply', { id, text, close, attachments }),
-  settings: () => request<{ defaultAssigneeId: string | null; playbook?: { text: string; edited: boolean; updatedAt: string | null }; playbookVersions?: PlaybookVersion[]; forwarders?: string[]; routing?: RoutingRules; draftModel?: string; draftModels?: { id: string; label: string; note: string }[]; draftModelPinned?: boolean }>('/api/support/settings'),
+  settings: () => request<{ defaultAssigneeId: string | null; playbook?: { text: string; edited: boolean; updatedAt: string | null }; playbookVersions?: PlaybookVersion[]; forwarders?: string[]; routing?: RoutingRules; draftModel?: string; draftModels?: { id: string; label: string; note: string }[]; draftModelPinned?: boolean; autoReply?: AutoReply }>('/api/support/settings'),
   saveDraftModel: (model: string) => post<{ draftModel: string }>('/api/support/settings', { action: 'draftModel', model }),
+  saveAutoReply: (r: AutoReply) => post<{ autoReply: AutoReply }>('/api/support/settings', { action: 'autoReply', enabled: r.enabled, text: r.text }),
   saveRouting: (routing: RoutingRules, applyToOpen = false) => post<{ routing: RoutingRules; assigned: number }>('/api/support/settings', { action: 'routing', routing, applyToOpen }),
   saveForwarders: (emails: string[]) => post<{ forwarders: string[] }>('/api/support/settings', { action: 'forwarders', emails }),
   savePlaybook: (text: string) => post<PlaybookSaved>('/api/support/settings', { action: 'playbook', text }),

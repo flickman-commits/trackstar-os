@@ -3,8 +3,9 @@
  *
  * Runs every 5 minutes from the cron (vercel.json), and on demand when a
  * rep presses Refresh on the Support page. One history.list call when
- * nothing changed. See server/domain/support/mailbox.js. Then Claude drafts
- * replies for the conversations that need one (server/domain/support/draft.js).
+ * nothing changed. See server/domain/support/mailbox.js. Then the automatic
+ * "we got your message" goes to new conversations (autoReply.js, when on), and
+ * Claude drafts replies for the conversations that need one (draft.js).
  *
  * The cron calls it with GET (that is what Vercel sends). A person's Refresh
  * is a POST: a GET from a browser, which any link or image tag can make,
@@ -17,6 +18,7 @@ import { requireCapability } from '../../_lib/users.js'
 import { sync, isConnected, alertMailboxDown, clearMailboxDownAlert } from '../../../server/domain/support/mailbox.js'
 import { refreshTokenIfDue, ensureSubscribed, catchUpIfDue } from '../../../server/domain/support/instagram.js'
 import { draftPending } from '../../../server/domain/support/draft.js'
+import { sendAutoReplies } from '../../../server/domain/support/autoReply.js'
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, POST, OPTIONS' })) return
@@ -48,6 +50,13 @@ export default async function handler(req, res) {
     const out = await sync()
     await clearMailboxDownAlert()
     if (out.imported || out.failed) console.log(`[support.sync] ${out.mode}: imported ${out.imported}, failed ${out.failed}`)
+    // "We got your message" to new conversations, when switched on (autoReply.js). Never fails the sync.
+    try {
+      const ack = await sendAutoReplies()
+      if (ack.sent || ack.failed) console.log(`[support.autoReply] sent ${ack.sent}, failed ${ack.failed}`)
+    } catch (err) {
+      console.warn(`[support.autoReply] ${err.message}`)
+    }
     // Claude's drafts for what just came in (and anything still waiting on one). Never fails the sync.
     let drafts = null
     try {
