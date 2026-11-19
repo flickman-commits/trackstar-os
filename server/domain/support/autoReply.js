@@ -16,11 +16,16 @@
  * the conversation stays Open, Claude still drafts, triage still runs, the
  * waiting badge keeps counting (mailbox.js refreshThread). Off until an admin
  * switches it on in Support > Settings > Auto-reply.
+ *
+ * A customer with an order they can still change gets its own Manage your
+ * order link in place of the general line (personalizeReply), only when the
+ * order's email is exactly theirs.
  */
 import prisma from '../../db.js'
 import { sendReply, isOurs, isBounce } from './mailbox.js'
 import { replyToHtml, replyToPlain } from './format.js'
 import { UserError } from './errors.js'
+import { openManageLinks } from '../orders/selfServeOrder.js'
 
 const KEY = 'support_autoreply'
 export const DEFAULT_AUTO_REPLY = `Hey [First name],
@@ -57,6 +62,26 @@ export function fillReply(text, customerName) {
   const first = String(customerName || '').trim().split(/\s+/)[0] || ''
   const name = /^[\p{L}'-]{2,}$/u.test(first) ? first[0].toUpperCase() + first.slice(1).toLowerCase() : 'there'
   return String(text).replace(/\[first name\]/gi, name)
+}
+
+const untilLabel = d => `${new Date(d).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })} ET`
+
+/**
+ * Their own Manage your order link(s) in the reply, when they have an order
+ * they can still change (openManageLinks). The line in the wording that
+ * mentions Manage your order is replaced by one line per order; wording with
+ * no such line gets them after its first paragraph. No links: the wording
+ * as written. Pure.
+ */
+export function personalizeReply(text, links = []) {
+  if (!links.length) return text
+  const lines = links.map(l => `- **Need to change something on ${l.number ? `order #${l.number}` : 'your order'}?** You can fix the name, change the frame or photo, update the address, or cancel yourself until ${untilLabel(l.closesAt)}. [Manage your order](${l.url})`)
+  const parts = String(text).split('\n')
+  const at = parts.findIndex(p => /manage your order/i.test(p))
+  if (at >= 0) { parts.splice(at, 1, ...lines); return parts.join('\n') }
+  const para = String(text).split('\n\n')
+  para.splice(Math.min(1, para.length), 0, lines.join('\n'))
+  return para.join('\n\n')
 }
 
 /**
@@ -119,7 +144,9 @@ export async function sendAutoReplies({ limit = 25 } = {}) {
     // Claim it first: two syncs at once must not both send.
     const claimed = await prisma.supportThread.updateMany({ where: { id: t.id, autoRepliedAt: null, lastOutboundAt: null }, data: { autoRepliedAt: new Date() } })
     if (!claimed.count) continue
-    const text = fillReply(cfg.text, t.customerName)
+    // Their own Manage your order link when an order of theirs can still change; the plain wording if anything goes wrong.
+    const links = await openManageLinks(t.customerEmail).catch(err => { console.warn(`[support.autoReply] links ${t.id}: ${err.message}`); return [] })
+    const text = personalizeReply(fillReply(cfg.text, t.customerName), links)
     try {
       // Shown in the conversation as a grey "Auto-reply sent" line (Conversation.tsx), not a reply.
       await sendReply({ userId: null, thread: t, html: replyToHtml(text), text: replyToPlain(text), auto: true })

@@ -6,6 +6,7 @@
  * arteloSend.queueSend never sends before then (a person's Send now still can).
  */
 import crypto from 'crypto'
+import { appBaseUrl } from '../../lib/links.js'
 
 // 48 since 2026-11-05 (Matt): the customer has two days to ask for a change before the print is made.
 export const CHANGE_WINDOW_HOURS = 48
@@ -40,4 +41,15 @@ export function linkIsValid(shopifyOrderId, signature) {
   const expected = linkSignature(shopifyOrderId)
   if (!expected || typeof signature !== 'string' || signature.length !== expected.length) return false
   return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature.toLowerCase()))
+}
+
+/**
+ * The customer's Manage your order link for a Shopify order: the same one the
+ * confirmation email builds (shopify/order-confirmation/top.liquid), so it
+ * goes only where that email went. Null without the secret.
+ */
+export function manageUrl(shopifyOrderId) {
+  const id = String(shopifyOrderId || '').trim()
+  const sig = /^\d{6,20}$/.test(id) ? linkSignature(id) : null
+  return sig ? `${appBaseUrl()}/order/${id}/${sig}` : null
 }

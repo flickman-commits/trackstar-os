@@ -32,7 +32,7 @@
  * can. After the window the page points the customer at support.
  */
 import prisma from '../../db.js'
-import { linkIsValid, placedAt, CHANGE_WINDOW_HOURS } from './changeWindow.js'
+import { linkIsValid, placedAt, CHANGE_WINDOW_HOURS, manageUrl } from './changeWindow.js'
 import { closesAtFor, closedReasonFor, isFullName, toTitleCase } from './selfServeWindow.js'
 import { shippingAddress, cancellable, cancelAndRefund } from '../support/actions.js'
 import { itemChoices, changeItem } from '../support/changeItem.js'
@@ -79,6 +79,43 @@ async function load(shopifyOrderId, signature) {
   if (!rows.length) throw new ManageError(await justPlaced(id) ? 'not_ready' : 'not_found', 404)
   const closesAt = closesAtFor(rows[0], await raceDays(rows))
   return { id, rows, closesAt, reason: closedReasonFor(rows, closesAt) }
+}
+
+/**
+ * The orders a customer can still change themselves, for the support
+ * auto-reply (support/autoReply.js): their Shopify standard orders whose
+ * email is exactly theirs and whose window is open by the same rule as the
+ * page (closedReasonFor), newest first. The link goes only to the order's
+ * own address, as the confirmation email does.
+ */
+export async function openManageLinks(email, { limit = 3, now = Date.now() } = {}) {
+  const e = String(email || '').trim()
+  if (!e || !process.env.SELF_SERVE_LINK_SECRET) return []
+  const rows = await prisma.order.findMany({
+    where: { source: 'shopify', trackstarOrderType: 'standard', bulkOrderId: null, customerEmail: { equals: e, mode: 'insensitive' }, createdAt: { gte: new Date(now - 365 * 86400000) } },
+    orderBy: { createdAt: 'desc' },
+    take: 60,
+    select: { ...ROW, parentOrderNumber: true, customerEmail: true },
+  })
+  const byOrder = new Map()
+  for (const r of rows) {
+    if (String(r.customerEmail || '').trim().toLowerCase() !== e.toLowerCase()) continue
+    const id = String(r.parentOrderNumber || '')
+    if (!/^\d{6,20}$/.test(id)) continue
+    if (!byOrder.has(id)) byOrder.set(id, [])
+    byOrder.get(id).push(r)
+  }
+  const out = []
+  for (const [id, group] of byOrder) {
+    if (out.length >= limit) break
+    group.sort((a, b) => a.lineItemIndex - b.lineItemIndex)
+    const closesAt = closesAtFor(group[0], await raceDays(group), now)
+    if (closedReasonFor(group, closesAt, now)) continue
+    const url = manageUrl(id)
+    if (!url) continue
+    out.push({ number: String(group[0].shopifyOrderData?.name || '').replace('#', '') || null, url, closesAt })
+  }
+  return out
 }
 
 /**

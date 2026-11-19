@@ -50,3 +50,35 @@ test('out-of-office replies and mailings are spotted by their headers', () => {
   assert.equal(isAutomated({ 'x-auto-response-suppress': 'All' }), true)
   assert.equal(isAutomated({ subject: 'Hi' }), false)
 })
+
+test('a customer with an order they can still change gets its own link in place of the general line', async () => {
+  const { personalizeReply } = await import('./autoReply.js')
+  const wording = 'Hey Jane,\n\nWe got it.\n\n- **Where is my order?** 10 to 12 days.\n- **Need to change something?** Use the "Manage your order" button in your confirmation email.\n\nThanks'
+  const links = [{ number: '10245', url: 'https://fast.trackstar.art/order/123456789/abc', closesAt: new Date('2026-11-20T20:15:00Z') }]
+  const out = personalizeReply(wording, links)
+  assert.match(out, /- \*\*Need to change something on order #10245\?\*\* .* until Fri, Nov 20, 3:15 PM ET\. \[Manage your order\]\(https:\/\/fast\.trackstar\.art\/order\/123456789\/abc\)/)
+  assert.doesNotMatch(out, /confirmation email/)
+  assert.match(out, /Where is my order/)
+  // No order found: the wording as written.
+  assert.equal(personalizeReply(wording, []), wording)
+  // Wording without the line: the links go after the first paragraph.
+  assert.match(personalizeReply('Hey Jane,\n\nWe got it.', links), /^Hey Jane,\n\n- \*\*Need to change something on order #10245/)
+})
+
+test('the link is the one the confirmation email builds, and nothing without the secret', async () => {
+  const { manageUrl, linkSignature, linkIsValid } = await import('../orders/changeWindow.js')
+  const was = process.env.SELF_SERVE_LINK_SECRET
+  try {
+    delete process.env.SELF_SERVE_LINK_SECRET
+    assert.equal(manageUrl('7594451894555'), null)
+    process.env.SELF_SERVE_LINK_SECRET = 'test-secret'
+    const url = manageUrl('7594451894555')
+    const [, id, sig] = url.match(/\/order\/(\d+)\/([0-9a-f]+)$/)
+    assert.equal(id, '7594451894555')
+    assert.equal(sig, linkSignature('7594451894555'))
+    assert.equal(linkIsValid(id, sig), true)
+    assert.equal(manageUrl('not-an-id'), null)
+  } finally {
+    if (was === undefined) delete process.env.SELF_SERVE_LINK_SECRET; else process.env.SELF_SERVE_LINK_SECRET = was
+  }
+})
