@@ -140,6 +140,17 @@ export async function orgShipTo(bulk) {
 }
 
 /**
+ * The runner's print is in production once their order exists at Artelo (or
+ * is being created there), or the runner was closed by hand. A rendered,
+ * approved print that has not gone yet is not: removing or changing the
+ * runner simply means it never goes.
+ */
+export function inProduction(o) {
+  const a = o?.arteloOrderData || {}
+  return Boolean(o?.status === 'completed' || o?.bulkSentAt || a.id || a.creatingAt)
+}
+
+/**
  * Create runner rows under a bulk order. Skips exact duplicate names already
  * present. Each runner carries the run's event, so research searches that
  * event; when the order ships to the organization, that is every runner's

@@ -3,6 +3,12 @@
  *
  *   GET  ?token=            who this is for, the race, how many are in so far
  *   POST { token, runners: [{ firstName, lastName, email?, address:{...} }] }
+ *   POST { token, action: 'remove', id }                         partner link only
+ *   POST { token, action: 'edit', id, firstName?, lastName?, address? }  partner link only
+ *
+ * A partner manages their own list (remove someone, fix a name or an
+ * address) until that runner's print is in production: their order exists at
+ * Artelo (inProduction). After that it is ours to sort out, by email.
  *
  * The link is the credential. It says nothing about who has already been
  * entered beyond a count, and it never returns an error message from
@@ -12,7 +18,7 @@ import prisma from '../../_lib/prisma.js'
 import { setCors } from '../../_lib/auth.js'
 import { recordAudit } from '../../_lib/users.js'
 import { checkRateLimitDurable } from '../../../server/lib/publicRateLimit.js'
-import { addRunners, addressComplete, orgShipTo } from '../../../server/domain/bulk/bulkOrders.js'
+import { addRunners, addressComplete, orgShipTo, normalizeZip, usZipProblem, inProduction } from '../../../server/domain/bulk/bulkOrders.js'
 
 function clientIp(req) {
   const fwd = req.headers['x-forwarded-for']
@@ -20,6 +26,19 @@ function clientIp(req) {
 }
 
 const MAX_PER_SUBMIT = 500
+
+const LOCK_SELECT = { id: true, orderNumber: true, runnerName: true, status: true, bulkSentAt: true, arteloOrderData: true, shippingAddress: true, customerEmail: true }
+
+function cleanAddress(a = {}) {
+  return normalizeZip({
+    line1: String(a.line1 || '').trim().slice(0, 150),
+    line2: String(a.line2 || '').trim().slice(0, 150),
+    city: String(a.city || '').trim().slice(0, 80),
+    state: String(a.state || '').trim().slice(0, 80),
+    zip: String(a.zip || '').trim().slice(0, 20),
+    country: String(a.country || 'United States').trim().slice(0, 60),
+  })
+}
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, POST, OPTIONS', allowPublic: true })) return
@@ -44,8 +63,8 @@ export default async function handler(req, res) {
       const count = kind === 'runner' ? null : await prisma.order.count({ where: { bulkOrderId: bulk.id } })
       // The partner sees who is on the list, names only; nobody's address
       // is echoed back over a link.
-      const received = kind === 'runner' ? null : (await prisma.order.findMany({ where: { bulkOrderId: bulk.id }, orderBy: { lineItemIndex: 'asc' }, select: { orderNumber: true, runnerName: true, shippingAddress: true, createdAt: true } }))
-        .map(r => ({ id: r.orderNumber, name: r.runnerName, city: r.shippingAddress?.city || null, at: r.createdAt }))
+      const received = kind === 'runner' ? null : (await prisma.order.findMany({ where: { bulkOrderId: bulk.id }, orderBy: { lineItemIndex: 'asc' }, select: { orderNumber: true, runnerName: true, shippingAddress: true, createdAt: true, status: true, bulkSentAt: true, arteloOrderData: true } }))
+        .map(r => ({ id: r.orderNumber, name: r.runnerName, city: r.shippingAddress?.city || null, at: r.createdAt, locked: inProduction(r) }))
       let previewImageUrl = null
       if (kind === 'partner') {
         previewImageUrl = bulk.previewImageUrl || null
@@ -77,14 +96,53 @@ export default async function handler(req, res) {
     // and only a runner that belongs to this order and has no print yet.
     if (body.action === 'remove') {
       if (kind !== 'partner') return res.status(404).json({ error: 'not_found' })
-      const runner = await prisma.order.findFirst({ where: { bulkOrderId: bulk.id, orderNumber: String(body.id || '') }, select: { id: true, productionFileUrl: true, status: true } })
+      const runner = await prisma.order.findFirst({ where: { bulkOrderId: bulk.id, orderNumber: String(body.id || '') }, select: LOCK_SELECT })
       if (!runner) return res.status(404).json({ error: 'not_found' })
-      if (runner.productionFileUrl || runner.status === 'completed') return res.status(409).json({ error: 'in_production' })
+      if (inProduction(runner)) return res.status(409).json({ error: 'in_production' })
       await prisma.runnerResearch.deleteMany({ where: { orderId: runner.id } })
       await prisma.order.delete({ where: { id: runner.id } })
       await recordAudit({ action: 'bulk.intake_remove', summary: `${bulk.partnerName} removed a runner from ${bulk.number} through the partner intake link`, detail: { bulkOrderId: bulk.id, orderNumber: String(body.id) }, actor: { isSystem: true, email: 'partner intake link' } })
       const count = await prisma.order.count({ where: { bulkOrderId: bulk.id } })
       return res.status(200).json({ removed: true, entered: count })
+    }
+
+    // The partner fixes a runner: a name typo or a new address. A new name
+    // is a different print (research and design start over), so the runner
+    // is replaced; an address is changed in place. Blank address = keep it.
+    if (body.action === 'edit') {
+      if (kind !== 'partner') return res.status(404).json({ error: 'not_found' })
+      const runner = await prisma.order.findFirst({ where: { bulkOrderId: bulk.id, orderNumber: String(body.id || '') }, select: LOCK_SELECT })
+      if (!runner) return res.status(404).json({ error: 'not_found' })
+      if (inProduction(runner)) return res.status(409).json({ error: 'in_production' })
+      const namesOnly = Boolean(await orgShipTo(bulk))
+      const first = String(body.firstName || '').trim().slice(0, 60)
+      const last = String(body.lastName || '').trim().slice(0, 60)
+      if (!first || !last) return res.status(400).json({ error: 'name' })
+      const typed = cleanAddress(body.address || {})
+      const anyAddress = Boolean(typed.line1 || typed.city || typed.zip)
+      let address = runner.shippingAddress
+      if (!namesOnly && anyAddress) {
+        if (!addressComplete(typed)) return res.status(400).json({ error: 'address' })
+        if (usZipProblem(typed)) return res.status(400).json({ error: 'zip' })
+        address = typed
+      }
+      const name = `${first} ${last}`
+      const renamed = name.toLowerCase() !== String(runner.runnerName || '').trim().toLowerCase()
+      let id = runner.orderNumber
+      if (renamed) {
+        const taken = await prisma.order.findFirst({ where: { bulkOrderId: bulk.id, runnerName: { equals: name, mode: 'insensitive' }, NOT: { id: runner.id } }, select: { id: true } })
+        if (taken) return res.status(409).json({ error: 'duplicate' })
+        await prisma.$transaction([
+          prisma.runnerResearch.deleteMany({ where: { orderId: runner.id } }),
+          prisma.order.delete({ where: { id: runner.id } }),
+        ])
+        const [created] = await addRunners(bulk, [{ runnerName: name, email: runner.customerEmail || null, address: address || {} }])
+        id = created?.orderNumber || null
+      } else if (address !== runner.shippingAddress) {
+        await prisma.order.update({ where: { id: runner.id }, data: { shippingAddress: address } })
+      }
+      await recordAudit({ action: 'bulk.intake_edit', summary: `${bulk.partnerName} ${renamed ? 'changed a runner\'s name' : 'changed a runner\'s address'} on ${bulk.number} through the partner intake link`, detail: { bulkOrderId: bulk.id, orderNumber: runner.orderNumber, newOrderNumber: id, renamed, addressChanged: address !== runner.shippingAddress }, actor: { isSystem: true, email: 'partner intake link' } })
+      return res.status(200).json({ edited: true, id, name, city: address?.city || null })
     }
 
     const list = Array.isArray(body.runners) ? body.runners.slice(0, kind === 'runner' ? 1 : MAX_PER_SUBMIT) : []

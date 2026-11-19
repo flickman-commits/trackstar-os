@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Trash2, Loader2, CheckCircle2, Upload, Download, Copy, Link2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Trash2, Loader2, CheckCircle2, Upload, Download, Copy, Link2, ChevronDown, ChevronUp, Pencil, Lock } from 'lucide-react'
 import ProofFullscreen from '@/components/ProofFullscreen'
 import { useArmed } from '@/lib/useArmed'
 import { loadPublic, LoadError } from '@/lib/publicLoad'
@@ -59,15 +59,140 @@ function parsePaste(text: string): Row[] {
   return rows
 }
 
+type Received = { id: string; name: string; city: string | null; at: string; locked?: boolean }
+
+const field = 'w-full px-2.5 py-2 rounded-md text-base sm:text-sm'
+const fieldStyle = { border: `1px solid ${T.line}`, backgroundColor: '#fff', color: '#1A1A1A' }
+
+/**
+ * The partner's list as it stands, with Edit and Remove on every runner whose
+ * print is not in production yet. Always on the page: a partner who needed to
+ * take two runners off could not find the remove button, which sat in a
+ * collapsed list under the request-link tab.
+ */
+function YourList({ token, received, namesOnly, onRemoved, onEdited }: {
+  token: string
+  received: Received[]
+  namesOnly: boolean
+  onRemoved: (id: string, entered: number) => void
+  onEdited: (id: string, next: Received) => void
+}) {
+  const [open, setOpen] = useState(true)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [draft, setDraft] = useState<Row>(blank())
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const { arm, isArmed } = useArmed()
+
+  const post = (body: object) => fetch(`${API_BASE}/api/public/bulk-intake`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, ...body }) })
+  const locked = 'Their print is already in production, so it can\'t be changed here. Email us and we\'ll sort it out.'
+
+  const remove = async (r: Received) => {
+    if (!arm(`remove:${r.id}`)) return
+    setMsg(null)
+    try {
+      const res = await post({ action: 'remove', id: r.id })
+      if (!res.ok) { setMsg(res.status === 409 ? `${r.name}: ${locked}` : `Could not remove ${r.name} just now. Please try again.`); return }
+      const data = await res.json()
+      onRemoved(r.id, data.entered)
+    } catch { setMsg(`Could not remove ${r.name} just now. Please try again.`) }
+  }
+
+  const startEdit = (r: Received) => {
+    const [first, ...rest] = r.name.split(/\s+/)
+    setDraft({ ...blank(), firstName: first || '', lastName: rest.join(' ') })
+    setEditing(r.id); setMsg(null)
+  }
+
+  const save = async (r: Received) => {
+    setBusy(true); setMsg(null)
+    try {
+      const res = await post({ action: 'edit', id: r.id, firstName: draft.firstName, lastName: draft.lastName, address: { line1: draft.line1, line2: draft.line2, city: draft.city, state: draft.state, zip: draft.zip, country: draft.country } })
+      if (!res.ok) {
+        const e = (await res.json().catch(() => ({}))).error
+        setMsg(e === 'in_production' ? `${r.name}: ${locked}` : e === 'name' ? 'Add a first and last name.' : e === 'address' ? 'That address is missing the street, city or ZIP code.' : e === 'zip' ? 'That ZIP code does not look right.' : e === 'duplicate' ? 'Someone with that name is already on your list.' : 'Could not save that just now. Please try again.')
+        return
+      }
+      const data = await res.json()
+      onEdited(r.id, { ...r, id: data.id, name: data.name, city: data.city })
+      setEditing(null)
+    } catch { setMsg('Could not save that just now. Please try again.') } finally { setBusy(false) }
+  }
+
+  const set = (k: keyof Row) => (e: React.ChangeEvent<HTMLInputElement>) => setDraft(d => ({ ...d, [k]: e.target.value }))
+
+  return (
+    <div className="rounded-2xl p-5 mb-4" style={{ backgroundColor: T.card, border: `1px solid ${T.line}` }}>
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between text-left">
+        <span>
+          <span className="block text-base font-bold" style={{ color: '#1A1A1A' }}>Your list ({received.length})</span>
+          <span className="block text-xs mt-0.5" style={{ color: '#666' }}>Fix a name or address, or take someone off, any time before their print goes into production.</span>
+        </span>
+        {open ? <ChevronUp className="w-4 h-4 shrink-0" style={{ color: '#999' }} /> : <ChevronDown className="w-4 h-4 shrink-0" style={{ color: '#999' }} />}
+      </button>
+      {msg && <p className="text-sm mt-3 rounded-lg p-2.5" style={{ backgroundColor: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.25)', color: '#991B1B' }}>{msg}</p>}
+      {open && (received.length === 0 ? (
+        <p className="text-sm mt-3" style={{ color: '#999' }}>Nobody yet. Runners appear here as they are added.</p>
+      ) : (
+        <ul className="mt-3 max-h-[28rem] overflow-y-auto text-sm" style={{ color: '#1A1A1A' }}>
+          {received.map((r, i) => (
+            <li key={r.id} className="py-2" style={{ borderTop: i ? `1px solid ${T.line}` : undefined }}>
+              {editing === r.id ? (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input className={field} style={fieldStyle} placeholder="First name" value={draft.firstName} onChange={set('firstName')} />
+                    <input className={field} style={fieldStyle} placeholder="Last name" value={draft.lastName} onChange={set('lastName')} />
+                  </div>
+                  {!namesOnly && (
+                    <>
+                      <p className="text-xs" style={{ color: '#666' }}>New address? Type it in full. Leave these blank to keep the one we have{r.city ? ` (${r.city})` : ''}.</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input className={field} style={fieldStyle} placeholder="Street address" value={draft.line1} onChange={set('line1')} />
+                        <input className={field} style={fieldStyle} placeholder="Apt, suite (optional)" value={draft.line2} onChange={set('line2')} />
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <input className={field} style={fieldStyle} placeholder="City" value={draft.city} onChange={set('city')} />
+                        <input className={field} style={fieldStyle} placeholder="State" value={draft.state} onChange={set('state')} />
+                        <input className={field} style={fieldStyle} placeholder="ZIP" value={draft.zip} onChange={set('zip')} />
+                      </div>
+                    </>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setEditing(null)} className="px-3 py-2 text-sm font-semibold rounded-md" style={{ color: '#666' }}>Cancel</button>
+                    <button onClick={() => save(r)} disabled={busy} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-md disabled:opacity-50" style={{ backgroundColor: T.accent, color: '#fff' }}>{busy && <Loader2 className="w-4 h-4 animate-spin" />}Save</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="font-medium">{r.name}</span>
+                    {r.city && <span className="text-xs ml-2" style={{ color: '#999' }}>{r.city}</span>}
+                  </span>
+                  {r.locked ? (
+                    <span className="inline-flex items-center gap-1 text-xs shrink-0" style={{ color: '#999' }} title={locked}><Lock className="w-3.5 h-3.5" />In production</span>
+                  ) : (
+                    <span className="flex items-center gap-1 shrink-0">
+                      <button type="button" onClick={() => startEdit(r)} className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-semibold rounded-md" style={{ color: '#1A1A1A' }} title="Fix the name or address"><Pencil className="w-3.5 h-3.5" />Edit</button>
+                      <button type="button" onClick={() => remove(r)} className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-semibold rounded-md" style={{ color: isArmed(`remove:${r.id}`) ? '#DC2626' : '#666' }} title="Take them off the list"><Trash2 className="w-3.5 h-3.5" />{isArmed(`remove:${r.id}`) ? 'Click again to remove' : 'Remove'}</button>
+                    </span>
+                  )}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      ))}
+    </div>
+  )
+}
+
 export default function BulkIntake() {
   const { token } = useParams<{ token: string }>()
-  const [info, setInfo] = useState<{ partnerName: string; raceName: string; raceYear: number; quantity: number; entered: number; note: string | null; product: string; runnerLink: string | null; previewImageUrl: string | null; event?: string | null; namesOnly?: boolean; received: { id: string; name: string; city: string | null; at: string }[] | null } | null>(null)
+  const [info, setInfo] = useState<{ partnerName: string; raceName: string; raceYear: number; quantity: number; entered: number; note: string | null; product: string; runnerLink: string | null; previewImageUrl: string | null; event?: string | null; namesOnly?: boolean; received: Received[] | null } | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'gone' | 'sent' | 'unavailable'>('loading')
   const [rows, setRows] = useState<Row[]>([blank()])
   const [mode, setMode] = useState<'paste' | 'link'>('paste')
   const [copied, setCopied] = useState(false)
-  const { arm, isArmed } = useArmed()
-  const [receivedOpen, setReceivedOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ added: number; duplicates: number; rejected: { name?: string; reason: string }[] } | null>(null)
@@ -173,6 +298,14 @@ export default function BulkIntake() {
         {info.note && <p className="text-sm mt-4 rounded-xl p-3" style={{ backgroundColor: 'rgba(70,0,214,0.05)', border: '1px solid rgba(70,0,214,0.15)', color: '#1A1A1A' }}>{info.note}</p>}
       </div>
 
+      <YourList
+        token={token || ''}
+        received={info.received || []}
+        namesOnly={Boolean(info.namesOnly)}
+        onRemoved={(id, entered) => setInfo(v => v ? { ...v, entered, received: (v.received || []).filter(x => x.id !== id) } : v)}
+        onEdited={(id, next) => setInfo(v => v ? { ...v, received: (v.received || []).map(x => x.id === id ? next : x) } : v)}
+      />
+
       {/* Two ways in: they have the list, or they ask their runners for it. */}
       <div className="inline-flex p-1 rounded-full mb-3" style={{ backgroundColor: '#fff', border: `1px solid ${T.line}` }}>
         {(['paste', 'link'] as const).map(m => (
@@ -196,42 +329,6 @@ export default function BulkIntake() {
                 </button>
               </div>
             </div>
-          </div>
-          {/* Who has come in so far, so the partner knows who to chase. */}
-          <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${T.line}` }}>
-            <button onClick={() => setReceivedOpen(o => !o)} className="w-full flex items-center justify-between text-sm font-semibold" style={{ color: '#1A1A1A' }}>
-              <span>Received so far ({info.received?.length || 0})</span>
-              {receivedOpen ? <ChevronUp className="w-4 h-4" style={{ color: '#999' }} /> : <ChevronDown className="w-4 h-4" style={{ color: '#999' }} />}
-            </button>
-            {receivedOpen && (
-              (info.received?.length || 0) === 0 ? (
-                <p className="text-xs mt-2" style={{ color: '#999' }}>Nobody yet. They appear here as they submit.</p>
-              ) : (
-                <ul className="mt-2 max-h-64 overflow-y-auto text-sm" style={{ color: '#1A1A1A' }}>
-                  {info.received!.map((r, i) => (
-                    <li key={r.id} className="flex items-center justify-between gap-3 py-1.5" style={{ borderTop: i ? `1px solid ${T.line}` : undefined }}>
-                      <span className="font-medium">{r.name}</span>
-                      <span className="flex items-center gap-3">
-                        <span className="text-xs" style={{ color: '#999' }}>{r.city || ''}</span>
-                        <button
-                          type="button"
-                          title="Remove from the list"
-                          onClick={async () => {
-                            if (!arm(`remove:${r.id}`)) return
-                            const res = await fetch(`${API_BASE}/api/public/bulk-intake`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, action: 'remove', id: r.id }) })
-                            if (!res.ok) { setErr(res.status === 409 ? `${r.name} already has a print in production, so we can't remove them here. Email us.` : 'Could not remove them just now.'); return }
-                            const data = await res.json()
-                            setInfo(v => v ? { ...v, entered: data.entered, received: (v.received || []).filter(x => x.id !== r.id) } : v)
-                          }}
-                          className="inline-flex items-center gap-1 text-xs"
-                          style={{ color: isArmed(`remove:${r.id}`) ? '#DC2626' : '#999' }}
-                        ><Trash2 className="w-4 h-4" />{isArmed(`remove:${r.id}`) && 'Click again to remove'}</button>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )
-            )}
           </div>
         </div>
       ) : (
