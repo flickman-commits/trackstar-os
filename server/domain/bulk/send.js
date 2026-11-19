@@ -68,11 +68,15 @@ async function approvedJob(orderId) {
 
 /** Why this runner cannot go yet, or null when they can. */
 export async function notReadyReason(order, bulk) {
+  return notReadyFrom(order, bulk, Boolean(order.productionFileUrl) || Boolean(await approvedJob(order.id)))
+}
+
+/** The same answer from what the caller already loaded: hasPrint is an approved render or an uploaded file. */
+export function notReadyFrom(order, bulk, hasPrint) {
   if (order.status === 'completed' || order.bulkSentAt) return null
   if (!bulk?.paidAt) return 'Invoice not paid'
   if (!addressComplete(order.shippingAddress)) return 'No complete address'
-  if (order.productionFileUrl) return null
-  if (await approvedJob(order.id)) return null
+  if (hasPrint) return null
   if (!order.researchedAt) return 'Not researched yet'
   return 'Print not approved yet'
 }

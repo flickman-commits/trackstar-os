@@ -28,6 +28,7 @@ import { sameRunnerEmail } from '@/components/orders/sameRunnerEmail'
 import ProofShowcase from '@/components/ProofShowcase'
 import PhotoCropper from '@/components/PhotoCropper'
 import OrderProduction from '@/components/orders/OrderProduction'
+import { BulkSendLine, BulkAddressAction } from '@/components/orders/BulkRunnerSend'
 import ConvertToCustomModal from '@/components/orders/ConvertToCustomModal'
 import FeatureStar from '@/components/orders/FeatureStar'
 import Linkify from '@/components/Linkify'
@@ -128,7 +129,17 @@ export default function OrderDetail({
   // after a run of browser dialogs Chrome offers to block them, and a blocked
   // confirm answers "no" silently, so Re-Open did nothing at all (5308). Arc blocks them outright.
   const { confirm, modal: confirmModal } = useConfirm()
+  // A bulk runner's send and address actions (BulkRunnerSend.tsx): say what happened, then reload so the line shows it.
+  const bulkDone = async (message: string) => { setToast({ message, type: 'success' }); await fetchOrders() }
+  const bulkError = (message: string) => setToast({ message, type: 'error' })
   useEffect(() => { setFrameMenu(null) }, [selectedOrder?.id])
+  // Approving a bulk runner's print queues it for Artelo on the server; reload so its send line says so instead of the old state.
+  const bulkReview = selectedOrder?.trackstarOrderType === 'bulk' ? design.job?.review : undefined
+  const lastBulkReview = useRef(bulkReview)
+  useEffect(() => {
+    if (lastBulkReview.current !== bulkReview && bulkReview === 'approved') void fetchOrders()
+    lastBulkReview.current = bulkReview
+  }, [bulkReview, fetchOrders])
   const canChangeFrame = isAdmin && selectedOrder?.source === 'shopify' && selectedOrder.status !== 'completed'
 
   const openFrameMenu = async () => {
@@ -2290,6 +2301,8 @@ Thank you!`
                         <TimerOff className="w-3.5 h-3.5" /> {selectedOrder.hadNoTime ? 'Put the time back' : 'Convert to NO TIME'}
                       </button>
                     )}
+                    {/* A runner added by hand may have no address yet: add it here, until the print has gone. */}
+                    {selectedOrder.trackstarOrderType === 'bulk' && !isEditing && <BulkAddressAction order={selectedOrder} onDone={bulkDone} onError={bulkError} />}
                     {/* A bulk runner who did not finish: no print. Their order closes and
                         they leave the partner's list and its print count (bulk/dnf.js). */}
                     {selectedOrder.trackstarOrderType === 'bulk' && selectedOrder.status !== 'completed' && !isEditing && (
@@ -3288,7 +3301,7 @@ Thank you!`
                     still 'pending' or 'missing_year'. When Research Runner
                     also shows, both share the row 50/50. */}
                 {/* A bulk runner goes to Artelo on its own once its print is approved (bulk/send.js): where that stands, and the Artelo order once it exists. */}
-                {selectedOrder.trackstarOrderType === 'bulk' && <BulkSendLine order={selectedOrder} />}
+                {selectedOrder.trackstarOrderType === 'bulk' && <BulkSendLine order={selectedOrder} onDone={bulkDone} onError={bulkError} />}
                 {selectedOrder.status !== 'completed' &&
                  selectedOrder.status !== 'flagged' &&
                  selectedOrder.trackstarOrderType !== 'bulk' &&
@@ -3441,7 +3454,6 @@ Thank you!`
   )
 }
 
-/** Where a bulk runner's print stands with Artelo: sent (with the link), queued, stopped with a reason, or waiting on its approval. */
 /** The frame chip: "BlackPremiumOak" reads "Black Oak" on black, natural oak on wood, unframed plain. */
 function frameChip(frameType: string) {
   const f = frameType.replace(/Premium/i, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\s+/g, ' ').trim()
@@ -3467,26 +3479,6 @@ function DesignChoiceLink({ order, to, onDone, onError }: { order: Order; to: 'n
       className="mt-1.5 text-xs font-medium text-white/75 underline underline-offset-2 hover:text-white disabled:opacity-50">
       {busy ? '…' : label}
     </button>
-  )
-}
-
-function BulkSendLine({ order }: { order: Order }) {
-  const b = order.bulkSend
-  const when = (d: string) => new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-  const sent = Boolean(b?.sentAt) || order.status === 'completed'
-  const text = sent ? `Sent to Artelo${b?.sentAt ? ` ${when(b.sentAt)}` : ''}`
-    : b?.sendAfter ? `Going to Artelo ${new Date(b.sendAfter).getTime() <= Date.now() ? 'now' : `at ${when(b.sendAfter)}`}`
-    : b?.error ? b.error
-    : 'Goes to Artelo on its own once the print is approved (and the invoice is paid)'
-  return (
-    <div className="flex-1 flex flex-col sm:flex-row sm:items-center gap-2 px-4 py-3 rounded-md border border-border-gray bg-white">
-      <span className={`flex-1 text-sm ${sent ? 'text-green-700 font-medium' : b?.error ? 'text-red-600' : 'text-off-black/60'}`}>{text}</span>
-      {sent && order.arteloUrl && (
-        <a href={order.arteloUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border border-border-gray bg-white text-sm font-medium text-off-black hover:border-off-black/30 transition-colors" title="Open this runner's order in Artelo">
-          <img src="/artelo-icon.png" alt="" className="w-4 h-4 rounded-[3px]" /> Artelo <ArrowUpRight className="w-3.5 h-3.5 flex-shrink-0 opacity-40" />
-        </a>
-      )}
-    </div>
   )
 }
 

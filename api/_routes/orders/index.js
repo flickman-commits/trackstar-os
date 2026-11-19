@@ -20,6 +20,8 @@ import { usesOldDesign, usesNewDesign } from '../../../server/domain/render/desi
 import { loadPipelineContext } from '../../../server/domain/orders/pipelineStatus.js'
 import { sendPublicError } from '../../../server/lib/publicError.js'
 import { waitingOnCustomers, bouncedCustomers } from '../../../server/domain/support/compose.js'
+import { notReadyFrom, sendStateOf } from '../../../server/domain/bulk/send.js'
+import { addressComplete } from '../../../server/domain/bulk/bulkOrders.js'
 
 
 /**
@@ -245,6 +247,7 @@ export default async function handler(req, res) {
         assignee: { select: { id: true, firstName: true, lastName: true } },
         // The newest render, for the pipeline status.
         // A few, so a render at another size (render/jobs.js) is skipped for the order's status.
+        bulkOrder: { select: { paidAt: true } },
         renderJobs: { orderBy: { version: 'desc' }, take: 3, select: { spec: true, status: true, review: true, error: true, reviewNote: true, sendAfter: true, sendHeldAt: true, sendHeldBy: true, sendError: true, arteloSentAt: true } },
       },
       // The raw Shopify, Etsy and Artelo payloads are about 20MB across all
@@ -392,7 +395,10 @@ export default async function handler(req, res) {
         arteloUrl: arteloOrderUrl(order.arteloOrderData?.id),
         // A bulk runner's own trip to Artelo (server/domain/bulk/send.js): sent, queued, or waiting on a person.
         bulkSend: order.trackstarOrderType === 'bulk'
-          ? { sentAt: order.bulkSentAt || null, sendAfter: order.bulkSendAfter || null, error: order.bulkSendError || null }
+          ? (() => {
+              const notReady = notReadyFrom(order, order.bulkOrder, Boolean(order.productionFileUrl) || (order.renderJobs || []).some(j => j.status === 'done' && j.review === 'approved'))
+              return { bulkOrderId: order.bulkOrderId, sentAt: order.bulkSentAt || null, sendAfter: order.bulkSendAfter || null, error: order.bulkSendError || null, ...sendStateOf(order, notReady), address: order.shippingAddress || null, addressComplete: addressComplete(order.shippingAddress) }
+            })()
           : null,
         // Race-partner virtual fields (aliases for existing columns — no schema change)
         partnerName: order.trackstarOrderType === 'race_partner' ? order.raceName : null,

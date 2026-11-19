@@ -159,7 +159,15 @@ export interface Order {
   etsyOrderUrl?: string | null
   arteloUrl?: string | null
   /** A bulk runner's send to Artelo: sent, queued (sendAfter), or stopped with a reason. */
-  bulkSend?: { sentAt: string | null; sendAfter: string | null; error: string | null } | null
+  bulkSend?: {
+    bulkOrderId: string | null
+    sentAt: string | null; sendAfter: string | null; error: string | null
+    /** server/domain/bulk/send.js sendStateOf: why it is where it is. */
+    state?: 'sent' | 'queued' | 'held' | 'error' | 'not_ready' | 'ready'
+    reason?: string | null
+    address?: { line1?: string; line2?: string; city?: string; state?: string; zip?: string; country?: string } | null
+    addressComplete?: boolean
+  } | null
   commentCount?: number
   assigneeId?: string | null
   assigneeName?: string | null
