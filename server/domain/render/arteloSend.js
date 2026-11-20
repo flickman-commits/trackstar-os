@@ -349,12 +349,18 @@ export async function sendOne(job) {
 
     // Already gone: a print sent with another item of this order, or by hand.
     if (live?.status !== 'PendingFulfillmentAction') {
+      // Past pending: received, in production, shipped or later (not cancelled).
+      const gone = Boolean(live?.status) && !['AwaitingPayment', 'Cancelled', 'Canceled'].includes(live.status)
       const sentByUs = await prisma.renderJob.findFirst({ where: { arteloSentAt: { not: null }, order: { parentOrderNumber: order.parentOrderNumber } }, select: { reviewedById: true } })
-      if (sentByUs && ['Received', 'InProduction'].includes(live?.status)) { await markSent(job, order, job.reviewedById); return }
+      if (sentByUs && gone) { await markSent(job, order, job.reviewedById); return }
       // Our design was on this very item before someone sent the order from
       // Artelo by hand (MCM 6144 and five others, 2026-10-27): what prints is ours.
       const ours = job.arteloAttachedAt && job.arteloItemId && (live?.orderItems || []).some(i => i.id === job.arteloItemId)
-      if (ours && ['Received', 'InProduction'].includes(live?.status)) { await markSent(job, order, job.reviewedById); return }
+      if (ours && gone) { await markSent(job, order, job.reviewedById); return }
+      // A custom order's file is the designer's final PDF, and a person attached
+      // and sent it in Artelo by hand: it is sent (7159, 2026-11-20, sat at
+      // Attach in Artelo after Artelo had shipped it).
+      if (order.trackstarOrderType === 'custom' && gone) { await markSent(job, order, job.reviewedById); return }
       return outcome(job, { error: `Artelo already has this order as ${live?.productionStatus || live?.status}. Nothing was sent; a change now means a reprint.`, notify: true })
     }
 
