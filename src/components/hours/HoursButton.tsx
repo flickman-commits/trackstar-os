@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Clock } from 'lucide-react'
 import { openHours } from '@/lib/openHours'
 import { HOURS_STATE, hoursState, type HoursState } from '@/lib/hoursState'
+import { useAuth } from '@/lib/auth'
 
 const elapsed = (s: HoursState, now: number) => {
   const m = Math.max(0, Math.floor((now - new Date(s.startedAt!).getTime()) / 60000) + s.carriedMinutes)
@@ -15,6 +16,8 @@ const elapsed = (s: HoursState, now: number) => {
  * running-timer card (RunningTimer), which already asks the server.
  */
 export default function HoursButton() {
+  // An admin (Matt) opens it to see and log hours, not to start a shift: plain "Hours" (2026-11-20).
+  const { isAdmin } = useAuth()
   const [state, setState] = useState<HoursState | null>(hoursState)
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
@@ -34,9 +37,9 @@ export default function HoursButton() {
     </button>
   )
   return (
-    <button onClick={openHours} aria-label={state?.paused ? 'Resume your timer' : 'Clock in'} title={state?.paused ? 'Your timer is paused. Open the Hours Tracker to resume.' : 'Start your timer, or log time you worked'}
+    <button onClick={openHours} aria-label={state?.paused ? 'Resume your timer' : isAdmin ? 'Hours' : 'Clock in'} title={state?.paused ? 'Your timer is paused. Open the Hours Tracker to resume.' : 'Start your timer, or log time you worked'}
       className="inline-flex items-center gap-2 h-[46px] px-4 rounded-lg bg-dark-fill text-sm aria-[label]:px-3.5 font-semibold text-white hover:opacity-90 whitespace-nowrap">
-      <Clock className="w-4 h-4" /><span className="hidden xl:inline">{state?.paused ? 'Paused · resume' : 'Clock in'}</span>
+      <Clock className="w-4 h-4" /><span className="hidden xl:inline">{state?.paused ? 'Paused · resume' : isAdmin ? 'Hours' : 'Clock in'}</span>
     </button>
   )
 }
