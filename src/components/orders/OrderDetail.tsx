@@ -28,6 +28,7 @@ import { sameRunnerEmail } from '@/components/orders/sameRunnerEmail'
 import ProofShowcase from '@/components/ProofShowcase'
 import PhotoCropper from '@/components/PhotoCropper'
 import OrderProduction from '@/components/orders/OrderProduction'
+import OrderSupportActions from '@/components/orders/OrderSupportActions'
 import { BulkSendLine, BulkAddressAction } from '@/components/orders/BulkRunnerSend'
 import ConvertToCustomModal from '@/components/orders/ConvertToCustomModal'
 import FeatureStar from '@/components/orders/FeatureStar'
@@ -2381,6 +2382,10 @@ Thank you!`
                         }} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2" title="Mark it complete as it is, without sending anything to Artelo">
                         <CheckCircle2 className="w-3.5 h-3.5" /> Close order
                       </button>
+                    )}
+                    {/* Support's actions about this one order (Eli, 2026-11-20); cancelling stays in Support. */}
+                    {!isEditing && ['standard', 'custom'].includes(selectedOrder.trackstarOrderType || 'standard') && (
+                      <OrderSupportActions order={selectedOrder} onDone={() => { fetchOrders() }} />
                     )}
                     {selectedOrder.customerEmail && can('support') && !isEditing && selectedOrder.trackstarOrderType !== 'bulk' && (
                       <button onClick={() => setEmailingOrder(selectedOrder)} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2" title={`Email ${selectedOrder.customerEmail} from fast@ (opens a Support conversation)`}>

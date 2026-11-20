@@ -19,6 +19,7 @@ import prisma from '../../_lib/prisma.js'
 import { reorderPrep, createReorder, quoteReorder } from '../../../server/domain/support/arteloOrder.js'
 import { claimPrep, sendArteloClaim } from '../../../server/domain/support/damageClaim.js'
 import { assertOrderInThread } from '../../../server/domain/support/threads.js'
+import { threadForOrder, ORDER_ARTELO_ACTIONS } from '../../../server/domain/support/orderTarget.js'
 import { claimOnce } from '../../../server/domain/support/idempotency.js'
 import { publicMessage, publicStatus } from '../../../server/domain/support/errors.js'
 
@@ -29,10 +30,17 @@ export default async function handler(req, res) {
   if (!user) return
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {}
-    const thread = await prisma.supportThread.findUnique({ where: { id: String(body.id || '') } })
-    if (!thread) return res.status(404).json({ error: 'No such conversation' })
     if (!body.shopifyOrderId) return res.status(400).json({ error: 'Which order?' })
-    await assertOrderInThread(thread, { shopifyOrderId: body.shopifyOrderId })
+    // From the Fulfillment order view: the order, and the customer's latest conversation to log on (orderTarget.js).
+    const fromOrder = Boolean(body.orderRowId) && !body.id
+    if (fromOrder && !ORDER_ARTELO_ACTIONS.has(body.action)) return res.status(400).json({ error: 'That action is in Support only' })
+    let thread
+    if (fromOrder) thread = (await threadForOrder(body.orderRowId, body.shopifyOrderId)).thread
+    else {
+      thread = await prisma.supportThread.findUnique({ where: { id: String(body.id || '') } })
+      if (!thread) return res.status(404).json({ error: 'No such conversation' })
+      await assertOrderInThread(thread, { shopifyOrderId: body.shopifyOrderId })
+    }
     if (body.action === 'prep') return res.status(200).json(await reorderPrep({ shopifyOrderId: body.shopifyOrderId }))
     if (body.action === 'quote') return res.status(200).json(await quoteReorder({ lines: body.lines, address: body.address }))
     if (body.action === 'create') {
@@ -41,14 +49,14 @@ export default async function handler(req, res) {
       if (body.test === true && user.role !== 'admin') return res.status(403).json({ error: 'Test orders are for admins. Leave Test off to send the real one.' })
       await claimOnce('support.artelo_order', body.idempotencyKey)
       const out = await createReorder({ thread, shopifyOrderId: body.shopifyOrderId, orderIds: Array.isArray(body.orderIds) ? body.orderIds.map(String) : [], changes: body.changes && typeof body.changes === 'object' ? body.changes : null, files: body.files && typeof body.files === 'object' ? body.files : null, frames: Array.isArray(body.frames) ? body.frames : null, address: body.address, email: body.email, instructions: body.instructions, test: body.test === true, reason: body.reason, note: body.reasonNote, quotedCents: body.quotedCents, actor: user })
-      await recordAudit({ action: 'support.artelo_order', summary: out.summary, detail: { threadId: thread.id, shopifyOrderId: body.shopifyOrderId, arteloOrderId: out.orderId, test: out.test }, actor: user })
+      await recordAudit({ action: 'support.artelo_order', summary: out.summary, detail: { threadId: thread?.id || null, shopifyOrderId: body.shopifyOrderId, arteloOrderId: out.orderId, test: out.test, ...(fromOrder ? { from: 'fulfillment' } : {}) }, actor: user })
       return res.status(200).json(out)
     }
     if (body.action === 'claimPrep') return res.status(200).json(await claimPrep({ thread, shopifyOrderId: body.shopifyOrderId, tracking: body.tracking, actor: user }))
     if (body.action === 'claim') {
       await claimOnce('support.artelo_claim', body.idempotencyKey)
       const out = await sendArteloClaim({ thread, shopifyOrderId: body.shopifyOrderId, kind: body.kind, subject: body.subject, body: body.body, photos: body.photos, uploads: body.uploads, actor: user })
-      await recordAudit({ action: 'support.artelo_claim', summary: out.summary, detail: { threadId: thread.id, shopifyOrderId: body.shopifyOrderId, kind: out.kind, photos: out.photos, claimThreadId: out.claimThreadId }, actor: user })
+      await recordAudit({ action: 'support.artelo_claim', summary: out.summary, detail: { threadId: thread?.id || null, shopifyOrderId: body.shopifyOrderId, kind: out.kind, photos: out.photos, claimThreadId: out.claimThreadId, ...(fromOrder ? { from: 'fulfillment' } : {}) }, actor: user })
       return res.status(200).json(out)
     }
     return res.status(400).json({ error: 'Unknown action' })

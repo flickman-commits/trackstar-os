@@ -422,14 +422,14 @@ export async function createReorder({ thread, shopifyOrderId, orderIds, changes,
   const by = actorName(actor)
   const what = `${test ? 'Test ' : ''}Artelo order ${orderId}: ${sending.map(i => `${i.label} (${i.productLabel})`).join('; ')} to ${a.name}, ${a.city} ${a.province}`
   await prisma.$transaction([
-    prisma.supportNote.create({ data: { threadId: thread.id, kind: 'event', body: `${by} created ${what}`, authorId: actor?.id || null, authorName: by } }),
+    ...(thread ? [prisma.supportNote.create({ data: { threadId: thread.id, kind: 'event', body: `${by} created ${what}`, authorId: actor?.id || null, authorName: by } })] : []),
     // "New Artelo order" starts the comment so the next one is numbered -R2. A test order does not count.
     // Frames alone go on the order's first print, so the order still counts toward -R numbering.
     ...(test ? [] : (picked.length ? picked.map(i => i.orderId) : rows.slice(0, 1).map(r => r.id)).map(orderRowId => prisma.orderComment.create({ data: { orderId: orderRowId, text: `New Artelo order ${orderId} sent from Support${String(instructions || '').trim() ? `: ${String(instructions).trim().slice(0, 300)}` : ''}`, authorId: actor?.id || null, authorName: by } }))),
   ])
   if (!test) {
     await recordReplacement({
-      arteloOrderId: orderId, arteloId: created?.id || null, orderNumber: number, shopifyOrderId: id, threadId: thread.id,
+      arteloOrderId: orderId, arteloId: created?.id || null, orderNumber: number, shopifyOrderId: id, threadId: thread?.id || null,
       reason, note, quotedCents: Number.isInteger(quotedCents) ? quotedCents : null, actor, actorName: by,
       items: sending.map(i => ({ label: i.label, kind: i.frameOnly ? 'frame' : 'print', size: String(i.product?.size || '').replace(/^x/, ''), frame: i.product?.frameColor || 'Unframed' })),
     })

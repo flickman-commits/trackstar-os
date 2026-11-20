@@ -31,6 +31,7 @@ import { requireCapability, recordAudit } from '../../_lib/users.js'
 import { can } from '../../_lib/roles.js'
 import prisma from '../../_lib/prisma.js'
 import { changeItemPrep, changeItem } from '../../../server/domain/support/changeItem.js'
+import { threadForOrder, ORDER_ACTIONS } from '../../../server/domain/support/orderTarget.js'
 import { discount15, lookupCode, orderNote, fixPersonalization, slackMatt, shippingAddress, sendBalanceInvoice, refundable, refund, cancelOrder, REFUND_LIMIT_CENTS, DISCOUNT_LIMIT_PERCENT } from '../../../server/domain/support/actions.js'
 import { sendSupportInvoice, INVOICE_LIMIT_CENTS } from '../../../server/domain/support/invoice.js'
 import { sendSupportGiftCard, GIFT_CARD_LIMIT_CENTS } from '../../../server/domain/support/giftCards.js'
@@ -52,12 +53,17 @@ export default async function handler(req, res) {
 
     if (action === 'lookupCode') return res.status(200).json(await lookupCode(body.code))
 
-    const thread = await prisma.supportThread.findUnique({ where: { id: String(body.id || '') } })
-    if (!thread) return res.status(404).json({ error: 'No such thread' })
-    const audit = (summary, detail = {}) => recordAudit({ action: `support.${action}`, summary, detail: { threadId: thread.id, ...detail }, actor: user })
+    // From the Fulfillment order view: the order, and the customer's latest conversation to log on (orderTarget.js).
+    const fromOrder = Boolean(body.orderRowId) && !body.id
+    if (fromOrder && !ORDER_ACTIONS.has(action)) return res.status(400).json({ error: 'That action is in Support only' })
+    const thread = fromOrder
+      ? (await threadForOrder(body.orderRowId, body.shopifyOrderId)).thread
+      : await prisma.supportThread.findUnique({ where: { id: String(body.id || '') } })
+    if (!thread && !fromOrder) return res.status(404).json({ error: 'No such thread' })
+    const audit = (summary, detail = {}) => recordAudit({ action: `support.${action}`, summary, detail: { threadId: thread?.id || null, ...(fromOrder ? { orderId: body.orderRowId, from: 'fulfillment' } : {}), ...detail }, actor: user })
 
     // The page names the order; it has to be one this conversation is about.
-    if (body.shopifyOrderId !== undefined || body.orderId !== undefined) {
+    if (!fromOrder && (body.shopifyOrderId !== undefined || body.orderId !== undefined)) {
       await assertOrderInThread(thread, { shopifyOrderId: body.shopifyOrderId, orderId: body.orderId })
     }
     if (ONCE.has(action)) await claimOnce(`support.${action}`, body.idempotencyKey)

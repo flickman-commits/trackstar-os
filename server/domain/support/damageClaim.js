@@ -113,7 +113,8 @@ export async function claimPrep({ thread, shopifyOrderId, tracking, actor }) {
     arteloOrderId: f.artelo?.orderId || null,
     to: ARTELO_SUPPORT_EMAIL,
     kinds: TICKET_KINDS.map(k => ({ value: k.value, label: k.label, sub: k.sub, photos: k.photos, ...draftFor(k, f, actor) })),
-    photos: (await claimPhotos(thread.id)).slice(0, 30),
+    // From the order view with no conversation for this customer: no photos of theirs to offer.
+    photos: thread ? (await claimPhotos(thread.id)).slice(0, 30) : [],
   }
 }
 
@@ -140,7 +141,7 @@ export async function sendArteloClaim({ thread, shopifyOrderId, kind = 'damaged'
   }
   // Only photos from this conversation, by the same list the form showed.
   const picked = Array.isArray(photos) ? photos.slice(0, MAX_PHOTOS) : []
-  const own = picked.length ? await claimPhotos(thread.id) : []
+  const own = picked.length && thread ? await claimPhotos(thread.id) : []
   for (const p of picked) {
     const hit = own.find(o => o.messageId === String(p?.messageId) && o.index === Number(p?.index))
     if (!hit) throw new UserError('One of those photos is not in this conversation')
@@ -159,7 +160,7 @@ export async function sendArteloClaim({ thread, shopifyOrderId, kind = 'damaged'
   const withFiles = files.length ? ` with ${files.length} attachment${files.length === 1 ? '' : 's'}` : ''
   const label = k.label.toLowerCase()
   await prisma.$transaction([
-    prisma.supportNote.create({ data: { threadId: thread.id, kind: 'event', body: `${by} opened an Artelo ticket for #${f.number} (${label})${withFiles}: "${subj}". Artelo's answer comes into Support as its own conversation.`, authorId: actor?.id || null, authorName: by } }),
+    ...(thread ? [prisma.supportNote.create({ data: { threadId: thread.id, kind: 'event', body: `${by} opened an Artelo ticket for #${f.number} (${label})${withFiles}: "${subj}". Artelo's answer comes into Support as its own conversation.`, authorId: actor?.id || null, authorName: by } })] : []),
     ...f.rows.map(r => prisma.orderComment.create({ data: { orderId: r.id, text: `Artelo ticket (${label})${withFiles}: ${subj}`, authorId: actor?.id || null, authorName: by } })),
   ])
   return { number: f.number, kind, photos: files.length, claimThreadId: sent?.threadId || null, summary: `Opened an Artelo ticket for #${f.number} (${label})${withFiles}` }

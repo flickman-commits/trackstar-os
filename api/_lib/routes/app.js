@@ -23,6 +23,7 @@ export default {
   'orders/changes': () => import('../../_routes/orders/changes.js'),
   'orders/comments': () => import('../../_routes/orders/comments.js'),
   'orders/convert-to-custom': () => import('../../_routes/orders/convert-to-custom.js'),
+  'orders/customer-order': () => import('../../_routes/orders/customer-order.js'),
   'orders/excluded-products': () => import('../../_routes/orders/excluded-products.js'),
   'orders/final-pdf': () => import('../../_routes/orders/final-pdf.js'),
   'orders/gift-stats': () => import('../../_routes/orders/gift-stats.js'),

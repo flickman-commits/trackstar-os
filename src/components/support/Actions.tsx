@@ -114,6 +114,14 @@ const blankAddress = (thread: ThreadDetail): Address => ({ name: thread.customer
 
 type FormProps = { o: CustomerOrder; thread: ThreadDetail; onDone: () => void; onCancel: () => void }
 
+/**
+ * Who an action is for: the conversation, or, from the Fulfillment order view
+ * (OrderSupportActions), the order itself; the server then logs it on the
+ * customer's latest conversation (server/domain/support/orderTarget.js).
+ */
+export type ActionThread = ThreadDetail & { orderRowId?: string }
+const targetOf = (thread: ThreadDetail) => (thread as ActionThread).orderRowId ? { orderRowId: (thread as ActionThread).orderRowId } : { id: thread.id }
+
 type Saved = { pasted: string; arteloUrl: string | null; taxNote?: string | null; owedCents?: number; address?: Address }
 
 /**
@@ -134,7 +142,7 @@ function TaxInvoice({ o, thread, cents, address }: { o: CustomerOrder; thread: T
   const send = async () => {
     setBusy(true)
     try {
-      await supportApi.action('sendBalanceInvoice', { id: thread.id, shopifyOrderId: o.shopifyOrderId, message, idempotencyKey: pressKey })
+      await supportApi.action('sendBalanceInvoice', { ...targetOf(thread), shopifyOrderId: o.shopifyOrderId, message, idempotencyKey: pressKey })
       setSent(true)
       toast.success(`Invoice for ${usd(cents)} sent on #${o.number}`)
     } catch (e) { toast.error((e as Error).message) }
@@ -151,14 +159,14 @@ function TaxInvoice({ o, thread, cents, address }: { o: CustomerOrder; thread: T
 }
 
 /** The ship-to form, prefilled from Shopify (or Artelo's copy), then the hand-off to Artelo. */
-function AddressForm({ o, thread, onDone, onCancel }: FormProps) {
+export function AddressForm({ o, thread, onDone, onCancel }: FormProps) {
   const [a, setA] = useState<Address>(o.shipTo || o.arteloAddress || blankAddress(thread))
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState<Saved | null>(null)
   const save = async () => {
     setBusy(true)
     try {
-      const out = await supportApi.action<Saved>('shippingAddress', { id: thread.id, shopifyOrderId: o.shopifyOrderId, address: a })
+      const out = await supportApi.action<Saved>('shippingAddress', { ...targetOf(thread), shopifyOrderId: o.shopifyOrderId, address: a })
       try { await navigator.clipboard.writeText(out.pasted) } catch { /* the button below copies too */ }
       setSaved(out)
       toast.success(`#${o.number} updated in Shopify. Address copied for Artelo.`)
@@ -338,7 +346,7 @@ function trackingText(o: FormProps['o']) {
  * attach the customer's photos from this conversation or files from your
  * computer, send. The subject always carries the order number.
  */
-function ArteloTicketForm({ o, thread, onDone, onCancel }: FormProps) {
+export function ArteloTicketForm({ o, thread, onDone, onCancel }: FormProps) {
   const [prep, setPrep] = useState<TicketPrep | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [kind, setKind] = useState<string>('damaged')
@@ -353,7 +361,7 @@ function ArteloTicketForm({ o, thread, onDone, onCancel }: FormProps) {
   const [sent, setSent] = useState<{ files: number } | null>(null)
   const key = (p: { messageId: string; index: number }) => `${p.messageId}:${p.index}`
   useEffect(() => {
-    supportApi.arteloOrder<TicketPrep>({ action: 'claimPrep', id: thread.id, shopifyOrderId: o.shopifyOrderId, tracking: trackingText(o) })
+    supportApi.arteloOrder<TicketPrep>({ action: 'claimPrep', ...targetOf(thread), shopifyOrderId: o.shopifyOrderId, tracking: trackingText(o) })
       .then(r => { setPrep(r); const k = r.kinds[0]; setSubject(k.subject); setBody(k.body); setPicked(r.photos.slice(0, 8).map(key)) })
       .catch(e => setErr((e as Error).message))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -379,7 +387,7 @@ function ArteloTicketForm({ o, thread, onDone, onCancel }: FormProps) {
     setBusy(true)
     try {
       const out = await supportApi.arteloOrder<{ photos: number }>({
-        action: 'claim', id: thread.id, shopifyOrderId: o.shopifyOrderId, kind, subject, body,
+        action: 'claim', ...targetOf(thread), shopifyOrderId: o.shopifyOrderId, kind, subject, body,
         photos: photosToSend.map(p => ({ messageId: p.messageId, index: p.index })), uploads: uploads.map(u => u.ref), idempotencyKey: pressKey,
       })
       setSent({ files: out.photos })
@@ -468,7 +476,7 @@ type ReorderPrep = {
  * email, $0. For a reprint or a replacement. "Test only" makes an Artelo test
  * order that is never produced, to try it first.
  */
-function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & { isAdmin: boolean }) {
+export function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & { isAdmin: boolean }) {
   const [prep, setPrep] = useState<ReorderPrep | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [picked, setPicked] = useState<string[]>([])
@@ -525,7 +533,7 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
     let stale = false
     const t = window.setTimeout(() => {
       setQuoting(true)
-      supportApi.arteloOrder<Quote>({ action: 'quote', id: thread.id, shopifyOrderId: o.shopifyOrderId, lines: quoteLines.map(({ key: _k, ...l }) => l), address: a })
+      supportApi.arteloOrder<Quote>({ action: 'quote', ...targetOf(thread), shopifyOrderId: o.shopifyOrderId, lines: quoteLines.map(({ key: _k, ...l }) => l), address: a })
         .then(q => { if (!stale) { setQuote({ keys: quoteLines.map(l => l.key), q }); setQuoteErr(null) } })
         .catch(e => { if (!stale) { setQuote(null); setQuoteErr((e as Error).message) } })
         .finally(() => { if (!stale) setQuoting(false) })
@@ -544,7 +552,7 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
       : <span className={`shrink-0 text-sm tabular-nums font-medium ${quoting ? 'text-off-black/35' : 'text-off-black'}`}>{usd(c)}</span>
   }
   useEffect(() => {
-    supportApi.arteloOrder<ReorderPrep>({ action: 'prep', id: thread.id, shopifyOrderId: o.shopifyOrderId })
+    supportApi.arteloOrder<ReorderPrep>({ action: 'prep', ...targetOf(thread), shopifyOrderId: o.shopifyOrderId })
       .then(r => { setPrep(r); setLooseFrame(f => ({ ...f, size: r.items.find(i => i.size)?.size || r.sizes[0]?.value || '' })); setPicked(r.items.filter(i => i.copyable).map(i => i.orderId)); setChanges(Object.fromEntries(r.items.map(i => [i.orderId, { size: i.size || '', frame: i.frame || 'Unframed' }]))) })
       .catch(e => setErr((e as Error).message))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -552,7 +560,7 @@ function ArteloOrderForm({ o, thread, isAdmin, onDone, onCancel }: FormProps & {
     if (!confirming) { setConfirming(true); setPressKey(newIdempotencyKey()); return }
     setBusy(true)
     try {
-      const out = await supportApi.arteloOrder<{ orderId: string; url: string | null; test: boolean }>({ action: 'create', id: thread.id, shopifyOrderId: o.shopifyOrderId, orderIds: picked, changes, frames: frameOn ? [looseFrame] : [], files: Object.fromEntries(Object.entries(files).filter(([id]) => picked.includes(id)).map(([id, f]) => [id, f.ref])), address: a, email, instructions, test: isAdmin && test, reason, reasonNote, quotedCents: quote?.q.totalCents ?? null, idempotencyKey: pressKey })
+      const out = await supportApi.arteloOrder<{ orderId: string; url: string | null; test: boolean }>({ action: 'create', ...targetOf(thread), shopifyOrderId: o.shopifyOrderId, orderIds: picked, changes, frames: frameOn ? [looseFrame] : [], files: Object.fromEntries(Object.entries(files).filter(([id]) => picked.includes(id)).map(([id, f]) => [id, f.ref])), address: a, email, instructions, test: isAdmin && test, reason, reasonNote, quotedCents: quote?.q.totalCents ?? null, idempotencyKey: pressKey })
       setDone(out)
       toast.success(`${out.test ? 'Test order' : 'Artelo order'} ${out.orderId} created`)
       onDone()
