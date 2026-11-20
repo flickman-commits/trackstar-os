@@ -122,6 +122,18 @@ export async function createJob({ orderId, requestedBy = 'admin', requestedById 
  * size that has been reviewed, so approving a 12x18 for Support puts the
  * order's own print back in view.
  */
+/** Every finished render of the order, newest first, for the version picker (small: no files). */
+export async function renderVersions(orderId) {
+  const jobs = await prisma.renderJob.findMany({ where: { orderId: String(orderId), status: 'done' }, orderBy: { version: 'desc' }, take: 30, select: { id: true, version: true, createdAt: true, review: true, reviewNote: true, requestedBy: true, spec: true } })
+  return jobs.map(j => ({ id: j.id, version: j.version, createdAt: j.createdAt, review: j.review, reviewNote: j.reviewNote, requestedBy: j.requestedBy, size: j.spec?.size || null, altSize: Boolean(j.spec?.altSize) }))
+}
+
+/** One render of this order, by id, for looking back at an earlier version. */
+export async function jobOfOrder(orderId, jobId) {
+  const job = await prisma.renderJob.findUnique({ where: { id: String(jobId) }, include: { reviewer: { select: { firstName: true, lastName: true } } } })
+  return job && job.orderId === String(orderId) ? job : null
+}
+
 export async function latestJob(orderId) {
   const jobs = await prisma.renderJob.findMany({ where: { orderId: String(orderId) }, orderBy: { version: 'desc' }, take: 10, include: { reviewer: { select: { firstName: true, lastName: true } } } })
   return jobs.find(j => !(j.spec?.altSize && ['approved', 'rejected', 'closed'].includes(j.review))) || jobs[0] || null

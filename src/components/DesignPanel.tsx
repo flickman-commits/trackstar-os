@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Sparkles, Download, Check, X, RefreshCw, ArrowUpRight, Send, Pause, Undo2 } from 'lucide-react'
+import { Loader2, Sparkles, Download, Check, X, RefreshCw, ArrowUpRight, Send, Pause, Undo2, ChevronDown } from 'lucide-react'
 import type { Design } from '@/lib/useDesign'
 import { shortcutsPaused, previewShown } from '@/lib/shortcuts'
 import { btnPrimary, btnGhost, inputBase } from '@/lib/ui'
@@ -37,7 +37,10 @@ export function DesignCard({ d }: { d: Design }) {
   const [lightbox, setLightbox] = useState(false)
   if (d.reserved && !d.state) return <div className="w-full md:w-[347px] md:max-w-full aspect-[2/3] md:aspect-auto md:h-[520px] self-start rounded-md border border-border-gray bg-subtle-gray animate-pulse" />
   if (!d.visible || !d.state) return null
-  const { job, state } = d
+  const { state } = d
+  // An earlier version picked from the V tag shows in place of the current one, clearly labelled.
+  const job = d.viewing || d.job
+  const old = d.viewing && d.job ? d.viewing : null
 
   if (job?.status === 'done' && job.previewUrl) {
     // The box takes the print's shape (8x10 is 4:5, the rest 2:3), so an 8x10 has no bands above and below.
@@ -45,8 +48,15 @@ export function DesignCard({ d }: { d: Design }) {
     const ratio = m ? `${m[1]} / ${m[2]}` : '2 / 3'
     return (
       <div className="self-start w-full md:w-auto flex flex-col items-center gap-2">
+        {old && (
+          <div className="w-full md:w-[347px] md:max-w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md bg-amber-50 border border-amber-300 text-xs text-amber-900">
+            <span><span className="font-semibold">Viewing V{old.version}</span>, an earlier version{old.reviewNote ? ` (${old.review}: ${old.reviewNote})` : ''}</span>
+            <button onClick={() => { void d.viewVersion(null) }} className="shrink-0 font-semibold underline underline-offset-2 hover:text-amber-700">Back to V{d.job!.version}</button>
+          </div>
+        )}
         <button onClick={() => setLightbox(true)} style={{ aspectRatio: ratio }} className="relative self-start w-full md:w-[347px] md:max-w-full rounded-md border border-border-gray bg-subtle-gray overflow-hidden" title="Open larger">
           <img src={job.previewUrl} data-render-preview={job.id} alt={`Render of ${job.spec.file}`} className="w-full h-full object-contain block" />
+          {old && <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-amber-400 text-[11px] font-bold text-amber-950">V{old.version}</span>}
           {job.review !== 'pending' && (
             <span className={`absolute top-2 left-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold ${job.review === 'approved' ? 'bg-green-100 text-green-800' : job.review === 'closed' ? 'bg-off-black/10 text-off-black/70' : 'bg-red-100 text-red-800'}`}>
               {job.review === 'approved' ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
@@ -475,6 +485,40 @@ export function DesignFileLinks({ d }: { d: Design }) {
   )
 }
 
+/**
+ * The version tag. With more than one version, hovering it lists them all;
+ * clicking one shows it on the design card, labelled, to see what an earlier
+ * render got wrong (Matt, 2026-11-20).
+ */
+function VersionTag({ d }: { d: Design }) {
+  const job = d.job!
+  const shown = d.viewing || job
+  const list = d.versions.filter(v => !v.altSize || v.id === job.id)
+  const label = (v: { review: string }) => v.review === 'approved' ? 'Approved' : v.review === 'rejected' ? 'Rejected' : v.review === 'closed' ? 'Replaced' : 'Waiting for review'
+  if (list.length < 2) return <Tag title={`${job.requestedBy === 'system' ? 'Rendered automatically' : 'Re-rendered by hand'}, ${fmt(job.createdAt)}`}>V{job.version}</Tag>
+  return (
+    <span className="relative group">
+      <button type="button" className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium ${d.viewing ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-white border-border-gray text-off-black/70'}`} title="See earlier versions">
+        V{shown.version} <ChevronDown className="w-3 h-3 opacity-60" />
+      </button>
+      <span className="absolute left-0 top-full z-30 pt-1 hidden group-hover:block group-focus-within:block">
+        <span className="block w-64 rounded-md border border-border-gray bg-white shadow-lg py-1">
+          {list.map(v => (
+            <button key={v.id} type="button" onClick={() => { void d.viewVersion(v.id) }}
+              className={`w-full text-left px-3 py-1.5 hover:bg-subtle-gray ${v.id === shown.id ? 'bg-subtle-gray' : ''}`} title={v.reviewNote || undefined}>
+              <span className="flex items-center justify-between gap-2 text-xs">
+                <span className="font-semibold text-off-black">V{v.version}{v.id === job.id ? ' (current)' : ''}</span>
+                <span className={v.review === 'approved' ? 'text-green-700' : v.review === 'rejected' ? 'text-red-600' : 'text-off-black/50'}>{label(v)}</span>
+              </span>
+              <span className="block text-[11px] text-off-black/50 truncate">{fmt(v.createdAt)}{v.reviewNote ? ` · ${v.reviewNote}` : ''}</span>
+            </button>
+          ))}
+        </span>
+      </span>
+    </span>
+  )
+}
+
 function Tag({ tone = 'gray', children, href, title, onClick }: { tone?: 'green' | 'red' | 'purple' | 'gray' | 'blue'; children: React.ReactNode; href?: string | null; title?: string; onClick?: () => void }) {
   const cls = `inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-medium ${
     tone === 'green' ? 'bg-green-50 border-green-200 text-green-800'
@@ -493,7 +537,8 @@ function Tag({ tone = 'gray', children, href, title, onClick }: { tone?: 'green'
  * and fine, red = a problem, purple = in Artelo).
  */
 export function DesignDetailsTags({ d }: { d: Design }) {
-  const job = d.job
+  // The measurements are of the version on screen, an earlier one when picked.
+  const job = d.viewing || d.job
   if (!d.visible || !job || job.status !== 'done') return null
   const o = job.output
   const b = o?.bleedIn
@@ -505,7 +550,7 @@ export function DesignDetailsTags({ d }: { d: Design }) {
       <div className="flex flex-wrap gap-1.5">
         {/* The race, photo, approver and date source all show elsewhere on the order;
             what belongs here is the version and what the PDF measured. */}
-        <Tag title={`${job.requestedBy === 'system' ? 'Rendered automatically' : 'Re-rendered by hand'}, ${fmt(job.createdAt)}`}>V{job.version}</Tag>
+        <VersionTag d={d} />
         {job.spec.noTime && <Tag tone="red">No time</Tag>}
         {o ? (
           <>

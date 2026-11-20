@@ -13,7 +13,7 @@
  */
 import { setCors, requireAdmin } from '../../_lib/auth.js'
 import { requireCapability, recordAudit, loadActiveUser } from '../../_lib/users.js'
-import { checkOrder, createJob, latestJob, signedFiles, onlineWorkers } from '../../../server/domain/render/jobs.js'
+import { checkOrder, createJob, latestJob, signedFiles, onlineWorkers, renderVersions, jobOfOrder } from '../../../server/domain/render/jobs.js'
 import { reviewRender, deliverEverywhere } from '../../../server/domain/render/review.js'
 import { inBackground } from '../../../server/lib/background.js'
 import { autoSendOn, sendState } from '../../../server/domain/render/arteloSend.js'
@@ -28,7 +28,13 @@ export default async function handler(req, res) {
       if (!(await loadActiveUser(actor))) return res.status(401).json({ error: 'Your account is no longer active. Sign in again.' })
       const orderId = String(req.query?.orderId || '')
       if (!orderId) return res.status(400).json({ error: 'orderId is required' })
-      let [{ ok, reasons }, job, workers, autoSend] = await Promise.all([checkOrder(orderId, { allowUnpaidPhoto: true }), latestJob(orderId), onlineWorkers(), autoSendOn()])
+      // An earlier version, to look back at what changed (the version picker on the V tag).
+      if (req.query?.jobId) {
+        const old = await jobOfOrder(orderId, req.query.jobId)
+        if (!old) return res.status(404).json({ error: 'That version was not found' })
+        return res.status(200).json({ job: present(old, await signedFiles(old)) })
+      }
+      let [{ ok, reasons }, job, workers, autoSend, versions] = await Promise.all([checkOrder(orderId, { allowUnpaidPhoto: true }), latestJob(orderId), onlineWorkers(), autoSendOn(), renderVersions(orderId)])
       // An approved render that did not reach Drive or Artelo is retried on
       // sight, in the background so opening the order never waits on it. The
       // first two minutes after an approval belong to that approval's own
@@ -36,7 +42,7 @@ export default async function handler(req, res) {
       const missing = job && job.review === 'approved' && (!job.deliveredAt || !job.arteloUploadedAt)
       if (missing && (!job.reviewedAt || Date.now() - new Date(job.reviewedAt).getTime() > 120000)) inBackground(deliverEverywhere(job))
       const files = job ? await signedFiles(job) : { pdfUrl: null, previewUrl: null }
-      return res.status(200).json({ eligible: ok, reasons, job: job ? present(job, files) : null, workersOnline: workers.map(w => w.name), autoSend })
+      return res.status(200).json({ eligible: ok, reasons, job: job ? present(job, files) : null, workersOnline: workers.map(w => w.name), autoSend, versions })
     }
 
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })

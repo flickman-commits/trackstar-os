@@ -16,7 +16,9 @@ export type Job = {
   output: { trimIn: string | null; bleedIn: { left: number; right: number; top: number; bottom: number } | null; color: 'CMYK' | 'RGB' | 'mixed' | null; images?: { ppi: number; widthIn: number; heightIn: number }[] } | null
   pdfUrl: string | null; previewUrl: string | null
 }
-type State = { eligible: boolean; reasons: string[]; job: Job | null; workersOnline: string[]; autoSend?: boolean }
+/** A finished render of the order, for the version picker (api/_routes/render/jobs.js). */
+export type Version = { id: string; version: number; createdAt: string; review: Job['review']; reviewNote: string | null; requestedBy: Job['requestedBy']; size: string | null; altSize: boolean }
+type State = { eligible: boolean; reasons: string[]; job: Job | null; workersOnline: string[]; autoSend?: boolean; versions?: Version[] }
 
 async function post(body: Record<string, unknown>) {
   const res = await apiFetch('/api/render/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -49,7 +51,19 @@ export function useDesign(orderId: string | null, canManage: boolean) {
     } catch { /* leave what we have */ }
   }, [orderId])
 
-  useEffect(() => { setState(null); setErr(null); load() }, [load])
+  useEffect(() => { setState(null); setErr(null); setViewing(null); load() }, [load])
+
+  // An earlier version shown in place of the current one, to see what changed. Null = the current one.
+  const [viewing, setViewing] = useState<Job | null>(null)
+  const viewVersion = useCallback(async (jobId: string | null) => {
+    if (!orderId || !jobId || jobId === state?.job?.id) { setViewing(null); return }
+    try {
+      const res = await apiFetch(`/api/render/jobs?orderId=${encodeURIComponent(orderId)}&jobId=${encodeURIComponent(jobId)}`)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not open that version')
+      if (current.current === orderId) setViewing(data.job)
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not open that version') }
+  }, [orderId, state?.job?.id])
 
   // While a render is in flight, or an approved print is still on its way to
   // Drive and Artelo (that happens after Approve answers), ask again every few seconds.
@@ -111,6 +125,6 @@ export function useDesign(orderId: string | null, canManage: boolean) {
   const visible = Boolean(orderId && state && (canManage || job?.review === 'approved'))
   // Room is held for the design from the moment the order opens, so the layout does not jump when it loads.
   const reserved = Boolean(orderId && (canManage || job?.review === 'approved'))
-  return { state, job, busy, creating, err, create, review, sendAction, autoSend: state?.autoSend !== false && !job?.spec?.altSize, reload: load, uploading, canManage, visible, reserved, offline: !state || state.workersOnline.length === 0 }
+  return { state, job, viewing, viewVersion, versions: state?.versions || [], busy, creating, err, create, review, sendAction, autoSend: state?.autoSend !== false && !job?.spec?.altSize, reload: load, uploading, canManage, visible, reserved, offline: !state || state.workersOnline.length === 0 }
 }
 
