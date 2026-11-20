@@ -343,6 +343,7 @@ export function mapOrder(order: Record<string, unknown>): Order {
     shopifyAdminUrl: order.shopifyAdminUrl as string | null | undefined,
     etsyOrderUrl: order.etsyOrderUrl as string | null | undefined,
     arteloUrl: order.arteloUrl as string | null | undefined,
+    bulkSend: (order.bulkSend as Order['bulkSend']) ?? null,
     partnerName: order.partnerName as string | null | undefined,
     partnerContactName: order.partnerContactName as string | null | undefined,
     creatorShipping: order.creatorShipping as Order['creatorShipping'],
