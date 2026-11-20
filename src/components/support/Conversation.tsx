@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Archive, Bold, ChevronDown, Clock, Copy, Italic, Link as LinkIcon, Loader2, Mail, Paperclip, RotateCcw, Send, StickyNote, Trash2, Zap, X, Search } from 'lucide-react'
+import { AlertTriangle, Archive, Bold, ChevronDown, Clock, Copy, Italic, Link as LinkIcon, Link2, Loader2, Mail, Paperclip, RotateCcw, Send, StickyNote, Trash2, Zap, X, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { markupToPlain } from '@/lib/replyMarkup'
 import { btnGhost, btnPrimary, btnSecondary } from '@/lib/ui'
@@ -522,6 +522,11 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
             {/* Marked and unmarked from the details panel (or p); here it only shows. */}
             {thread.priority && <span className="mr-1 px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-[11px] font-semibold text-amber-800">Priority</span>}
             {thread.bouncedAt && <span className="mr-1 px-2 py-0.5 rounded-full bg-red-100 border border-red-300 text-[11px] font-semibold text-red-800" title="Our last email came back undeliverable. Find the right address and send again.">Email bounced</span>}
+            {/* A link a teammate can open straight onto this conversation (Support.tsx reads ?thread=). */}
+            <button onClick={() => { navigator.clipboard.writeText(`${globalThis.location.origin}/support?thread=${encodeURIComponent(thread.id)}`).then(() => toast.success('Link to this conversation copied')).catch(() => toast.error('Could not copy the link')) }}
+              className={`${btnGhost} text-xs whitespace-nowrap`} title="Copy a link to this conversation to share with the team">
+              <Link2 className="w-3.5 h-3.5 text-off-black/50" /> Share conversation
+            </button>
             <button onClick={onMarkUnread} disabled={busy} className={`${btnGhost} px-1.5`} title="Mark unread (u)">
               <Mail className="w-4 h-4 text-off-black/40" />
             </button>

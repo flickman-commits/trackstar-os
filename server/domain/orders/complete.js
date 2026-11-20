@@ -54,9 +54,10 @@ export function describeOrder(order) {
  * @param {object} [opts.actor]          the person, for the Activity Log
  * @param {string} [opts.via]            'approve' when an approved render placed the photo
  * @param {string} [opts.renderJobId]    the approved render, when via === 'approve'
- * @param {boolean} [opts.override]      Close order: a person says the print was handled
- *   outside the tool, so the Artelo and photo checks are skipped and what was
- *   skipped goes in the Activity Log (Eli, 2026-11-20: Close order kept refusing).
+ * @param {boolean} [opts.override]      Close order: the print was made by hand, so the
+ *   design check (photo placed) is skipped and what was skipped
+ *   goes in the Activity Log. Artelo (it must really be in production) and an
+ *   added photo being paid for are still checked (Matt, 2026-11-20).
  */
 export async function completeOrder({ orderId, orderNumber, actor = null, via = 'manual', renderJobId = null, override = false }) {
   const existing = orderId
@@ -67,9 +68,7 @@ export async function completeOrder({ orderId, orderNumber, actor = null, via = 
   // By hand: only once Artelo has it. Our own send (via 'approve') has just
   // been accepted by Artelo; a skipped product is fulfilled by Artelo itself.
   const skipped = []
-  if (via === 'manual' && override) {
-    try { await assertArteloHasIt(existing) } catch (e) { if (!(e instanceof CompleteError)) throw e; skipped.push(e.code === 'artelo_unreachable' ? 'Artelo could not be checked' : 'Artelo had not sent it to production') }
-  } else if (via === 'manual') await assertArteloHasIt(existing)
+  if (via === 'manual') await assertArteloHasIt(existing)
 
   // The photo gate is for designs made by hand. When the script made the
   // design, it placed the photo and a person approved the result with the
@@ -84,7 +83,7 @@ export async function completeOrder({ orderId, orderNumber, actor = null, via = 
     if (!photoByRender) throw new CompleteError('photo_not_confirmed', 'This print includes a customer photo and was not made by the script. Confirm the photo is placed before completing the order.')
   }
   if (override && existing.photoPath && !existing.photoPlacedAt) skipped.push('the photo was not confirmed placed')
-  if (existing.photoAddedManually && !fromArtelo && !override) {
+  if (existing.photoAddedManually && !fromArtelo) {
     const siblings = await prisma.order.findMany({ where: { parentOrderNumber: existing.parentOrderNumber }, select: { id: true, photoPath: true, photoAddedManually: true, photoFree: true, trackstarOrderType: true } })
     if (unpaidPhotoRows(siblings, existing.shopifyOrderData).has(existing.id)) {
       throw new CompleteError('photo_not_paid', 'The customer has not paid for the photo yet. Wait for the Shopify order to read paid before completing.')

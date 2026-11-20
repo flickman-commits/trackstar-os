@@ -2367,7 +2367,7 @@ Thank you!`
                         left to finish it (Eli, 2026-11-15). Logged on the order. */}
                     {selectedOrder.status !== 'completed' && !isEditing && selectedOrder.trackstarOrderType !== 'bulk' && (
                       <button onClick={async () => {
-                          if (!(await confirm({ title: 'Close this order?', body: 'It is marked complete as it is, without sending anything to Artelo, even if Artelo has not sent it to production or the photo is not confirmed. The Artelo order is left as it is. Use it when the print, or its replacement, was handled outside the tool.', action: 'Close order' }))) return
+                          if (!(await confirm({ title: 'Close this order?', body: 'It is marked complete as it is, skipping the design checks (like the photo-placed box) because it was made by hand. Artelo must already have it in production, or it will not close. Use it when the print, or its replacement, was handled outside the tool.', action: 'Close order' }))) return
                           const number = selectedOrder.orderNumber, id = selectedOrder.id
                           if (!(await markAsCompleted(number, { override: true }))) return
                           apiFetch('/api/orders/comments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: id, text: `Closed by hand${user?.firstName ? ` by ${user.firstName}` : ''}.` }) }).catch(() => {})
