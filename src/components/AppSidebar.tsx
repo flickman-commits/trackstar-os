@@ -240,7 +240,8 @@ function SalesTile({ item, active }: { item: Item; active: boolean }) {
  * card and white current tile as the desktop rail.
  */
 /** Above the home indicator, and above the order view's bottom bar when one is up (--phone-bar-h, set by OrderDetail). */
-const SQUARE_BOTTOM = 'calc(env(safe-area-inset-bottom) + 12px + var(--phone-bar-h, -8px) + 8px)'
+// The hours bar (hours/RunningTimer.tsx) sits under everything; the menu moves up by it.
+const SQUARE_BOTTOM = 'calc(var(--hours-bar-h, env(safe-area-inset-bottom)) + 12px + var(--phone-bar-h, -8px) + 8px)'
 
 export function MobileToolBar({
   can,
@@ -368,7 +369,7 @@ export default function AppSidebar({
   ]
 
   return (
-    <aside className="hidden md:flex fixed left-3 top-3 bottom-3 w-[78px] z-30 flex-col rounded-[22px] bg-dark-fill shadow-[0_2px_10px_rgba(0,0,0,0.10)]">
+    <aside style={{ bottom: 'calc(12px + var(--hours-bar-h, 0px))' }} className="hidden md:flex fixed left-3 top-3 w-[78px] z-30 flex-col rounded-[22px] bg-dark-fill shadow-[0_2px_10px_rgba(0,0,0,0.10)]">
       {/* overflow-visible on purpose: overflow-y-auto would also clip on the
           x axis. Seven tiles never need to scroll. */}
       <div className="flex-1 flex flex-col gap-0.5 px-1.5 pt-2.5 overflow-visible">
