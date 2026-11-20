@@ -223,9 +223,54 @@ async function upload(url, file, contentType) {
   if (!res.ok) throw new Error(`Upload failed (${res.status}): ${(await res.text()).slice(0, 200)}`)
 }
 
+/**
+ * Which part of a render failed, and what a person does about it. The raw
+ * error ("Unknown system error -11", "71:81: syntax error") told nobody
+ * anything (Pittsburgh Half, Nov 19-20): every failure now names the step,
+ * the file, what went wrong in plain words, and the fix, with the raw error
+ * at the end for whoever debugs it.
+ */
+const STEPS = {
+  template: 'Copying the production file',
+  photo: 'Downloading the customer photo',
+  illustrator: 'Making the print in Illustrator',
+  files: 'Reading the finished print',
+  upload: 'Uploading the finished print',
+}
+function explain(step, e, ctx = {}) {
+  const raw = String(e?.message || e).trim()
+  const code = `${e?.code || ''} ${raw}`
+  const file = ctx.src ? ` "${path.relative(RACES_DIR, ctx.src)}"` : ''
+  let what = raw, fix = 'Re-render; if it fails the same way, send this message to Matt.'
+  if (step === 'template') {
+    if (/online-only/.test(raw)) return raw
+    if (/ENOENT/.test(code)) { what = `the production file${file} is not on the render Mac (moved, renamed or deleted)`; fix = 'Put it back in the race\'s Illustrator Files folder, or fix its path under Settings > Designs, then Re-render.' }
+    else if (/EACCES|EPERM/.test(code)) { what = `the render Mac is not allowed to read${file}`; fix = 'Check the file\'s sharing in Google Drive, then Re-render.' }
+  } else if (step === 'photo') {
+    what = `the customer photo could not be downloaded (${raw})`; fix = 'Open the order\'s photo; if it is missing, ask the customer for it again or use Replace the customer photo, then Re-render.'
+  } else if (step === 'illustrator') {
+    if (/did not finish in time/i.test(raw)) { what = `Illustrator did not finish within ${ILLUSTRATOR_TIMEOUT_MS / 60000} minutes, twice (it was restarted between tries)`; fix = 'Check Illustrator on the render Mac for an open dialog (missing font, update prompt) and close it, then Re-render.' }
+    else if (/-2741|Expected end of line|-600|isn\'t running|not running|-609/i.test(raw)) { what = 'Illustrator was not open, or was starting or quitting, when the job began'; fix = 'Make sure Illustrator is open on the render Mac, then Re-render.' }
+    else if (/artboard/i.test(raw)) fix = `The production file${file} needs fixing in Illustrator (see above); then Re-render.`
+    else if (/frame|placeholder|layer/i.test(raw)) fix = `The production file${file} needs fixing in Illustrator (see above): it may have been saved with a customer's print still in it. Then Re-render.`
+  } else if (step === 'upload') {
+    what = `the finished print could not be uploaded (${raw})`; fix = 'Usually the network: Re-render.'
+  }
+  const err = new Error(`${STEPS[step] || step} failed: ${what}. ${fix}${what === raw ? '' : ` (${raw})`}`)
+  err.retry = e?.retry
+  return err
+}
+async function step(name, fn, ctx) {
+  try { return await fn() } catch (e) {
+    const out = explain(name, e, ctx)
+    out.original = e.message
+    throw out
+  }
+}
+
 async function render(job) {
   const { spec, template: tpl } = job
-  if (!tpl) throw new Error(`No template for ${spec.template || spec.race}`)
+  if (!tpl) throw new Error(`No production file is set up for ${spec.template || spec.race}. Add it under Settings > Designs, then Re-render.`)
   const src = localFile(tpl)
   const dir = path.join(WORK, job.id)
   fs.rmSync(dir, { recursive: true, force: true })
@@ -233,10 +278,10 @@ async function render(job) {
 
   // A copy of the production file, so the live one is never opened or touched.
   const template = path.join(dir, 'template.ai')
-  copyFile(src, template)
+  await step('template', () => copyFile(src, template), { src })
 
   let photo = null
-  if (job.photoUrl) { photo = path.join(dir, 'photo' + (path.extname(spec.photoPath || '') || '.jpg')); await download(job.photoUrl, photo) }
+  if (job.photoUrl) { photo = path.join(dir, 'photo' + (path.extname(spec.photoPath || '') || '.jpg')); await step('photo', () => download(job.photoUrl, photo)) }
 
   const out = path.join(dir, spec.file)
   const rules = tpl.rules || {}
@@ -244,18 +289,23 @@ async function render(job) {
   fs.writeFileSync(path.join(HERE, 'illustrator', 'current.json'), JSON.stringify(current))
   fs.rmSync(path.join(HERE, 'illustrator', 'result.json'), { force: true })
 
-  await runIllustrator(SCRIPT, ILLUSTRATOR_TIMEOUT_MS)
-  const resultFile = path.join(HERE, 'illustrator', 'result.json')
-  if (!fs.existsSync(resultFile)) throw new Error('Illustrator ran but wrote no result')
-  const result = JSON.parse(fs.readFileSync(resultFile, 'utf8'))
-  if (!result.ok) throw new Error(result.error || 'Illustrator reported a failure')
-  if (!fs.existsSync(out + '.pdf') || !fs.existsSync(out + '.png')) throw new Error('Illustrator finished but the files are missing')
+  const result = await step('illustrator', async () => {
+    await runIllustrator(SCRIPT, ILLUSTRATOR_TIMEOUT_MS)
+    const resultFile = path.join(HERE, 'illustrator', 'result.json')
+    if (!fs.existsSync(resultFile)) throw new Error('Illustrator ran but wrote no result (the script stopped before the end)')
+    const r = JSON.parse(fs.readFileSync(resultFile, 'utf8'))
+    if (!r.ok) throw new Error(r.error || 'Illustrator reported a failure without a reason')
+    return r
+  }, { src })
+  await step('files', () => { if (!fs.existsSync(out + '.pdf') || !fs.existsSync(out + '.png')) throw new Error('Illustrator finished but the PDF or preview was not saved') })
 
   // Measure the PDF itself: trim, bleed on each side, CMYK or not.
   let output = null
   try { output = inspectPdf(out + '.pdf') } catch (e) { log(`  could not inspect the PDF: ${e.message}`) }
-  await upload(job.pdfUploadUrl, out + '.pdf', 'application/pdf')
-  await upload(job.previewUploadUrl, out + '.png', 'image/png')
+  await step('upload', async () => {
+    await upload(job.pdfUploadUrl, out + '.pdf', 'application/pdf')
+    await upload(job.previewUploadUrl, out + '.png', 'image/png')
+  })
   fs.rmSync(dir, { recursive: true, force: true })
   return { notes: result.notes || '', output }
 }
@@ -266,14 +316,17 @@ async function render(job) {
  * dropped mid-upload. A hung Illustrator is quit (forced if it will not) and
  * reopened first. Anything else fails at once, as before.
  */
-const RETRYABLE = /did not finish in time|fetch failed|ECONNRESET|ETIMEDOUT|socket hang up/i
+// "Expected end of line" (-2741): AppleScript could not load Illustrator's
+// dictionary because it was starting or quitting (Honolulu, Marine Corps, Twin Cities).
+const RETRYABLE = /did not finish in time|fetch failed|ECONNRESET|ETIMEDOUT|socket hang up|terminated|-2741|Expected end of line|-600|-609/i
 async function renderWithRetry(job) {
   try {
     return await render(job)
   } catch (e) {
-    if (!RETRYABLE.test(e.message)) throw e
-    log(`  ${e.message}; trying once more`)
-    if (/did not finish in time/i.test(e.message)) await restartIllustrator()
+    const raw = e.original || e.message
+    if (!RETRYABLE.test(raw)) throw e
+    log(`  ${raw}; trying once more`)
+    if (/did not finish in time|-2741|Expected end of line|-600|-609/i.test(raw)) await restartIllustrator()
     else await sleep(10000)
     return render(job)
   }

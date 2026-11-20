@@ -365,10 +365,10 @@ async function handleClearResearch({ raceName, confirm }, res) {
  *
  * Deliberately NOT gated to admins. Completing orders is the job.
  */
-async function handleComplete({ orderNumber }, res, actor) {
+async function handleComplete({ orderNumber, override = false }, res, actor) {
   if (!orderNumber) return res.status(400).json({ error: 'orderNumber is required' })
   try {
-    const { order } = await completeOrder({ orderNumber, actor, via: 'manual' })
+    const { order } = await completeOrder({ orderNumber, actor, via: 'manual', override: override === true })
     console.log(`[actions/complete] Order ${orderNumber} marked as completed`)
     return res.status(200).json({ success: true, order: withoutRawOrderData(order) })
   } catch (e) {

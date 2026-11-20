@@ -654,14 +654,14 @@ export default function Dashboard() {
   const markAsCompletedRef = useRef<(orderNumber: string) => void>(() => {})
   // A double click or F pressed twice used to send two completions.
   const completingRef = useRef<string | null>(null)
-  const markAsCompleted = async (orderNumber: string) => {
+  const markAsCompleted = async (orderNumber: string, opts: { override?: boolean } = {}) => {
     if (completingRef.current === orderNumber) return false
     completingRef.current = orderNumber
     try {
       const response = await apiFetch(`/api/orders/actions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'complete', orderNumber })
+        body: JSON.stringify({ action: 'complete', orderNumber, override: opts.override === true })
       })
 
       if (!response.ok) {
@@ -674,7 +674,7 @@ export default function Dashboard() {
         throw new Error(body.message || (typeof body.error === 'string' && body.error ? body.error : '') || `Failed to mark as completed (${response.status})`)
       }
 
-      setToast({ message: 'Order marked as completed!', type: 'success' })
+      setToast({ message: opts.override ? 'Order closed.' : 'Order marked as completed!', type: 'success' })
       // Optimiztically reflect the new status without closing the modal
       setSelectedOrder(prev => prev && prev.orderNumber === orderNumber ? { ...prev, status: 'completed' } : prev)
       setOrders(prev => prev.map(o => o.orderNumber === orderNumber ? { ...o, status: 'completed' } : o))

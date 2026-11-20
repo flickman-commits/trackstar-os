@@ -54,8 +54,11 @@ export function describeOrder(order) {
  * @param {object} [opts.actor]          the person, for the Activity Log
  * @param {string} [opts.via]            'approve' when an approved render placed the photo
  * @param {string} [opts.renderJobId]    the approved render, when via === 'approve'
+ * @param {boolean} [opts.override]      Close order: a person says the print was handled
+ *   outside the tool, so the Artelo and photo checks are skipped and what was
+ *   skipped goes in the Activity Log (Eli, 2026-11-20: Close order kept refusing).
  */
-export async function completeOrder({ orderId, orderNumber, actor = null, via = 'manual', renderJobId = null }) {
+export async function completeOrder({ orderId, orderNumber, actor = null, via = 'manual', renderJobId = null, override = false }) {
   const existing = orderId
     ? await prisma.order.findUnique({ where: { id: String(orderId) } })
     : await prisma.order.findFirst({ where: { orderNumber: String(orderNumber || '') } })
@@ -63,7 +66,10 @@ export async function completeOrder({ orderId, orderNumber, actor = null, via = 
   if (existing.status === 'completed') return { order: existing, already: true }
   // By hand: only once Artelo has it. Our own send (via 'approve') has just
   // been accepted by Artelo; a skipped product is fulfilled by Artelo itself.
-  if (via === 'manual') await assertArteloHasIt(existing)
+  const skipped = []
+  if (via === 'manual' && override) {
+    try { await assertArteloHasIt(existing) } catch (e) { if (!(e instanceof CompleteError)) throw e; skipped.push(e.code === 'artelo_unreachable' ? 'Artelo could not be checked' : 'Artelo had not sent it to production') }
+  } else if (via === 'manual') await assertArteloHasIt(existing)
 
   // The photo gate is for designs made by hand. When the script made the
   // design, it placed the photo and a person approved the result with the
@@ -72,12 +78,13 @@ export async function completeOrder({ orderId, orderNumber, actor = null, via = 
   // via 'artelo': the import saw Artelo fulfil it. It is made already, so the
   // photo checks for a person completing by hand do not apply.
   const fromArtelo = via === 'artelo'
-  if (existing.photoPath && !existing.photoPlacedAt && !fromArtelo) {
+  if (existing.photoPath && !existing.photoPlacedAt && !fromArtelo && !override) {
     const approved = (await prisma.renderJob.findMany({ where: { orderId: existing.id, review: 'approved', status: 'done' }, orderBy: { version: 'desc' }, take: 10, select: { spec: true } })).find(j => !j.spec?.altSize)
     photoByRender = via === 'approve' || (approved?.spec?.photoPath && approved.spec.photoPath === existing.photoPath)
     if (!photoByRender) throw new CompleteError('photo_not_confirmed', 'This print includes a customer photo and was not made by the script. Confirm the photo is placed before completing the order.')
   }
-  if (existing.photoAddedManually && !fromArtelo) {
+  if (override && existing.photoPath && !existing.photoPlacedAt) skipped.push('the photo was not confirmed placed')
+  if (existing.photoAddedManually && !fromArtelo && !override) {
     const siblings = await prisma.order.findMany({ where: { parentOrderNumber: existing.parentOrderNumber }, select: { id: true, photoPath: true, photoAddedManually: true, photoFree: true, trackstarOrderType: true } })
     if (unpaidPhotoRows(siblings, existing.shopifyOrderData).has(existing.id)) {
       throw new CompleteError('photo_not_paid', 'The customer has not paid for the photo yet. Wait for the Shopify order to read paid before completing.')
@@ -105,9 +112,9 @@ export async function completeOrder({ orderId, orderNumber, actor = null, via = 
 
   await recordAudit({
     action: 'order.complete',
-    summary: `Completed ${describeOrder(existing)}${via === 'approve' ? ' (design approved)' : fromArtelo ? ' (fulfilled in Artelo)' : ''}`,
-    detail: { orderNumber: existing.orderNumber, orderType: existing.trackstarOrderType, runnerName: existing.runnerName, raceName: existing.raceName, via, closedRenders: closed.count },
+    summary: `${override ? 'Closed by hand' : 'Completed'} ${describeOrder(existing)}${via === 'approve' ? ' (design approved)' : fromArtelo ? ' (fulfilled in Artelo)' : ''}${skipped.length ? ` (override: ${skipped.join('; ')})` : ''}`,
+    detail: { orderNumber: existing.orderNumber, orderType: existing.trackstarOrderType, runnerName: existing.runnerName, raceName: existing.raceName, via, override, skipped, closedRenders: closed.count },
     actor,
   })
-  return { order, already: false, closedRenders: closed.count }
+  return { order, already: false, closedRenders: closed.count, skipped }
 }

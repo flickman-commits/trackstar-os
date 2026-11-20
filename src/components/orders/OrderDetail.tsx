@@ -88,7 +88,7 @@ export interface OrderDetailProps {
     fetchOrders: () => Promise<void>
     loadTeam: () => void
     setToast: Dispatch<SetStateAction<ToastMessage | null>>
-    markAsCompleted: (orderNumber: string) => Promise<boolean>
+    markAsCompleted: (orderNumber: string, opts?: { override?: boolean }) => Promise<boolean>
     assignOrder: (orderId: string, assigneeId: string | null) => Promise<void>
     /** Open the "Email customer" modal for this order, with a message already written if given. */
     emailCustomer: (order: Order, preset?: { subject: string; text: string } | null) => void
@@ -2367,9 +2367,9 @@ Thank you!`
                         left to finish it (Eli, 2026-11-15). Logged on the order. */}
                     {selectedOrder.status !== 'completed' && !isEditing && selectedOrder.trackstarOrderType !== 'bulk' && (
                       <button onClick={async () => {
-                          if (!(await confirm({ title: 'Close this order?', body: 'It is marked complete as it is, without sending anything to Artelo. Use it when the print, or its replacement, was handled outside the tool.', action: 'Close order' }))) return
+                          if (!(await confirm({ title: 'Close this order?', body: 'It is marked complete as it is, without sending anything to Artelo, even if Artelo has not sent it to production or the photo is not confirmed. The Artelo order is left as it is. Use it when the print, or its replacement, was handled outside the tool.', action: 'Close order' }))) return
                           const number = selectedOrder.orderNumber, id = selectedOrder.id
-                          if (!(await markAsCompleted(number))) return
+                          if (!(await markAsCompleted(number, { override: true }))) return
                           apiFetch('/api/orders/comments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: id, text: `Closed by hand${user?.firstName ? ` by ${user.firstName}` : ''}.` }) }).catch(() => {})
                         }} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2" title="Mark it complete as it is, without sending anything to Artelo">
                         <CheckCircle2 className="w-3.5 h-3.5" /> Close order
