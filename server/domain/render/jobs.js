@@ -223,7 +223,16 @@ export async function completeJob({ jobId, workerId, notes, output }) {
   // A print that is not print ready says so where the reviewer reads it.
   const problems = outputProblems(measured, job.spec?.size)
   const allNotes = [notes, problems.length ? `Check the PDF: ${problems.join('; ')}` : null].filter(Boolean).join('; ')
-  return prisma.renderJob.update({ where: { id: job.id }, data: { status: 'done', finishedAt: new Date(), pdfPath: paths.pdf, previewPath: paths.preview, notes: allNotes ? allNotes.slice(0, 2000) : null, output: measured ?? undefined } })
+  const done = await prisma.renderJob.update({ where: { id: job.id }, data: { status: 'done', finishedAt: new Date(), pdfPath: paths.pdf, previewPath: paths.preview, notes: allNotes ? allNotes.slice(0, 2000) : null, output: measured ?? undefined } })
+  // The order may have changed while this rendered: 9202 (Nov 11) rendered
+  // with one bib, the right match was accepted 86 seconds later, and the old
+  // design was approved and printed. One that no longer matches is closed
+  // here, before anyone reviews it; the import renders the new one.
+  if (!job.spec?.altSize) {
+    const closed = await closeOutdatedDesigns(job.orderId, 'The order changed while this design was rendering; a new design replaces it').catch(e => { console.error('[render] closing outdated', job.id, e.message); return 0 })
+    if (closed) return prisma.renderJob.findUnique({ where: { id: job.id } })
+  }
+  return done
 }
 
 export async function failJob({ jobId, workerId, error }) {

@@ -7,6 +7,7 @@ import prisma from '../../db.js'
 import { resultsLinkForBib } from './resultsLink.js'
 import { typedTime, sameClock } from './timeReading.js'
 import { isTriathlon } from '../orders/triathlon.js'
+import { closeOutdatedDesigns } from '../render/jobs.js'
 
 /** Wrong input or nothing found; `status` is the HTTP status the API answers with. */
 export class AcceptMatchError extends Error {
@@ -120,6 +121,9 @@ export async function acceptMatch({ orderNumber, match }) {
     where: { id: order.id },
     data: { status: 'ready', researchedAt: new Date() }
   })
+  // A design made from the old result must not be approved: 9202 (Nov 11)
+  // printed the bib of the match on file before this one was accepted.
+  await closeOutdatedDesigns(order.id, 'A different result was accepted after this design was made; a new design replaces it').catch(e => console.error('[accept-match] closing old designs', e.message))
   // The research agent's "pick the right one" note no longer applies (ResearchService clearAgentNote).
   await prisma.orderComment.deleteMany({ where: { orderId: order.id, authorName: 'Research agent' } }).catch(() => {})
 
