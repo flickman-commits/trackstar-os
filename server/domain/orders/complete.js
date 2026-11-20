@@ -54,10 +54,11 @@ export function describeOrder(order) {
  * @param {object} [opts.actor]          the person, for the Activity Log
  * @param {string} [opts.via]            'approve' when an approved render placed the photo
  * @param {string} [opts.renderJobId]    the approved render, when via === 'approve'
- * @param {boolean} [opts.override]      Close order: the print was made by hand, so the
- *   design check (photo placed) is skipped and what was skipped
- *   goes in the Activity Log. Artelo (it must really be in production) and an
- *   added photo being paid for are still checked (Matt, 2026-11-20).
+ * @param {boolean} [opts.override]      Close order: a person has checked the order is
+ *   fulfilled, or needs no fulfilment (one print cancelled, the other a custom
+ *   left pending in Artelo), so the Artelo and photo-placed checks are skipped
+ *   and what was skipped goes in the Activity Log (Eli and Matt, 2026-11-20).
+ *   An added photo must still be paid for.
  */
 export async function completeOrder({ orderId, orderNumber, actor = null, via = 'manual', renderJobId = null, override = false }) {
   const existing = orderId
@@ -68,7 +69,9 @@ export async function completeOrder({ orderId, orderNumber, actor = null, via = 
   // By hand: only once Artelo has it. Our own send (via 'approve') has just
   // been accepted by Artelo; a skipped product is fulfilled by Artelo itself.
   const skipped = []
-  if (via === 'manual') await assertArteloHasIt(existing)
+  if (via === 'manual' && override) {
+    try { await assertArteloHasIt(existing) } catch (e) { if (!(e instanceof CompleteError)) throw e; skipped.push(e.code === 'artelo_unreachable' ? 'Artelo could not be checked' : 'Artelo had not sent it to production') }
+  } else if (via === 'manual') await assertArteloHasIt(existing)
 
   // The photo gate is for designs made by hand. When the script made the
   // design, it placed the photo and a person approved the result with the
