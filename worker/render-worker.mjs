@@ -131,7 +131,15 @@ function copyFile(src, dest) {
   try { fs.copyFileSync(src, dest) }
   catch (e) {
     if (!/-11|EDEADLK|EAGAIN|ENOTSUP/i.test(`${e.code} ${e.message}`)) throw e
-    fs.writeFileSync(dest, fs.readFileSync(src))
+    try { fs.writeFileSync(dest, fs.readFileSync(src)) }
+    catch (e2) {
+      // Error -11 again: the file is online-only in Google Drive, and Drive
+      // will not download for a background process (Pittsburgh Half, Nov 18,
+      // after the template was saved again). Opening it on the Mac once brings
+      // it down; making the Races folder Available offline stops it for good.
+      if (!/-11|EDEADLK/i.test(`${e2.code} ${e2.message}`)) throw e2
+      throw new Error(`The template "${path.basename(src)}" is online-only in Google Drive, so the worker cannot read it. On the render Mac, right-click the Races folder in Google Drive and choose Available offline (or open the file once), then Re-render.`)
+    }
   }
 }
 
