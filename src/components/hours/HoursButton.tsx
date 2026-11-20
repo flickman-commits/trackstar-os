@@ -38,7 +38,7 @@ export default function HoursButton() {
   )
   return (
     <button onClick={openHours} aria-label={state?.paused ? 'Resume your timer' : isAdmin ? 'Hours' : 'Clock in'} title={state?.paused ? 'Your timer is paused. Open the Hours Tracker to resume.' : 'Start your timer, or log time you worked'}
-      className="inline-flex items-center gap-2 h-[46px] px-4 rounded-lg bg-dark-fill text-sm aria-[label]:px-3.5 font-semibold text-white hover:opacity-90 whitespace-nowrap">
+      className={`inline-flex items-center gap-2 h-[46px] px-4 rounded-lg text-sm aria-[label]:px-3.5 font-semibold whitespace-nowrap ${isAdmin && !state?.paused ? 'bg-white border border-border-gray text-off-black hover:border-off-black/30' : 'bg-dark-fill text-white hover:opacity-90'}`}>
       <Clock className="w-4 h-4" /><span className="hidden xl:inline">{state?.paused ? 'Paused · resume' : isAdmin ? 'Hours' : 'Clock in'}</span>
     </button>
   )
