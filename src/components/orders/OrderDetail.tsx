@@ -3212,7 +3212,7 @@ Thank you!`
                     </button>
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
                       {(design.job?.status === 'done' && (design.job.review === 'pending' || design.job.review === 'approved')) ? (
-                        <DesignReview compact d={design} arteloOrderUrl={selectedOrder.status !== 'completed' && selectedOrder.trackstarOrderType !== 'bulk' ? selectedOrder.arteloUrl : null} onComplete={selectedOrder.status !== 'completed' ? () => markAsCompleted(selectedOrder.orderNumber) : undefined} />
+                        <DesignReview compact bulk={selectedOrder.trackstarOrderType === 'bulk'} d={design} arteloOrderUrl={selectedOrder.status !== 'completed' && selectedOrder.trackstarOrderType !== 'bulk' ? selectedOrder.arteloUrl : null} onComplete={selectedOrder.status !== 'completed' ? () => markAsCompleted(selectedOrder.orderNumber) : undefined} />
                       ) : (!design.state && design.reserved && selectedOrder.pipeline?.stage === 'review') ? (
                         // The print is still loading: its buttons in place, greyed, so they do not appear late.
                         <div className="grid gap-1.5 grid-cols-[1fr,2fr]" aria-busy>
@@ -3285,7 +3285,7 @@ Thank you!`
               {/* Reviewing the automated print is the main action here, so it is big.
                   Once approved, the same spot sends you to Artelo to attach the file. */}
               <div className="space-y-2">
-                <div className="hidden md:block"><DesignReview d={design} arteloOrderUrl={selectedOrder.status !== 'completed' && selectedOrder.trackstarOrderType !== 'bulk' ? selectedOrder.arteloUrl : null} onComplete={selectedOrder.status !== 'completed' ? () => markAsCompleted(selectedOrder.orderNumber) : undefined} /></div>
+                <div className="hidden md:block"><DesignReview bulk={selectedOrder.trackstarOrderType === 'bulk'} d={design} arteloOrderUrl={selectedOrder.status !== 'completed' && selectedOrder.trackstarOrderType !== 'bulk' ? selectedOrder.arteloUrl : null} onComplete={selectedOrder.status !== 'completed' ? () => markAsCompleted(selectedOrder.orderNumber) : undefined} /></div>
               </div>
 
               </div>
@@ -3301,7 +3301,7 @@ Thank you!`
                     still 'pending' or 'missing_year'. When Research Runner
                     also shows, both share the row 50/50. */}
                 {/* A bulk runner goes to Artelo on its own once its print is approved (bulk/send.js): where that stands, and the Artelo order once it exists. */}
-                {selectedOrder.trackstarOrderType === 'bulk' && <BulkSendLine order={selectedOrder} onDone={bulkDone} onError={bulkError} />}
+                {selectedOrder.trackstarOrderType === 'bulk' && <BulkSendLine order={selectedOrder} onDone={bulkDone} onError={bulkError} onRefresh={() => { void fetchOrders() }} />}
                 {selectedOrder.status !== 'completed' &&
                  selectedOrder.status !== 'flagged' &&
                  selectedOrder.trackstarOrderType !== 'bulk' &&

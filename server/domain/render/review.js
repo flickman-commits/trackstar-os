@@ -52,7 +52,7 @@ export async function reviewRender({ jobId, decision, note, user, designNeed = f
     if (send) job = await queueSend(job)
     delivery = deliverEverywhere(job)
     // A bulk runner goes to Artelo as their own order once approved (bulk/send.js).
-    if (send) await queueRunnerSend(job.orderId).catch(e => console.error('[render/review] bulk queue', job.id, e.message))
+    if (send) await queueRunnerSend(job.orderId, { after: delivery }).catch(e => console.error('[render/review] bulk queue', job.id, e.message))
     if (!job.spec?.altSize) await prisma.renderJob.updateMany({ where: { orderId: job.orderId, review: 'pending', id: { not: job.id } }, data: { review: 'closed', reviewNote: 'Another version was approved', reviewedAt: new Date() } })
   }
   // Named by the order, not the template file, so the Activity Log finds it by order number.

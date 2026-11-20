@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowUpRight, Loader2, MapPin, Pause, Send } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import ActionModal from '@/components/ActionModal'
@@ -24,14 +24,21 @@ const linkBtn = 'inline-flex items-center justify-center gap-1.5 px-3 py-2 round
  * with what a person can do about it: Hold one that is about to go, Send now
  * one that is held or stopped, Add address when that is what it waits on.
  */
-export function BulkSendLine({ order, onDone, onError }: { order: Order; onDone: Done; onError: Fail }) {
+export function BulkSendLine({ order, onDone, onError, onRefresh }: { order: Order; onDone: Done; onError: Fail; onRefresh?: () => void }) {
   const b = order.bulkSend
   const [busy, setBusy] = useState<string | null>(null)
   const [addressOpen, setAddressOpen] = useState(false)
   const state = b?.state || (order.status === 'completed' ? 'sent' : 'not_ready')
   const sent = state === 'sent'
+  // A queued runner goes a few seconds after it was queued (bulk/send.js SEND_HOLD_MS): look again then, so the line says Sent.
+  const sendAfter = state === 'queued' ? b?.sendAfter : null
+  useEffect(() => {
+    if (!sendAfter || !onRefresh) return
+    const t = setTimeout(onRefresh, Math.max(0, new Date(sendAfter).getTime() - Date.now()) + 8000)
+    return () => clearTimeout(t)
+  }, [sendAfter, onRefresh])
   const text = sent ? `Sent to Artelo${b?.sentAt ? ` ${when(b.sentAt)}` : ''}`
-    : state === 'queued' ? `Going to Artelo ${b?.sendAfter && new Date(b.sendAfter).getTime() > Date.now() ? `at ${when(b.sendAfter)}` : 'within 2 minutes'}${b?.reason ? ` (last try: ${b.reason})` : ''}`
+    : state === 'queued' ? `Going to Artelo ${b?.reason ? 'again within 2 minutes' : 'in a few seconds'}${b?.reason ? ` (last try: ${b.reason})` : ''}`
     : state === 'held' ? `${b?.reason}. It will not go to Artelo until someone presses Send now.`
     : state === 'error' ? `Stopped: ${b?.reason}`
     : state === 'ready' ? 'Ready for Artelo'
@@ -54,7 +61,7 @@ export function BulkSendLine({ order, onDone, onError }: { order: Order; onDone:
         </button>
       )}
       {canSend && !needsAddress && (
-        <button disabled={!!busy} onClick={() => run('send', { action: 'send-runner' }, 'Queued for Artelo. It goes within 2 minutes.')} className={`${linkBtn} !bg-dark-fill !text-white !border-dark-fill`}>
+        <button disabled={!!busy} onClick={() => run('send', { action: 'send-runner' }, 'Going to Artelo in a few seconds.')} className={`${linkBtn} !bg-dark-fill !text-white !border-dark-fill`}>
           {busy === 'send' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Send now
         </button>
       )}
@@ -95,7 +102,7 @@ function BulkAddressModal({ order, onClose, onDone, onError }: { order: Order; o
     try {
       await bulkAction(order, { action: 'update-runner', address: f })
       onClose()
-      await onDone('Address saved. If the print is approved, it goes to Artelo within 2 minutes.')
+      await onDone('Address saved. If the print is approved, it goes to Artelo in a few seconds.')
     } catch (e) { onError(e instanceof Error ? e.message : 'Could not save the address') } finally { setBusy(false) }
   }
   return (

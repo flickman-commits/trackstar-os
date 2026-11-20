@@ -186,7 +186,7 @@ function SendStatus({ d, compact, onComplete }: { d: Design; compact: boolean; o
   )
 }
 
-export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = false }: { d: Design; arteloOrderUrl?: string | null; onComplete?: () => void; compact?: boolean }) {
+export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = false, bulk = false }: { d: Design; arteloOrderUrl?: string | null; onComplete?: () => void; compact?: boolean; bulk?: boolean }) {
   // compact: the phone's bottom bar, shorter buttons in the same order.
   const pad = compact ? 'h-12 text-[15px] !rounded-xl' : 'py-4 text-base'
   const [rejecting, setRejecting] = useState(false)
@@ -368,7 +368,7 @@ export function DesignReview({ d, arteloOrderUrl = null, onComplete, compact = f
       </div>
       {d.autoSend && !compact && (
         <p className="text-[11px] text-off-black/50">
-          Goes to Artelo production in a few minutes; you can Hold it until then.{' '}
+          {bulk ? 'Goes to Artelo in 5 seconds; Hold stops it until then.' : 'Goes to Artelo production in a few minutes; you can Hold it until then.'}{' '}
           <button onClick={() => { void d.review('approved', undefined, false, false) }} disabled={d.busy} className="underline decoration-dotted underline-offset-2 hover:text-off-black disabled:opacity-40">Approve only, don't send</button>
         </p>
       )}

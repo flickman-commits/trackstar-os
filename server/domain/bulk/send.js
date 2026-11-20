@@ -23,8 +23,25 @@ import { recordAudit } from '../../../api/_lib/users.js'
 import { slackTo, slackText, slackLink } from '../../lib/slack.js'
 import { arteloOrderUrl, orderAppUrl } from '../../lib/links.js'
 import { addressComplete, normalizeZip, usZipProblem } from './bulkOrders.js'
+import { inBackground } from '../../lib/background.js'
 
 const MIN = 60_000
+/** How long a queued runner waits before it goes: long enough to Hold a wrong click, no longer. */
+export const SEND_HOLD_MS = 5_000
+
+/**
+ * Send this runner (or every due runner) once the hold is over, in the
+ * background of the request that queued it, after `after` settles (the
+ * approve's Drive and library upload, so the send does not upload the file a
+ * second time). A Hold clears bulkSendAfter, so a held runner is not picked
+ * up. Anything that fails here is retried by the every-2-minutes cron.
+ */
+function sendSoon(orderId = null, after = null) {
+  const wait = new Promise(r => setTimeout(r, SEND_HOLD_MS + 500))
+  inBackground(Promise.all([wait, Promise.resolve(after).catch(() => {})])
+    .then(() => sendBulkDue({ orderId, limit: orderId ? 1 : 20 }))
+    .catch(e => console.error('[bulk.send] soon', orderId, e.message)))
+}
 // No hold for a bulk runner: there is no customer to write in and ask for a
 // change (the partner gave the list), so an approved print goes straight to
 // production on the sender's next run (Matt, 2026-11-06).
@@ -86,19 +103,22 @@ export function notReadyFrom(order, bulk, hasPrint) {
  * a co-branded file is uploaded, an address is fixed, or the invoice is paid.
  * A runner with an error stays put until a person presses Send now.
  */
-export async function queueRunnerSend(orderId, { force = false } = {}) {
+export async function queueRunnerSend(orderId, { force = false, after = null, soon = true } = {}) {
   const order = await prisma.order.findUnique({ where: { id: orderId }, include: { bulkOrder: { select: { paidAt: true } } } })
   if (!order || order.trackstarOrderType !== 'bulk' || order.status === 'completed' || order.bulkSentAt) return null
   if (!force && order.bulkSendError) return order
   if (await notReadyReason(order, order.bulkOrder)) return order
-  return prisma.order.update({ where: { id: orderId }, data: { bulkSendAfter: new Date(), bulkSendError: null } })
+  const out = await prisma.order.update({ where: { id: orderId }, data: { bulkSendAfter: new Date(Date.now() + SEND_HOLD_MS), bulkSendError: null } })
+  if (soon) sendSoon(orderId, after)
+  return out
 }
 
 /** Everyone on a bulk order who is ready and not queued: after the invoice is paid, or a list was fixed. */
 export async function queueReadyRunners(bulkOrderId) {
   const rows = await prisma.order.findMany({ where: { bulkOrderId, status: { not: 'completed' }, bulkSentAt: null, bulkSendAfter: null, bulkSendError: null }, select: { id: true } })
   let n = 0
-  for (const r of rows) { const out = await queueRunnerSend(r.id); if (out?.bulkSendAfter) n++ }
+  for (const r of rows) { const out = await queueRunnerSend(r.id, { soon: false }); if (out?.bulkSendAfter) n++ }
+  if (n) sendSoon()
   return n
 }
 
@@ -246,10 +266,10 @@ export async function settleBulkStatus(bulkOrderId) {
  * Every runner whose time has come, oldest first, within `budgetMs`. Each is
  * claimed first, so two runs never send the same runner twice. Never throws.
  */
-export async function sendBulkDue({ limit = 20, budgetMs = 60_000 } = {}) {
+export async function sendBulkDue({ limit = 20, budgetMs = 60_000, orderId = null } = {}) {
   const started = Date.now()
   const due = await prisma.order.findMany({
-    where: { trackstarOrderType: 'bulk', status: { not: 'completed' }, bulkSentAt: null, bulkSendAfter: { lte: new Date() } },
+    where: { ...(orderId ? { id: orderId } : {}), trackstarOrderType: 'bulk', status: { not: 'completed' }, bulkSentAt: null, bulkSendAfter: { lte: new Date() } },
     orderBy: { bulkSendAfter: 'asc' }, take: limit,
     include: { bulkOrder: { select: { id: true, number: true, partnerName: true, paidAt: true } } },
   })
