@@ -104,12 +104,18 @@ export function templateFor(order, raceName, eventType) {
 }
 
 /** The order fields buildSpec reads. Use this select so callers cannot forget one. */
+/** The triathlon title set by hand on the order, as two lines, or null. */
+export function printTitleOf(order) {
+  const a = String(order?.printTitle1 || '').trim(), b = String(order?.printTitle2 || '').trim()
+  return a || b ? [a, b] : null
+}
+
 export const SPEC_SELECT = {
   id: true, orderNumber: true, parentOrderNumber: true, lineItemIndex: true, trackstarOrderType: true, status: true,
   // When they bought decides the design for a race whose design changed (designSwitch.js).
   source: true, createdAt: true, designChoice: true, renderBeforeRace: true,
   raceName: true, raceNameOverride: true, raceYear: true, yearOverride: true,
-  runnerName: true, runnerNameOverride: true, productSize: true, hadNoTime: true, noBib: true,
+  runnerName: true, runnerNameOverride: true, productSize: true, hadNoTime: true, noBib: true, printTitle1: true, printTitle2: true,
   photoPath: true, photoAddedManually: true, photoFree: true, photoLater: true, photoLaterClosedAt: true, shopifyOrderData: true, arteloOrderData: true,
   bulkOrder: { select: { number: true, paidAt: true, printKind: true } },
   runnerResearch: { orderBy: { id: 'desc' }, select: { researchStatus: true, bibNumber: true, officialTime: true, officialPace: true, eventType: true, swimTime: true, swimDistance: true, bikeTime: true, bikeDistance: true, runTime: true, runDistance: true, race: { select: { id: true, raceName: true, year: true, raceDate: true, raceDateSource: true, raceDateSourceUrl: true, raceDateEvidence: true, raceDateVerifiedAt: true, raceDateConfirmedByPerson: true, location: true, weatherCondition: true, weatherTemp: true, weatherFetchedAt: true, weatherConfirmedAt: true, firstPrintedAt: true } } } },
@@ -155,7 +161,8 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
   // No bib by choice: the bib frame prints empty.
   if (!bib && !order.noBib) reasons.push('No bib number yet')
   // A triathlon print has no pace; it has a title and three legs instead.
-  const title = triathlon ? triathlonTitleFor(raceName) : null
+  // A title set by hand on the order wins (Eli, 2026-11-20: manual adjustments); else the IRONMAN config's.
+  const title = triathlon ? (printTitleOf(order) || triathlonTitleFor(raceName)) : null
   const legs = {}
   if (triathlon) {
     if (order.hadNoTime) reasons.push('A triathlon print always has its times')

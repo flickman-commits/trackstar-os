@@ -748,6 +748,7 @@ export default function OrderDetail({
         swimTime: order.swimTime || '', swimDistance: order.swimDistance || '',
         bikeTime: order.bikeTime || '', bikeDistance: order.bikeDistance || '',
         runTime: order.runTime || '', runDistance: order.runDistance || '',
+        printTitle1: order.printTitle?.[0] || '', printTitle2: order.printTitle?.[1] || '',
       } : {}),
     })
     setIsEditing(true)
@@ -856,6 +857,12 @@ export default function OrderDetail({
       if (originalOrder.isTriathlon) {
         for (const k of ['swimTime', 'swimDistance', 'bikeTime', 'bikeDistance', 'runTime', 'runDistance'] as const) {
           if ((editValues[k] ?? '') !== (originalOrder[k] || '')) updates[k] = editValues[k] || null
+        }
+        // The title: saved only when changed; both empty puts it back to the race config's.
+        const t1 = (editValues.printTitle1 ?? '').trim(), t2 = (editValues.printTitle2 ?? '').trim()
+        if (t1 !== (originalOrder.printTitle?.[0] || '') || t2 !== (originalOrder.printTitle?.[1] || '')) {
+          (updates as Record<string, unknown>).printTitle1 = t1 || null;
+          (updates as Record<string, unknown>).printTitle2 = t2 || null
         }
       }
 
@@ -2828,6 +2835,17 @@ Thank you!`
                               className="text-body-sm font-medium text-off-black bg-white border border-border-gray rounded px-2 py-1 w-40 text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                           </div>
+                          {selectedOrder.isTriathlon && (
+                            <div className="flex justify-between items-center gap-2">
+                              <span className="text-body-sm text-off-black/60" title="The two title lines on the print. Change them for a race whose title needs a manual adjustment; clear both to go back to the race's own.">Title</span>
+                              <span className="inline-flex gap-1.5">
+                                <input type="text" value={editValues.printTitle1 ?? ''} onChange={(e) => setEditValues({ ...editValues, printTitle1: e.target.value })} placeholder="Ironman 70.3" maxLength={60}
+                                  className="text-body-sm font-medium text-off-black bg-white border border-border-gray rounded px-2 py-1 w-28 text-right focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                <input type="text" value={editValues.printTitle2 ?? ''} onChange={(e) => setEditValues({ ...editValues, printTitle2: e.target.value })} placeholder="North Carolina" maxLength={60}
+                                  className="text-body-sm font-medium text-off-black bg-white border border-border-gray rounded px-2 py-1 w-36 text-right focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                              </span>
+                            </div>
+                          )}
                           {selectedOrder.isTriathlon && (['swim', 'bike', 'run'] as const).map(leg => (
                             <div key={leg} className="flex justify-between items-center gap-2">
                               <span className="text-body-sm text-off-black/60 capitalize">{leg}</span>
@@ -2908,6 +2926,15 @@ Thank you!`
                             <PendingField label="Time" />
                           ) : (
                             <NotAvailableField label="Time" />
+                          )}
+                          {selectedOrder.isTriathlon && (
+                            <div className="flex justify-between items-center py-1.5">
+                              <span className="text-body-sm text-off-black/60">Title</span>
+                              <span className="text-body-sm font-medium text-off-black text-right">
+                                {selectedOrder.printTitle ? selectedOrder.printTitle.filter(Boolean).join(' / ') : <span className="text-off-black/40">None: set one under Edit</span>}
+                                {selectedOrder.printTitleCustom && <span className="ml-1.5 text-[11px] text-off-black/40">set by hand</span>}
+                              </span>
+                            </div>
                           )}
                           {selectedOrder.isTriathlon ? (['swim', 'bike', 'run'] as const).map(leg => {
                             const t = selectedOrder[`${leg}Time`], d = selectedOrder[`${leg}Distance`]

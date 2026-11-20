@@ -31,6 +31,8 @@ model Order {
   // { stage, note, by, at, basis }. Holds until the worked-out stage changes from `basis`.
   queueOverride      Json?
   noBib              Boolean   @default(false) // The customer wants no bib on the print: the bib frame renders empty
+  printTitle1        String? // A triathlon print's title, set by hand ("Ironman 70.3"); null = from the race config
+  printTitle2        String? // Its second line ("North Carolina")
   status             String    @default("pending") // "pending", "missing_year", "ready", "flagged", "completed"
   researchedAt       DateTime?
   // The last research attempt by a bulk pass (bulk/bulkOrders.js researchPending), found or not, so a pass moves down the list

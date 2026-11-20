@@ -1,4 +1,6 @@
 import { isTriathlon } from '../../../server/domain/orders/triathlon.js'
+import { printTitleOf } from '../../../server/domain/render/spec.js'
+import { triathlonTitleFor } from '../../../server/scrapers/index.js'
 import prisma from '../../_lib/prisma.js'
 import { seesMoney } from '../../_lib/money.js'
 import { setCors, requireAdmin } from '../../_lib/auth.js'
@@ -317,6 +319,9 @@ export default async function handler(req, res) {
         officialPace: formatPace(research?.officialPace),
         // Triathlons: each leg as it prints, and whether this order is one.
         isTriathlon: isTriathlon(order),
+        // The two title lines a triathlon prints, set by hand or from the IRONMAN config; printTitleCustom when by hand.
+        printTitle: isTriathlon(order) ? (printTitleOf(order) || triathlonTitleFor(order.raceNameOverride ?? order.raceName)) : null,
+        printTitleCustom: isTriathlon(order) && Boolean(printTitleOf(order)),
         swimTime: research?.swimTime || null, swimDistance: research?.swimDistance || null,
         bikeTime: research?.bikeTime || null, bikeDistance: research?.bikeDistance || null,
         runTime: research?.runTime || null, runDistance: research?.runDistance || null,

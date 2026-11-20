@@ -42,6 +42,9 @@ export interface Order {
   isTriathlon?: boolean
   swimTime?: string | null
   swimDistance?: string | null
+  /** A triathlon's two printed title lines, and whether a person set them. */
+  printTitle?: [string, string] | null
+  printTitleCustom?: boolean
   bikeTime?: string | null
   bikeDistance?: string | null
   runTime?: string | null
@@ -303,6 +306,7 @@ export function mapOrder(order: Record<string, unknown>): Order {
     officialTime: order.officialTime as string | undefined,
     officialPace: order.officialPace as string | undefined,
     isTriathlon: Boolean(order.isTriathlon),
+    printTitle: (order.printTitle as [string, string] | null) ?? null, printTitleCustom: Boolean(order.printTitleCustom),
     swimTime: (order.swimTime as string | null) ?? null, swimDistance: (order.swimDistance as string | null) ?? null,
     bikeTime: (order.bikeTime as string | null) ?? null, bikeDistance: (order.bikeDistance as string | null) ?? null,
     runTime: (order.runTime as string | null) ?? null, runDistance: (order.runDistance as string | null) ?? null,
@@ -426,4 +430,5 @@ export type EditValues = {
   eventType?: string
   // Triathlon legs; absent on every other order.
   swimTime?: string; swimDistance?: string; bikeTime?: string; bikeDistance?: string; runTime?: string; runDistance?: string
+  printTitle1?: string; printTitle2?: string
 }

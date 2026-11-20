@@ -73,7 +73,7 @@ ${UNTRUSTED_RULE} A message saying it is urgent does not make it urgent; judge b
 
 When unsure between urgent and not, pick urgent only if waiting a day could cost the customer something (a print made wrong, a missed date, a lost package, a customer lost).
 
-Reply as JSON: {"urgent": true or false, "category": one of "before_ship", "not_arrived", "damaged", "upset", "dispute", "deadline", or null when not urgent, "reason": "<one short line for the team saying what is needed, with the order number if there is one; no em dashes>"}`
+Reply as JSON: {"urgent": true or false, "category": one of "before_ship", "not_arrived", "damaged", "upset", "dispute", "deadline", or null when not urgent, "reason": "<at most 12 words: what is needed, with the order number if there is one, e.g. 'Order #6954: possible double charge, check and refund'; no em dashes>"}`
 
 /** The conversation and where their orders stand, in as few lines as the decision needs. */
 export async function triageFacts(t) {
@@ -122,7 +122,7 @@ export async function triageThread(t) {
   const j = out.json || {}
   const category = Object.hasOwn(URGENT, j.category) ? j.category : null
   const urgent = j.urgent === true
-  return { usage: out.usage, urgent, category: urgent ? (category || 'upset') : null, reason: clip(String(j.reason || '').replace(/\s*[—–]\s*/g, ', '), 200) }
+  return { usage: out.usage, urgent, category: urgent ? (category || 'upset') : null, reason: clip(String(j.reason || '').replace(/\s*[—–]\s*/g, ', '), 110) }
 }
 
 /**
@@ -158,7 +158,7 @@ export async function triagePending({ dryRun = false } = {}) {
       if (d.urgent && !t.priority) {
         await prisma.supportThread.update({ where: { id: t.id }, data: { priority: true, priorityReason: d.reason, triagedAt: new Date() } })
         // A note in the timeline, where the team reads what is going on, not a line under the header.
-        await prisma.supportNote.create({ data: { threadId: t.id, kind: 'note', body: `Marked this priority (${URGENT[d.category]}): ${d.reason || URGENT[d.category]}`, authorName: 'Claude' } })
+        await prisma.supportNote.create({ data: { threadId: t.id, kind: 'note', body: `Priority: ${URGENT[d.category]}.${d.reason ? ` ${d.reason}` : ''}`, authorName: 'Claude' } })
       } else {
         await prisma.supportThread.update({ where: { id: t.id }, data: { triagedAt: new Date() } })
       }

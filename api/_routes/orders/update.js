@@ -37,6 +37,8 @@ export default async function handler(req, res) {
       eventType,
       // Triathlon legs (time and distance each), entered by hand.
       swimTime, swimDistance, bikeTime, bikeDistance, runTime, runDistance,
+      // A triathlon print's title, set by hand; empty puts it back to the race config's.
+      printTitle1, printTitle2,
       // Partner details. Partner rows have no columns of their own: the
       // organization lives in raceName and the contact in customerName /
       // customerEmail. Named separately here so a caller cannot reach a real
@@ -345,6 +347,14 @@ export default async function handler(req, res) {
       updateData.renderBeforeRace = renderBeforeRace
       await recordAudit({ action: 'order.render-before-race', summary: `Order ${existingOrder.orderNumber}: ${renderBeforeRace ? 'renders before race day' : 'waits for race day again'}`, detail: { orderNumber: existingOrder.orderNumber, renderBeforeRace }, actor })
     }
+    for (const [k, v] of [['printTitle1', printTitle1], ['printTitle2', printTitle2]]) {
+      if (v === undefined) continue
+      const next = String(v ?? '').trim().slice(0, 60) || null
+      if (next !== (existingOrder[k] ?? null)) updateData[k] = next
+    }
+    if ('printTitle1' in updateData || 'printTitle2' in updateData) {
+      await recordAudit({ action: 'order.print-title', summary: `Order ${existingOrder.orderNumber}: triathlon title ${[updateData.printTitle1 ?? existingOrder.printTitle1, updateData.printTitle2 ?? existingOrder.printTitle2].filter(Boolean).join(' / ') || 'back to the race config'}`, detail: { orderNumber: existingOrder.orderNumber, before: [existingOrder.printTitle1, existingOrder.printTitle2], after: [updateData.printTitle1 ?? existingOrder.printTitle1, updateData.printTitle2 ?? existingOrder.printTitle2] }, actor })
+    }
     if (designChoice !== undefined && (designChoice ?? null) !== (existingOrder.designChoice ?? null)) {
       if (designChoice !== null && !['new', 'old'].includes(designChoice)) return res.status(400).json({ error: 'The design is new or old' })
       updateData.designChoice = designChoice
@@ -367,7 +377,7 @@ export default async function handler(req, res) {
 
     // A new name, race or result means an open design was made from the old
     // one: close it now rather than leave it to be approved or sent.
-    const printChanged = 'runnerNameOverride' in updateData || 'raceNameOverride' in updateData || 'noBib' in updateData || 'designChoice' in updateData
+    const printChanged = 'runnerNameOverride' in updateData || 'raceNameOverride' in updateData || 'noBib' in updateData || 'designChoice' in updateData || 'printTitle1' in updateData || 'printTitle2' in updateData
       || bibNumber !== undefined || officialTime !== undefined || officialPace !== undefined || Boolean(eventType)
     if (printChanged && existingOrder.trackstarOrderType !== 'custom') {
       const closed = await closeOutdatedDesigns(existingOrder.id, 'The order was edited after this design was made; a new design replaces it').catch(e => { console.error('[API /orders/update] closing old designs', e.message); return 0 })
