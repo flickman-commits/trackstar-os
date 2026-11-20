@@ -8,6 +8,7 @@ import { resultsLinkForBib } from './resultsLink.js'
 import { typedTime, sameClock } from './timeReading.js'
 import { isTriathlon } from '../orders/triathlon.js'
 import { closeOutdatedDesigns } from '../render/jobs.js'
+import { recordAudit } from '../../../api/_lib/users.js'
 
 /** Wrong input or nothing found; `status` is the HTTP status the API answers with. */
 export class AcceptMatchError extends Error {
@@ -121,6 +122,14 @@ export async function acceptMatch({ orderNumber, match }) {
     where: { id: order.id },
     data: { status: 'ready', researchedAt: new Date() }
   })
+  // What the record said before, kept: the update overwrites it in place, and
+  // 9202's wrong bib (3102) could not be traced to where it came from.
+  await recordAudit({
+    action: 'research.accept_match',
+    summary: `Accepted ${match.name} for ${orderNumber}: bib ${research.bibNumber || '(none)'} → ${updatedResearch.bibNumber || '(none)'}, time ${research.officialTime || '(none)'} → ${updatedResearch.officialTime || '(none)'}`,
+    detail: { orderId: order.id, orderNumber, before: { researchStatus: research.researchStatus, bibNumber: research.bibNumber, officialTime: research.officialTime, officialPace: research.officialPace, eventType: research.eventType, source: research.source, resultsUrl: research.resultsUrl, researchNotes: research.researchNotes }, after: { bibNumber: updatedResearch.bibNumber, officialTime: updatedResearch.officialTime, resultsUrl: updatedResearch.resultsUrl } },
+    actor: null,
+  }).catch(e => console.error('[accept-match] audit', e.message))
   // A design made from the old result must not be approved: 9202 (Nov 11)
   // printed the bib of the match on file before this one was accepted.
   await closeOutdatedDesigns(order.id, 'A different result was accepted after this design was made; a new design replaces it').catch(e => console.error('[accept-match] closing old designs', e.message))
