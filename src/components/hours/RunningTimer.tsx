@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import { Clock, Loader2, Pause, Play, Square } from 'lucide-react'
+import { GripVertical, Loader2, Pause, Play, Square } from 'lucide-react'
 import { financeApi, mondayOf, todayET } from '@/lib/financeApi'
 import type { HoursPayload, TimeEntry } from '@/types/finance'
 import { tell, type HoursState } from '@/lib/hoursState'
@@ -15,36 +15,64 @@ const clock = (ms: number) => {
   return `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
-/** The bar's height; the rail, the phone menu and the page move up by it (--hours-bar-h). */
-const BAR_H = 52
+const POS_KEY = 'hours_timer_pos'
+type Pos = { x: number; y: number }
+const readPos = (): Pos | null => {
+  try { const p = JSON.parse(localStorage.getItem(POS_KEY) || 'null'); return p && Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null } catch { return null }
+}
+/** Keep the card on screen, even after the window shrinks. */
+const clamp = (p: Pos, el: HTMLElement | null): Pos => {
+  const w = el?.offsetWidth || 280, h = el?.offsetHeight || 72
+  return { x: Math.min(Math.max(8, p.x), window.innerWidth - w - 8), y: Math.min(Math.max(8, p.y), window.innerHeight - h - 8) }
+}
 
 /**
- * The bar along the bottom of the whole app while your timer runs or is
- * paused, like Slack's huddle bar (Matt, 2026-11-20): what it is, how long,
- * and the same buttons as before. It sets --hours-bar-h so nothing sits under it.
+ * The card's frame. Drag it by the grip on its left to wherever it is out of
+ * the way; the spot is remembered on this device. Until it is moved it sits in
+ * the bottom right (above the bottom bar on a phone).
  */
-function Bar({ children }: { children: ReactNode }) {
+function Floating({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<Pos | null>(readPos)
   useEffect(() => {
-    const root = document.documentElement
-    root.style.setProperty('--hours-bar-h', `calc(${BAR_H}px + env(safe-area-inset-bottom))`)
-    return () => { root.style.removeProperty('--hours-bar-h') }
+    if (!pos) return
+    const fit = () => setPos(p => (p ? clamp(p, ref.current) : p))
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  const start = (e: React.PointerEvent) => {
+    const el = ref.current
+    if (!el) return
+    e.preventDefault()
+    const box = el.getBoundingClientRect()
+    const dx = e.clientX - box.left, dy = e.clientY - box.top
+    let last: Pos = { x: box.left, y: box.top }
+    const move = (ev: PointerEvent) => { last = clamp({ x: ev.clientX - dx, y: ev.clientY - dy }, el); setPos(last) }
+    const up = () => {
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up)
+      try { localStorage.setItem(POS_KEY, JSON.stringify(last)) } catch { /* private window */ }
+    }
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up)
+  }
+  const reset = () => { setPos(null); try { localStorage.removeItem(POS_KEY) } catch { /* private window */ } }
   return (
-    <div role="status" style={{ height: `calc(${BAR_H}px + env(safe-area-inset-bottom))`, paddingBottom: 'env(safe-area-inset-bottom)' }}
-      className="fixed inset-x-0 bottom-0 z-[150] flex items-center gap-2 sm:gap-3 px-3 sm:px-5 bg-[#1A1A1A] text-white border-t border-white/10 shadow-[0_-4px_16px_rgba(0,0,0,0.15)]">
+    <div ref={ref} style={pos ? { left: pos.x, top: pos.y } : undefined}
+      className={`fixed z-[150] ${pos ? '' : 'right-3 md:right-5 bottom-[calc(100px+env(safe-area-inset-bottom))] md:bottom-5'} flex items-center gap-3 rounded-2xl border border-border-gray bg-white shadow-xl pl-1.5 pr-3 py-3 min-w-[260px]`}>
+      <span onPointerDown={start} onDoubleClick={reset} title="Drag to move. Double-click to put it back in the corner." aria-label="Move the timer"
+        className="self-stretch flex items-center px-1 -my-3 cursor-grab active:cursor-grabbing text-off-black/25 hover:text-off-black/50 touch-none select-none">
+        <GripVertical className="w-4 h-4" />
+      </span>
       {children}
     </div>
   )
 }
 
-const BTN = 'shrink-0 inline-flex items-center gap-1.5 rounded-[5px] h-9 px-3 sm:px-4 text-sm font-semibold disabled:opacity-50 transition-colors'
-const FILLED = `${BTN} bg-white text-[#1A1A1A] hover:bg-[#E0E0E0]`
-const OUTLINE = `${BTN} border border-white/60 text-white hover:bg-white hover:text-[#1A1A1A]`
-
 /**
- * While your timer runs, a bar along the bottom of every page (Bar): how
- * long it has been running, what it is for, Pause and Stop (or, while
- * paused, Resume and Stop). It reads your
+ * While your timer runs, a small card in the bottom right of every page:
+ * how long it has been running, what it is for, Pause and Stop (or, while
+ * paused, Resume and Stop). It can be dragged out of the way (Floating). It reads your
  * week once a minute and whenever the Hours modal changes it. Only for
  * people whose role includes Hours.
  */
@@ -81,38 +109,40 @@ export default function RunningTimer({ onOpen }: { onOpen?: () => void }) {
     } catch (e) { toast.error((e as Error).message) } finally { setBusy(false) }
   }
   if (!running?.startedAt && paused) return (
-    <Bar>
-      <button onClick={onOpen} className="flex items-center gap-2.5 text-left min-w-0 flex-1" title="Open the Hours Tracker">
-        <Clock className="w-4 h-4 text-white/70 shrink-0" />
-        <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-        <span className="text-sm font-semibold shrink-0">Paused</span>
-        <span className="text-sm font-semibold tabular-nums shrink-0">{clock(paused.carriedMinutes * 60000)}</span>
-        {paused.note && <span className="hidden sm:inline text-sm text-white/60 truncate">· {paused.note}</span>}
+    <Floating>
+      <button onClick={onOpen} className="flex items-center gap-3 text-left min-w-0 flex-1" title="Open the Hours Tracker">
+        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+        <span className="min-w-0">
+          <span className="block text-[11px] font-medium text-off-black/50 leading-tight">Paused</span>
+          <span className="block text-xl font-bold tabular-nums text-off-black leading-tight">{clock(paused.carriedMinutes * 60000)}</span>
+          {paused.note && <span className="block text-xs text-off-black/55 truncate max-w-[150px]">{paused.note}</span>}
+        </span>
       </button>
-      <button onClick={() => act('resume', 'Timer resumed')} disabled={busy} className={FILLED}>
-        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}Resume
+      <button onClick={() => act('resume', 'Timer resumed')} disabled={busy} className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-[#4600D6] px-4 h-12 text-sm font-semibold text-white hover:bg-[#3A00B0] disabled:opacity-50">
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-white" />}Resume
       </button>
-      <button onClick={() => act('end', 'Done for now')} disabled={busy} className={OUTLINE} title="Stop: your time so far is already logged">
-        <Square className="w-3 h-3 fill-current" />Stop
+      <button onClick={() => act('end', 'Done for now')} disabled={busy} className="shrink-0 inline-flex items-center justify-center rounded-xl border border-border-gray w-12 h-12 text-off-black hover:bg-subtle-gray disabled:opacity-50" title="Stop: your time so far is already logged" aria-label="Stop">
+        <Square className="w-3.5 h-3.5 fill-off-black" />
       </button>
-    </Bar>
+    </Floating>
   )
   if (!running?.startedAt) return null
   return (
-    <Bar>
-      <button onClick={onOpen} className="flex items-center gap-2.5 text-left min-w-0 flex-1" title="Open the Hours Tracker">
-        <Clock className="w-4 h-4 text-white/70 shrink-0" />
-        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
-        <span className="hidden sm:inline text-sm font-semibold shrink-0">Timer running</span>
-        <span className="text-sm font-semibold tabular-nums shrink-0">{clock(now - new Date(running.startedAt).getTime() + carried * 60000)}</span>
-        {running.note && <span className="hidden sm:inline text-sm text-white/60 truncate">· {running.note}</span>}
+    <Floating>
+      <button onClick={onOpen} className="flex items-center gap-3 text-left min-w-0 flex-1" title="Open the Hours Tracker">
+        <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+        <span className="min-w-0">
+          <span className="block text-[11px] font-medium text-off-black/50 leading-tight">Timer running</span>
+          <span className="block text-xl font-bold tabular-nums text-off-black leading-tight">{clock(now - new Date(running.startedAt).getTime() + carried * 60000)}</span>
+          {running.note && <span className="block text-xs text-off-black/55 truncate max-w-[170px]">{running.note}</span>}
+        </span>
       </button>
-      <button onClick={() => act('pause', 'Timer paused')} disabled={busy} className={OUTLINE}>
-        <Pause className="w-3.5 h-3.5 fill-current" />Pause
+      <button onClick={() => act('pause', 'Timer paused')} disabled={busy} className="shrink-0 inline-flex items-center justify-center rounded-xl border border-border-gray w-12 h-12 text-off-black hover:bg-subtle-gray disabled:opacity-50" title="Pause" aria-label="Pause">
+        <Pause className="w-3.5 h-3.5 fill-off-black" />
       </button>
-      <button onClick={() => act('stop', 'Timer stopped')} disabled={busy} className={FILLED}>
-        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-3 h-3 fill-current" />}Stop
+      <button onClick={() => act('stop', 'Timer stopped')} disabled={busy} className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-dark-fill px-5 h-12 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-3.5 h-3.5 fill-white" />}Stop
       </button>
-    </Bar>
+    </Floating>
   )
 }

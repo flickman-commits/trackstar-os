@@ -78,8 +78,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     // Room for the rail on the left on desktop. On a phone every page has the
     // whole screen; the menu is a square floating in the bottom corner.
-    // The hours bar along the bottom (RunningTimer) takes its height off the page.
-    <div className="md:pl-[92px]" style={{ paddingBottom: 'var(--hours-bar-h, 0px)' }}>
+    <div className="md:pl-[92px]">
       <MobileToolBar
         can={can}
         activeId={activeId}

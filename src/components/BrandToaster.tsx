@@ -20,8 +20,6 @@ export default function BrandToaster() {
   return (
     <Toaster
       position={pathname.startsWith('/support') ? 'bottom-right' : 'bottom-center'}
-      // Above the hours bar while it shows (hours/RunningTimer.tsx).
-      offset="calc(32px + var(--hours-bar-h, 0px))"
       icons={{ success: <ToastDot type="success" />, error: <ToastDot type="error" />, info: <ToastDot type="info" />, warning: <ToastDot type="warning" /> }}
       toastOptions={{
         unstyled: true,
