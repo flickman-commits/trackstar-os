@@ -9,7 +9,7 @@ import { segment, segmentGroup } from '@/lib/ui'
 import BulkView from '@/components/bulk/BulkView'
 import { useDesign } from '@/lib/useDesign'
 import StatusLegend from '@/components/StatusLegend'
-import { Avatar, QueuePill, PersonFilter, TeamPanel, type QueueMember } from '@/components/AssigneePicker'
+import { Avatar, QueuePill, PersonFilter, TeamPanel, type QueueMember, type SentToday } from '@/components/AssigneePicker'
 import { setTeamColors } from '@/lib/teamColors'
 import { useSearchParams, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
@@ -280,9 +280,9 @@ export default function Dashboard() {
   const [onTime, setOnTime] = useState<OnTime | null>(null)
   // Late orders, oldest first (the server sorts them): their rank tops the Action list.
   const lateRank = useMemo(() => new Map((onTime?.lateOrders || []).map((n, i) => [n, i] as [string, number])), [onTime])
-  // And standard orders sent to production in the last 24 hours. Read again
+  // And standard orders sent to production today (New York). Read again
   // every five minutes while the tab is visible.
-  const [sentToday, setSentToday] = useState<{ count: number; byPerson: { name: string; count: number }[] } | null>(null)
+  const [sentToday, setSentToday] = useState<{ count: number; byPerson: SentToday[] } | null>(null)
   useEffect(() => {
     if (!can('settings.stats')) return
     const read = () => apiFetch('/api/admin/stats?range=7d&only=fulfillment').then(r => r.ok ? r.json() : null)

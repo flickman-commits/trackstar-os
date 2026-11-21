@@ -265,29 +265,38 @@ export function startOfTodayNY(now = new Date()) {
 }
 
 /**
- * Standard orders sent to production since midnight (New York), and who sent
- * them: the person who marked each one complete (the Activity Log line),
- * not whoever it was assigned to. Each order counts once, for its first
- * completion today. The header counter that says whether the day's pace
- * keeps up with what comes in.
+ * Standard orders sent to production today (since midnight New York), and
+ * who sent them: the person who marked each one complete (the Activity Log
+ * line), not whoever it was assigned to. Each order counts once, for its
+ * first completion today. Per person also: how many before and after noon,
+ * and the first and last send, so the day's rhythm shows (Matt, 2026-11-21:
+ * the calendar day, not a rolling 24 hours).
  */
-export async function sentToProductionToday() {
-  // Rolling 24 hours, not the calendar day, so the morning count isn't empty.
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+export async function sentToProductionToday(now = new Date()) {
+  const since = startOfTodayNY(now)
+  const noon = new Date(since.getTime() + 12 * 60 * 60 * 1000)
   const events = await prisma.auditEvent.findMany({
     where: { action: 'order.complete', createdAt: { gte: since } },
     orderBy: { createdAt: 'asc' },
-    select: { detail: true, actorEmail: true, user: { select: { firstName: true } } },
+    select: { detail: true, actorEmail: true, createdAt: true, user: { select: { firstName: true } } },
   })
   const firstBy = new Map()
   for (const e of events) {
     const n = e.detail?.orderNumber
-    if (n && !firstBy.has(n)) firstBy.set(n, e.user?.firstName || (e.actorEmail === 'system' ? 'Automatic' : String(e.actorEmail || 'Someone').split('@')[0]))
+    if (n && !firstBy.has(n)) firstBy.set(n, { who: e.user?.firstName || (e.actorEmail === 'system' ? 'Automatic' : String(e.actorEmail || 'Someone').split('@')[0]), at: e.createdAt })
   }
   if (!firstBy.size) return { count: 0, byPerson: [], since }
   const standard = await prisma.order.findMany({ where: { orderNumber: { in: [...firstBy.keys()] }, trackstarOrderType: 'standard' }, select: { orderNumber: true } })
   const tally = new Map()
-  for (const { orderNumber } of standard) { const who = firstBy.get(orderNumber); tally.set(who, (tally.get(who) || 0) + 1) }
-  const byPerson = [...tally.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
+  for (const { orderNumber } of standard) {
+    const { who, at } = firstBy.get(orderNumber)
+    const t = tally.get(who) || { name: who, count: 0, morning: 0, afternoon: 0, first: at, last: at }
+    t.count++
+    if (at < noon) t.morning++; else t.afternoon++
+    if (at < t.first) t.first = at
+    if (at > t.last) t.last = at
+    tally.set(who, t)
+  }
+  const byPerson = [...tally.values()].sort((a, b) => b.count - a.count)
   return { count: standard.length, byPerson, since }
 }

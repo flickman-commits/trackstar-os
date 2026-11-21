@@ -173,21 +173,34 @@ export function PersonFilter({ team, value, meId, onChange }: {
   )
 }
 
+export type SentToday = { name: string; count: number; morning?: number; afternoon?: number; first?: string; last?: string }
+
+const clockNY = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }).replace(' AM', 'am').replace(' PM', 'pm')
+
+/** "4 in the morning, 3 in the afternoon · 9:12am to 3:40pm" (New York time). */
+function rhythm(s?: SentToday) {
+  if (!s?.count || !s.first) return ''
+  const split = [s.morning ? `${s.morning} in the morning` : '', s.afternoon ? `${s.afternoon} in the afternoon` : ''].filter(Boolean).join(', ')
+  const span = s.last && clockNY(s.last) !== clockNY(s.first) ? `${clockNY(s.first)} to ${clockNY(s.last)}` : `at ${clockNY(s.first)}`
+  return [split, span].filter(Boolean).join(' · ')
+}
+
 /**
  * The team on Standard Orders, in the same chip row as the other views'
- * Current Team: one chip per person with what they sent to production in the
- * last 24 hours and what is still left for them, and the totals in the
- * label. Clicking a person shows only their orders.
+ * Current Team: one chip per person with what they sent to production today
+ * (since midnight New York) and what is still left for them, and the totals
+ * in the label. Hovering shows the morning/afternoon split and the first and
+ * last send. Clicking a person shows only their orders.
  */
 export function TeamPanel({ team, sent, toApprove, selected, onSelect, presence }: {
   team: Teammate[]
-  sent: { name: string; count: number }[] | null
+  sent: SentToday[] | null
   toApprove: { userId: string; count: number }[]
   selected?: string
   onSelect?: (userId: string) => void
   presence?: Presence[]
 }) {
-  type Row = { key: string; user?: Teammate; name: string; userId?: string; sent: number; left: number }
+  type Row = { key: string; user?: Teammate; name: string; userId?: string; sent: number; left: number; when?: SentToday }
   const rows: Row[] = []
   for (const p of toApprove) {
     const user = team.find(u => u.id === p.userId)
@@ -195,11 +208,11 @@ export function TeamPanel({ team, sent, toApprove, selected, onSelect, presence 
   }
   for (const p of sent || []) {
     const row = rows.find(r => r.name === p.name)
-    if (row) row.sent += p.count
-    else { const user = team.find(u => u.firstName === p.name); rows.push({ key: `s-${p.name}`, user, userId: user?.id, name: p.name, sent: p.count, left: 0 }) }
+    if (row) { row.sent += p.count; row.when = p }
+    else { const user = team.find(u => u.firstName === p.name); rows.push({ key: `s-${p.name}`, user, userId: user?.id, name: p.name, sent: p.count, left: 0, when: p }) }
   }
   const sentTotal = rows.reduce((n, r) => n + r.sent, 0)
   const leftTotal = rows.reduce((n, r) => n + r.left, 0)
-  const faces: Face[] = rows.map(r => ({ key: r.key, userId: r.userId, user: r.user, name: r.name, facts: `${r.left} left · ${r.sent} sent`, detail: `${r.left} left to fulfill · ${r.sent} sent to production in the last 24 hours` }))
+  const faces: Face[] = rows.map(r => ({ key: r.key, userId: r.userId, user: r.user, name: r.name, facts: `${r.left} left · ${r.sent} sent`, detail: [`${r.left} left to fulfill`, `${r.sent} sent to production today`, rhythm(r.when)].filter(Boolean).join(' · ') }))
   return <TeamFaces label={`Team · ${sentTotal} sent today · ${leftTotal} left`} faces={faces} presence={presence} selected={selected} onSelect={onSelect} />
 }
