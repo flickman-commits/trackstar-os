@@ -51,6 +51,18 @@
         "VITE_PORT=3200 API_PORT=3201 npm run dev"
       ],
       "port": 3200
+    },
+    {
+      "name": "storefront-wizard-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8779",
+        "--directory",
+        "/Users/flickman/Software/trackstar-art/_preview"
+      ],
+      "port": 8779
     }
   ]
 }

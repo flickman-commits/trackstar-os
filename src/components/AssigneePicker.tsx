@@ -214,5 +214,5 @@ export function TeamPanel({ team, sent, toApprove, selected, onSelect, presence 
   const sentTotal = rows.reduce((n, r) => n + r.sent, 0)
   const leftTotal = rows.reduce((n, r) => n + r.left, 0)
   const faces: Face[] = rows.map(r => ({ key: r.key, userId: r.userId, user: r.user, name: r.name, facts: `${r.left} left · ${r.sent} sent`, detail: [`${r.left} left to fulfill`, `${r.sent} sent to production today`, rhythm(r.when)].filter(Boolean).join(' · ') }))
-  return <TeamFaces label={`Team · ${sentTotal} sent today · ${leftTotal} left`} faces={faces} presence={presence} selected={selected} onSelect={onSelect} />
+  return <TeamFaces label={`Today · ${sentTotal} sent · ${leftTotal} left`} faces={faces} presence={presence} selected={selected} onSelect={onSelect} />
 }
