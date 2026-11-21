@@ -12,9 +12,15 @@ import { appBaseUrl } from '../../lib/links.js'
 export const CHANGE_WINDOW_HOURS = 48
 const HOUR = 3600_000
 
-/** When the customer placed the order: Shopify's created_at, else when we imported it. */
+/**
+ * When the customer placed the order: Shopify's created_at, Etsy's receipt
+ * create_timestamp (seconds), else when we imported it. An Etsy order
+ * imported late (six from Nov 8 came in on Nov 21) was otherwise held two
+ * more days from the import.
+ */
 export function placedAt(order) {
-  const raw = order?.shopifyOrderData?.created_at || order?.shopifyOrderData?.processed_at || order?.createdAt
+  const etsy = Number(order?.etsyOrderData?.create_timestamp || order?.etsyOrderData?.created_timestamp) || 0
+  const raw = order?.shopifyOrderData?.created_at || order?.shopifyOrderData?.processed_at || (etsy ? etsy * 1000 : null) || order?.createdAt
   const d = raw ? new Date(raw) : null
   return d && !Number.isNaN(d.getTime()) ? d : null
 }

@@ -88,7 +88,7 @@ export async function queueSend(job, { orderType } = {}) {
     // Held before it was approved (the mockup went to the customer to approve,
     // holdForCustomer): it stays held, and Send now releases it once they say yes.
     if (job.sendHeldAt) return job
-    const order = await prisma.order.findUnique({ where: { id: job.orderId }, select: { trackstarOrderType: true, shopifyOrderData: true, createdAt: true } })
+    const order = await prisma.order.findUnique({ where: { id: job.orderId }, select: { trackstarOrderType: true, shopifyOrderData: true, etsyOrderData: true, createdAt: true } })
     const type = orderType || order?.trackstarOrderType
     if (!SEND_TYPES.includes(type) || !(await autoSendOn())) return job
     // A print of this order already went to production: this design is a
