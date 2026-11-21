@@ -44,7 +44,14 @@ export function evaluateCheck(r, { sizes: need = SIZES, cobranded = false } = {}
     if (missing.length) problems.push(`${size}: no ${missing.join(', ')} frame found`)
     // A triathlon design (rules.triathlon): the title and all three legs must be found too.
     if (b.triathlon?.missing?.length) problems.push(`${size}: triathlon ${b.triathlon.missing.join(', ')} not found`)
-    if (b.ambiguous?.length) problems.push(`${size}: two ${b.ambiguous.join(', ')} frames and neither is a placeholder`)
+    // lib.jsx collectFrames only gives up on two frames of a kind when both are placeholders or
+    // neither is, so the frame it kept says which: say that, and what to do about it.
+    for (const kind of b.ambiguous || []) {
+      const f = fields[kind]
+      problems.push(f?.placeholder
+        ? `${size}: two ${kind} placeholders ("${f.text}"); delete the extra one (often stacked under the other, or inside a group)`
+        : `${size}: two ${kind} frames holding past orders and no placeholder; delete one, or set it back to the placeholder text`)
+    }
     for (const k of have) if (!fields[k].placeholder && (k === 'name' || k === 'bib')) warnings.push(`${size}: ${k} frame holds a past order ("${fields[k].text}"); replaced at render time`)
     if (b.leftoverText?.length) warnings.push(`${size}: leftover text hidden at render time: ${b.leftoverText.map(t => `"${t}"`).join(', ')}`)
     for (const k of have) if (fields[k].layer !== 'PERSONALIZE LAYER') warnings.push(`${size}: ${k} frame is on "${fields[k].layer}", not PERSONALIZE LAYER`)
