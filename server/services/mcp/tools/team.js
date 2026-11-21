@@ -102,7 +102,7 @@ export const teamTools = [
     readOnly: false,
     input: {},
     async handler() {
-      const out = await runLockedImport(() => processOrders({ runResearch: false, verbose: false }))
+      const out = await runLockedImport(() => processOrders({ runResearch: false, verbose: false, catchUp: true }))
       if (out.skipped === 'already_running') return { summary: 'Import already running', alreadyRunning: true }
       return { summary: `Imported ${out.imported || 0}, updated ${out.updated || 0}`, imported: out.imported || 0, updated: out.updated || 0, skipped: out.skipped || 0 }
     },

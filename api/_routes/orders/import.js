@@ -33,7 +33,8 @@ export default async function handler(req, res) {
 
     const results = await runLockedImport(() => processOrders({
       runResearch,
-      verbose: true
+      verbose: true,
+      catchUp: true,
     }))
 
     return res.status(200).json(results)
