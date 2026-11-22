@@ -400,6 +400,41 @@ export const CHIP_TIME_FIXTURES = [
     officialPage: { url: 'https://www.mychiptime.com/searchResultGen.php?eID=16898&fname=Melissa&lname=Gallagher', shows: '00:49:59', readOn: '2026-11-12' },
     notes: 'Philadelphia 2025 8K (eID 16898) - pace against 4.97 mi (26.2 would give ~1:54, 13.1 ~3:49). Gun 01:07:44 vs chip 00:49:59, an 18-minute gap. POSITIVE SPLIT: 9:41/M at 2.4M fading to 10:03/M overall. Page Total Pace 10:03/M; 2999s / 4.97 = 10:03.4.',
   },
+  // Philadelphia 2026, one per distance. philadelphiamarathon.com links these
+  // three events as "Search Results (2026)" (read 2026-11-22, race day).
+  {
+    platform: 'mychiptime',
+    race: 'Philadelphia Marathon',
+    year: 2026,
+    runner: 'Shadrach Murphy',
+    expectedChipTime: '3:44:57',
+    expectedChipPace: '8:35',
+    expectedBib: '23516',
+    officialPage: { url: 'https://www.mychiptime.com/searchResultGen.php?eID=17626&lname=Murphy', shows: '03:44:57', readOn: '2026-11-22' },
+    notes: 'Philadelphia 2026 Marathon (eID 17626). Gun 03:59:33 vs chip 03:44:57, a 15-minute gap, so a gun-time regression fails. POSITIVE SPLIT: running-average pace 8:15/M at 15K fading to 8:35/M at the finish. Page Total Pace 8:35/M; 13497s / 26.2 = 8:35.2.',
+  },
+  {
+    platform: 'mychiptime',
+    race: 'Philadelphia Marathon',
+    year: 2026,
+    runner: 'Jeffrey Brennan',
+    expectedChipTime: '2:33:50',
+    expectedChipPace: '11:45',
+    expectedBib: '44090',
+    officialPage: { url: 'https://www.mychiptime.com/searchResultGen.php?eID=17625&lname=Brennan', shows: '02:33:50', readOn: '2026-11-22' },
+    notes: 'Philadelphia 2026 HALF (eID 17625) - pace against 13.1, not 26.2 (26.2 would give ~5:52). Gun 02:58:05 vs chip 02:33:50. POSITIVE SPLIT: 10:59/M at 4.3K, 11:53/M at 20K, 11:45/M overall. Page Total Pace 11:45/M; 9230s / 13.1 = 11:44.6, past .5, and the page rounds it up.',
+  },
+  {
+    platform: 'mychiptime',
+    race: 'Philadelphia Marathon',
+    year: 2026,
+    runner: 'Zabrina Gallagher',
+    expectedChipTime: '0:46:51',
+    expectedChipPace: '9:26',
+    expectedBib: '50874',
+    officialPage: { url: 'https://www.mychiptime.com/searchResultGen.php?eID=17627&lname=Gallagher', shows: '00:46:51', readOn: '2026-11-22' },
+    notes: 'Philadelphia 2026 8K (eID 17627) - pace against 4.97 mi. Gun 00:50:41 vs chip 00:46:51. NEGATIVE SPLIT: 9:39/M at 2.4M down to 9:24/M at 8K. Page Total Pace 9:26/M; 2811s / 4.97 = 9:25.6.',
+  },
   // Richmond, one per distance (the weekend's three are searched together).
   // richmondmarathon.org/results links RunSignUp race 53399 for every year
   // 2021-2025. The page prints whole seconds (no tenths), so there is no

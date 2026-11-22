@@ -19,11 +19,11 @@
  *         Marathon 2025", 8K 16898 "2025 8K 2025" (the pages all say
  *         11/22/2025). philadelphiamarathon.com links 16896/16897/16898
  *         directly as "View 2025 Results".
- *   2026: landing 17291. Children appeared by 2026-11-12 (marathon 17626,
- *         half 17625, 8K 17627) but the race (Nov 22) has not run, so they
- *         are NOT configured. Once results are posted: re-read the landing
- *         page, open each child to confirm the title and the 2026 results,
- *         then add `2026: { marathon, halfMarathon, eightK }` below.
+ *   2026: landing 17291 "Philadelphia Marathon Weekend 2026"
+ *         marathon 17626 "2026 Marathon", half 17625 "2026 Half Marathon",
+ *         8K 17627 "2026 8K" (the pages all say 11/21/2026, the Saturday;
+ *         the marathon ran Sunday 11/22). Read off the landing page and
+ *         opened on 2026-11-22 with results posted.
  * Wheelers, Challenge (Freedom / Independence / Liberty Bell / Patriot)
  * children are not sold and are left out.
  *
@@ -129,5 +129,6 @@ export default {
   eventIds: {
     2024: { marathon: '16165', halfMarathon: '16164', eightK: '16166' },
     2025: { marathon: '16897', halfMarathon: '16896', eightK: '16898' },
+    2026: { marathon: '17626', halfMarathon: '17625', eightK: '17627' },
   }
 }
