@@ -23,6 +23,7 @@ import { UserError } from './errors.js'
 import { getDraftModel } from './draftModel.js'
 import { reviewLinkFor } from '../../lib/reviewLinks.js'
 import { customerBlock, customerField, UNTRUSTED_RULE } from './untrusted.js'
+import { draftReference } from './helpCenter.js'
 
 /** The quick actions a draft may point at, by the name the Actions list shows. */
 export const ACTION_NAMES = [
@@ -342,7 +343,9 @@ export async function draftThread(threadId, { instruction = '', actor = null, dr
   const fence = v => String(v || '').replace(/<\/?saved_replies>/gi, '')
   const macroText = macros.slice(0, 45).map(m => `- ${fence(m.name)}: ${fence(clip(m.body.replace(/\s+/g, ' '), 400))}`).join('\n')
 
-  const prompt = `${facts}${instruction ? `\n\nThe rep asked for this draft to be redone with this instruction: ${clip(instruction, 500)}` : ''}\n\nDraft the reply to the customer's latest message.`
+  // The help articles and past cases that fit this message (helpCenter.js): how the team handles it, on top of the playbook.
+  const reference = await draftReference(`${thread.subject || ''} ${stripQuoted(lastInbound.bodyText || '')}`, { threadId: thread.id })
+  const prompt = `${facts}${reference ? `\n\n${reference}` : ''}${instruction ? `\n\nThe rep asked for this draft to be redone with this instruction: ${clip(instruction, 500)}` : ''}\n\nDraft the reply to the customer's latest message.`
   const out = await complete({
     system: SYSTEM(playbook, macroText, thread.channel === 'instagram' ? 'instagram' : 'email'),
     prompt,

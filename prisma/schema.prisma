@@ -1341,6 +1341,16 @@ model SupportThread {
   // When triage last read this thread; it reads it again once the customer writes after that.
   // When the automatic "we got your message" reply went out (support/autoReply.js); set before sending, so it goes once.
   autoRepliedAt    DateTime?
+  // The case, once closed (support/cases.js): what it was about and what we did,
+  // tagged by Claude and correctable by a person. Feeds similar-case search
+  // for the Ask box and the drafts. caseTaggedAt older than lastMessageAt
+  // means it reopened; it is tagged again once closed.
+  caseType         String?
+  caseOutcome      String?
+  caseSummary      String?
+  caseCostCents    Int?
+  caseTaggedAt     DateTime?
+  caseTaggedBy     String?
   triagedAt        DateTime?
   // When the damage pass (support/damage.js) last read it; read again once the customer writes after that.
   damageCheckedAt  DateTime?
@@ -1908,3 +1918,67 @@ model DamageReport {
   @@index([reportedAt])
   @@index([customerEmail])
 }
+
+/**
+ * Support > Help: the support playbook's articles (scenarios, context, how we
+ * work), edited here and nowhere else (support/helpCenter.js). Reps read and
+ * search them; the Ask box and Claude's drafts pull the ones that fit. The
+ * core drafting playbook (SystemConfig support_playbook) stays the short
+ * version Claude reads on every draft.
+ */
+model SupportArticle {
+  id              String                  @id @default(cuid())
+  slug            String                  @unique
+  title           String
+  group           String                  @default("")
+  body            String
+  position        Int                     @default(0)
+  // Shown first in Help and read by every Ask answer and every draft: the numbers that change (delivery time, prices, cutoffs).
+  pinned          Boolean                 @default(false)
+  // When a person last confirmed it is still right (saving it counts). Help flags it after reviewEveryDays.
+  reviewedAt      DateTime?
+  reviewEveryDays Int                     @default(90)
+  updatedById     String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  versions        SupportArticleVersion[]
+
+  @@index([group, position])
+}
+
+model SupportArticleVersion {
+  id          String         @id @default(cuid())
+  articleId   String
+  article     SupportArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  title       String
+  body        String
+  createdById String?
+  createdAt   DateTime       @default(now())
+
+  @@index([articleId, createdAt])
+}
+
+/**
+ * Every question asked in Support > Help (support/helpCenter.js), with the
+ * answer and what it was built from. "Not right" keeps the correct answer;
+ * an admin approves it into the "Answers from the team" article or dismisses it.
+ */
+model SupportQuestion {
+  id           String    @id @default(cuid())
+  askedById    String?
+  askedByName  String    @default("")
+  threadId     String?
+  question     String
+  answer       String    @default("")
+  sources      Json?
+  feedback     String? // helpful | wrong
+  correction   String?
+  review       String? // pending | approved | dismissed (only for a correction)
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([review])
+}
+

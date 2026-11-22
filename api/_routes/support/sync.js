@@ -19,6 +19,7 @@ import { sync, isConnected, alertMailboxDown, clearMailboxDownAlert } from '../.
 import { refreshTokenIfDue, ensureSubscribed, catchUpIfDue } from '../../../server/domain/support/instagram.js'
 import { draftPending } from '../../../server/domain/support/draft.js'
 import { sendAutoReplies } from '../../../server/domain/support/autoReply.js'
+import { tagPendingCases } from '../../../server/domain/support/cases.js'
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, POST, OPTIONS' })) return
@@ -69,8 +70,18 @@ export default async function handler(req, res) {
     } catch (err) {
       console.warn(`[support.draft] ${err.message}`)
     }
+    // Closed conversations filed as cases (cases.js): a few each run, newest first. Never fails the sync.
+    let cases = null
+    if (cron) {
+      try {
+        cases = await tagPendingCases({ limit: 12, budgetMs: 40_000 })
+        if (cases.tagged || cases.failed) console.log(`[support.cases] tagged ${cases.tagged}, failed ${cases.failed}`)
+      } catch (err) {
+        console.warn(`[support.cases] ${err.message}`)
+      }
+    }
     if (cron) await recordCronSuccess(req.url)
-    return res.status(200).json({ ...out, drafts })
+    return res.status(200).json({ ...out, drafts, cases })
   } catch (error) {
     console.error('[API /support/sync]', error)
     // Only the cron's failures: a person's Refresh sees its own error.

@@ -11,6 +11,7 @@ import type { CustomerOrder, OrderItem, InstagramStatus, MailboxStatus, Mockup, 
 import Actions from './Actions'
 import { FilterSender } from './SenderFilter'
 import { TagChip } from '@/components/OrderTags'
+import CaseCard from './CaseCard'
 
 /**
  * The details panel, Intercom's right column: collapsible sections for the
@@ -554,6 +555,11 @@ export default function Details({ thread, tagSuggestions, onOpenThread, onMerge,
               <div className="pt-1"><FilterSender email={thread.customer.email} filters={filters} onChanged={onFiltersChanged} /></div>
             )}
           </Section>
+          {thread.status === 'closed' && (
+            <Section title="Case">
+              <CaseCard threadId={thread.id} status={thread.status} />
+            </Section>
+          )}
           <Section title="Orders" count={thread.context.orders.length}>
             {thread.context.shopifyError && <div className="text-xs text-amber-700 inline-flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />Shopify did not answer; showing what we have on file.</div>}
             {thread.context.orders.length === 0

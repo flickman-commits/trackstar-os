@@ -1,4 +1,4 @@
-import { Inbox, Layers, Clock, AlertTriangle, Moon, Archive, Settings2, Zap, Filter, Lightbulb } from 'lucide-react'
+import { Inbox, Layers, Clock, AlertTriangle, Moon, Archive, Settings2, Zap, Filter, Lightbulb, BookOpen } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Avatar } from '@/components/AssigneePicker'
 import type { InboxCounts, InboxView, Teammate } from '@/types/support'
@@ -27,7 +27,7 @@ function ViewRow({ row, active, onClick }: { row: Row; active: boolean; onClick:
   )
 }
 
-export default function ViewsColumn({ view, counts, team, me, onView, onMacros, onSettings, onRequestFeature, onHours }: {
+export default function ViewsColumn({ view, counts, team, me, onView, onMacros, onSettings, onRequestFeature, onHours, onHelp }: {
   view: InboxView
   counts: InboxCounts | null
   team: Teammate[]
@@ -38,6 +38,7 @@ export default function ViewsColumn({ view, counts, team, me, onView, onMacros, 
   onRequestFeature: () => void
   /** Log and submit your own hours (people with the hours capability). */
   onHours?: () => void
+  onHelp?: () => void
 }) {
   const c = counts
   const top: Row[] = [
@@ -79,6 +80,11 @@ export default function ViewsColumn({ view, counts, team, me, onView, onMacros, 
         </div>
       )}
       <div className="mt-auto px-2 py-3 border-t border-border-gray">
+        {onHelp && (
+          <button onClick={onHelp} className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] text-off-black/70 hover:bg-off-black/[0.04] hover:text-off-black transition-colors">
+            <BookOpen className="w-4 h-4 text-off-black/45" /><span className="flex-1 text-left">Help</span>
+          </button>
+        )}
         {onHours && (
           <button onClick={onHours} className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] text-off-black/70 hover:bg-off-black/[0.04] hover:text-off-black transition-colors">
             <Clock className="w-4 h-4 text-off-black/45" /><span className="flex-1 text-left">Hours</span>

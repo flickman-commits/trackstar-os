@@ -17,6 +17,7 @@ import RequestFeatureModal from '@/components/support/RequestFeatureModal'
 import SettingsModal from '@/components/support/SettingsModal'
 import ResizeHandle from '@/components/support/ResizeHandle'
 import HoursModal from '@/components/hours/HoursModal'
+import HelpCenter from '@/components/support/HelpCenter'
 import type { RichReplyHandle } from '@/components/support/RichReply'
 import { useColumnWidth, useWide } from '@/lib/useColumnWidth'
 import { useConfirm } from '@/components/useConfirm'
@@ -80,6 +81,7 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
   const { user, isAdmin, can } = useAuth()
   // Hours: the rep's own week, from the left column (people with the hours capability).
   const [hoursOpen, setHoursOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -464,7 +466,7 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
 
         <section className="flex-1 min-h-0 pb-3">
           <div className="h-full bg-white border border-border-gray rounded-lg shadow-sm overflow-hidden flex flex-col lg:flex-row">
-            <ViewsColumn view={view} counts={inbox?.counts || null} team={inbox?.team || []} me={me} onView={v => { setView(v); setSelectedId(null); setThread(null) }} onMacros={() => setMacrosOpen(true)} onSettings={() => setSettingsOpen(true)} onRequestFeature={() => setFeatureOpen(true)} onHours={can('hours') ? () => setHoursOpen(true) : undefined} />
+            <ViewsColumn view={view} counts={inbox?.counts || null} team={inbox?.team || []} me={me} onView={v => { setView(v); setSelectedId(null); setThread(null) }} onMacros={() => setMacrosOpen(true)} onSettings={() => setSettingsOpen(true)} onRequestFeature={() => setFeatureOpen(true)} onHours={can('hours') ? () => setHoursOpen(true) : undefined} onHelp={() => setHelpOpen(true)} />
             <HoursModal open={hoursOpen} onClose={() => setHoursOpen(false)} />
             {/* On the phone the list and the conversation take turns: the list until one is picked, then the conversation alone. */}
             <div className={`${thread ? 'hidden lg:contents' : 'contents'}`}>
@@ -529,6 +531,7 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
           </div>
         </div>
       )}
+      {helpOpen && <HelpCenter threadId={selectedId} onOpenThread={openThread} onClose={() => setHelpOpen(false)} />}
       {macrosOpen && <MacrosModal macros={macros} onChanged={loadMacros} onClose={() => setMacrosOpen(false)} />}
       {featureOpen && <RequestFeatureModal onClose={() => setFeatureOpen(false)} />}
       {settingsOpen && <SettingsModal team={inbox?.team || []} unassignedCount={inbox?.counts.unassigned || 0} status={status} instagram={instagram} isAdmin={isAdmin} filters={filters} onChanged={() => { loadStatus(); loadFilters(); loadInbox(true) }} onClose={() => setSettingsOpen(false)} />}
