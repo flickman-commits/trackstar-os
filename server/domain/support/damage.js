@@ -149,8 +149,9 @@ const WINDOW_DAYS = 60
 /**
  * For Stats: orders placed in the window (one per Shopify or Etsy order) and
  * how many of those had a damage report within 60 days, matched by the
- * order number the conversation names or else the customer's email. Also the
- * damage reports made in the window.
+ * order number the conversation names or else the customer's email. An order
+ * counts once however many conversations report it. Also the damaged orders
+ * first reported in the window, counted the same way.
  */
 export async function damageStats({ since, until }) {
   const [rate, reports, first] = await Promise.all([
@@ -172,7 +173,16 @@ export async function damageStats({ since, until }) {
                  AND d."reportedAt" < o.placed + make_interval(days => ${WINDOW_DAYS}::int)
              ))::int AS damaged
       FROM orders o`,
-    prisma.damageReport.count({ where: { damaged: true, reportedAt: { gte: since, lt: until } } }),
+    // Damaged orders first reported in the window. Two conversations about one
+    // order (a customer who writes twice, or from two addresses) are one: keyed by
+    // the order number, else the customer's email, and dated by the first report.
+    prisma.$queryRaw`
+      SELECT count(*)::int AS n FROM (
+        SELECT coalesce(d."orderNumber", 'email:' || d."customerEmail") AS key, min(d."reportedAt") AS first
+        FROM "DamageReport" d
+        WHERE d.damaged = true AND (d."orderNumber" IS NOT NULL OR d."customerEmail" <> '')
+        GROUP BY 1
+      ) k WHERE k.first >= ${since} AND k.first < ${until}`,
     prisma.$queryRaw`SELECT min(m."sentAt") AS at FROM "SupportMessage" m WHERE m.direction = 'in'`,
   ])
   const r = rate[0] || { orders: 0, damaged: 0 }
@@ -182,7 +192,7 @@ export async function damageStats({ since, until }) {
     orders: r.orders,
     damaged: r.damaged,
     pct: r.orders ? Math.round((r.damaged / r.orders) * 1000) / 10 : null,
-    reports,
+    reports: reports[0]?.n || 0,
     stillCounting: until.getTime() > Date.now() - WINDOW_DAYS * 86_400_000,
     partial: !trackedFrom || trackedFrom > since,
   }

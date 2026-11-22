@@ -118,8 +118,8 @@ function cardsFor(p: Period, label: string): Card[] {
       out.push({
         key: 'damaged', line: 'Orders that arrived damaged', tag: 'Support',
         value: dm.pct === null ? null : String(dm.pct), unit: '%', tone,
-        facts: [{ k: 'Damaged', v: `${dm.damaged} of ${dm.orders}` }, { k: 'Reports this period', v: String(dm.reports) }],
-        title: `Orders placed ${label.toLowerCase()} (one per Shopify or Etsy order) whose customer told Support within ${dm.windowDays} days that a print arrived broken or damaged. Claude reads each conversation; a person can mark or unmark one from the conversation (Damaged).`,
+        facts: [{ k: 'Damaged', v: `${dm.damaged} of ${dm.orders}` }, { k: 'Reported this period', v: String(dm.reports) }],
+        title: `Orders placed ${label.toLowerCase()} (one per Shopify or Etsy order) whose customer told Support within ${dm.windowDays} days that a print arrived broken or damaged. An order counts once, however many times they write about it. Claude reads each conversation; a person can mark or unmark one from the conversation (Damaged).`,
         note: dm.partial ? 'Starts before the inbox was tracked, so it reads low.' : dm.stillCounting ? `Still counting: damage shows up after delivery, so these orders have up to ${dm.windowDays} days.` : null,
       })
     }
