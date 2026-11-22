@@ -110,6 +110,20 @@ export function pipelineFor(args) {
 // Paid for the Photo Add-On and no photo came with the order (9643 shipped without it).
 const PHOTO_MISSING = { kind: 'data', fix: 'The customer paid for the Photo Add-On but no photo came with the order. Ask them for it (Email customer) and attach it with Add photo. If they want it without a photo, refund the Photo Add-On in Shopify. It does not render until one of those happens.' }
 
+/**
+ * A print that came with no personalization at all: no runner name from the
+ * order, none typed in, and no result on file. It imports as "Unknown
+ * Runner", which no lookup can find, so it used to read as a lookup that
+ * missed. Buy again on the customer's account page does this (9643: it
+ * rebuilds the cart from the products alone), and so can a cart link.
+ */
+export function noPersonalization(order, research) {
+  if (order.runnerNameOverride?.trim()) return false
+  if (research?.researchStatus === 'found') return false
+  const n = String(order.runnerName || '').trim()
+  return !n || /^unknown runner$/i.test(n)
+}
+
 function computePipeline({ order, research, race, render, hasScraper, templates, noTimeGaps, photoUnpaid, photoMissing = false, workerOnline, waitingOnCustomer = null, emailBounced = null }) {
   const raceName = order.raceNameOverride ?? order.raceName
   const year = order.yearOverride ?? order.raceYear
@@ -137,6 +151,13 @@ function computePipeline({ order, research, race, render, hasScraper, templates,
   if (render?.status === 'failed') return stage('action', 'Render failed', { kind: 'render', fix: / failed: /.test(render.error || '') ? `${render.error} It also renders again on its own once the order's data changes.` : `The render failed: ${render.error || 'unknown error'}. Fix the cause; it renders again on its own once the order's data changes, or use Re-render.` })
   if (render?.status === 'done' && render.review === 'approved') return approvedStage(render, stage)
   if (render?.status === 'done' && render.review === 'rejected') return stage('action', 'Design rejected', { kind: 'data', fix: `The design was rejected: ${render.reviewNote || 'no note'}. Fix the data; a new design renders on the next import.` })
+
+  // Nothing to look up until the customer tells us who ran: ask for all of it in one email (Missing details).
+  if (noPersonalization(order, research)) {
+    const need = ["the runner's name", ...(year ? [] : ['the year']), 'the bib', ...(photoMissing ? ['the photo they paid for'] : [])]
+    const list = need.length > 1 ? `${need.slice(0, -1).join(', ')} and ${need[need.length - 1]}` : need[0]
+    return stage('action', 'No personalization', { kind: 'data', fix: `The order came with no personalization (often Buy again on the customer's account page, which drops it). Email the customer for ${list} (Email customer > Missing details), then enter them on the order.${photoMissing ? ' Attach the photo with Add photo.' : ''}` })
+  }
 
   // Race and setup problems: things only a person (or a developer) can change.
   if (!raceName) return stage('action', 'Unknown race', { kind: 'setup', fix: 'The tool could not tell which race this is. Set the race on the order.' })

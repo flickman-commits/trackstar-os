@@ -91,6 +91,8 @@ export interface Order {
   photoPath?: string | null
   photoAddedManually?: boolean
   photoUnpaid?: boolean
+  // Paid for the Photo Add-On, and no photo came with the order.
+  photoMissing?: boolean
   // When a designer confirmed the photo is on the artwork. Completing a photo
   // order is blocked until this is set.
   photoPlacedAt?: string | null
@@ -393,6 +395,7 @@ export function mapOrder(order: Record<string, unknown>): Order {
     photoPath: order.photoPath as string | null | undefined,
     photoAddedManually: order.photoAddedManually as boolean | undefined,
     photoUnpaid: order.photoUnpaid as boolean | undefined,
+    photoMissing: order.photoMissing as boolean | undefined,
     photoPlacedAt: order.photoPlacedAt as string | null | undefined,
     // Counts and send timestamps. The API has always returned these and this
     // whitelist has always dropped them, so everything downstream read

@@ -28,12 +28,19 @@ export interface EmailCustomerOrder {
   runnerName?: string | null
   raceName?: string | null
   raceYear?: number | string | null
+  /** The print came with no personalization at all (pipeline reason NO_PERSONALIZATION). */
+  noPersonalization?: boolean
+  /** They paid for the Photo Add-On and no photo came with the order. */
+  photoMissing?: boolean
 }
+
+/** The pipeline's reason for a print that arrived with no personalization (server/domain/orders/pipeline.js). */
+export const NO_PERSONALIZATION = 'No personalization'
 
 const ASK = '[what we need]'
 // Each chip writes the whole email for that one ask; picking another replaces it.
-type Pick = 'bib' | 'name' | 'time' | 'race' | 'mockup' | 'address' | 'photo' | 'hof'
-const ASKS: { id: Exclude<Pick, 'mockup' | 'address' | 'photo' | 'hof'>; label: string; text: string }[] = [
+type Pick = 'details' | 'bib' | 'name' | 'time' | 'race' | 'mockup' | 'address' | 'photo' | 'hof'
+const ASKS: { id: Exclude<Pick, 'details' | 'mockup' | 'address' | 'photo' | 'hof'>; label: string; text: string }[] = [
   { id: 'bib', label: 'Bib number', text: 'The bib number (it\'s on the race app or confirmation email)' },
   { id: 'name', label: 'Last name', text: 'The full name they registered under, exactly as it shows in the results' },
   { id: 'time', label: 'Finish time', text: 'The official finish time' },
@@ -85,6 +92,25 @@ Here's the design for ${forWhat} (attached). Does everything look right?
 Reply "looks good" and we'll print it, or tell us what to change.
 
 ${bye}`
+  // The order came with no personalization (Buy again on their account page, 9643): ask for all of
+  // it at once, and for the photo whenever they paid for the add-on, which the one-detail asks never did.
+  if (pick === 'details') {
+    const lines = [
+      "The runner's full name, as it shows in the race results",
+      ...(o.raceYear ? [] : ['Which year they ran it']),
+      "The bib number (it's on the race app or confirmation email)",
+      ...(o.photoMissing ? ["The photo you'd like on the print (you added the Photo Add-On). The original from your phone works best, attached to your reply"] : []),
+    ]
+    return `${hi}
+
+We're working on ${race ? `your ${race} print` : 'your print'}, and your order came through without the personalization details. Could you reply with:
+
+${lines.map(l => `**• ${l}**`).join('\n')}
+
+We'll get it made as soon as we hear back.
+
+${bye}`
+  }
   // The photo they uploaded is too small or blurry to print well (Eli, 2026-11-15).
   // Three days to send a better one, then it prints with the photo we have.
   if (pick === 'photo') return `${hi}
@@ -126,8 +152,9 @@ export default function EmailCustomerModal({ order, repName, onClose, preset }: 
   const subjects = { ask: `Trackstar Order ${number} (Action Required)`, mockup: `Trackstar Order ${number} (Please Approve Your Design)`, address: `Trackstar Order ${number} (Please Confirm Your Address)`, photo: `Trackstar Order ${number} (A Better Photo, Please)`, hof: 'Trackstar Hall of Fame' }
   const rep = repName || 'The team'
   const [subject, setSubject] = useState(preset?.subject || subjects.ask)
-  const [pick, setPick] = useState<Pick | null>(null)
-  const [text, setText] = useState(() => preset?.text || template(order, rep, null))
+  // An order with no personalization opens on the ask for all of it.
+  const [pick, setPick] = useState<Pick | null>(preset ? null : order.noPersonalization ? 'details' : null)
+  const [text, setText] = useState(() => preset?.text || template(order, rep, order.noPersonalization ? 'details' : null))
   const [busy, setBusy] = useState(false)
   const [sent, setSent] = useState<{ threadId: string; to: string; held?: boolean } | null>(null)
   // The design the customer would approve: the newest render, else the newest proof.
@@ -227,6 +254,8 @@ export default function EmailCustomerModal({ order, repName, onClose, preset }: 
           <div>
             <span className={fieldLabel}>We need</span>
             <div className="flex flex-wrap items-center gap-2">
+              <button onClick={() => choose('details')} className={modalChip(pick === 'details')}
+                title={`The order came with no personalization: ask for the runner, bib${order.raceYear ? '' : ', year'}${order.photoMissing ? ' and the photo they paid for' : ''} in one email`}>Missing details</button>
               {ASKS.map(a => (
                 <button key={a.id} onClick={() => choose(a.id)} className={modalChip(pick === a.id)}>{a.label}</button>
               ))}
@@ -239,7 +268,7 @@ export default function EmailCustomerModal({ order, repName, onClose, preset }: 
               <button onClick={() => choose('hof')} className={modalChip(pick === 'hof')}
                 title="They made the Trackstar Hall of Fame: a $50 gift card and a note from Matt">Hall of Fame</button>
             </div>
-            {[...ASKS.map(a => a.id), 'mockup' as Pick, 'address' as Pick, 'photo' as Pick, 'hof' as Pick].some(id => isArmed(`replace:${id}`)) && <p className="mt-2 text-amber-700">Click it again to replace what you wrote with the template.</p>}
+            {['details' as Pick, ...ASKS.map(a => a.id), 'mockup' as Pick, 'address' as Pick, 'photo' as Pick, 'hof' as Pick].some(id => isArmed(`replace:${id}`)) && <p className="mt-2 text-amber-700">Click it again to replace what you wrote with the template.</p>}
           </div>
           <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,application/pdf" className="hidden" onChange={e => attachOwn(e.target.files?.[0])} />
           {pick === 'hof' && (

@@ -13,7 +13,7 @@ import { Avatar, QueuePill, PersonFilter, TeamPanel, type QueueMember, type Sent
 import { setTeamColors } from '@/lib/teamColors'
 import { useSearchParams, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
-import EmailCustomerModal, { type EmailPreset } from '@/components/support/EmailCustomerModal'
+import EmailCustomerModal, { type EmailPreset, NO_PERSONALIZATION } from '@/components/support/EmailCustomerModal'
 import PageHeader from '@/components/PageHeader'
 import OrderTags, { HoverTip } from '@/components/OrderTags'
 import OrderDetail from '@/components/orders/OrderDetail'
@@ -2276,7 +2276,7 @@ export default function Dashboard() {
 
         {emailingOrder && (
           <EmailCustomerModal
-            order={{ id: emailingOrder.id, displayNumber: emailingOrder.displayOrderNumber || emailingOrder.parentOrderNumber, customerEmail: emailingOrder.customerEmail, customerName: emailingOrder.customerName, runnerName: emailingOrder.effectiveRunnerName || emailingOrder.runnerName, raceName: emailingOrder.effectiveRaceName || emailingOrder.raceName, raceYear: emailingOrder.effectiveRaceYear || emailingOrder.raceYear }}
+            order={{ id: emailingOrder.id, displayNumber: emailingOrder.displayOrderNumber || emailingOrder.parentOrderNumber, customerEmail: emailingOrder.customerEmail, customerName: emailingOrder.customerName, runnerName: emailingOrder.effectiveRunnerName || emailingOrder.runnerName, raceName: emailingOrder.effectiveRaceName || emailingOrder.raceName, raceYear: emailingOrder.effectiveRaceYear || emailingOrder.raceYear, noPersonalization: emailingOrder.pipeline?.reason === NO_PERSONALIZATION, photoMissing: Boolean(emailingOrder.photoMissing) }}
             repName={currentUser?.firstName || ''}
             preset={emailing?.preset}
             // Sending marks the Support thread waiting on the customer; the queue re-reads so the order moves to Waiting at once.

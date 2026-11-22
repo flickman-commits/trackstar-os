@@ -41,7 +41,7 @@ test('race names: place plus 70.3 or not; never a guess', () => {
 })
 
 const tri = (research, extra = {}) => pipelineFor({
-  order: { status: 'pending', raceName: 'Ironman 70.3 Wisconsin', raceYear: 2025, lineItemIndex: 0, shopifyOrderData: { line_items: [{ title: 'Personalized Triathlon Print' }] }, productSize: '12x18' },
+  order: { status: 'pending', runnerName: 'Jane Doe', raceName: 'Ironman 70.3 Wisconsin', raceYear: 2025, lineItemIndex: 0, shopifyOrderData: { line_items: [{ title: 'Personalized Triathlon Print' }] }, productSize: '12x18' },
   research, race: { raceDate: new Date('2025-09-06') }, render: null, hasScraper: true, templates: new Set(), noTimeGaps: new Set(), photoUnpaid: false, workerOnline: true, ...extra,
 })
 
