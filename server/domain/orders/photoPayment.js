@@ -36,3 +36,26 @@ export function unpaidPhotoRows(rows, shopifyOrderData) {
   const covered = Math.max(0, paidPhotoAddons(shopifyOrderData) - (withPhoto.length - manual.length))
   return new Set(manual.slice(covered).map(r => r.id))
 }
+
+const PHOTO_PROP = li => (li?.properties || []).some(p => p?.name === '_photo_path' && String(p.value || '').trim())
+
+/**
+ * The reverse of unpaidPhotoRows: the customer paid for a photo and this
+ * print has none. Order 9643 (Nov 2026) came through Shopify with a paid
+ * $20 Photo Add-On and none of the personalization, no photo included; it
+ * printed and shipped without the photo the customer paid for. A print with
+ * no photo of its own is short one when the order's paid add-ons outnumber
+ * the photos that came with it at checkout. Cleared by attaching the photo
+ * (Add photo) or by refunding the add-on in Shopify. A photo the customer
+ * chose to send after the race (photoLater) is waited for elsewhere.
+ */
+export function paidPhotoMissing(order) {
+  if (!order || order.photoPath || order.photoLater || order.source !== 'shopify') return false
+  const data = order.shopifyOrderData
+  const paid = paidPhotoAddons(data)
+  if (!paid) return false
+  const items = Array.isArray(data?.line_items) ? data.line_items : []
+  const withPhoto = items.filter(li => !isPhotoAddonLineItem(li) && !isRemovedLineItem(li) && PHOTO_PROP(li))
+    .reduce((n, li) => n + Number(li.current_quantity ?? li.quantity ?? 1), 0)
+  return paid > withPhoto
+}

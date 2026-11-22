@@ -10,7 +10,7 @@
  * Everything else stays with the designers, as today.
  */
 import { formatRaceDate, formatTemp, formatTime, formatPace, formatCondition } from '../../lib/printFormat.js'
-import { unpaidPhotoRows } from '../orders/photoPayment.js'
+import { unpaidPhotoRows, paidPhotoMissing } from '../orders/photoPayment.js'
 import { awaitingLaterPhoto } from '../orders/photoLaterState.js'
 import { printBlockers } from '../races/verification.js'
 import { isMainEvent, getCanonicalRaceName, namedEventsFor, triathlonTitleFor } from '../../scrapers/index.js'
@@ -193,6 +193,8 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
     const unpaid = unpaidPhotoRows([order], order.shopifyOrderData)
     if (unpaid.size) reasons.push('Photo add-on is not paid yet')
   }
+  // Paid for a photo and none came with the order (9643): never print without it.
+  if (paidPhotoMissing(order)) reasons.push('The customer paid for a photo but none came with the order: get it from them and Add photo, or refund the Photo Add-On')
 
   if (reasons.length) return { ok: false, reasons, spec: null }
   return {

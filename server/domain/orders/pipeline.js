@@ -57,6 +57,7 @@ export function raceRun(race, year, now = new Date()) {
  * @param {Set<string>} p.templates  template keys that are enabled and checked ok
  * @param {Set<string>} p.noTimeGaps "template|size" pairs that cannot print a no-time order
  * @param {boolean} p.photoUnpaid
+ * @param {boolean} [p.photoMissing] paid for the Photo Add-On, no photo came with the order
  * @param {boolean} p.workerOnline
  * @param {Date|string|null} [p.waitingOnCustomer] since when Support has been waiting on this customer's reply
  * @param {Date|string|null} [p.emailBounced]      when our last email to this customer came back undeliverable
@@ -106,7 +107,10 @@ export function pipelineFor(args) {
   }
 }
 
-function computePipeline({ order, research, race, render, hasScraper, templates, noTimeGaps, photoUnpaid, workerOnline, waitingOnCustomer = null, emailBounced = null }) {
+// Paid for the Photo Add-On and no photo came with the order (9643 shipped without it).
+const PHOTO_MISSING = { kind: 'data', fix: 'The customer paid for the Photo Add-On but no photo came with the order. Ask them for it (Email customer) and attach it with Add photo. If they want it without a photo, refund the Photo Add-On in Shopify. It does not render until one of those happens.' }
+
+function computePipeline({ order, research, race, render, hasScraper, templates, noTimeGaps, photoUnpaid, photoMissing = false, workerOnline, waitingOnCustomer = null, emailBounced = null }) {
   const raceName = order.raceNameOverride ?? order.raceName
   const year = order.yearOverride ?? order.raceYear
   const stage = (s, reason, extra = {}) => ({ stage: s, reason, ...extra })
@@ -171,6 +175,7 @@ function computePipeline({ order, research, race, render, hasScraper, templates,
     if (!templates.has(TRI_TEMPLATE) || !(printTitleOf(order) || triathlonTitleFor(raceName)) || !SIZES.includes(order.productSize) || order.hadNoTime) return stage('action', 'Make by hand', { kind: 'setup', fix: 'Everything for this triathlon print is here. Make it from the triathlon design, then mark it complete.' })
     if (awaitingLaterPhoto(order)) return stage('waiting', 'Waiting on photo', { fix: 'The customer chose to add their photo after the race. The print renders once it is in.' })
     if (photoUnpaid) return stage('waiting', 'Photo not paid', { fix: 'The customer has not paid for the photo add-on yet. The print renders once Shopify reads paid.' })
+    if (photoMissing) return stage('action', 'Photo paid, none sent', PHOTO_MISSING)
     if (!render) return stage('waiting', workerOnline ? 'Render queued' : 'Waiting for the renderer', { fix: workerOnline ? 'The print is queued for the next render run.' : 'No render worker is online. The print renders when one checks in.' })
     if (render.status === 'done' && render.review === 'closed') return stage('waiting', 'Render queued', { fix: 'The last design was closed. A new one renders on the next run.' })
     return stage('waiting', 'In progress')
@@ -222,6 +227,7 @@ function computePipeline({ order, research, race, render, hasScraper, templates,
     ? 'The customer chose to add their photo after the race and has the upload link. The print renders once it is in. If no photo arrives by the deadline, it prints without one and the Photo Add-On is refunded, on its own.'
     : 'The customer chose to add their photo after the race. The upload link is emailed the day after race day; the print renders once the photo is in.' })
   if (photoUnpaid) return stage('waiting', 'Photo not paid', { fix: 'The customer has not paid for the photo add-on yet. The print renders once Shopify reads paid.' })
+  if (photoMissing) return stage('action', 'Photo paid, none sent', PHOTO_MISSING)
   if (!render) return stage('waiting', workerOnline ? 'Render queued' : 'Waiting for the renderer', { fix: workerOnline ? 'The print is queued for the next render run.' : 'No render worker is online. The print renders when one checks in.' })
   if (render.status === 'done' && render.review === 'closed') return stage('waiting', 'Render queued', { fix: 'The last design was closed. A new one renders on the next run.' })
   return stage('waiting', 'In progress')

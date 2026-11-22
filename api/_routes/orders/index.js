@@ -10,7 +10,7 @@ import { isExpeditedShipping, getShippingMethod } from '../../../server/lib/ship
 import { getOrderTotalUsd, isBigSpender, BIG_SPENDER_THRESHOLD_USD } from '../../../server/lib/orderValue.js'
 import { getProductInfo, loadProductCatalog } from '../../../server/lib/productCatalog.js'
 import { isRushAddonLineItem, isRemovedLineItem } from '../../../server/lib/lineItemMatching.js'
-import { unpaidPhotoRows } from '../../../server/domain/orders/photoPayment.js'
+import { unpaidPhotoRows, paidPhotoMissing } from '../../../server/domain/orders/photoPayment.js'
 import { shopifyAdminUrl, arteloOrderUrl, etsyOrderUrl, photoLaterUrl } from '../../../server/lib/links.js'
 import { photoLaterDeadline } from '../../../server/domain/orders/photoLaterState.js'
 import { getEtsyListingImageUrl } from '../../../server/lib/etsyImageCache.js'
@@ -521,6 +521,9 @@ export default async function handler(req, res) {
       for (const id of unpaidPhotoRows(rows, rows[0].shopifyOrderData)) unpaid.add(id)
     }
     for (const o of transformedOrders) o.photoUnpaid = unpaid.has(o.id)
+    // The reverse: paid for a photo, and none came with the order (9643).
+    const missing = new Set(orders.filter(paidPhotoMissing).map(o => o.id))
+    for (const o of transformedOrders) o.photoMissing = missing.has(o.id)
 
     // Waiting on a customer's reply to something we asked (Support, "waiting").
     try {
@@ -543,7 +546,7 @@ export default async function handler(req, res) {
       if (!o || o.trackstarOrderType !== 'standard') continue
       const research = pickResearch(o.runnerResearch, o.raceNameOverride ?? o.raceName, o.yearOverride ?? o.raceYear, getCanonicalRaceName)
       const race = research?.race || raceFor(o.raceNameOverride ?? o.raceName, o.yearOverride ?? o.raceYear)
-      t.pipeline = pipelineFor({ order: o, research, race, render: o.renderJobs?.find(j => !j.spec?.altSize) || null, hasScraper: t.hasScraperAvailable, templates: templateKeys, noTimeGaps: gaps, photoUnpaid: t.photoUnpaid, workerOnline, waitingOnCustomer: t.waitingOnCustomerSince || null, emailBounced: t.emailBouncedAt || null })
+      t.pipeline = pipelineFor({ order: o, research, race, render: o.renderJobs?.find(j => !j.spec?.altSize) || null, hasScraper: t.hasScraperAvailable, templates: templateKeys, noTimeGaps: gaps, photoUnpaid: t.photoUnpaid, photoMissing: t.photoMissing, workerOnline, waitingOnCustomer: t.waitingOnCustomerSince || null, emailBounced: t.emailBouncedAt || null })
     }
 
     return res.status(200).json({ orders: transformedOrders, ...(openOnly ? { completedCount } : {}) })

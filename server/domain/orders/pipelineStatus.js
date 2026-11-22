@@ -7,7 +7,7 @@
 import prisma from '../../db.js'
 import { pipelineFor } from './pipeline.js'
 import { waitingOnCustomers, bouncedCustomers } from '../support/compose.js'
-import { unpaidPhotoRows } from './photoPayment.js'
+import { unpaidPhotoRows, paidPhotoMissing } from './photoPayment.js'
 import { noTimeGaps, onlineWorkers } from '../render/templates.js'
 import { getCanonicalRaceName, hasScraperForRace } from '../../scrapers/index.js'
 import { ensureOverridesLoaded } from '../../scrapers/scraperOverrides.js'
@@ -68,6 +68,17 @@ export async function pipelinesFor(ids) {
     }
   }
 
+  // Paid for a photo and none came with the order (9643). Only Shopify rows with no photo can be short one.
+  const noPhoto = orders.filter(o => o.source === 'shopify' && !o.photoPath && !o.photoLater && o.status !== 'completed').map(o => o.id)
+  const missing = new Set()
+  if (noPhoto.length) {
+    const pay = await prisma.$queryRaw`SELECT id, "shopifyOrderData"::jsonb->'financial_status' AS fs, "shopifyOrderData"::jsonb->'line_items' AS li FROM "Order" WHERE id = ANY(${noPhoto})`
+    for (const r of pay) {
+      const o = orders.find(x => x.id === r.id)
+      if (paidPhotoMissing({ ...o, shopifyOrderData: { financial_status: r.fs, line_items: r.li } })) missing.add(r.id)
+    }
+  }
+
   // Support conversations waiting on these customers' replies.
   const openEmails = orders.filter(o => o.status !== 'completed').map(o => o.customerEmail)
   const waiting = await waitingOnCustomers(openEmails).catch(() => new Map())
@@ -80,7 +91,7 @@ export async function pipelinesFor(ids) {
     out.set(o.id, pipelineFor({
       order: o, research, race, render: o.renderJobs?.[0] || null,
       hasScraper: hasScraperForRace(o.raceNameOverride ?? o.raceName),
-      templates: ctx.templateKeys, noTimeGaps: ctx.gaps, photoUnpaid: unpaid.has(o.id), workerOnline: ctx.workerOnline,
+      templates: ctx.templateKeys, noTimeGaps: ctx.gaps, photoUnpaid: unpaid.has(o.id), photoMissing: missing.has(o.id), workerOnline: ctx.workerOnline,
       waitingOnCustomer: o.status !== 'completed' ? waiting.get(String(o.customerEmail || '').trim().toLowerCase()) || null : null,
       emailBounced: o.status !== 'completed' ? bounced.get(String(o.customerEmail || '').trim().toLowerCase()) || null : null,
     }))
