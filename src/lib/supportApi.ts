@@ -3,7 +3,7 @@
  * shapes, so the Support screens never touch fetch or JSON directly.
  */
 import { apiFetch } from '@/lib/api'
-import type { Address, SenderFilter, BackfillResult, InboxPayload, InboxSort, InboxView, InstagramBackfillResult, InstagramStatus, Macro, MailboxStatus, Mockup, Note, SyncResult, ThreadDetail, ThreadRow, ThreadStatus, RoutingRules } from '@/types/support'
+import type { Address, DamageReport, SenderFilter, BackfillResult, InboxPayload, InboxSort, InboxView, InstagramBackfillResult, InstagramStatus, Macro, MailboxStatus, Mockup, Note, SyncResult, ThreadDetail, ThreadRow, ThreadStatus, RoutingRules } from '@/types/support'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -76,6 +76,7 @@ export const supportApi = {
   setStatus: (id: string, status: ThreadStatus, restore = false) => act<ThreadRow>(id, 'status', { status, ...(restore ? { restore: true } : {}) }),
   snooze: (id: string, until: string | null) => act<ThreadRow>(id, 'snooze', { until }),
   setPriority: (id: string, priority: boolean) => act<ThreadRow>(id, 'priority', { priority }),
+  setDamage: (id: string, damaged: boolean) => act<{ damage: DamageReport }>(id, 'damage', { damaged }),
   setTags: (id: string, tags: string[]) => act<ThreadRow>(id, 'tags', { tags }),
   addNote: (id: string, body: string, mentions: string[]) => act<Note>(id, 'note', { body, mentions }),
   deleteNote: (id: string, noteId: string) => act<{ id: string }>(id, 'deleteNote', { noteId }),

@@ -458,6 +458,35 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
+/**
+ * Did a print arrive broken or damaged? Claude marks it from what the customer
+ * wrote (server/domain/support/damage.js); a person can mark or unmark it, and
+ * that call stays. Stats counts these as "Orders that arrived damaged".
+ */
+function DamageRow({ thread, onChanged }: { thread: ThreadDetail; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const d = thread.damage
+  const set = async (damaged: boolean) => {
+    setBusy(true)
+    try { await supportApi.setDamage(thread.id, damaged); toast.success(damaged ? 'Counted as a damaged print' : 'Not counted as a damaged print'); onChanged() }
+    catch (e) { toast.error(e instanceof Error ? e.message : 'Could not save that') }
+    finally { setBusy(false) }
+  }
+  const who = d?.source === 'person' ? `Marked by ${d.decidedBy || 'a person'}` : 'Found by Claude'
+  return (
+    <Attr label="Damaged">
+      {d?.damaged ? (
+        <span className="inline-flex items-center gap-2 flex-wrap">
+          <span className="px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-[11px] font-semibold text-red-700" title={[d.summary, who].filter(Boolean).join('. ')}>Arrived damaged</span>
+          <button onClick={() => { void set(false) }} disabled={busy} className="text-xs text-off-black/50 hover:text-off-black hover:underline disabled:opacity-50" title="Not a damaged print: leave it out of Stats">Not damaged</button>
+        </span>
+      ) : (
+        <button onClick={() => { void set(true) }} disabled={busy} className="text-xs text-off-black/50 hover:text-off-black hover:underline disabled:opacity-50" title="The customer says a print arrived broken or damaged: count it in Stats">Mark as damaged</button>
+      )}
+    </Attr>
+  )
+}
+
 export default function Details({ thread, tagSuggestions, onOpenThread, onMerge, merging = [], onPriority, onTags, onInsert, onAttach, onChanged, width, filters, onFiltersChanged, drawer = false }: {
   thread: ThreadDetail | null
   tagSuggestions: string[]
@@ -514,6 +543,7 @@ export default function Details({ thread, tagSuggestions, onOpenThread, onMerge,
                 <button onClick={() => onPriority(true)} className={btnSecondary} title="Mark as priority (p)">Mark as Priority</button>
               )}
             </Attr>
+            <DamageRow thread={thread} onChanged={onChanged} />
             {(thread.lastInboundAt || thread.lastOutboundAt) && (
               <div className="grid grid-cols-2 gap-3 text-xs pt-0.5">
                 <div><div className="text-off-black/45">Their last message</div><div className="text-off-black">{thread.lastInboundAt ? `${ago(thread.lastInboundAt)} ago` : 'None yet'}</div></div>

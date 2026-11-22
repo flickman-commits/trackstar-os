@@ -19,8 +19,11 @@
  *            Close (closeCounter.js counts the same way, by day).
  *   replacements  what we paid Artelo for replacements made in the window
  *            (finance/replacements.js), cancelled and paid-back ones left out.
+ *   damage   the share of orders placed in the window whose customer reported
+ *            a print arriving broken or damaged within 60 days (damage.js).
  */
 import prisma from '../../db.js'
+import { damageStats } from './damage.js'
 
 const WINDOW_DAYS = 60
 const CLOSED = '% closed this'
@@ -29,7 +32,7 @@ const cents = r => r.billedCents ?? r.quotedCents ?? 0
 
 /** @param {{ since: Date, until: Date }} w */
 export async function supportStats({ since, until }) {
-  const [received, closed, closers, rate, first, reps] = await Promise.all([
+  const [received, closed, closers, rate, first, reps, damage] = await Promise.all([
     prisma.$queryRaw`
       SELECT to_char(m."sentAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York', 'YYYY-MM-DD') AS day, count(*)::int AS n
       FROM "SupportMessage" m JOIN "SupportThread" t ON t.id = m."threadId"
@@ -68,6 +71,7 @@ export async function supportStats({ since, until }) {
       FROM orders o`,
     prisma.$queryRaw`SELECT min(m."sentAt") AS at FROM "SupportMessage" m JOIN "SupportThread" t ON t.id = m."threadId" WHERE t.channel = 'email' AND m.direction = 'in'`,
     prisma.replacement.findMany({ where: { createdAt: { gte: since, lt: until }, canceled: false, reimbursed: false }, select: { billedCents: true, quotedCents: true } }),
+    damageStats({ since, until }),
   ])
 
   const users = await prisma.user.findMany({ where: { id: { in: closers.map(c => c.id) } }, select: { id: true, firstName: true, lastName: true } })
@@ -97,5 +101,6 @@ export async function supportStats({ since, until }) {
     },
     closers: closers.map(c => ({ id: c.id, name: nameOf.get(c.id) || 'Someone', closed: c.n })),
     replacements: { count: reps.length, cents: reps.reduce((s, x) => s + cents(x), 0) },
+    damage,
   }
 }

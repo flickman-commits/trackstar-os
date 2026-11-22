@@ -12,72 +12,72 @@ datasource db {
 }
 
 model Order {
-  id                 String    @id @default(cuid())
-  orderNumber        String    // Order number for this specific item (parentOrderNumber-lineItemIndex)
-  parentOrderNumber  String    // Original Shopify/Etsy order number
-  lineItemIndex      Int       @default(0) // Which line item this is (0, 1, 2, etc.)
-  source             String    // "shopify" or "etsy"
-  arteloOrderData    Json      // Full order object from Artelo
-  shopifyOrderData   Json?     // Personalization data if Shopify
-  etsyOrderData      Json?     // Receipt/personalization data if Etsy
-  raceName           String
-  raceYear           Int
-  runnerName         String
-  productSize        String
-  frameType          String
-  notes              String?   // Notes from Shopify (year corrections, etc.)
-  hadNoTime          Boolean   @default(false) // Flag: customer entered "no time" in runner name
+  id                  String    @id @default(cuid())
+  orderNumber         String // Order number for this specific item (parentOrderNumber-lineItemIndex)
+  parentOrderNumber   String // Original Shopify/Etsy order number
+  lineItemIndex       Int       @default(0) // Which line item this is (0, 1, 2, etc.)
+  source              String // "shopify" or "etsy"
+  arteloOrderData     Json // Full order object from Artelo
+  shopifyOrderData    Json? // Personalization data if Shopify
+  etsyOrderData       Json? // Receipt/personalization data if Etsy
+  raceName            String
+  raceYear            Int
+  runnerName          String
+  productSize         String
+  frameType           String
+  notes               String? // Notes from Shopify (year corrections, etc.)
+  hadNoTime           Boolean   @default(false) // Flag: customer entered "no time" in runner name
   // A person moved the order to another queue by hand (orders/queueOverride.js):
   // { stage, note, by, at, basis }. Holds until the worked-out stage changes from `basis`.
-  queueOverride      Json?
-  noBib              Boolean   @default(false) // The customer wants no bib on the print: the bib frame renders empty
-  printTitle1        String? // A triathlon print's title, set by hand ("Ironman 70.3"); null = from the race config
-  printTitle2        String? // Its second line ("North Carolina")
-  status             String    @default("pending") // "pending", "missing_year", "ready", "flagged", "completed"
-  researchedAt       DateTime?
+  queueOverride       Json?
+  noBib               Boolean   @default(false) // The customer wants no bib on the print: the bib frame renders empty
+  printTitle1         String? // A triathlon print's title, set by hand ("Ironman 70.3"); null = from the race config
+  printTitle2         String? // Its second line ("North Carolina")
+  status              String    @default("pending") // "pending", "missing_year", "ready", "flagged", "completed"
+  researchedAt        DateTime?
   // The last research attempt by a bulk pass (bulk/bulkOrders.js researchPending), found or not, so a pass moves down the list
   researchAttemptedAt DateTime?
-  createdAt          DateTime  @default(now())
+  createdAt           DateTime  @default(now())
   // Any change to the row: the dashboard asks for orders changed since its last load.
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt           DateTime  @default(now()) @updatedAt
 
   // Trackstar order classification
-  trackstarOrderType String    @default("standard") // "standard" | "custom" | "race_partner" | "bulk" | "sample" (overseas sample design)
+  trackstarOrderType String @default("standard") // "standard" | "custom" | "race_partner" | "bulk" | "sample" (overseas sample design)
   // Note: race_partner rows reuse raceName as the partner name and
   // customerName/customerEmail as the partner contact — no schema change needed.
 
   // Custom order fields (populated from Shopify properties for custom orders)
-  designStatus       String    @default("not_started") // "not_started" | "in_progress" | "awaiting_review" | "ready_to_send" | "done"
-  dueDate            DateTime? // Computed: order created_at + 14 days (4 if isRushOrder)
+  designStatus        String    @default("not_started") // "not_started" | "in_progress" | "awaiting_review" | "ready_to_send" | "done"
+  dueDate             DateTime? // Computed: order created_at + 14 days (4 if isRushOrder)
   // "Skip the line": the customer paid the rush fee, so this order is promised
   // in 4 days instead of 14 and should be designed first. Set from the rush
   // add-on line item / the print's Rush Order property at import.
-  isRushOrder        Boolean   @default(false)
+  isRushOrder         Boolean   @default(false)
   // An admin moved this order to rush by hand (comped or arranged off-site).
   // The import's paid-rush check never undoes it.
-  rushOverride       Boolean   @default(false)
+  rushOverride        Boolean   @default(false)
   // Render before race day (a creator's print): the "race has not happened" gate is lifted for this order only.
-  renderBeforeRace   Boolean   @default(false)
+  renderBeforeRace    Boolean   @default(false)
   // A race whose design changed (render/designSwitch.js): 'new' or 'old' set by hand beats when they bought.
-  designChoice       String?
-  customerEmail      String?   // Customer email from Shopify order
-  customerName       String?   // Customer first name from Shopify order (for email template)
-  bibNumberCustomer  String?   // Bib # provided by customer (custom orders only)
-  timeCustomer       String?   // Time provided by customer (custom orders only)
-  creativeDirection  String?   // Creative direction notes from customer
-  isGift             Boolean   @default(false) // Whether this is a gift order
-  proofSentAt        DateTime? // When proofs were last sent to customer (for follow-up tracking)
-  designerNote       String?   // Optional note from designer sent with proofs (shown in approval portal)
+  designChoice        String?
+  customerEmail       String? // Customer email from Shopify order
+  customerName        String? // Customer first name from Shopify order (for email template)
+  bibNumberCustomer   String? // Bib # provided by customer (custom orders only)
+  timeCustomer        String? // Time provided by customer (custom orders only)
+  creativeDirection   String? // Creative direction notes from customer
+  isGift              Boolean   @default(false) // Whether this is a gift order
+  proofSentAt         DateTime? // When proofs were last sent to customer (for follow-up tracking)
+  designerNote        String? // Optional note from designer sent with proofs (shown in approval portal)
   // Custom-order delay notification (Dan's "Notify Customer of Delay" button)
-  delayNoticeSentAt  DateTime? // When the delay-notice email was sent
-  delayNoticeDaysLate Int?     // How many days late we promised in that email
+  delayNoticeSentAt   DateTime? // When the delay-notice email was sent
+  delayNoticeDaysLate Int? // How many days late we promised in that email
 
   // Shipping. Currently used by creator-sample orders to surface a real
   // "shipped" signal in the creator portal (status='completed' means "sent to
   // production", which is not the same as out-the-door).
-  trackingNumber     String?
-  trackingCarrier    String?   // Free-text: "USPS", "UPS", "FedEx", etc.
-  shippedAt          DateTime?
+  trackingNumber  String?
+  trackingCarrier String? // Free-text: "USPS", "UPS", "FedEx", etc.
+  shippedAt       DateTime?
 
   // Customer-confirmed race result, captured by the storefront Instant Lookup
   // widget on STANDARD race orders. Distinct from bibNumberCustomer/timeCustomer
@@ -88,11 +88,11 @@ model Order {
   //                  = null  → no widget data (Etsy, or a PDP without the widget)
   //                            → research runs normally, exactly as before.
   // Phase 1 reads these to skip research when verified; Phase 0 only captures them.
-  lookupVerified     Boolean?  // Did the data come from a confirmed official match?
-  customerBib        String?   // Bib # from the widget (verified or manual)
-  customerFinishTime String?   // Finish time from the widget (verified or manual)
-  customerPace       String?   // Pace from the widget (only set on a verified match)
-  customerEventType  String?   // Event/distance from the widget (e.g. "Marathon")
+  lookupVerified     Boolean? // Did the data come from a confirmed official match?
+  customerBib        String? // Bib # from the widget (verified or manual)
+  customerFinishTime String? // Finish time from the widget (verified or manual)
+  customerPace       String? // Pace from the widget (only set on a verified match)
+  customerEventType  String? // Event/distance from the widget (e.g. "Marathon")
   // How the shopper arrived at their confirmed/typed result. Drives the
   // "outcome" chip on the order detail and helps debug widget behavior.
   //   "auto_match"          → single official-results match, customer confirmed
@@ -119,16 +119,16 @@ model Order {
   // walk back. The dashboard mints a short-lived signed URL on demand via
   // /api/admin/photo-signed-url when a designer opens the order.
   //   null → no photo on this order (the overwhelming majority)
-  photoPath          String?
+  photoPath            String?
   // A photo an admin attached after purchase (the customer emailed it). It
   // only counts as paid once the Shopify order carries a paid Photo Add-On
   // line for it; until then the order shows "Photo not paid" and cannot be
   // completed.
-  photoAddedManually Boolean  @default(false)
+  photoAddedManually   Boolean   @default(false)
   // A hand-attached photo we are not charging for (Settings in the order
   // view: "Photo is free"). Counts as paid, renders with the photo, and
   // never needs a Photo Add-On line on the Shopify order.
-  photoFree          Boolean  @default(false)
+  photoFree            Boolean   @default(false)
   // "Add photo after the race": a pre-order where the customer paid for the
   // Photo Add-On at checkout but had no race photo yet. The print waits for
   // the photo; server/domain/orders/photoLater.js emails an upload link the
@@ -151,66 +151,66 @@ model Order {
   // Address Review", "Customer Unpaid"); null when it is not. Set by the
   // import's hold check and the daily Artelo check (arteloMismatch.js); the
   // Action queue shows it, since nothing prints until someone acts in Artelo.
-  arteloHold         String?
+  arteloHold           String?
   // Custom Counter: a design we have made before pays half. Null = decided
   // automatically (an earlier custom for the same race and distance); true or
   // false = set by hand in the counter (customCounter.js).
-  designRepeat       Boolean?
+  designRepeat         Boolean?
   // The customer's answer on the approval page to "Can we feature this
   // design on our site?" (custom orders). Null = approved before the
   // question existed. False keeps it out of Settings > Site Gallery.
-  featureConsent     Boolean?
+  featureConsent       Boolean?
   // Set when a designer confirms the customer's photo is actually placed on
   // the artwork. A photo order that ships without the photo is a reprint and a
   // refund, and the photo is the one element no proof template shows by
   // default, so it needs an explicit human check rather than an assumption.
   // Null on every order without a photo.
-  photoPlacedAt      DateTime?
+  photoPlacedAt        DateTime?
 
   // Manual override fields (for customer corrections)
-  yearOverride       Int?      // Override for raceYear
-  raceNameOverride   String?   // Override for raceName
-  runnerNameOverride String?   // Override for runnerName
+  yearOverride       Int? // Override for raceYear
+  raceNameOverride   String? // Override for raceName
+  runnerNameOverride String? // Override for runnerName
 
   // Relations
-  runnerResearch   RunnerResearch[]
-  comments         OrderComment[]
-  approvalToken    ApprovalToken?
-  proofs           Proof[]
-  messages         OrderMessage[]
-  creatorSample    Creator?  @relation("CreatorSample") // Set iff this is a creator-program sample order
+  runnerResearch      RunnerResearch[]
+  comments            OrderComment[]
+  approvalToken       ApprovalToken?
+  proofs              Proof[]
+  messages            OrderMessage[]
+  creatorSample       Creator?         @relation("CreatorSample") // Set iff this is a creator-program sample order
   // Bulk partner orders: one runner per row, grouped under a BulkOrder. The
   // address is the runner's own; every print ships separately.
   // Who is fulfilling this order. Set on import from the per-type default
   // (SystemConfig "assignment_defaults"), changeable by anyone on the team.
-  assigneeId       String?
-  assignee         User?      @relation("OrderAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assigneeId          String?
+  assignee            User?            @relation("OrderAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   // Custom design payouts: who moved this order to Sent to Production, and
   // when. Cleared if it is reopened. Older rows have neither; the counter
   // falls back to researchedAt and the assignee for those.
   designCompletedAt   DateTime?
   designCompletedById String?
-  designCompletedBy   User?    @relation("DesignCompletedBy", fields: [designCompletedById], references: [id], onDelete: SetNull)
-  bulkOrderId      String?
+  designCompletedBy   User?            @relation("DesignCompletedBy", fields: [designCompletedById], references: [id], onDelete: SetNull)
+  bulkOrderId         String?
   // A bulk runner's own Artelo order (server/domain/bulk/send.js): queued
   // for sending once it has an address and a print, sent (the order is in
   // arteloOrderData, like an imported one), or stuck with the reason.
-  bulkSendAfter    DateTime?
-  bulkSentAt       DateTime?
-  bulkSendError    String?
-  bulkOrder        BulkOrder? @relation(fields: [bulkOrderId], references: [id], onDelete: Cascade)
+  bulkSendAfter       DateTime?
+  bulkSentAt          DateTime?
+  bulkSendError       String?
+  bulkOrder           BulkOrder?       @relation(fields: [bulkOrderId], references: [id], onDelete: Cascade)
   // A bulk runner who did not finish (server/domain/bulk/dnf.js): their order
   // is closed (status completed, nothing prints) and they leave the runner
   // list and the print count, so the prints paid for and not made can be refunded.
-  bulkDnfAt        DateTime?
-  bulkDnfBy        String?
-  renderJobs       RenderJob[]
-  galleryPick      GalleryPick?
-  shippingAddress  Json?      // { line1, line2, city, state, zip, country }
-  productionFileUrl String?   // Public URL of the finished print file, for the Artelo sheet
+  bulkDnfAt           DateTime?
+  bulkDnfBy           String?
+  renderJobs          RenderJob[]
+  galleryPick         GalleryPick?
+  shippingAddress     Json? // { line1, line2, city, state, zip, country }
+  productionFileUrl   String? // Public URL of the finished print file, for the Artelo sheet
 
-  @@index([updatedAt])
   @@unique([parentOrderNumber, lineItemIndex]) // Each line item is unique within an order
+  @@index([updatedAt])
   @@index([orderNumber])
   @@index([parentOrderNumber]) // For grouping items from same order
   @@index([status])
@@ -227,72 +227,72 @@ model Order {
 }
 
 model Race {
-  id               Int       @id @default(autoincrement())
-  raceName         String
-  year             Int
-  raceDate         DateTime? // null = nobody has verified one yet. Never a placeholder.
+  id                        Int       @id @default(autoincrement())
+  raceName                  String
+  year                      Int
+  raceDate                  DateTime? // null = nobody has verified one yet. Never a placeholder.
   // Where raceDate came from: "manual" (a person typed it, which only happens
   // once they have confirmed it on the results site), "config" (a verified
   // raceDates pin), "scraped" (read off the results page), "researched"
   // (confirmed against a cited source: official site, results, news). Null on rows that
   // predate this column, which may still hold a value from the old computed
   // rules - those are the ones the sweep should keep asking about.
-  raceDateSource   String?
+  raceDateSource            String?
   // The evidence: where the date was confirmed (a results page, the official
   // site, a race-day report) and what it said. A date prints only when it has
   // this. Set by a person in the tool, the config sync, or the nightly routine.
-  raceDateSourceUrl   String?
-  raceDateEvidence    String?
-  raceDateVerifiedAt  DateTime?
-  raceDateVerifiedBy  String?   // user id, "config", "nightly", or a script name
+  raceDateSourceUrl         String?
+  raceDateEvidence          String?
+  raceDateVerifiedAt        DateTime?
+  raceDateVerifiedBy        String? // user id, "config", "nightly", or a script name
   raceDateConfirmedByPerson String? // name of the person who confirmed a suggested (scraped) date; cleared when the date changes
   // Set the first time a print made from this race year is approved. After
   // that the date and weather are locked: a change needs a reason, is logged,
   // and flags every open render made with the old values.
-  firstPrintedAt   DateTime?
-  eventTypes       Json      // Array like ["Marathon", "Half Marathon"]
-  resultsUrl       String?
-  resultsSiteType  String?
-  location         String?
-  weatherCondition String?   // "sunny", "cloudy", "rainy", or "snowy"
-  weatherTemp      String?
-  weatherFetchedAt DateTime?
-  weatherDetails   String?   // JSON breakdown of how the weather was calculated (for the info popover)
+  firstPrintedAt            DateTime?
+  eventTypes                Json // Array like ["Marathon", "Half Marathon"]
+  resultsUrl                String?
+  resultsSiteType           String?
+  location                  String?
+  weatherCondition          String? // "sunny", "cloudy", "rainy", or "snowy"
+  weatherTemp               String?
+  weatherFetchedAt          DateTime?
+  weatherDetails            String? // JSON breakdown of how the weather was calculated (for the info popover)
   // Calculated weather is checked by a person before it prints (Confirm in the order view). Any change clears it.
-  weatherConfirmedAt DateTime?
-  weatherConfirmedBy String?
-  createdAt        DateTime  @default(now())
+  weatherConfirmedAt        DateTime?
+  weatherConfirmedBy        String?
+  createdAt                 DateTime  @default(now())
   // Any change to the row: the dashboard asks for orders changed since its last load.
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt                 DateTime  @default(now()) @updatedAt
 
   // Relations
-  runnerResearch   RunnerResearch[]
+  runnerResearch RunnerResearch[]
 
-  @@index([updatedAt])
   @@unique([raceName, year])
+  @@index([updatedAt])
   @@index([raceName])
   @@index([year])
 }
 
 model RunnerResearch {
-  id             Int      @id @default(autoincrement())
-  orderId        String   // Changed to orderId to link to Order.id instead
-  raceId         Int
-  runnerName     String
-  bibNumber      String?
-  officialTime   String?
-  officialPace   String?
+  id              Int      @id @default(autoincrement())
+  orderId         String // Changed to orderId to link to Order.id instead
+  raceId          Int
+  runnerName      String
+  bibNumber       String?
+  officialTime    String?
+  officialPace    String?
   // Triathlons only (server/domain/orders/triathlon.js): each leg's time and
   // distance as they print ("00:40:15", "1.5 mi"), entered by hand.
-  swimTime       String?
-  swimDistance   String?
-  bikeTime       String?
-  bikeDistance   String?
-  runTime        String?
-  runDistance    String?
-  eventType      String?  // "Marathon" or "Half Marathon"
-  yearFound      Int?
-  researchStatus String   @default("pending") // "found", "not_found", "ambiguous", "no_scraper", "year_not_configured", "upstream_error"
+  swimTime        String?
+  swimDistance    String?
+  bikeTime        String?
+  bikeDistance    String?
+  runTime         String?
+  runDistance     String?
+  eventType       String? // "Marathon" or "Half Marathon"
+  yearFound       Int?
+  researchStatus  String   @default("pending") // "found", "not_found", "ambiguous", "no_scraper", "year_not_configured", "upstream_error"
   // How this result was obtained:
   //   "scraper"           → found by the backend research scrape (default)
   //   "customer_verified" → customer confirmed an official-results match in the
@@ -300,29 +300,29 @@ model RunnerResearch {
   //   "customer_supplied" → customer typed or edited the numbers themselves.
   //                         Used as given, but never matched against official
   //                         results, so the dashboard says so.
-  source         String   @default("scraper")
-  researchNotes  String?
-  resultsUrl     String?  // URL where this runner's results were found
+  source          String   @default("scraper")
+  researchNotes   String?
+  resultsUrl      String? // URL where this runner's results were found
   // Candidate matches surfaced when no exact name match was found. Each item:
   // { name, bib?, time?, pace?, city?, state?, eventType?, resultsUrl? }
   // The dashboard renders these as Accept-button rows so the user can pick.
   possibleMatches Json?
-  createdAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
   // Any change to the row: the dashboard asks for orders changed since its last load.
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt       DateTime @default(now()) @updatedAt
 
   // Relations
-  order          Order    @relation(fields: [orderId], references: [id])
-  race           Race     @relation(fields: [raceId], references: [id])
+  order Order @relation(fields: [orderId], references: [id])
+  race  Race  @relation(fields: [raceId], references: [id])
 
-  @@index([updatedAt])
-  @@index([orderId])
-  @@index([raceId])
-  @@index([researchStatus])
   // One research row per order and race: every writer finds the row and then
   // creates it if missing, so two at once made two, and readers disagreed on
   // which one was the result.
   @@unique([orderId, raceId])
+  @@index([updatedAt])
+  @@index([orderId])
+  @@index([raceId])
+  @@index([researchStatus])
 }
 
 // A partner's bulk order of prints for one race: who pays and the invoice, the runner list,
@@ -331,31 +331,31 @@ model RunnerResearch {
 // filename convention and the order modal all work on them unchanged.
 model BulkOrder {
   id                String    @id @default(cuid())
-  number            String    @unique   // "BULK-0001", the parentOrderNumber on its runners
+  number            String    @unique // "BULK-0001", the parentOrderNumber on its runners
   partnerName       String
   raceName          String
   raceYear          Int
   quantity          Int       @default(0) // What was invoiced; the runner count may differ
   frameType         String    @default("Natural Premium Oak") // Artelo framing value
   productSize       String    @default("12x18")
-  stripeInvoiceUrl  String?   // Older orders: the Stripe payment link (new ones are invoiced through Shopify below)
+  stripeInvoiceUrl  String? // Older orders: the Stripe payment link (new ones are invoiced through Shopify below)
   paidAt            DateTime?
   // The Shopify order that paid for this run: a draft order tagged "bulk"
   // (plus this run's number, e.g. "BULK-0003", to link one made here first).
   shopifyOrderId    String?   @unique
-  shopifyOrderName  String?   // "#4412"
-  productionFileUrl String?   // Google Drive link to the co-branded Illustrator file
-  previewImageUrl   String?   // What the finished print should look like
+  shopifyOrderName  String? // "#4412"
+  productionFileUrl String? // Google Drive link to the co-branded Illustrator file
+  previewImageUrl   String? // What the finished print should look like
   raceDate          DateTime?
   dueDate           DateTime? // raceDate + 3 days unless set by hand
   status            String    @default("collecting") // collecting | fulfillment | submitted
   submittedAt       DateTime?
   intakeToken       String    @unique @default(uuid()) // /intake/<token> for the partner. uuid, not cuid: random, so a runner link says nothing about the partner link
   runnerToken       String    @unique @default(uuid()) // /runner/<token>: each runner submits their own name and address
-  intakeNote        String?   // Shown to the partner on the intake page
+  intakeNote        String? // Shown to the partner on the intake page
   notes             String?
-  partnerOrderId    String?   // The race_partner design order this belongs to, if any
-  partnerType       String?   // race | charity | corporate: who is buying. Null on orders made before it was asked
+  partnerOrderId    String? // The race_partner design order this belongs to, if any
+  partnerType       String? // race | charity | corporate: who is buying. Null on orders made before it was asked
   // The event at the race ("Marathon", "Half Marathon", "8K") on older
   // orders; research searches that event for its runners.
   eventType         String?
@@ -367,44 +367,44 @@ model BulkOrder {
   contactName       String?
   contactEmail      String?
   contactPhone      String?
-  billingAddress    Json?     // { company, name, address1, address2, city, province, zip, country }
+  billingAddress    Json? // { company, name, address1, address2, city, province, zip, country }
   printKind         String    @default("standard") // standard: our race design, rendered by the worker; cobranded: theirs, from its own production file
-  events            String?   // Internal: which events were sold ("Full 5, Half 5, 10K 3"); the lookup finds each runner's
-  discountKind      String?   // percent | amount
-  discountPercent   Int?      // 15 = 15% off
-  discountCents     Int?      // 5000 = $50.00 off
+  events            String? // Internal: which events were sold ("Full 5, Half 5, 10K 3"); the lookup finds each runner's
+  discountKind      String? // percent | amount
+  discountPercent   Int? // 15 = 15% off
+  discountCents     Int? // 5000 = $50.00 off
   currency          String    @default("USD")
-  discountNote      String?   // Why we gave it; never on the invoice
+  discountNote      String? // Why we gave it; never on the invoice
   shipping          String    @default("runner") // runner: each print to its runner; organization: all to shipToAddress
   shipToAddress     Json?
-  shopifyDraftId    String?   // The Shopify draft order it is invoiced with; tagged "bulk" and this number
-  shopifyDraftName  String?   // "#D72"
-  invoiceUrl        String?   // The customer's checkout link
+  shopifyDraftId    String? // The Shopify draft order it is invoiced with; tagged "bulk" and this number
+  shopifyDraftName  String? // "#D72"
+  invoiceUrl        String? // The customer's checkout link
   invoiceSentAt     DateTime?
   createdById       String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  runners           Order[]
-  refunds           BulkRefund[]
+  runners Order[]
+  refunds BulkRefund[]
 
   @@index([dueDate])
   @@index([status])
 }
 
 model OrderComment {
-  id        String   @id @default(cuid())
-  orderId   String
-  text      String?
-  imageUrl  String?
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  orderId    String
+  text       String?
+  imageUrl   String?
+  createdAt  DateTime @default(now())
   // Who wrote it. Nullable because every comment written before sign-ins
   // existed has no author, and inventing one would be a lie.
   authorId   String?
   authorName String?
 
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  order  Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  author User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
 }
@@ -417,12 +417,12 @@ model OrderComment {
 model OrderMessage {
   id             String   @id @default(cuid())
   orderId        String
-  sender         String   // "designer" | "customer"
+  sender         String // "designer" | "customer"
   body           String
   readByDesigner Boolean  @default(false) // false when a customer reply is awaiting Dan
   createdAt      DateTime @default(now())
 
-  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
 }
@@ -434,7 +434,7 @@ model ApprovalToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
 model Proof {
@@ -454,14 +454,14 @@ model Proof {
   // case: one unnamed group, one approval, everything else rejected.
   groupLabel       String?
   imageUrl         String
-  thumbnailUrl     String?  // Compressed ~200px thumbnail for grid views (saves egress bandwidth)
+  thumbnailUrl     String? // Compressed ~200px thumbnail for grid views (saves egress bandwidth)
   fileName         String?
   status           String   @default("pending") // "pending" | "approved" | "revision_requested"
   customerFeedback String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  order            Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
 }
@@ -478,11 +478,11 @@ model LookupLog {
   createdAt DateTime @default(now())
   race      String?
   year      Int?
-  name      String   // anonymized: "M.H.(11)"
-  outcome   String   // found | suggestions | time_unavailable | not_found | off | upstream_error | rate_limited | bad_request | cached
+  name      String // anonymized: "M.H.(11)"
+  outcome   String // found | suggestions | time_unavailable | not_found | off | upstream_error | rate_limited | bad_request | cached
   status    Int?
   ms        Int?
-  ip        String   // anonymized: "73.21.x.x"
+  ip        String // anonymized: "73.21.x.x"
   cached    Boolean  @default(false)
 
   @@index([createdAt])
@@ -504,7 +504,7 @@ model LookupLog {
 // race-year is.
 model ScraperHealth {
   id        Int      @id @default(autoincrement())
-  race      String   // canonical race name, e.g. "Boston Marathon"
+  race      String // canonical race name, e.g. "Boston Marathon"
   year      Int
   checkedAt DateTime @default(now())
 
@@ -517,16 +517,16 @@ model ScraperHealth {
   // no_probe  → configured and reachable, but we have no known finisher to
   //             assert against, so this is "untested", not "passing"
   // ineligible→ Puppeteer platform; cannot run on the public endpoint at all
-  status    String
+  status String
 
   // What we asserted against, so a failure is debuggable without a re-run.
   probeName String?
   expectBib String?
   actualBib String?
 
-  ms        Int?
-  detail    String?  // error message / notes
-  platform  String?  // which scraper ran, incl. whether a fallback was used
+  ms       Int?
+  detail   String? // error message / notes
+  platform String? // which scraper ran, incl. whether a fallback was used
 
   @@unique([race, year])
   @@index([status])
@@ -549,12 +549,12 @@ model ScraperHealth {
 // Antonio, Las Vegas, Detroit, Palm Beaches, Baltimore) and nothing in the
 // system said so.
 model ShopifyProduct {
-  id             Int      @id @default(autoincrement())
-  productId      String   @unique // Shopify numeric id, as it appears on line items
-  handle         String   @unique
+  id             Int     @id @default(autoincrement())
+  productId      String  @unique // Shopify numeric id, as it appears on line items
+  handle         String  @unique
   title          String
-  status         String?  // ACTIVE | DRAFT | ARCHIVED
-  templateSuffix String?  // which PDP template — tells us if the wizard is on it
+  status         String? // ACTIVE | DRAFT | ARCHIVED
+  templateSuffix String? // which PDP template — tells us if the wizard is on it
   featuredImage  String?
   tags           Json?
 
@@ -562,9 +562,9 @@ model ShopifyProduct {
   // storefront lookup uses (parseRaceNameFromTitle → getCanonicalRaceName).
   // Null means either a non-race product (gift card, Custom) or a race we sell
   // with no scraper — the panel distinguishes those, since only one is a gap.
-  raceCanonical  String?
+  raceCanonical String?
 
-  syncedAt       DateTime @updatedAt
+  syncedAt DateTime @updatedAt
 
   @@index([raceCanonical])
   @@index([status])
@@ -582,8 +582,8 @@ model ShopifyProduct {
 // a code change, and should be — a button that could invent a scraper would
 // be a button that could quietly invent wrong results.
 model ScraperOverride {
-  id         Int      @id @default(autoincrement())
-  race       String   // canonical race name
+  id         Int       @id @default(autoincrement())
+  race       String // canonical race name
   year       Int
   // Platform-shaped, matching what the config would have held: a bare id for
   // Athlinks/Xacte, { marathon, halfMarathon } for MyChipTime.
@@ -591,13 +591,13 @@ model ScraperOverride {
   // Which scraper this applies to. Null means the primary; set it to target a
   // config's `fallback` instead.
   platform   String?
-  source     String   // discovered | manual
+  source     String // discovered | manual
   note       String?
   // Set once a probe has confirmed the id actually returns the runner we
   // expect. An unverified override is a guess, and the panel says so.
   verifiedAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   @@unique([race, year])
   @@index([race])
@@ -622,7 +622,7 @@ model ScraperFixture {
   runnerName   String
   bib          String?
   officialTime String?
-  source       String   // captured | manual
+  source       String // captured | manual
   capturedAt   DateTime @default(now())
 
   @@unique([race, year])
@@ -647,61 +647,61 @@ model SystemConfig {
 // Future phases add: briefs, content submissions, Meta ad tagging, attribution,
 // and commission tracking. Those live in their own tables (added later).
 model Creator {
-  id                  String    @id @default(cuid())
+  id String @id @default(cuid())
 
   // Invite + portal access. Token doubles as the creator's persistent portal
   // credential — they bookmark /creator/<token> and return to it anytime.
-  inviteToken         String    @unique
-  invitedAt           DateTime  @default(now())
-  onboardedAt         DateTime?
+  inviteToken String    @unique
+  invitedAt   DateTime  @default(now())
+  onboardedAt DateTime?
 
   // Profile (populated at onboarding)
-  name                String?
-  email               String?
-  instagramHandle     String?
-  tiktokHandle        String?
+  name            String?
+  email           String?
+  instagramHandle String?
+  tiktokHandle    String?
 
   // Application questions (the public landing page is framed as an
   // application — both fields collected during /apply onboarding).
   //   bestContentLinks: pasted URLs / handles of their best UGC examples
   //   whyWorkWithUs:    optional freeform pitch from the applicant
-  bestContentLinks    String?
-  whyWorkWithUs       String?
+  bestContentLinks String?
+  whyWorkWithUs    String?
 
   // Race info for the sample print (required for the personalization)
-  raceName            String?
-  raceYear            Int?
-  bibNumber           String?
-  finishTime          String?
+  raceName   String?
+  raceYear   Int?
+  bibNumber  String?
+  finishTime String?
 
   // Product preferences for the sample
   // The exact store print they picked ("Personalized Berlin World Major Race
   // Poster"), from the shared catalog; raceName is that print's race.
-  productTitle        String?
-  productSize         String?
-  frameType           String?
+  productTitle String?
+  productSize  String?
+  frameType    String?
 
   // Shipping address
-  shippingName        String?
-  shippingAddress1    String?
-  shippingAddress2    String?
-  shippingCity        String?
-  shippingState       String?
-  shippingZip         String?
-  shippingCountry     String?   @default("US")
+  shippingName     String?
+  shippingAddress1 String?
+  shippingAddress2 String?
+  shippingCity     String?
+  shippingState    String?
+  shippingZip      String?
+  shippingCountry  String? @default("US")
 
   // Commission — flexible per creator. Matt sets these manually after onboarding.
   //   commissionModel: "free_product" | "flat_per_asset" | "rev_share" | "hybrid"
   //   commissionConfig: JSON e.g. { "per_asset_usd": 50, "percent": 10 }
-  commissionModel     String    @default("free_product")
-  commissionConfig    Json      @default("{}")
-  commissionNotes     String?
+  commissionModel  String  @default("free_product")
+  commissionConfig Json    @default("{}")
+  commissionNotes  String?
 
   // Free-form admin notes about the creator (anything Matt wants to jot down).
-  notes               String?
+  notes String?
 
   // Whitelisting (Meta Partnership Ads). Optional — off by default.
-  whitelistingEnabled Boolean   @default(false)
+  whitelistingEnabled Boolean @default(false)
   metaPageId          String?
 
   // How this row was created:
@@ -709,29 +709,29 @@ model Creator {
   //   "public_apply" → minted when someone clicked Apply on the public /apply page
   // Used to hide abandoned public applications (public_apply + never onboarded)
   // from the admin table so they don't clutter it with blank rows.
-  source              String    @default("admin_invite")
+  source String @default("admin_invite")
 
   // Workflow status
-  status              String    @default("invited") // "invited" | "applied" | "active" | "paused" | "denied"
+  status String @default("invited") // "invited" | "applied" | "active" | "paused" | "denied"
 
   // Content delivery status — tracks whether the creator has handed over the
   // promised content. Distinct from `status` (which is program-level).
   //   "not_received" | "received" | "edited" | "posted"
-  contentStatus       String    @default("not_received")
+  contentStatus String @default("not_received")
 
   // Link to the Standard Order that fulfills their sample.
-  sampleOrderId       String?   @unique
-  sampleOrder         Order?    @relation("CreatorSample", fields: [sampleOrderId], references: [id])
+  sampleOrderId         String?  @unique
+  sampleOrder           Order?   @relation("CreatorSample", fields: [sampleOrderId], references: [id])
   // Samples sent as Shopify orders (the Samples flow), newest last. The order
   // reaches our Order table on the next import; sampleOrder is then linked to
   // the newest one (server/domain/creators/creatorSample.js linkCreatorSamples).
   sampleShopifyOrderIds String[] @default([])
 
   // Briefs assigned to this creator — selected by Matt at invite time.
-  briefAssignments    BriefAssignment[]
+  briefAssignments BriefAssignment[]
 
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([email])
@@ -742,26 +742,26 @@ model Creator {
 // later). The creator portal shows their assigned briefs as the directive
 // for what to shoot.
 model Brief {
-  id             String   @id @default(cuid())
-  title          String
-  description    String?                // overall goal / context
-  styleOfVideo   String?                // e.g. "POV reveal", "talking head"
-  angle          String?                // messaging angle
-  targetLength   String?                // e.g. "15-30s", "60-90s"
+  id            String   @id @default(cuid())
+  title         String
+  description   String? // overall goal / context
+  styleOfVideo  String? // e.g. "POV reveal", "talking head"
+  angle         String? // messaging angle
+  targetLength  String? // e.g. "15-30s", "60-90s"
   // Information framework — "guardrails, not scripts". Creators get the
   // framework, not a line-by-line script, and find their own voice inside it.
-  hooks          String?                // opening lines / hook options (newline-separated)
-  emotion        String?                // the emotional lever the content should pull
-  fomo           String?                // why the viewer should act now
-  persona        String?                // who they're speaking to
+  hooks         String? // opening lines / hook options (newline-separated)
+  emotion       String? // the emotional lever the content should pull
+  fomo          String? // why the viewer should act now
+  persona       String? // who they're speaking to
   // Top-performing reference content — the "50 best videos" idea. URLs +
   // notes about why each works.
-  examplesNotes  String?
-  status         String   @default("active") // "active" | "archived"
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  examplesNotes String?
+  status        String   @default("active") // "active" | "archived"
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  assignments    BriefAssignment[]
+  assignments BriefAssignment[]
 
   @@index([status])
 }
@@ -774,8 +774,8 @@ model BriefAssignment {
   creatorId  String
   assignedAt DateTime @default(now())
 
-  brief      Brief    @relation(fields: [briefId], references: [id], onDelete: Cascade)
-  creator    Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  brief   Brief   @relation(fields: [briefId], references: [id], onDelete: Cascade)
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
 
   @@unique([briefId, creatorId])
   @@index([creatorId])
@@ -791,7 +791,7 @@ model BriefAssignment {
 // the widest rate-limit window.
 model RateLimitHit {
   id        String   @id @default(cuid())
-  key       String   // "<bucket>:<ip>", e.g. "photo_upload:203.0.113"
+  key       String // "<bucket>:<ip>", e.g. "photo_upload:203.0.113"
   createdAt DateTime @default(now())
 
   @@index([key, createdAt])
@@ -819,19 +819,17 @@ model ProductEditBatch {
   actorEmail  String?
   undoneBy    String?
 
-  actor       User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
 }
 
 /**
  * A person who can sign in to TrackstarOS.
- *
  * Replaces the single shared ADMIN_PASSWORD. The shared password could not be
  * revoked for one person without rotating it for everyone, and it made every
  * action anonymous - with several contractors working in a tool that can
  * rewrite 116 live prices in one click, "who did this" needs an answer.
- *
  * Roles are deliberately only two. `admin` can do the irreversible things
  * (bulk price writes, variant deletion, cache and research wipes) and manage
  * users; `staff` can do everything else, which is the actual day to day work.
@@ -839,28 +837,28 @@ model ProductEditBatch {
  * inventing a hierarchy nobody needs yet.
  */
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
+  id                    String    @id @default(cuid())
+  email                 String    @unique
   // Stored separately rather than as one "name" string. A single column forces
   // every reader to guess where the split is, and that guess is wrong for
   // anyone whose first or last name is more than one word.
-  firstName    String
-  lastName     String    @default("")
+  firstName             String
+  lastName              String    @default("")
   // scrypt, stored as "scrypt:<saltHex>:<hashHex>". Null while an invite is
   // outstanding, which is also what blocks sign-in until they set one.
-  passwordHash String?
+  passwordHash          String?
   // admin | sales | fulfillment | designer (api/_lib/roles.js). "staff" from
   // before roles reads as designer.
-  role         String    @default("designer")
+  role                  String    @default("designer")
   // More roles on top of `role`, when someone wears several hats (support and
   // a designer, say). What they can do is everything their roles include
   // together. `role` stays the main one: admin whenever admin is among them,
   // so every role === 'admin' check holds (api/_lib/roles.js splitRoles).
-  extraRoles   String[]  @default([])
+  extraRoles            String[]  @default([])
   // Per-person exceptions to what their roles include: capabilities added on
   // top, and ones taken away, so one person's special case needs no new role.
-  extraCaps    String[]  @default([])
-  deniedCaps   String[]  @default([])
+  extraCaps             String[]  @default([])
+  deniedCaps            String[]  @default([])
   // Pay per custom design, in cents (USD), for the Custom Counter and the
   // month-end statement. Null = the level default (senior head designer
   // $50 / $25 repeat, junior designer $40 / $20). Set in Settings > Custom Counter.
@@ -877,49 +875,48 @@ model User {
   // holder's name, the currency and country); bank details stay in Wise.
   wiseRecipientId       String?
   wiseRecipientName     String?
-  payoutCurrency        String?   // CRC | COP | USD ..., the recipient's currency
-  payoutCountry         String?   // ISO country of the recipient account
+  payoutCurrency        String? // CRC | COP | USD ..., the recipient's currency
+  payoutCountry         String? // ISO country of the recipient account
   // Tax form: W-9 (US) | W-8BEN (outside the US). Paying through Wise is
   // blocked until one is on file; filing 1099s is out of scope.
   taxFormType           String?
   taxFormOnFile         Boolean   @default(false)
-  isActive     Boolean   @default(true)
+  isActive              Boolean   @default(true)
   // Bumped to sign this person out everywhere: on deactivation, a password
   // change or reset, or an admin's "Sign out everywhere". Carried in the
   // session cookie and compared on every request (api/_lib/auth.js).
-  sessionVersion Int     @default(0)
+  sessionVersion        Int       @default(0)
   // Invite flow: a single-use token that lets someone set their first password.
-  inviteToken     String?   @unique
-  inviteExpiresAt DateTime?
-  lastLoginAt  DateTime?
+  inviteToken           String?   @unique
+  inviteExpiresAt       DateTime?
+  lastLoginAt           DateTime?
   // When they last used the app (throttled to every 5 minutes); see touchLastSeen.
-  lastSeenAt   DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  lastSeenAt            DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  comments     OrderComment[]
-  assignedOrders Order[]  @relation("OrderAssignee")
-  completedDesigns Order[] @relation("DesignCompletedBy")
-  renderRequests   RenderJob[] @relation("RenderRequestedBy")
-  renderReviews    RenderJob[] @relation("RenderReviewedBy")
-  assignedBulkOrders BulkOrder[] @relation("BulkAssignee")
-  editBatches  ProductEditBatch[]
-  auditEvents  AuditEvent[]
-  apiKeys      ApiKey[]
-  supportThreads   SupportThread[]   @relation("SupportAssignee")
-  supportReplies   SupportMessage[]  @relation("SupportSentBy")
-  supportNotes     SupportNote[]     @relation("SupportNoteAuthor")
-  supportReads     SupportRead[]
-  supportMacros    SupportMacro[]    @relation("SupportMacroAuthor")
-  timesheets       Timesheet[]       @relation("TimesheetOwner")
-  payoutLines      PayoutLine[]      @relation("PayoutRecipient")
+  comments           OrderComment[]
+  assignedOrders     Order[]            @relation("OrderAssignee")
+  completedDesigns   Order[]            @relation("DesignCompletedBy")
+  renderRequests     RenderJob[]        @relation("RenderRequestedBy")
+  renderReviews      RenderJob[]        @relation("RenderReviewedBy")
+  assignedBulkOrders BulkOrder[]        @relation("BulkAssignee")
+  editBatches        ProductEditBatch[]
+  auditEvents        AuditEvent[]
+  apiKeys            ApiKey[]
+  supportThreads     SupportThread[]    @relation("SupportAssignee")
+  supportReplies     SupportMessage[]   @relation("SupportSentBy")
+  supportNotes       SupportNote[]      @relation("SupportNoteAuthor")
+  supportReads       SupportRead[]
+  supportMacros      SupportMacro[]     @relation("SupportMacroAuthor")
+  timesheets         Timesheet[]        @relation("TimesheetOwner")
+  payoutLines        PayoutLine[]       @relation("PayoutRecipient")
 
   @@index([email])
 }
 
 /**
  * Who did something consequential, and to what.
- *
  * Deliberately separate from the domain tables: an audit row must survive the
  * thing it describes being edited or deleted, so it stores plain text rather
  * than foreign keys to the affected record.
@@ -937,7 +934,7 @@ model AuditEvent {
   actorEmail String
   createdAt  DateTime @default(now())
 
-  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([action, createdAt])
@@ -945,7 +942,6 @@ model AuditEvent {
 
 /**
  * Topline waitlist signups.
- *
  * This table was created outside Prisma and already exists in the database.
  * It is mapped here so `prisma db push` stops proposing to drop it - it is not
  * managed by this app, but silently deleting someone else's table is not a
@@ -1046,10 +1042,10 @@ model SalesSkip {
 // routine and can only read or repair. Revoked keys are kept for the record.
 model ApiKey {
   id          String    @id @default(cuid())
-  name        String                 // "Matt's phone", "Nightly sweep"
-  prefix      String                 // First characters of the secret, to tell keys apart
-  hash        String    @unique      // sha256 of the secret
-  scopes      String[]               // read | write | admin | repair
+  name        String // "Matt's phone", "Nightly sweep"
+  prefix      String // First characters of the secret, to tell keys apart
+  hash        String    @unique // sha256 of the secret
+  scopes      String[] // read | write | admin | repair
   userId      String?
   createdById String?
   lastUsedAt  DateTime?
@@ -1057,7 +1053,7 @@ model ApiKey {
   revokedAt   DateTime?
   createdAt   DateTime  @default(now())
 
-  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -1068,8 +1064,8 @@ model ApiKey {
 model DesignSurvey {
   id          String         @id @default(cuid())
   token       String         @unique // the public link, /vote/{token}
-  title       String         // e.g. "Chicago Marathon 2026"
-  question    String?        // shown above the options; a default is used when empty
+  title       String // e.g. "Chicago Marathon 2026"
+  question    String? // shown above the options; a default is used when empty
   status      String         @default("open") // "open" | "closed"
   // When voting stops. Null means no limit. After this the public page says
   // the survey has ended and refuses votes, without anyone closing it.
@@ -1085,7 +1081,7 @@ model SurveyOption {
   id           String       @id @default(cuid())
   surveyId     String
   survey       DesignSurvey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
-  label        String?      // optional name; voters see "Option 1", "Option 2" otherwise
+  label        String? // optional name; voters see "Option 1", "Option 2" otherwise
   imageUrl     String
   thumbnailUrl String?
   sortOrder    Int          @default(0)
@@ -1101,9 +1097,9 @@ model SurveyVote {
   survey    DesignSurvey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
   optionId  String
   option    SurveyOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
-  voterId   String       // random id kept in the voter's browser; one vote each, changeable
+  voterId   String // random id kept in the voter's browser; one vote each, changeable
   comment   String?
-  ipHash    String?      // salted hash, only to spot ballot stuffing; never the raw address
+  ipHash    String? // salted hash, only to spot ballot stuffing; never the raw address
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
@@ -1116,42 +1112,41 @@ model SurveyVote {
  * with Illustrator, worker/render-worker.mjs) to fill the race's production
  * template with one order's details and export the print file. The worker
  * polls for queued jobs, so the tool never needs to reach the Mac.
- *
  * Files land in the private "production-files" bucket as
  * renders/<orderId>/v<version>.pdf and .png. Nothing is overwritten; a
  * re-render is a new version. A person reviews every render before it goes
  * anywhere (review: pending | approved | rejected).
  */
 model RenderJob {
-  id            String    @id @default(cuid())
-  orderId       String
-  order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  version       Int       @default(1)
+  id               String    @id @default(cuid())
+  orderId          String
+  order            Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  version          Int       @default(1)
   // queued | rendering | done | failed
-  status        String    @default("queued")
+  status           String    @default("queued")
   // admin | system | customer: who asked, so customer-facing proofs can share this later
-  requestedBy   String    @default("admin")
-  requestedById String?
-  requester     User?     @relation("RenderRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  requestedBy      String    @default("admin")
+  requestedById    String?
+  requester        User?     @relation("RenderRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
   // The exact values the worker rendered, kept so a review compares against what was sent
-  spec          Json
-  workerId      String?
-  claimedAt     DateTime?
-  finishedAt    DateTime?
-  pdfPath       String?
-  previewPath   String?
-  notes         String?   // what the worker did beyond the plain fill, e.g. "name shrunk 1 step"
-  error         String?
+  spec             Json
+  workerId         String?
+  claimedAt        DateTime?
+  finishedAt       DateTime?
+  pdfPath          String?
+  previewPath      String?
+  notes            String? // what the worker did beyond the plain fill, e.g. "name shrunk 1 step"
+  error            String?
   // pending | approved | rejected
-  review        String    @default("pending")
-  reviewNote    String?
-  reviewedById  String?
-  reviewer      User?     @relation("RenderReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
-  reviewedAt    DateTime?
+  review           String    @default("pending")
+  reviewNote       String?
+  reviewedById     String?
+  reviewer         User?     @relation("RenderReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt       DateTime?
   // An approved render is uploaded to the shop's Drive Orders folder, the
   // same place a designer saves by hand (server/domain/render/deliver.js).
-  deliveredAt   DateTime?
-  deliveredPath String?   // the Drive link
+  deliveredAt      DateTime?
+  deliveredPath    String? // the Drive link
   // The same PDF in the Artelo image library (server/domain/render/artelo.js)
   arteloUploadId   String?
   arteloUrl        String?
@@ -1169,25 +1164,27 @@ model RenderJob {
   arteloSentAt     DateTime?
   sendError        String?
   sendCheckedAt    DateTime?
-  deliveryError String?
+  deliveryError    String?
   // Set when the race's date or weather changed after this render was made: it needs re-rendering.
-  staleReason   String?
+  staleReason      String?
   // What the worker measured in the PDF it made: { trimIn, bleedIn: {left,right,top,bottom}, color } (worker/lib/inspectPdf.mjs)
-  output        Json?
-  createdAt     DateTime  @default(now())
+  output           Json?
+  createdAt        DateTime  @default(now())
   // Any change to the row: the dashboard asks for orders changed since its last load.
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt        DateTime  @default(now()) @updatedAt
 
+  // One version number per order: two renders created at once used to share a
+  // number and the same storage path, so one file overwrote the other.
+  @@unique([orderId, version])
   @@index([updatedAt])
   @@index([orderId, createdAt])
   @@index([status, createdAt])
   @@index([sendAfter])
-  // One version number per order: two renders created at once used to share a
-  // number and the same storage path, so one file overwrote the other.
-  @@unique([orderId, version])
 }
 
-/** A render worker that has checked in. Online means seen in the last minute. */
+/**
+ * A render worker that has checked in. Online means seen in the last minute.
+ */
 model RenderWorker {
   id         String   @id
   name       String
@@ -1205,7 +1202,6 @@ model RenderWorker {
  * design sold as its own product (World Majors). Races span years, so this
  * hangs off the race name, not a Race row. The file path is relative to the
  * shop's Drive Races folder, which every worker has synced.
- *
  * A template is usable only when enabled, its last check passed, and a
  * worker that is online has the file. Workers run the check themselves
  * whenever the file changes (worker/illustrator/check.jsx) and report here.
@@ -1229,7 +1225,7 @@ model PrintTemplate {
   lastCheckOk     Boolean?
   // The checker's findings: { problems: [], warnings: [], sizes: { "12x18": {...} } }
   lastCheckReport Json?
-  lastCheckMtime  String?   // the file's modification time the check was run against
+  lastCheckMtime  String? // the file's modification time the check was run against
   lastCheckWorker String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -1256,7 +1252,7 @@ model DesignNeed {
   detail        String?
   // The orders waiting on it: [{ id, number }]
   orders        Json?
-  source        String    // auto | reject | manual
+  source        String // auto | reject | manual
   status        String    @default("open") // open | done
   // The latest word on it: how it closed, or why it reopened.
   note          String?
@@ -1317,66 +1313,69 @@ model FeatureRequest {
 //             not clear it, an inbound message does not either.
 //   closed    done. A person closes it; a new inbound message reopens it.
 model SupportThread {
-  id              String    @id @default(cuid())
+  id               String        @id @default(cuid())
   // "email" is a Gmail thread in fast@; "instagram" is a DM conversation with
   // one customer. One of the ids below is set, by channel.
-  channel         String    @default("email")
-  gmailThreadId   String?   @unique
+  channel          String        @default("email")
+  gmailThreadId    String?       @unique
   // Instagram: the customer's Instagram-scoped id (one thread per customer,
   // reopened when they write again), the conversation id once the API has
   // told us, and the handle to reply to and show.
-  igUserId        String?   @unique
-  igConversationId String?  @unique
-  igUsername      String    @default("")
-  subject         String    @default("")
+  igUserId         String?       @unique
+  igConversationId String?       @unique
+  igUsername       String        @default("")
+  subject          String        @default("")
   // The other party: the address that is not the mailbox. One per thread;
   // a thread with several correspondents keeps the first.
-  customerEmail   String    @default("")
-  customerName    String    @default("")
-  status          String    @default("open")
-  snoozedUntil    DateTime?
-  assigneeId      String?
-  assignee        User?     @relation("SupportAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  customerEmail    String        @default("")
+  customerName     String        @default("")
+  status           String        @default("open")
+  snoozedUntil     DateTime?
+  assigneeId       String?
+  assignee         User?         @relation("SupportAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   // Starred, the way Intercom marks a priority conversation. A person sets
   // it, or the twice-daily triage pass (support/triage.js) does, with its
   // one-line reason in priorityReason. Triage never removes a star.
-  priority        Boolean   @default(false)
-  priorityReason  String    @default("")
+  priority         Boolean       @default(false)
+  priorityReason   String        @default("")
   // When triage last read this thread; it reads it again once the customer writes after that.
   // When the automatic "we got your message" reply went out (support/autoReply.js); set before sending, so it goes once.
-  autoRepliedAt   DateTime?
-  triagedAt       DateTime?
+  autoRepliedAt    DateTime?
+  triagedAt        DateTime?
+  // When the damage pass (support/damage.js) last read it; read again once the customer writes after that.
+  damageCheckedAt  DateTime?
+  damageReport     DamageReport?
   // Free-form labels; the playbook's scenario names are offered as suggestions.
-  tags            String[]  @default([])
+  tags             String[]      @default([])
   // From a sender the team filtered out (vendors, alerts, newsletters): kept,
   // never in the inbox views, findable under Filtered. See support/filters.js.
-  filtered        Boolean   @default(false)
+  filtered         Boolean       @default(false)
   // Folded into another conversation (the customer wrote again instead of
   // replying). Its messages moved there; the row stays so mail that still
   // arrives on this Gmail thread lands in the merged conversation.
-  mergedIntoId    String?
+  mergedIntoId     String?
   // The newest message's first line, for the list.
-  snippet         String    @default("")
-  messageCount    Int       @default(0)
-  lastMessageAt   DateTime  @default(now())
-  lastInboundAt   DateTime?
-  lastOutboundAt  DateTime?
+  snippet          String        @default("")
+  messageCount     Int           @default(0)
+  lastMessageAt    DateTime      @default(now())
+  lastInboundAt    DateTime?
+  lastOutboundAt   DateTime?
   // Our last email to this customer came back undeliverable (a mailer-daemon
   // notice newer than our last message). Cleared by a later send or a real
   // reply. The order shows "Email bounced" under Action instead of waiting.
-  bouncedAt       DateTime?
+  bouncedAt        DateTime?
   // "Not waiting" pressed on the order: our last email did not need an
   // answer after all. Holds until we write again (compose.js threadWaiting).
-  notWaitingAt    DateTime?
+  notWaitingAt     DateTime?
   // Set by the backfill for threads that were already over when the mirror
   // was built, so a report can tell history from live work.
-  backfilled      Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  backfilled       Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  messages        SupportMessage[]
-  notes           SupportNote[]
-  reads           SupportRead[]
+  messages SupportMessage[]
+  notes    SupportNote[]
+  reads    SupportRead[]
 
   @@index([status, lastMessageAt])
   @@index([filtered, status])
@@ -1408,45 +1407,45 @@ model SupportLinkedOrder {
 }
 
 model SupportMessage {
-  id              String    @id @default(cuid())
-  threadId        String
-  thread          SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  id             String        @id @default(cuid())
+  threadId       String
+  thread         SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
   // Same as the thread's. The message is stored once, by the channel's own id.
-  channel         String    @default("email")
-  gmailMessageId  String?   @unique
-  igMessageId     String?   @unique
+  channel        String        @default("email")
+  gmailMessageId String?       @unique
+  igMessageId    String?       @unique
   // The RFC 822 Message-ID and the one it answers, so a reply from here can
   // thread correctly in the customer's mail client, not only in Gmail.
-  rfcMessageId    String?
-  inReplyTo       String?
+  rfcMessageId   String?
+  inReplyTo      String?
   // "in" from the customer, "out" from the mailbox.
-  direction       String
-  fromEmail       String    @default("")
-  fromName        String    @default("")
-  toEmails        String    @default("")
-  ccEmails        String    @default("")
-  subject         String    @default("")
-  bodyText        String    @default("")
-  bodyHtml        String?
+  direction      String
+  fromEmail      String        @default("")
+  fromName       String        @default("")
+  toEmails       String        @default("")
+  ccEmails       String        @default("")
+  subject        String        @default("")
+  bodyText       String        @default("")
+  bodyHtml       String?
   // [{ filename, mimeType, size, attachmentId }]. The bytes stay in Gmail.
-  attachments     Json?
+  attachments    Json?
   // Inbound email only: did the sender pass Gmail's check that the From
   // address is really theirs (DMARC, or DKIM signed by the From domain)?
   // "pass" | "fail" | "none". Null for outbound, Instagram and older rows.
   // A conversation whose latest message did not pass gets no order details or
   // one-click actions in its draft (support/draft.js).
-  senderCheck     String?
+  senderCheck    String?
   // Written by a machine, not a person. Outbound: our automatic "we got your
   // message" reply (support/autoReply.js), which never counts as answering
   // the customer. Inbound: an out-of-office, newsletter or notification
   // (its headers say so), which never gets an automatic reply.
-  auto            Boolean   @default(false)
-  sentAt          DateTime
+  auto           Boolean       @default(false)
+  sentAt         DateTime
   // Who pressed Send here. Null for inbound mail, for anything sent in Gmail
   // itself, and for everything the backfill found.
-  sentById        String?
-  sentBy          User?     @relation("SupportSentBy", fields: [sentById], references: [id], onDelete: SetNull)
-  createdAt       DateTime  @default(now())
+  sentById       String?
+  sentBy         User?         @relation("SupportSentBy", fields: [sentById], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
 
   @@index([threadId, sentAt])
   @@index([sentAt])
@@ -1460,18 +1459,18 @@ model SupportMessage {
 // system's line in the same timeline: assigned, closed, snoozed, starred.
 // Later, Claude's draft and investigation land here as a note too.
 model SupportNote {
-  id         String   @id @default(cuid())
+  id         String        @id @default(cuid())
   threadId   String
   thread     SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  kind       String   @default("note") // note | event | draft
+  kind       String        @default("note") // note | event | draft
   // A draft's working: scenario, key facts, steps, suggested actions, escalation. Null on notes and events.
   data       Json?
   body       String
   authorId   String?
-  author     User?    @relation("SupportNoteAuthor", fields: [authorId], references: [id], onDelete: SetNull)
-  authorName String   @default("")
-  mentions   String[] @default([])
-  createdAt  DateTime @default(now())
+  author     User?         @relation("SupportNoteAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  authorName String        @default("")
+  mentions   String[]      @default([])
+  createdAt  DateTime      @default(now())
 
   @@index([threadId, createdAt])
   @@index([mentions])
@@ -1499,8 +1498,8 @@ model SupportRead {
 model SupportPlaybookVersion {
   id          String   @id @default(cuid())
   text        String
-  source      String   // edit | lesson | reset | weekly | restore
-  summary     String?  // What changed and why (the weekly review's changelog)
+  source      String // edit | lesson | reset | weekly | restore
+  summary     String? // What changed and why (the weekly review's changelog)
   createdById String?
   createdAt   DateTime @default(now())
 
@@ -1531,7 +1530,7 @@ model WinningAd {
   title       String
   url         String
   imageUrl    String?
-  notes       String?  // why it works, the hook, the numbers
+  notes       String? // why it works, the hook, the numbers
   createdById String?
   createdAt   DateTime @default(now())
 
@@ -1545,14 +1544,14 @@ model WinningAd {
 // what the sample really cost. The monthly sample spend reads this table.
 model SampleCost {
   id           String   @id @default(cuid())
-  source       String   // "samples_tool" | "mcp" | "creator"
-  orderName    String?  // Shopify order name (#5321) or CREATOR-XXXXXX
+  source       String // "samples_tool" | "mcp" | "creator"
+  orderName    String? // Shopify order name (#5321) or CREATOR-XXXXXX
   recipient    String
   email        String?
-  items        Json     // [{ title, size, frame, quantity }]
+  items        Json // [{ title, size, frame, quantity }]
   costCents    Int
   chargedCents Int      @default(0)
-  creatorId    String?  // set for a creator's sample
+  creatorId    String? // set for a creator's sample
   currency     String   @default("USD")
   createdById  String?
   createdAt    DateTime @default(now())
@@ -1596,7 +1595,7 @@ model GalleryPick {
   id            String    @id @default(cuid())
   orderId       String    @unique
   status        String    @default("suggested") // "suggested" | "live" | "skipped"
-  segment       String?   // "marathon" | "ultra" | "other"; null = guessed from the race
+  segment       String? // "marathon" | "ultra" | "other"; null = guessed from the race
   starredById   String?
   starredAt     DateTime?
   decidedById   String?
@@ -1607,7 +1606,7 @@ model GalleryPick {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([status])
 }
@@ -1623,50 +1622,50 @@ model GalleryPick {
 // contribution margin, ROAS) is stored: server/domain/finance/scoreboard.js
 // computes it, so a rule change recomputes history.
 model FinanceDay {
-  day                      String   @id // YYYY-MM-DD, Eastern
-  shopifyGrossCents        Int?
-  shopifyDiscountsCents    Int?
-  shopifyReturnsCents      Int?
-  shopifyShippingCents     Int?
-  shopifyTaxCents          Int?
-  shopifyNetCents          Int?
-  shopifyOrders            Int?
-  shopifySessions          Int?
-  shopifyAddToCart         Int?
-  shopifyReachedCheckout   Int?
-  shopifyCompletedCheckout Int?
-  shopifyFeesCents         Int?
-  etsyGrossCents           Int?
-  etsyDiscountsCents       Int?
-  etsyReturnsCents         Int?
-  etsyShippingCents        Int?
-  etsyTaxCents             Int?
-  etsyNetCents             Int?
-  etsyOrders               Int?
-  etsyVisits               Int?
-  etsyFeesCents            Int?
-  productionCents          Int?
-  shippingCostCents        Int?
-  unitsProduced            Int?
-  metaSpendCents           Int?
-  metaImpressions          Int?
-  metaClicks               Int?
-  metaPurchases            Int?
-  metaPurchaseValueCents   Int?
-  metaAddToCarts           Int?
-  googleSpendCents         Int?
+  day                        String   @id // YYYY-MM-DD, Eastern
+  shopifyGrossCents          Int?
+  shopifyDiscountsCents      Int?
+  shopifyReturnsCents        Int?
+  shopifyShippingCents       Int?
+  shopifyTaxCents            Int?
+  shopifyNetCents            Int?
+  shopifyOrders              Int?
+  shopifySessions            Int?
+  shopifyAddToCart           Int?
+  shopifyReachedCheckout     Int?
+  shopifyCompletedCheckout   Int?
+  shopifyFeesCents           Int?
+  etsyGrossCents             Int?
+  etsyDiscountsCents         Int?
+  etsyReturnsCents           Int?
+  etsyShippingCents          Int?
+  etsyTaxCents               Int?
+  etsyNetCents               Int?
+  etsyOrders                 Int?
+  etsyVisits                 Int?
+  etsyFeesCents              Int?
+  productionCents            Int?
+  shippingCostCents          Int?
+  unitsProduced              Int?
+  metaSpendCents             Int?
+  metaImpressions            Int?
+  metaClicks                 Int?
+  metaPurchases              Int?
+  metaPurchaseValueCents     Int?
+  metaAddToCarts             Int?
+  googleSpendCents           Int?
   // Trybe (creator commissions), from the sheet's Trybe tab: cost = earnings + platform fee + card processing.
-  trybeSalesCents          Int?
-  trybeConversions         Int?
-  trybeEarningsCents       Int?
-  trybeCostCents           Int?
-  googleImpressions        Int?
-  googleClicks             Int?
-  googleConversions        Int?
+  trybeSalesCents            Int?
+  trybeConversions           Int?
+  trybeEarningsCents         Int?
+  trybeCostCents             Int?
+  googleImpressions          Int?
+  googleClicks               Int?
+  googleConversions          Int?
   googleConversionValueCents Int?
-  overrides                Json?
-  readAt                   DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  overrides                  Json?
+  readAt                     DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 }
 
 // An effective-dated constant the scoreboard math uses: the designer fee's
@@ -1675,7 +1674,7 @@ model FinanceDay {
 model FinanceRule {
   id            String   @id @default(cuid())
   key           String
-  effectiveFrom String   // YYYY-MM-DD
+  effectiveFrom String // YYYY-MM-DD
   value         Json
   note          String?
   createdAt     DateTime @default(now())
@@ -1690,7 +1689,7 @@ model FinanceRule {
 model Timesheet {
   id              String    @id @default(cuid())
   userId          String
-  weekStart       String    // YYYY-MM-DD, a Monday
+  weekStart       String // YYYY-MM-DD, a Monday
   status          String    @default("draft") // draft | submitted | approved | rejected
   submittedAt     DateTime?
   reviewedById    String?
@@ -1715,7 +1714,7 @@ model TimeEntry {
   id          String    @id @default(cuid())
   timesheetId String
   userId      String
-  day         String    // YYYY-MM-DD, Eastern
+  day         String // YYYY-MM-DD, Eastern
   minutes     Int       @default(0)
   startedAt   DateTime?
   endedAt     DateTime?
@@ -1735,9 +1734,9 @@ model TimeEntry {
 // fee, or typed by hand. The app records payments; it never makes them.
 model PayRun {
   id          String    @id @default(cuid())
-  kind        String    // hours | monthly
-  periodStart String    // YYYY-MM-DD
-  periodEnd   String    // YYYY-MM-DD
+  kind        String // hours | monthly
+  periodStart String // YYYY-MM-DD
+  periodEnd   String // YYYY-MM-DD
   label       String
   // draft | approved | paid, and for a send through Wise:
   // sending | paid | partial (some transfers failed) | failed
@@ -1746,7 +1745,7 @@ model PayRun {
   createdById String?
   approvedAt  DateTime?
   paidAt      DateTime?
-  via         String?   // "wise" for a run sent through the Wise API
+  via         String? // "wise" for a run sent through the Wise API
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -1757,23 +1756,23 @@ model PayRun {
 }
 
 model PayoutLine {
-  id          String    @id @default(cuid())
-  payRunId    String
-  userId      String
-  kind        String    // customs | hours | designer_fee | bonus | reimbursement | other
-  quantity    Int?      // customs, or minutes for hours
-  rateCents   Int?
-  amountCents Int
-  currency    String    @default("USD")
-  sourceRef   String?   @unique // "customs:2026-10:<userId>", "fee:2026-10:<userId>", "timesheet:<id>"
-  note        String?
-  paidAt      DateTime?
-  paidRef     String?
+  id             String    @id @default(cuid())
+  payRunId       String
+  userId         String
+  kind           String // customs | hours | designer_fee | bonus | reimbursement | other
+  quantity       Int? // customs, or minutes for hours
+  rateCents      Int?
+  amountCents    Int
+  currency       String    @default("USD")
+  sourceRef      String?   @unique // "customs:2026-10:<userId>", "fee:2026-10:<userId>", "timesheet:<id>"
+  note           String?
+  paidAt         DateTime?
+  paidRef        String?
   // The Wise transfer that pays this line, when it went through Wise. A line
   // with one is spoken for: it is never paid again by hand or by another send.
   wiseTransferId String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   payRun       PayRun        @relation(fields: [payRunId], references: [id], onDelete: Cascade)
   user         User          @relation("PayoutRecipient", fields: [userId], references: [id], onDelete: Restrict)
@@ -1792,20 +1791,20 @@ model WiseTransfer {
   payRunId              String
   userId                String
   customerTransactionId String    @unique
-  sourceCents           Int       // USD cents sent
+  sourceCents           Int // USD cents sent
   targetCurrency        String
   wiseRecipientId       String
   quoteId               String?
-  rate                  String?   // as Wise gave it, e.g. "502.31"
-  targetMinor           Int?      // estimated amount received, in hundredths of targetCurrency
+  rate                  String? // as Wise gave it, e.g. "502.31"
+  targetMinor           Int? // estimated amount received, in hundredths of targetCurrency
   feeCents              Int?
   wiseTransferId        String?   @unique
   // prepared (saved, Wise not called yet) | created (transfer made, not
   // funded) | funded | sent (outgoing_payment_sent) | failed | cancelled
   status                String    @default("prepared")
-  wiseState             String?   // Wise's own state, e.g. outgoing_payment_sent
+  wiseState             String? // Wise's own state, e.g. outgoing_payment_sent
   failureReason         String?
-  traceId               String?   // Wise's x-trace-id from the last call, for Wise support
+  traceId               String? // Wise's x-trace-id from the last call, for Wise support
   fundedAt              DateTime?
   sentAt                DateTime?
   checkedAt             DateTime?
@@ -1828,8 +1827,8 @@ model WiseTransfer {
 model Replacement {
   id             String    @id @default(cuid())
   arteloOrderId  String    @unique // "4829-R1"
-  arteloId       String?   // Artelo's own id, for the link
-  orderNumber    String    // "4829", the order it replaces
+  arteloId       String? // Artelo's own id, for the link
+  orderNumber    String // "4829", the order it replaces
   shopifyOrderId String?
   threadId       String?
   // damaged | lost | our_mistake | customer_change | other
@@ -1859,26 +1858,53 @@ model Replacement {
 // is refunded in Stripe by hand and then marked done here. Money in integer
 // cents with a currency (CLAUDE.md).
 model BulkRefund {
-  id            String    @id @default(cuid())
-  bulkOrderId   String
-  bulkOrder     BulkOrder @relation(fields: [bulkOrderId], references: [id], onDelete: Cascade)
-  kind          String    // full | unfilled | custom
-  prints        Int?      // prints refunded (unfilled: paid for and not made)
-  amountCents   Int?      // null until an admin sets it (someone who does not see money asks by prints)
-  paidCents     Int?      // what the order was paid, when asked: the base for the suggestion
-  currency      String    @default("USD")
-  reason        String
-  via           String    // shopify | stripe
-  status        String    @default("requested") // requested | approved (Stripe: refund it there) | refunded | declined | failed
-  requestedBy   String?
-  decidedBy     String?
-  decidedAt     DateTime?
-  refundedAt    DateTime?
+  id              String    @id @default(cuid())
+  bulkOrderId     String
+  bulkOrder       BulkOrder @relation(fields: [bulkOrderId], references: [id], onDelete: Cascade)
+  kind            String // full | unfilled | custom
+  prints          Int? // prints refunded (unfilled: paid for and not made)
+  amountCents     Int? // null until an admin sets it (someone who does not see money asks by prints)
+  paidCents       Int? // what the order was paid, when asked: the base for the suggestion
+  currency        String    @default("USD")
+  reason          String
+  via             String // shopify | stripe
+  status          String    @default("requested") // requested | approved (Stripe: refund it there) | refunded | declined | failed
+  requestedBy     String?
+  decidedBy       String?
+  decidedAt       DateTime?
+  refundedAt      DateTime?
   shopifyRefundId String?
-  error         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  error           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([bulkOrderId])
   @@index([status])
+}
+
+// A customer told us a print arrived broken or damaged: cracked glass, a bent
+// or dented frame, a torn or creased print (Matt, 2026-11-21). One per
+// conversation. Claude finds them in Support (server/domain/support/damage.js);
+// a person can mark or unmark one from the conversation, and that decision is
+// kept (damaged: false stays, so the pass does not add it back). Stats >
+// "Orders that arrived damaged" counts these against orders placed.
+model DamageReport {
+  id            String        @id @default(cuid())
+  threadId      String        @unique
+  thread        SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  customerEmail String        @default("")
+  // The order it names, as the customer or Shopify writes it ("10637", an Etsy receipt id), when there is one.
+  orderNumber   String?
+  // When the customer first said so.
+  reportedAt    DateTime
+  summary       String        @default("")
+  damaged       Boolean       @default(true)
+  // "claude" | "person"
+  source        String        @default("claude")
+  decidedBy     String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([reportedAt])
+  @@index([customerEmail])
 }

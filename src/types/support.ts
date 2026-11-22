@@ -185,9 +185,21 @@ export interface ReplyWindow {
   reason: string | null
 }
 
+/** A customer said a print arrived broken or damaged (server/domain/support/damage.js). */
+export interface DamageReport {
+  damaged: boolean
+  summary: string
+  orderNumber: string | null
+  reportedAt: string
+  /** "claude" found it; "person" decided it, and that stays. */
+  source: 'claude' | 'person'
+  decidedBy: string | null
+}
+
 export interface ThreadDetail extends ThreadRow {
   gmailThreadId: string | null
   createdAt: string
+  damage?: DamageReport | null
   messages: Message[]
   notes: Note[]
   /** Set on an Instagram thread; null for email, which has no window. */

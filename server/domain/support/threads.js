@@ -12,6 +12,7 @@
 import { printHolds } from './holdsPrint.js'
 import { alignTracking } from '../../lib/tracking.js'
 import prisma from '../../db.js'
+import { shape as shapeDamage } from './damage.js'
 import { shopifyGraphQL } from '../../services/shopifyAuth.js'
 import { approvalUrl, shopifyAdminUrl, arteloOrderUrl, appBaseUrl } from '../../lib/links.js'
 import { slackDm, slackTo, slackText } from '../../lib/slack.js'
@@ -169,6 +170,7 @@ export async function getThread(id, { userId, money = false } = {}) {
       messages: { orderBy: { sentAt: 'asc' }, include: { sentBy: { select: TEAM_SELECT } } },
       notes: { orderBy: { createdAt: 'asc' }, include: { author: { select: TEAM_SELECT } } },
       reads: userId ? { where: { userId } } : false,
+      damageReport: true,
     },
   })
   if (!t) return null
@@ -190,6 +192,8 @@ export async function getThread(id, { userId, money = false } = {}) {
     ...row(t, readAt),
     gmailThreadId: t.gmailThreadId,
     createdAt: t.createdAt,
+    // A print that arrived broken or damaged (damage.js): Claude's call or a person's.
+    damage: shapeDamage(t.damageReport),
     // Meta's rule: a DM may be answered within 24 hours of the customer's last message. Null for email.
     replyWindow: instagram ? replyWindow(t) : null,
     messages: t.messages.map(m => {

@@ -38,6 +38,7 @@ type Support = {
   rate: { windowDays: number; orders: number; withTicket: number; pct: number | null; stillCounting: boolean; partial: boolean }
   closers: { id: string; name: string; closed: number }[]
   replacements: { count: number; cents: number }
+  damage?: { windowDays: number; orders: number; damaged: number; pct: number | null; reports: number; stillCounting: boolean; partial: boolean }
 }
 type Period = { shop?: Shop; support?: Support; error?: string }
 
@@ -110,6 +111,18 @@ function cardsFor(p: Period, label: string): Card[] {
       title: `Orders placed ${label.toLowerCase()} (one per Shopify or Etsy order) whose customer emailed us within ${sp.rate.windowDays} days. Instagram messages have no email to match.`,
       note: sp.rate.partial ? 'Starts before the inbox was tracked, so it reads low.' : sp.rate.stillCounting ? `Still counting: these customers have up to ${sp.rate.windowDays} days to write.` : null,
     })
+    const dm = sp.damage
+    if (dm) {
+      // Lower is better: 1% or less is good, up to 3% worth watching.
+      const tone = dm.pct === null ? '' : dm.pct <= 1 ? GOOD : dm.pct <= 3 ? OK : BAD
+      out.push({
+        key: 'damaged', line: 'Orders that arrived damaged', tag: 'Support',
+        value: dm.pct === null ? null : String(dm.pct), unit: '%', tone,
+        facts: [{ k: 'Damaged', v: `${dm.damaged} of ${dm.orders}` }, { k: 'Reports this period', v: String(dm.reports) }],
+        title: `Orders placed ${label.toLowerCase()} (one per Shopify or Etsy order) whose customer told Support within ${dm.windowDays} days that a print arrived broken or damaged. Claude reads each conversation; a person can mark or unmark one from the conversation (Damaged).`,
+        note: dm.partial ? 'Starts before the inbox was tracked, so it reads low.' : dm.stillCounting ? `Still counting: damage shows up after delivery, so these orders have up to ${dm.windowDays} days.` : null,
+      })
+    }
     const allClosed = sp.closers.reduce((n, c) => n + c.closed, 0)
     for (const c of sp.closers) {
       out.push({

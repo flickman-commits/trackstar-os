@@ -6,6 +6,7 @@
  *   POST { id, action: 'status', status }       open | waiting | escalated | closed; escalated DMs Matt the link
  *   POST { id, action: 'snooze', until }        ISO time, or null to unsnooze
  *   POST { id, action: 'priority', priority }
+ *   POST { id, action: 'damage', damaged }     a print arrived broken or damaged, or did not (Stats counts these)
  *   POST { id, action: 'tags', tags }
  *   POST { id, action: 'note', body, mentions }  an internal note; mentions are teammate ids
  *   POST { id, action: 'deleteNote', noteId }
@@ -25,6 +26,7 @@ import { seesMoney } from '../../_lib/money.js'
 import { setCors } from '../../_lib/auth.js'
 import { requireCapability, recordAudit } from '../../_lib/users.js'
 import { getThread, assign, setStatus, snooze, setPriority, setTags, addNote, deleteNote, markRead, markUnread, noteRow, setProposal, linkOrder, unlinkOrder, setNotWaiting } from '../../../server/domain/support/threads.js'
+import { setDamage } from '../../../server/domain/support/damage.js'
 import { escalate } from '../../../server/domain/support/actions.js'
 import { draftThread } from '../../../server/domain/support/draft.js'
 import { listMockups } from '../../../server/domain/support/mockups.js'
@@ -74,6 +76,9 @@ export default async function handler(req, res) {
         const t = await snooze(id, body.until || null, user)
         await audit(body.until ? `Snoozed "${t.subject}"` : `Unsnoozed "${t.subject}"`, { until: body.until || null })
         return res.status(200).json(t)
+      }
+      case 'damage': {
+        return res.status(200).json({ damage: await setDamage(id, Boolean(body.damaged), user) })
       }
       case 'priority': {
         const t = await setPriority(id, Boolean(body.priority), user)
