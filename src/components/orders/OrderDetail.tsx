@@ -1449,7 +1449,8 @@ Thank you!`
                         <span className={`w-2 h-2 rounded-full ${d.dot || 'bg-off-black/25'}`} />{d.label}
                       </span>
                     ) })()}
-                <div className="min-w-0">
+                {/* The number and its item badge keep their width, so the notes icon sits after them, not on top. */}
+                <div className={`min-w-0 ${selectedOrder.trackstarOrderType === 'custom' ? 'shrink-0' : ''}`}>
                   <h3 className="text-lg md:text-heading-md text-off-black whitespace-nowrap leading-tight">
                     {selectedOrder.trackstarOrderType === 'race_partner'
                       ? (selectedOrder.partnerName || selectedOrder.raceName || 'Partner')

@@ -10,7 +10,8 @@ export function SiblingsBadge({ count, position }: { count: number; position: nu
   if (count < 2) return null
   return (
     <span className="px-2 py-0.5 bg-off-black/5 text-off-black/60 text-xs font-medium rounded whitespace-nowrap" title={`This order has ${count} prints. This is print ${position}.`}>
-      Item {position} of {count}
+      {/* "1/2" on a phone, where "Item 1 of 2" ran under the notes icon. */}
+      <span className="md:hidden">{position}/{count}</span><span className="hidden md:inline">Item {position} of {count}</span>
     </span>
   )
 }
