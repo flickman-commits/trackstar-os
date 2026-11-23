@@ -9,7 +9,7 @@ import { segment, segmentGroup } from '@/lib/ui'
 import BulkView from '@/components/bulk/BulkView'
 import { useDesign } from '@/lib/useDesign'
 import StatusLegend from '@/components/StatusLegend'
-import { Avatar, QueuePill, PersonFilter, TeamPanel, type QueueMember, type SentToday } from '@/components/AssigneePicker'
+import { Avatar, QueuePill, PersonFilter, TeamPanel, CustomTeamPanel, type QueueMember, type SentToday } from '@/components/AssigneePicker'
 import { setTeamColors } from '@/lib/teamColors'
 import { useSearchParams, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
@@ -283,12 +283,15 @@ export default function Dashboard() {
   // And standard orders sent to production today (New York). Read again
   // every five minutes while the tab is visible.
   const [sentToday, setSentToday] = useState<{ count: number; byPerson: SentToday[] } | null>(null)
+  // And first proofs (v1) emailed to customers today, by who sent them (Custom view).
+  const [proofsToday, setProofsToday] = useState<SentToday[] | null>(null)
   useEffect(() => {
     if (!can('settings.stats')) return
     const read = () => apiFetch('/api/admin/stats?range=7d&only=fulfillment').then(r => r.ok ? r.json() : null)
       .then(d => {
         const t = d?.onTime; if (t?.due) setOnTime({ pct: t.onTimePct, goalHours: t.goalHours || 48, due: t.due, onTime: t.onTime, lateNow: t.lateNow, oldestLateDays: t.oldestLateDays, lateOrders: t.lateOrders || [] })
         if (typeof d?.sentToday?.count === 'number') setSentToday({ count: d.sentToday.count, byPerson: d.sentToday.byPerson || [] })
+        if (typeof d?.proofsToday?.count === 'number') setProofsToday(d.proofsToday.byPerson || [])
       }).catch(() => {})
     read()
     const t = setInterval(() => { if (document.visibilityState === 'visible') read() }, 300_000)
@@ -1034,6 +1037,17 @@ export default function Dashboard() {
     return [...n.entries()].map(([userId, count]) => ({ userId, count })).sort((a, b) => b.count - a.count)
   }, [fulfillable])
 
+  // Custom orders still waiting on their first proof, by who they are assigned
+  // to (the Custom team panel). From every order, not just the person shown.
+  const noProofYet = useMemo(() => {
+    const n = new Map<string, number>()
+    for (const o of orders) {
+      if (o.trackstarOrderType !== 'custom' || !o.assigneeId || o.proofSentAt || o.status === 'completed' || o.designStatus === 'sent_to_production') continue
+      n.set(o.assigneeId, (n.get(o.assigneeId) || 0) + 1)
+    }
+    return [...n.entries()].map(([userId, count]) => ({ userId, count })).sort((a, b) => b.count - a.count)
+  }, [orders])
+
   const stageCounts = useMemo(() => {
     const c = { review: 0, action: 0, waiting: 0, approved: 0, notRun: 0 }
     if (activeView !== 'standard') return c
@@ -1501,6 +1515,8 @@ export default function Dashboard() {
             </div>
             {activeView === 'standard' && sentToday
               ? <TeamPanel team={team} sent={sentToday.byPerson} toApprove={toApprove} presence={presence} selected={person} onSelect={(id) => setPersonFilter(f => f === id ? '' : id)} />
+              : activeView === 'custom' && proofsToday
+              ? <CustomTeamPanel team={team} sent={proofsToday} left={noProofYet} presence={presence} selected={person} onSelect={(id) => setPersonFilter(f => f === id ? '' : id)} />
               : <QueuePill people={teamQueue} team={team} presence={presence} selected={person} onSelect={scoped ? (id) => setPersonFilter(f => f === id ? '' : id) : undefined} />}
           </div>
 

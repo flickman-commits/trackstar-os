@@ -216,3 +216,35 @@ export function TeamPanel({ team, sent, toApprove, selected, onSelect, presence 
   const faces: Face[] = rows.map(r => ({ key: r.key, userId: r.userId, user: r.user, name: r.name, facts: `${r.left} left · ${r.sent} sent`, detail: [`${r.left} left to fulfill`, `${r.sent} sent to production today`, rhythm(r.when)].filter(Boolean).join(' · ') }))
   return <TeamFaces label={`Today · ${sentTotal} sent · ${leftTotal} left`} faces={faces} presence={presence} selected={selected} onSelect={onSelect} />
 }
+
+/**
+ * The team on Custom Orders: first proofs (v1) each person emailed today
+ * (since midnight New York) and how many of their assigned customs still have
+ * no proof sent. Revision rounds do not count. Clicking a person shows only
+ * their orders.
+ */
+export function CustomTeamPanel({ team, sent, left, selected, onSelect, presence }: {
+  team: Teammate[]
+  sent: SentToday[]
+  left: { userId: string; count: number }[]
+  selected?: string
+  onSelect?: (userId: string) => void
+  presence?: Presence[]
+}) {
+  type Row = { key: string; user?: Teammate; name: string; userId?: string; sent: number; left: number; when?: SentToday }
+  const rows: Row[] = []
+  for (const p of left) {
+    const user = team.find(u => u.id === p.userId)
+    if (user) rows.push({ key: `u-${p.userId}`, user, name: user.firstName, userId: p.userId, sent: 0, left: p.count })
+  }
+  for (const p of sent) {
+    const row = rows.find(r => r.name === p.name)
+    if (row) { row.sent += p.count; row.when = p }
+    else { const user = team.find(u => u.firstName === p.name); rows.push({ key: `s-${p.name}`, user, userId: user?.id, name: p.name, sent: p.count, left: 0, when: p }) }
+  }
+  const sentTotal = rows.reduce((n, r) => n + r.sent, 0)
+  const leftTotal = rows.reduce((n, r) => n + r.left, 0)
+  const span = (w?: SentToday) => !w?.first ? '' : w.last && clockNY(w.last) !== clockNY(w.first) ? `${clockNY(w.first)} to ${clockNY(w.last)}` : `at ${clockNY(w.first)}`
+  const faces: Face[] = rows.map(r => ({ key: r.key, userId: r.userId, user: r.user, name: r.name, facts: `${r.left} left · ${r.sent} sent`, detail: [`${r.left} assigned with no proof sent yet`, `${r.sent} first proof${r.sent === 1 ? '' : 's'} sent today`, span(r.when)].filter(Boolean).join(' · ') }))
+  return <TeamFaces label={`Today · ${sentTotal} proofs sent · ${leftTotal} left`} faces={faces} presence={presence} selected={selected} onSelect={onSelect} />
+}

@@ -10,6 +10,7 @@
 import { setCors } from '../../_lib/auth.js'
 import { computeStats, RANGES, rangeWindow } from '../../../server/services/shopifyStats.js'
 import { computeFulfillmentTime, sentToProductionToday } from '../../../server/domain/orders/fulfillmentTime.js'
+import { firstProofsSentToday } from '../../../server/domain/orders/proofsToday.js'
 import { computeOnTime } from '../../../server/domain/orders/onTime.js'
 import { requireCapability, requireAdminRole } from '../../_lib/users.js'
 import { sendPublicError } from '../../../server/lib/publicError.js'
@@ -33,8 +34,8 @@ export default async function handler(req, res) {
     // Worked out once every five minutes for everyone (sharedCache), not on every page load.
     if (req.query?.only === 'fulfillment') {
       const out = await sharedCache(`header-stats:${range}`, {}, async () => {
-        const [fulfillment, sentToday, onTime] = await Promise.all([computeFulfillmentTime(rangeWindow(range)), sentToProductionToday(), computeOnTime({ days: 7 })])
-        return { fulfillment, sentToday, onTime }
+        const [fulfillment, sentToday, proofsToday, onTime] = await Promise.all([computeFulfillmentTime(rangeWindow(range)), sentToProductionToday(), firstProofsSentToday(), computeOnTime({ days: 7 })])
+        return { fulfillment, sentToday, proofsToday, onTime }
       })
       return res.status(200).json(out)
     }

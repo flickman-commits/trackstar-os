@@ -272,6 +272,20 @@ export function startOfTodayNY(now = new Date()) {
  * and the first and last send, so the day's rhythm shows (Matt, 2026-11-21:
  * the calendar day, not a rolling 24 hours).
  */
+/**
+ * Who a completion goes to. With no person on it: the import saw Artelo
+ * fulfil an order that was sent from Artelo itself, not from the tool
+ * ("In Artelo"), or the tool sent it on its own ("Automatic"). Those used to
+ * read as "unknown", the Activity Log's placeholder for no actor.
+ */
+function sender(e) {
+  if (e.user?.firstName) return e.user.firstName
+  if (e.detail?.via === 'artelo') return 'In Artelo'
+  const email = String(e.actorEmail || '')
+  if (!email || email === 'unknown' || email === 'system') return 'Automatic'
+  return email.split('@')[0]
+}
+
 export async function sentToProductionToday(now = new Date()) {
   const since = startOfTodayNY(now)
   const noon = new Date(since.getTime() + 12 * 60 * 60 * 1000)
@@ -283,7 +297,7 @@ export async function sentToProductionToday(now = new Date()) {
   const firstBy = new Map()
   for (const e of events) {
     const n = e.detail?.orderNumber
-    if (n && !firstBy.has(n)) firstBy.set(n, { who: e.user?.firstName || (e.actorEmail === 'system' ? 'Automatic' : String(e.actorEmail || 'Someone').split('@')[0]), at: e.createdAt })
+    if (n && !firstBy.has(n)) firstBy.set(n, { who: sender(e), at: e.createdAt })
   }
   if (!firstBy.size) return { count: 0, byPerson: [], since }
   const standard = await prisma.order.findMany({ where: { orderNumber: { in: [...firstBy.keys()] }, trackstarOrderType: 'standard' }, select: { orderNumber: true } })
