@@ -43,14 +43,24 @@ export const renderTools = [
   {
     name: 'designs_to_review',
     title: 'Designs to review',
-    description: 'Standard orders whose newest render is finished and waiting for a yes or no: the preview image (a link good for 10 minutes) and the values that print.',
+    description: 'Standard orders whose newest render is finished and waiting for a yes or no, oldest first: the preview image (a link good for 10 minutes) and the values that print. Narrow to one order or one race.',
     scope: 'read',
     cap: 'orders.render',
     readOnly: true,
-    input: { limit: z.number().int().min(1).max(25).default(10) },
-    async handler({ limit = 10 }) {
+    input: {
+      limit: z.number().int().min(1).max(25).default(10),
+      orderNumber: z.string().max(40).optional().describe('Only this order (its Shopify number).'),
+      race: z.string().max(80).optional().describe('Only orders whose race name contains this.'),
+    },
+    async handler({ limit = 10, orderNumber, race }) {
+      const only = orderNumber ? (await findOrdersByNumber(orderNumber)).map(o => o.id) : null
+      if (only && !only.length) throw new ToolError(`No order matching "${orderNumber}".`)
       const pending = await prisma.renderJob.findMany({
-        where: { status: 'done', review: 'pending', order: { trackstarOrderType: 'standard', status: { not: 'completed' } } },
+        where: {
+          status: 'done', review: 'pending',
+          ...(only ? { orderId: { in: only } } : {}),
+          order: { trackstarOrderType: 'standard', status: { not: 'completed' }, ...(race ? { raceName: { contains: String(race), mode: 'insensitive' } } : {}) },
+        },
         orderBy: { finishedAt: 'asc' },
         include: { order: { select: { id: true, parentOrderNumber: true, lineItemIndex: true, raceName: true, raceNameOverride: true, raceYear: true, yearOverride: true, runnerName: true, runnerNameOverride: true } } },
       })
