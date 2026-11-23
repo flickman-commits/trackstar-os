@@ -21,7 +21,7 @@ import { pipelineFor } from '../../../server/domain/orders/pipeline.js'
 import { usesOldDesign, usesNewDesign } from '../../../server/domain/render/designSwitch.js'
 import { loadPipelineContext } from '../../../server/domain/orders/pipelineStatus.js'
 import { sendPublicError } from '../../../server/lib/publicError.js'
-import { waitingOnCustomers, bouncedCustomers } from '../../../server/domain/support/compose.js'
+import { waitingOnCustomers, bouncedCustomers, customerRepliedTo } from '../../../server/domain/support/compose.js'
 import { notReadyFrom, sendStateOf } from '../../../server/domain/bulk/send.js'
 import { addressComplete } from '../../../server/domain/bulk/bulkOrders.js'
 
@@ -537,6 +537,13 @@ export default async function handler(req, res) {
         // Our last email bounced: the order is an Action (find the right address), not waiting.
         const bouncedAt = bounced.get(key)
         if (bouncedAt) o.emailBouncedAt = bouncedAt
+      }
+      // A custom order's customer wrote to their designer and is owed an answer.
+      const customs = open.filter(o => o.trackstarOrderType === 'custom' && o.assigneeId)
+      const replied = await customerRepliedTo(customs.map(o => ({ email: o.customerEmail, assigneeId: o.assigneeId })))
+      for (const o of customs) {
+        const at = replied.get(`${String(o.customerEmail).trim().toLowerCase()}|${o.assigneeId}`)
+        if (at) o.customerRepliedAt = at
       }
     } catch (err) { console.warn('[orders] waiting-on-customer lookup failed:', err.message) }
 

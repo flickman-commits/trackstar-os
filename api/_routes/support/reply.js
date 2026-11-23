@@ -11,7 +11,8 @@
  */
 import { seesMoney } from '../../_lib/money.js'
 import { setCors } from '../../_lib/auth.js'
-import { requireCapability, recordAudit } from '../../_lib/users.js'
+import { requireSupport, recordAudit } from '../../_lib/users.js'
+import { assertThreadAccess } from '../../../server/domain/support/access.js'
 import prisma from '../../_lib/prisma.js'
 import { replyToHtml, replyToPlain } from '../../../server/domain/support/format.js'
 import { sendReply } from '../../../server/domain/support/mailbox.js'
@@ -34,7 +35,7 @@ async function orderOfRef(ref) {
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'POST, OPTIONS' })) return
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
-  const user = await requireCapability(req, res, 'support')
+  const user = await requireSupport(req, res)
   if (!user) return
   let claim = null
   let sentOk = false
@@ -43,6 +44,8 @@ export default async function handler(req, res) {
     const id = String(body.id || '')
     const text = String(body.text || '').replace(/\r\n/g, '\n').trim()
     if (!id) return res.status(400).json({ error: 'id is required' })
+    // A designer (support.own) answers only the conversations assigned to them.
+    await assertThreadAccess(user, id)
     if (!text) return res.status(400).json({ error: 'Write something first' })
     if (/—/.test(text)) return res.status(400).json({ error: 'No em dashes in anything a customer sees. Use a comma, a period or parentheses.', code: 'em_dash' })
 

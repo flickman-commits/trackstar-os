@@ -139,8 +139,6 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
   const [isSending, setIsSending] = useState(false)
   const [sendNote, setSendNote] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
-  const [question, setQuestion] = useState('')
-  const [isAsking, setIsAsking] = useState(false)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
@@ -467,34 +465,6 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
     }
   }
 
-  const askCustomer = async () => {
-    if (!question.trim()) return
-    if (!customerEmail) {
-      toast.error('No customer email on this order')
-      return
-    }
-    setIsAsking(true)
-    try {
-      const res = await apiFetch(`${API_BASE}/api/orders/actions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'message-customer', orderId, body: question.trim() })
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        toast.error(data.error || 'Failed to send question')
-        return
-      }
-      setQuestion('')
-      await fetchData()
-      toast.success(`Question emailed to ${customerEmail}`)
-    } catch {
-      toast.error('Failed to send question')
-    } finally {
-      setIsAsking(false)
-    }
-  }
-
   const awaitingDanReply = messages.length > 0 && messages[messages.length - 1].sender === 'customer'
 
   const hasPendingProofs = proofs.some(p => p.status === 'pending')
@@ -553,9 +523,9 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
     </div>
   )
 
-  // ═══ Designer ↔ customer Q&A — compose a question + see replies ═══
-  // Rendered in both compact and full modes so Dan can always reach the
-  // customer. Disabled (with a hint) when there's no email on the order.
+  // ═══ Designer ↔ customer Q&A through the portal: retired 2026-11-23 ═══
+  // Only an order that used it shows it, to read the history and any late
+  // answer. New questions go from Email customer from Support.
   // In the sidebar layout a new reply shows as a badge on the action, not a dialog that opens by itself.
   const messagingOpen = showMessaging || (!onActions && awaitingDanReply)
   const labelOptions = [...new Set(proofs.map(p => p.groupLabel).filter((l): l is string => !!l))]
@@ -567,7 +537,7 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
         className="w-full flex items-center gap-1.5 px-3 py-2 text-left"
       >
         <MessageSquare className="w-3.5 h-3.5 text-off-black/50" />
-        <p className="text-[11px] font-semibold text-off-black/60 uppercase tracking-wider">Message customer</p>
+        <p className="text-[11px] font-semibold text-off-black/60 uppercase tracking-wider">Portal messages</p>
         {awaitingDanReply && (
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-100 text-purple-700">New reply</span>
         )}
@@ -595,30 +565,15 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
         </div>
       )}
 
-      <textarea
-        value={question}
-        onChange={(e) => setQuestion(e.target.value)}
-        placeholder={customerEmail ? 'Ask the customer a question…' : 'No customer email on this order'}
-        disabled={!customerEmail || isAsking}
-        className="w-full px-3 py-2 border border-border-gray rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-off-black/20 resize-none bg-white disabled:opacity-50"
-        rows={2}
-      />
-      <button
-        onClick={askCustomer}
-        disabled={isAsking || !question.trim() || !customerEmail}
-        className="w-full px-3 py-2 text-xs font-medium text-white bg-dark-fill hover:opacity-90 rounded-md transition-opacity disabled:opacity-50 flex items-center justify-center gap-1.5"
-      >
-        {isAsking ? (
-          <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
-        ) : (
-          <><Send className="w-3.5 h-3.5" /> Email question to customer</>
-        )}
-      </button>
+      {/* The portal Q&A is retired (2026-11-23): its history stays readable here, and new
+          questions go from Email customer from Support, where the customer's reply comes back
+          to the designer's own inbox. */}
+      <p className="text-[11px] text-off-black/50 leading-snug">To ask the customer something now, use <span className="font-semibold">Email customer from Support</span> on this order. Their reply comes to your Support inbox.</p>
       </div>
       )}
     </div>
   )
-  const messagingBlock = !onActions ? messagingInline : messagingOpen ? (
+  const messagingBlock = messages.length === 0 ? null : !onActions ? messagingInline : messagingOpen ? (
     <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4" onClick={() => setShowMessaging(false)}>
       <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg max-h-full overflow-auto" onClick={e => e.stopPropagation()}>
         {messagingInline}

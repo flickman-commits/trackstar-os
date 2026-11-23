@@ -17,14 +17,18 @@ import { UserError } from './errors.js'
 import { can } from '../../../api/_lib/roles.js'
 
 /**
- * Who owns a conversation a person starts: the sender, when they work Support
- * (a fulfillment teammate, Matt). A designer sending proofs is not, so that
- * thread keeps the routing rule's person. The bot (no id) never owns one.
+ * Who owns a conversation a person starts: the sender, when they work
+ * Support (a fulfillment teammate, Matt) or answer their own customers there
+ * (a designer with 'support.own': proofs and emails from their custom order
+ * come back to them, in their My Inbox). Anyone else's thread keeps the
+ * routing rule's person. The bot (no id) never owns one.
  */
 export async function senderOwnerId(actor) {
   if (!actor?.id) return null
   const u = await prisma.user.findUnique({ where: { id: actor.id }, select: { id: true, isActive: true, role: true, extraRoles: true, extraCaps: true, deniedCaps: true } }).catch(() => null)
-  return u?.isActive && await can(u, 'support').catch(() => false) ? u.id : null
+  if (!u?.isActive) return null
+  const works = await can(u, 'support').catch(() => false) || await can(u, 'support.own').catch(() => false)
+  return works ? u.id : null
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/

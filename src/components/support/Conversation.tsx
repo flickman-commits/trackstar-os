@@ -530,7 +530,10 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
             <button onClick={onMarkUnread} disabled={busy} className={`${btnGhost} px-1.5`} title="Mark unread (u)">
               <Mail className="w-4 h-4 text-off-black/40" />
             </button>
-            <AssigneePicker team={team} value={thread.assignee?.id || null} meId={me.id} onChange={onAssign} firstNameOnly />
+            {/* A designer cannot hand a conversation to a teammate; they can give it back to Support. */}
+            {thread.ownOnly
+              ? <button onClick={() => onAssign(null)} disabled={busy} className={`${btnSecondary} text-xs whitespace-nowrap`} title="Unassign it so Support picks it up. It leaves your inbox.">Send to Support</button>
+              : <AssigneePicker team={team} value={thread.assignee?.id || null} meId={me.id} onChange={onAssign} firstNameOnly />}
           </div>
         </div>
       </div>

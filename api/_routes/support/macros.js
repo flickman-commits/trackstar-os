@@ -9,18 +9,20 @@
  * Anyone on Support adds; editing and deleting are the author's or an admin's.
  */
 import { setCors } from '../../_lib/auth.js'
-import { requireCapability, recordAudit } from '../../_lib/users.js'
+import { requireSupport, recordAudit } from '../../_lib/users.js'
 import { listMacros, saveMacro, deleteMacro, noteMacroUse } from '../../../server/domain/support/macros.js'
 import { publicMessage, publicStatus } from '../../../server/domain/support/errors.js'
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, POST, OPTIONS' })) return
-  const user = await requireCapability(req, res, 'support')
+  const user = await requireSupport(req, res)
   if (!user) return
   try {
     if (req.method === 'GET') return res.status(200).json({ macros: await listMacros() })
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {}
+    // A designer (support.own) uses the saved replies; adding and editing them is Support's.
+    if (user.supportScope === 'own' && body.action !== 'use') return res.status(403).json({ error: 'That is not part of your role. Ask Matt if you need it.', code: 'not_allowed' })
     if (body.action === 'save') {
       const m = await saveMacro({ id: body.id, name: body.name, shortcut: body.shortcut, body: body.body }, user)
       await recordAudit({ action: 'support.macro', summary: `${body.id ? 'Edited' : 'Added'} macro "${m.name}"`, detail: { id: m.id }, actor: user })

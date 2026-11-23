@@ -6,22 +6,25 @@
  * Read from the mirror, never from Gmail.
  */
 import { setCors } from '../../_lib/auth.js'
-import { requireCapability } from '../../_lib/users.js'
-import { listThreads, team, TAG_SUGGESTIONS } from '../../../server/domain/support/threads.js'
+import { requireSupport } from '../../_lib/users.js'
+import { listThreads, listOwnThreads, team, TAG_SUGGESTIONS } from '../../../server/domain/support/threads.js'
 import { publicMessage, publicStatus } from '../../../server/domain/support/errors.js'
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, OPTIONS' })) return
-  const user = await requireCapability(req, res, 'support')
+  const user = await requireSupport(req, res)
   if (!user) return
   try {
     const view = String(req.query?.view || 'all')
     const sort = String(req.query?.sort || 'waiting')
     const q = String(req.query?.q || '')
-    const [list, people] = await Promise.all([listThreads({ view, sort, q, userId: user.id }), team()])
+    // A designer (support.own) has one list, their own conversations, and no team to hand them to.
+    const own = user.supportScope === 'own'
+    const [list, people] = await Promise.all([own ? listOwnThreads({ sort, q, userId: user.id }) : listThreads({ view, sort, q, userId: user.id }), own ? [] : team()])
     return res.status(200).json({
       ...list,
       team: people,
+      ownOnly: own,
       tagSuggestions: TAG_SUGGESTIONS,
       me: { id: user.id, firstName: user.firstName, lastName: user.lastName, role: user.role },
     })

@@ -42,6 +42,7 @@ export const ROLE_LABEL = {
  */
 export const CAPABILITIES = [
   { id: 'support', group: 'Work areas', label: 'Support inbox', blurb: 'Read and answer customer conversations' },
+  { id: 'support.own', group: 'Work areas', label: 'Support, own conversations only', blurb: 'Only the conversations assigned to them, in My Inbox: for designers writing to the customers on their custom orders. The full Support inbox includes this.' },
   { id: 'sales', group: 'Work areas', label: 'Sales', blurb: 'The race and charity pipeline (needs an Attio seat)' },
   { id: 'creators', group: 'Work areas', label: 'Creators', blurb: 'The creator program and briefs' },
   { id: 'hours', group: 'Work areas', label: 'Hours', blurb: 'Log and submit their own time' },
@@ -69,8 +70,8 @@ export const DEFAULT_CAPS = {
   fulfillment: ['support', 'creators', 'orders.render', 'orders.add_photo', 'tools.discounts', 'tools.pace', 'tools.weather', 'settings.stats', 'settings.design_needs'],
   support: ['support', 'hours', 'tools.discounts', 'tools.pace', 'tools.weather'],
   creators: ['creators', 'hours', 'tools.discounts'],
-  head_designer: ['orders.assign_custom', 'orders.message_customer', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.stats', 'settings.design_needs'],
-  designer: ['orders.message_customer', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.stats', 'settings.design_needs'],
+  head_designer: ['support.own', 'orders.assign_custom', 'orders.message_customer', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.stats', 'settings.design_needs'],
+  designer: ['support.own', 'orders.message_customer', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.stats', 'settings.design_needs'],
 }
 
 const KEY = 'role_capabilities'
@@ -84,7 +85,7 @@ export function normalizeRole(role) {
 // `_known` predates all of these). A role gets a new capability's default
 // until an admin saves the table again, so "on by default" holds for a
 // workspace whose roles were set up before the capability existed.
-const ADDED_LATER = ['hours', 'orders.add_photo', 'settings.pricing']
+const ADDED_LATER = ['hours', 'orders.add_photo', 'settings.pricing', 'support.own']
 
 function clean(map) {
   const known = new Set(Array.isArray(map?._known) ? map._known : [...GRANTABLE].filter(c => !ADDED_LATER.includes(c)))

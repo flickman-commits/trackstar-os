@@ -175,6 +175,19 @@ export async function requireAnyCapability(req, res, capabilities) {
 }
 
 /**
+ * Signed in with Support: the whole inbox ('support'), or only the
+ * conversations assigned to them ('support.own', designers writing to the
+ * customers on their custom orders). Returns the user with `supportScope`
+ * 'all' or 'own'; the handler narrows what an 'own' person may reach with
+ * server/domain/support/access.js. Null after responding 401/403.
+ */
+export async function requireSupport(req, res) {
+  const user = await requireAnyCapability(req, res, ['support', 'support.own'])
+  if (!user) return null
+  return Object.assign(user, { supportScope: user.has.has('support') ? 'all' : 'own' })
+}
+
+/**
  * Authenticate AND require the admin role, in one call.
  *
  * `requireAdmin` is a misnomer inherited from when this app had one shared

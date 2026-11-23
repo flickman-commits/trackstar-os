@@ -590,8 +590,9 @@ export default async function handler(req, res) {
           await sendOrderEmail({
             order: { id: orderId, customerEmail: order.customerEmail, customerName: order.customerName },
             subject, html: emailHtml, text: emailText, actor, waiting: false,
+            // No order note: the proofs show on the order and the email in its Support conversation.
+            // Notes are for what needs someone's attention (2026-11-23).
             event: `Proofs emailed for ${displayNum}: ${proofCount} design${proofCount === 1 ? '' : 's'} to approve`,
-            comment: `Emailed ${proofCount} proof${proofCount === 1 ? '' : 's'} to the customer from fast@: "${subject}"`,
           })
         } else {
           await sendEmail({ from: fromEmail, to: [order.customerEmail], replyTo: process.env.PROOF_REPLY_TO_EMAIL || 'fast@trackstar.art', subject, html: emailHtml, text: emailText })

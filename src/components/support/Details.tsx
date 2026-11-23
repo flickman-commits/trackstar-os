@@ -534,7 +534,8 @@ export default function Details({ thread, tagSuggestions, onOpenThread, onMerge,
                 <Tags tags={thread.tags} suggestions={tagSuggestions} onChange={onTags} />
               </span>
             </Attr>
-            <Attr label="Priority">
+            {/* A designer (thread.ownOnly) works the conversation; starring, damage and sender filters are Support's. */}
+            {!thread.ownOnly && <Attr label="Priority">
               {thread.priority ? (
                 <span className="inline-flex items-center gap-2">
                   <span className="px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300 text-[11px] font-semibold text-amber-800">Priority</span>
@@ -543,19 +544,19 @@ export default function Details({ thread, tagSuggestions, onOpenThread, onMerge,
               ) : (
                 <button onClick={() => onPriority(true)} className={btnSecondary} title="Mark as priority (p)">Mark as Priority</button>
               )}
-            </Attr>
-            <DamageRow thread={thread} onChanged={onChanged} />
+            </Attr>}
+            {!thread.ownOnly && <DamageRow thread={thread} onChanged={onChanged} />}
             {(thread.lastInboundAt || thread.lastOutboundAt) && (
               <div className="grid grid-cols-2 gap-3 text-xs pt-0.5">
                 <div><div className="text-off-black/45">Their last message</div><div className="text-off-black">{thread.lastInboundAt ? `${ago(thread.lastInboundAt)} ago` : 'None yet'}</div></div>
                 <div><div className="text-off-black/45">Our last message</div><div className="text-off-black">{thread.lastOutboundAt ? `${ago(thread.lastOutboundAt)} ago` : 'None yet'}</div></div>
               </div>
             )}
-            {thread.channel !== 'instagram' && thread.customer.email && (
+            {!thread.ownOnly && thread.channel !== 'instagram' && thread.customer.email && (
               <div className="pt-1"><FilterSender email={thread.customer.email} filters={filters} onChanged={onFiltersChanged} /></div>
             )}
           </Section>
-          {thread.status === 'closed' && (
+          {thread.status === 'closed' && !thread.ownOnly && (
             <Section title="Case">
               <CaseCard threadId={thread.id} status={thread.status} />
             </Section>
@@ -563,9 +564,9 @@ export default function Details({ thread, tagSuggestions, onOpenThread, onMerge,
           <Section title="Orders" count={thread.context.orders.length}>
             {thread.context.shopifyError && <div className="text-xs text-amber-700 inline-flex items-start gap-1.5"><AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />Shopify did not answer; showing what we have on file.</div>}
             {thread.context.orders.length === 0
-              ? <div className="text-xs text-off-black/50 inline-flex items-center gap-1.5"><Package className="w-3.5 h-3.5" />{thread.customerEmail ? `No orders under ${thread.customerEmail}.` : 'No email to look orders up by. Ask for the order number.'}</div>
+              ? <div className="text-xs text-off-black/50 inline-flex items-center gap-1.5"><Package className="w-3.5 h-3.5" />{thread.ownOnly ? 'None of their orders is assigned to you.' : thread.customerEmail ? `No orders under ${thread.customerEmail}.` : 'No email to look orders up by. Ask for the order number.'}</div>
               : <div className="space-y-3">{thread.context.orders.map(o => (
-                  <OrderCard key={`${o.source}-${o.number}`} o={o} onUnlink={o.linked ? () => unlinkOrder(thread.id, o.number, onChanged) : undefined} />
+                  <OrderCard key={`${o.source}-${o.number}`} o={o} onUnlink={o.linked && !thread.ownOnly ? () => unlinkOrder(thread.id, o.number, onChanged) : undefined} />
                 ))}</div>}
             {(thread.printHolds || []).length > 0 && (
               <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-900 space-y-1">
@@ -587,7 +588,7 @@ export default function Details({ thread, tagSuggestions, onOpenThread, onMerge,
                 ))}
               </div>
             )}
-            <AddOrder threadId={thread.id} onChanged={onChanged} />
+            {!thread.ownOnly && <AddOrder threadId={thread.id} onChanged={onChanged} />}
           </Section>
           {thread.pastThreads.length > 0 && (
           <Section title="Other conversations" count={thread.pastThreads.length}>
@@ -615,9 +616,26 @@ export default function Details({ thread, tagSuggestions, onOpenThread, onMerge,
             )}
           </Section>
           )}
+          {/* A designer attaches their own designs to the reply; refunds, replacements, discount codes and the rest stay with Support. */}
+          {thread.ownOnly && thread.context.orders.some(o => (o.mockups || []).length > 0) && (
+            <Section title="Designs">
+              <div className="flex flex-wrap gap-1.5">
+                {thread.context.orders.flatMap(o => o.mockups || []).map(m => (
+                  <button key={m.ref} onClick={() => { onAttach(m); toast.success(`${m.label} attached to the reply`) }} className="w-16 text-left group" title={`Attach ${m.label} to the reply`}>
+                    <span className="block w-16 h-16 rounded border border-border-gray bg-white overflow-hidden group-hover:border-[#4600D6]">
+                      {m.thumbUrl ? <img src={m.thumbUrl} alt="" className="w-full h-full object-cover" /> : <Package className="w-5 h-5 m-auto mt-5 text-off-black/25" />}
+                    </span>
+                    <span className="block text-[10px] text-off-black/55 leading-tight mt-0.5 truncate">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+            </Section>
+          )}
+          {!thread.ownOnly && (
           <Section title="Actions">
             <Actions thread={thread} onInsert={onInsert} onAttach={onAttach} onChanged={onChanged} />
           </Section>
+          )}
         </>
       )}
     </aside>

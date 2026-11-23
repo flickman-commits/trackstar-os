@@ -79,13 +79,15 @@ const CONNECT_REASONS: Record<string, string> = {
 export default function Support({ active = true }: { active?: boolean } = {}) {
   useDocumentHead({ title: 'Support · Trackstar' })
   const { user, isAdmin, can } = useAuth()
+  // A designer (support.own): only the conversations assigned to them, in My Inbox (server/domain/support/access.js).
+  const ownOnly = !can('support') && can('support.own')
   // Hours: the rep's own week, from the left column (people with the hours capability).
   const [hoursOpen, setHoursOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
 
-  const [view, setView] = useState<InboxView>(() => { try { const v = localStorage.getItem('support.view') as InboxView | null; return v && v !== 'mentions' && v !== 'unassigned' ? v : 'all' } catch { return 'all' } })
+  const [view, setView] = useState<InboxView>(() => { if (!can('support') && can('support.own')) return 'inbox'; try { const v = localStorage.getItem('support.view') as InboxView | null; return v && v !== 'mentions' && v !== 'unassigned' ? v : 'all' } catch { return 'all' } })
   const [sort, setSort] = useState<InboxSort>(() => { try { return (localStorage.getItem('support.sort') as InboxSort) || 'priority' } catch { return 'priority' } })
   const [query, setQuery] = useState('')
   const [inbox, setInbox] = useState<InboxPayload | null>(null)
@@ -143,12 +145,14 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
   }, [location.search, navigate, active])
 
   const loadStatus = useCallback(() => {
+    // The mailbox and Instagram connections are Support's to look after.
+    if (ownOnly) return
     supportApi.status().then(setStatus).catch(() => setStatus(null))
     supportApi.instagramStatus().then(setInstagram).catch(() => setInstagram(null))
-  }, [])
+  }, [ownOnly])
   const loadMacros = useCallback(() => { supportApi.macros().then(r => setMacros(r.macros)).catch(() => {}) }, [])
   const [filters, setFilters] = useState<SenderFilter[]>([])
-  const loadFilters = useCallback(() => { supportApi.filters().then(r => setFilters(r.filters)).catch(() => {}) }, [])
+  const loadFilters = useCallback(() => { if (!ownOnly) supportApi.filters().then(r => setFilters(r.filters)).catch(() => {}) }, [ownOnly])
   // Answers can come back out of order (a slow search, then a quick poll):
   // only the newest request's answer is shown.
   const inboxSeq = useRef(0)
@@ -245,6 +249,14 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
   }
   const assign = (assigneeId: string | null) => thread && run(async () => {
     const prev = thread
+    // A designer sending it back to Support: it is no longer theirs to see, so it leaves the pane and the list.
+    if (ownOnly && !assigneeId) {
+      await supportApi.assign(thread.id, null)
+      setSelectedId(null); setThread(null)
+      setInbox(p => p ? { ...p, threads: p.threads.filter(r => r.id !== prev.id) } : p)
+      toast.success('Sent to Support')
+      return
+    }
     patchRow(await supportApi.assign(thread.id, assigneeId)); await refreshThread(thread.id)
     if ((prev.assignee?.id || null) !== assigneeId) remember('Assignee changed', async () => { patchRow(await supportApi.assign(prev.id, prev.assignee?.id || null)); if (selectedRef.current === prev.id) await refreshThread(prev.id) })
   })
@@ -354,6 +366,8 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
   })
   const refresh = async () => {
     setSyncing(true)
+    // A designer re-reads their list; checking the mailbox (and drafting for everyone) is Support's.
+    if (ownOnly) { try { await loadInbox(true); if (selectedId) refreshThread(selectedId) } finally { setSyncing(false) } return }
     try {
       const out = await supportApi.sync()
       if (out.skipped) toast.message('The mailbox is not connected yet')
@@ -396,7 +410,7 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
         case 'n': if (t) { e.preventDefault(); const b = document.querySelector<HTMLButtonElement>('[data-note-tab]'); b?.click() } break
         case 'm': if (t) { e.preventDefault(); document.querySelector<HTMLButtonElement>('[data-macro-button]')?.click() } break
         case 'a': if (t && user) assign(user.id); break
-        case 'p': if (t) setPriority(!t.priority); break
+        case 'p': if (t && !ownOnly) setPriority(!t.priority); break
         case 'c': if (t && t.status !== 'closed') setStatusOf('closed'); break
         case 'u': if (t) markUnread(); break
         case '?': setKeysOpen(v => !v); break
@@ -410,8 +424,8 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
 
   const me = inbox?.me || (user ? { id: user.id, firstName: user.firstName, lastName: user.lastName } : null)
   const threads = inbox?.threads || []
-  const title = view.startsWith('teammate:') ? (inbox?.team.find(u => `teammate:${u.id}` === view)?.firstName || 'Teammate') : VIEW_TITLE[view] || 'Inbox'
-  const empty = query ? 'Nothing matches.' : view.startsWith('teammate:') ? 'Nothing open for them.' : EMPTY[view] || 'Nothing here.'
+  const title = ownOnly ? 'My Inbox' : view.startsWith('teammate:') ? (inbox?.team.find(u => `teammate:${u.id}` === view)?.firstName || 'Teammate') : VIEW_TITLE[view] || 'Inbox'
+  const empty = query ? 'Nothing matches.' : ownOnly ? 'Nothing open with your customers. Email one from their custom order and the conversation shows up here.' : view.startsWith('teammate:') ? 'Nothing open for them.' : EMPTY[view] || 'Nothing here.'
 
   return (
     <div className={pageShell}>
@@ -422,13 +436,13 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
           <PageHeader
             title="Support"
             subtitle={`${title} · ${threads.length}`}
-            pill={inbox ? `${inbox.counts.all ?? threads.length} open` : undefined}
-            control={
+            pill={inbox && !ownOnly ? `${inbox.counts.all ?? threads.length} open` : undefined}
+            control={ownOnly ? undefined : (
               <select value={view} onChange={e => setView(e.target.value as InboxView)} className="text-xs font-medium bg-white border border-border-gray rounded-full pl-3 pr-7 py-1.5 appearance-none">
                 {Object.entries(VIEW_TITLE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 {inbox?.team.map(u => <option key={u.id} value={`teammate:${u.id}`}>{u.firstName}</option>)}
               </select>
-            }
+            )}
           />
         )}
         <div className="pt-4 md:pt-5 pb-3 hidden md:flex items-center justify-between gap-4 flex-shrink-0">
@@ -444,12 +458,12 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
               {query && <button onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-off-black/40 hover:text-off-black"><X className="w-3.5 h-3.5" /></button>}
             </div>
             {/* The views, as a menu, where the column does not fit. */}
-            <select value={view} onChange={e => setView(e.target.value as InboxView)} className="lg:hidden text-sm bg-white border border-border-gray rounded-md px-2 py-2">
+            {!ownOnly && <select value={view} onChange={e => setView(e.target.value as InboxView)} className="lg:hidden text-sm bg-white border border-border-gray rounded-md px-2 py-2">
               {Object.entries(VIEW_TITLE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               {inbox?.team.map(u => <option key={u.id} value={`teammate:${u.id}`}>{u.firstName}</option>)}
-            </select>
+            </select>}
             <button onClick={() => setKeysOpen(v => !v)} className={`${btnGhost} hidden md:inline-flex`} title="Keyboard shortcuts (?)"><Keyboard className="w-4 h-4" /></button>
-            <button onClick={refresh} disabled={syncing} className={btnSecondary} title="Check the mailbox now"><RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} /><span className="hidden md:inline">Refresh</span></button>
+            <button onClick={refresh} disabled={syncing} className={btnSecondary} title={ownOnly ? 'Check for new replies' : 'Check the mailbox now'}><RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} /><span className="hidden md:inline">Refresh</span></button>
             {status?.connected && <span className="hidden xl:inline-flex items-center gap-1.5 text-xs text-off-black/50"><Mail className="w-3.5 h-3.5" />{status.email}</span>}
           </div>
         </div>
@@ -466,7 +480,7 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
 
         <section className="flex-1 min-h-0 pb-3">
           <div className="h-full bg-white border border-border-gray rounded-lg shadow-sm overflow-hidden flex flex-col lg:flex-row">
-            <ViewsColumn view={view} counts={inbox?.counts || null} team={inbox?.team || []} me={me} onView={v => { setView(v); setSelectedId(null); setThread(null) }} onMacros={() => setMacrosOpen(true)} onSettings={() => setSettingsOpen(true)} onRequestFeature={() => setFeatureOpen(true)} onHours={can('hours') ? () => setHoursOpen(true) : undefined} onHelp={() => setHelpOpen(true)} />
+            <ViewsColumn view={view} counts={inbox?.counts || null} team={inbox?.team || []} me={me} onView={v => { setView(v); setSelectedId(null); setThread(null) }} onMacros={() => setMacrosOpen(true)} onSettings={() => setSettingsOpen(true)} onRequestFeature={() => setFeatureOpen(true)} onHours={can('hours') ? () => setHoursOpen(true) : undefined} onHelp={() => setHelpOpen(true)} ownOnly={ownOnly} />
             <HoursModal open={hoursOpen} onClose={() => setHoursOpen(false)} />
             {/* On the phone the list and the conversation take turns: the list until one is picked, then the conversation alone. */}
             <div className={`${thread ? 'hidden lg:contents' : 'contents'}`}>

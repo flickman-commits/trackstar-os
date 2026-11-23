@@ -188,7 +188,8 @@ function SupportKeepAlive() {
   const onSupport = pathname === '/support'
   const [opened, setOpened] = useState(onSupport)
   useEffect(() => { if (onSupport) setOpened(true) }, [onSupport])
-  if (!can('support')) return onSupport ? <RequireCap cap="support"><></></RequireCap> : null
+  // A designer with support.own gets Support too, narrowed to their own conversations.
+  if (!can('support') && !can('support.own')) return onSupport ? <RequireCap cap="support"><></></RequireCap> : null
   if (!opened) return null
   return (
     <div className={onSupport ? 'contents' : 'hidden'} aria-hidden={!onSupport}>

@@ -80,9 +80,9 @@ export async function emailCustomer({ orderId, subject, text, actor, mockupRef =
       data: { status: waiting ? 'waiting' : 'closed', ...(waiting ? {} : { notWaitingAt: new Date() }), assigneeId: owner || undefined, ...(order.customerName ? { customerName: order.customerName } : {}) },
     }),
     prisma.supportNote.create({ data: { threadId: stored.threadId, kind: 'event', body: `${by} emailed from Fulfillment about #${number}`, authorId: actor?.id || null, authorName: by } }),
-    prisma.orderComment.create({ data: { orderId: order.id, text: mockupRef
-      ? `Sent the design to the customer to approve: "${subj}".${held ? ' Held from production until they answer; Send now once they approve.' : ''}`
-      : `Emailed the customer from Support: "${subj}"`, authorId: actor?.id || null, authorName: by } }),
+    // An order note only when it needs someone's attention: the print is held for the
+    // customer's answer. That we emailed shows in the order's Conversation panel.
+    ...(held ? [prisma.orderComment.create({ data: { orderId: order.id, text: `Held from production until the customer answers "${subj}". Send now once they approve.`, authorId: actor?.id || null, authorName: by } })] : []),
   ])
   return { threadId: stored.threadId, to, subject: subj, held: Boolean(held) }
 }
@@ -185,6 +185,34 @@ export async function waitingOnCustomers(emails) {
 }
 
 /**
+ * Custom orders whose customer wrote to their designer and is owed an
+ * answer: an open conversation assigned to the order's designer where the
+ * customer spoke last. The Custom list tags the order "Customer replied" so
+ * the designer sees it without opening Support (access.js).
+ * @param {{ email: string, assigneeId: string }[]} pairs
+ * @returns {Promise<Map<string, Date>>} "<email>|<assigneeId>" -> when they wrote
+ */
+export async function customerRepliedTo(pairs) {
+  const list = pairs.filter(p => p.email && p.assigneeId).map(p => ({ email: String(p.email).trim().toLowerCase(), assigneeId: p.assigneeId }))
+  const out = new Map()
+  if (!list.length) return out
+  const threads = await prisma.supportThread.findMany({
+    where: {
+      customerEmail: { in: [...new Set(list.map(p => p.email))], mode: 'insensitive' },
+      assigneeId: { in: [...new Set(list.map(p => p.assigneeId))] },
+      status: { in: ['open', 'escalated'] }, mergedIntoId: null, filtered: false, lastInboundAt: { not: null },
+    },
+    select: { customerEmail: true, assigneeId: true, lastInboundAt: true, lastOutboundAt: true },
+  })
+  for (const t of threads) {
+    if (t.lastOutboundAt && t.lastOutboundAt >= t.lastInboundAt) continue
+    const key = `${t.customerEmail.toLowerCase()}|${t.assigneeId}`
+    if (!out.has(key) || out.get(key) < t.lastInboundAt) out.set(key, t.lastInboundAt)
+  }
+  return out
+}
+
+/**
  * Customers whose last email from us bounced (the conversation is still
  * going): the order shows "Email bounced" under Action, since nobody is
  * waiting on an email that never arrived. By lowercased email -> when.
@@ -207,7 +235,7 @@ export async function bouncedCustomers(emails) {
  * not closed), for the order view in TrackstarOS. Matched on the
  * order's email; filtered and merged-away threads never show.
  */
-export async function conversationsForOrder(orderId, { all = false } = {}) {
+export async function conversationsForOrder(orderId, { all = false, assigneeId = null } = {}) {
   const order = await prisma.order.findUnique({ where: { id: String(orderId || '') }, select: { customerEmail: true, shopifyOrderData: true, parentOrderNumber: true, orderNumber: true } })
   const email = String(order?.customerEmail || '').trim().toLowerCase()
   // Addresses this order was linked to by hand (they wrote in from another email).
@@ -216,7 +244,8 @@ export async function conversationsForOrder(orderId, { all = false } = {}) {
   if (!emails.length) return []
   // all: closed ones too, for the order's Conversation panel ("Show closed").
   const rows = await prisma.supportThread.findMany({
-    where: { customerEmail: { in: emails, mode: 'insensitive' }, mergedIntoId: null, filtered: false, ...(all ? {} : { status: { not: 'closed' } }) },
+    // assigneeId: a designer sees only the ones assigned to them (access.js).
+    where: { customerEmail: { in: emails, mode: 'insensitive' }, mergedIntoId: null, filtered: false, ...(all ? {} : { status: { not: 'closed' } }), ...(assigneeId ? { assigneeId } : {}) },
     orderBy: { lastMessageAt: 'desc' },
     take: all ? 25 : 5,
     select: { id: true, subject: true, status: true, snippet: true, lastMessageAt: true, lastInboundAt: true, lastOutboundAt: true, bouncedAt: true, messageCount: true, snoozedUntil: true, notWaitingAt: true, channel: true, assignee: { select: { firstName: true } } },

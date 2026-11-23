@@ -8,7 +8,7 @@
 export type Role = 'admin' | 'sales' | 'fulfillment' | 'support' | 'creators' | 'head_designer' | 'designer'
 
 export type Capability =
-  | 'sales' | 'support' | 'creators' | 'hours' | 'orders.assign_custom' | 'orders.render' | 'orders.add_photo' | 'orders.message_customer'
+  | 'sales' | 'support' | 'support.own' | 'creators' | 'hours' | 'orders.assign_custom' | 'orders.render' | 'orders.add_photo' | 'orders.message_customer'
   | 'tools.discounts' | 'tools.pace' | 'tools.weather' | 'tools.surveys' | 'tools.samples'
   | 'settings.pricing' | 'settings.reviews' | 'settings.stats' | 'settings.design_needs' | 'settings.data' | 'settings.admin'
 
@@ -29,6 +29,7 @@ export const ROLE_LABEL: Record<Role, string> = {
 export const CAPABILITY_LABEL: Partial<Record<Capability, string>> = {
   sales: 'Sales',
   support: 'Support',
+  'support.own': 'Own conversations',
   creators: 'Creators',
   hours: 'Hours',
   'orders.assign_custom': 'Assign customs',
@@ -52,8 +53,8 @@ const DEFAULT_CAPS: Record<Role, Caps> = {
   fulfillment: ['support', 'creators', 'orders.render', 'orders.add_photo', 'tools.discounts', 'tools.pace', 'tools.weather', 'settings.stats', 'settings.design_needs'],
   support: ['support', 'hours', 'tools.discounts', 'tools.pace', 'tools.weather'],
   creators: ['creators', 'hours', 'tools.discounts'],
-  head_designer: ['orders.assign_custom', 'orders.message_customer', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.stats', 'settings.design_needs'],
-  designer: ['orders.message_customer', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.stats', 'settings.design_needs'],
+  head_designer: ['support.own', 'orders.assign_custom', 'orders.message_customer', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.stats', 'settings.design_needs'],
+  designer: ['support.own', 'orders.message_customer', 'tools.pace', 'tools.weather', 'tools.surveys', 'settings.stats', 'settings.design_needs'],
 }
 
 /** "staff" (from before roles) and anything unknown read as designer, the narrowest. */

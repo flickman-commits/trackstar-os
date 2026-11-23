@@ -3,7 +3,7 @@ import DesignStatusPicker from '@/components/orders/DesignStatusPicker'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, CalendarClock, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff, Ruler, Flag, CheckCircle2 } from 'lucide-react'
+import { FileText, History, Plus, CalendarClock, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff, Ruler, Flag, CheckCircle2 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { shrinkImage } from '@/lib/shrinkImage'
@@ -29,6 +29,7 @@ import ProofShowcase from '@/components/ProofShowcase'
 import PhotoCropper from '@/components/PhotoCropper'
 import OrderProduction from '@/components/orders/OrderProduction'
 import OrderSupportActions from '@/components/orders/OrderSupportActions'
+import { isActivityNote } from '@/lib/orderNotes'
 import { BulkSendLine, BulkAddressAction } from '@/components/orders/BulkRunnerSend'
 import ConvertToCustomModal from '@/components/orders/ConvertToCustomModal'
 import FeatureStar from '@/components/orders/FeatureStar'
@@ -459,6 +460,10 @@ export default function OrderDetail({
 
   // Comments state for custom orders
   const [orderComments, setOrderComments] = useState<OrderComment[]>([])
+  const [showActivity, setShowActivity] = useState(false)
+  // Open Support conversations on the open order (ConversationPanel), and whether the design brief was asked for after it stepped aside.
+  const [openConvos, setOpenConvos] = useState<{ orderId: string; open: number } | null>(null)
+  const [briefShown, setBriefShown] = useState<string | null>(null)
   const [isLoadingComments, setIsLoadingComments] = useState(false)
   const [newCommentText, setNewCommentText] = useState('')
   // Comment composer stays collapsed until asked for. Auto-opens when the
@@ -1294,17 +1299,25 @@ Thank you!`
 
   // Comments as an amber note near the top of the order, where they get read:
   // usually a spelling fix on a standard order, or a reference photo and
-  // instructions on a custom one.
-  const commentsCallout = () => orderComments.length > 0 ? (
+  // instructions on a custom one. Notes that only record what the order
+  // already shows (proofs emailed, an email to the customer) are activity,
+  // folded into one quiet line under it (src/lib/orderNotes.ts).
+  const commentsCallout = () => {
+    const notes = orderComments.filter(c => c.imageUrl || !isActivityNote(c.text))
+    const activity = orderComments.filter(c => !c.imageUrl && isActivityNote(c.text))
+    if (!notes.length && !activity.length) return null
+    return (
+      <div className="space-y-1.5">
+        {notes.length > 0 && (
                     <div className="bg-amber-50 border border-amber-300 rounded-md px-3 py-2">
                       <div className="flex items-center gap-1.5 mb-1">
                         <MessageSquareText className="w-3.5 h-3.5 text-amber-700" />
                         <span className="text-[11px] font-semibold text-amber-800 uppercase tracking-wider">
-                          {orderComments.length === 1 ? 'Note on this order' : `${orderComments.length} notes on this order`}
+                          {notes.length === 1 ? 'Note on this order' : `${notes.length} notes on this order`}
                         </span>
                       </div>
                       <div className="space-y-1.5">
-                        {orderComments.map(comment => (
+                        {notes.map(comment => (
                           <div key={comment.id}>
                             {comment.imageUrl && (
                               <a href={comment.imageUrl} target="_blank" rel="noopener noreferrer">
@@ -1324,7 +1337,26 @@ Thank you!`
                         ))}
                       </div>
                     </div>
-  ) : null
+        )}
+        {activity.length > 0 && (
+          <div className="px-1">
+            <button type="button" onClick={() => setShowActivity(v => !v)} className="inline-flex items-center gap-1.5 text-[12px] text-off-black/45 hover:text-off-black">
+              <History className="w-3.5 h-3.5" />{activity.length} earlier update{activity.length === 1 ? '' : 's'}<span className="font-medium text-off-black/55 hover:underline">{showActivity ? 'Hide' : 'Show'}</span>
+            </button>
+            {showActivity && (
+              <ul className="mt-1 space-y-0.5 pl-5">
+                {activity.map(c => (
+                  <li key={c.id} className="text-[12px] text-off-black/55">
+                    {c.text} <span className="text-off-black/35">· {new Date(c.createdAt).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' })}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   if (!selectedOrder) return null
 
@@ -1507,6 +1539,10 @@ Thank you!`
                     // Stage-based collapse logic
                     const ds = selectedOrder.designStatus as DesignStatus
                     const isProductionStage = ['final_pdf_uploaded', 'sent_to_production'].includes(ds)
+                    // The design brief is for making the design: not started, designing, or revising. After that it
+                    // only matters again if the customer is talking to us (an open conversation is usually a change).
+                    const briefNeeded = ['not_started', 'in_progress', 'in_revision'].includes(ds || 'not_started')
+                      || (openConvos?.orderId === selectedOrder.id && openConvos.open > 0)
 
 
                     return (
@@ -1700,15 +1736,16 @@ Thank you!`
                           {proofActions.resending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Re-send proofs to customer
                         </button>
                       )}
-                      {selectedOrder.trackstarOrderType === 'custom' && proofActions && !isProductionStage && (
-                        <button onClick={proofActions.openMessages} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2" title="Ask the customer a question about the design; their reply comes back here">
-                          <MessageSquareText className="w-3.5 h-3.5" /> Message customer
+                      {/* The portal Q&A is retired: an order that used it keeps its history here. New questions go from Email customer from Support. */}
+                      {selectedOrder.trackstarOrderType === 'custom' && proofActions && proofActions.messageCount > 0 && !isProductionStage && (
+                        <button onClick={proofActions.openMessages} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2" title="Questions asked through the design portal, and the customer's answers">
+                          <MessageSquareText className="w-3.5 h-3.5" /> Portal messages
                           {proofActions.newReply
                             ? <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-purple-100 text-purple-700 no-underline">New reply</span>
-                            : proofActions.messageCount > 0 ? <span className="text-off-black/40 font-normal">({proofActions.messageCount})</span> : null}
+                            : <span className="text-off-black/40 font-normal">({proofActions.messageCount})</span>}
                         </button>
                       )}
-                      {/* Designers too (no Support access): the conversation opens in Support, unassigned. */}
+                      {/* Designers too: the conversation opens in Support assigned to them (support.own), so the reply comes back to their My Inbox. */}
                       {selectedOrder.customerEmail && (can('support') || can('orders.message_customer')) && (
                         <button onClick={() => setEmailingOrder(selectedOrder)} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2" title={`Email ${selectedOrder.customerEmail} from fast@ (opens a Support conversation; replies come into Support)`}>
                           <Mail className="w-3.5 h-3.5" /> Email customer from Support
@@ -1746,8 +1783,16 @@ Thank you!`
 
                   {/* The work: notes from the team, the step it is on, the proofs, and what the customer asked for. */}
                   <div className="order-1 md:order-none md:col-start-1 md:row-start-1 min-w-0 flex flex-col gap-4">
-                  {/* What the customer gave the designer, first: what they asked for, and their photo beside it. */}
-                  {selectedOrder.trackstarOrderType === 'custom' && !isProductionStage && (
+                  {/* What the customer gave the designer, first: what they asked for, and their photo beside it.
+                      Only while the design is being made. Once proofs are out or approved it steps aside
+                      (Upload final PDF is the job then), unless a conversation with the customer is open,
+                      which is usually a change to the design; a link brings it back. */}
+                  {selectedOrder.trackstarOrderType === 'custom' && !isProductionStage && !briefNeeded && briefShown !== selectedOrder.id && (
+                    <button type="button" onClick={() => setBriefShown(selectedOrder.id)} className="self-start inline-flex items-center gap-1.5 px-1 text-[12px] text-off-black/45 hover:text-off-black">
+                      <FileText className="w-3.5 h-3.5" />Creative direction{selectedOrder.photoPath ? ' and customer photo' : ''}<span className="font-medium text-off-black/55 hover:underline">Show</span>
+                    </button>
+                  )}
+                  {selectedOrder.trackstarOrderType === 'custom' && !isProductionStage && (briefNeeded || briefShown === selectedOrder.id) && (
                     <div className={`grid gap-3 ${selectedOrder.photoPath ? 'md:grid-cols-2' : ''}`}>
                       <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
                         <p className="text-[10px] font-semibold text-purple-600 uppercase tracking-wider mb-1">Creative Direction</p>
@@ -1793,7 +1838,9 @@ Thank you!`
 
                   {/* The customer's open Support conversations, at the top like on a
                       standard order: on a custom they are usually a change to the design. */}
-                  <ConversationPanel orderId={selectedOrder.id} enabled={!!selectedOrder.customerEmail && can('support')} onChanged={() => { fetchOrders() }} />
+                  {/* A designer (support.own) sees the conversations assigned to them (compose.js GET). */}
+                  <ConversationPanel orderId={selectedOrder.id} enabled={!!selectedOrder.customerEmail && (can('support') || can('support.own'))} onChanged={() => { fetchOrders() }}
+                    onLoaded={list => setOpenConvos({ orderId: selectedOrder.id, open: list.filter(t => t.status !== 'closed' || t.waiting).length })} />
 
                   {/* ═══ STAGE-SPECIFIC PRIMARY ACTION — always at the top ═══ */}
 

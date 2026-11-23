@@ -28,7 +28,8 @@ export default function SettingsModal({ team, unassignedCount, status, instagram
 }) {
   return (
     <ActionModal icon={Settings} title="Support settings" description="Routing, filtered senders, rules for Claude, drafting, the mailbox and Instagram." onClose={onClose} size="lg" bare>
-      {isAdmin && <RoutingRules team={team} unassignedCount={unassignedCount} onChanged={onChanged} />}
+      {/* New conversations route to people on Support; a designer (ownOnly) only gets what is handed to them. */}
+      {isAdmin && <RoutingRules team={team.filter(u => !u.ownOnly)} unassignedCount={unassignedCount} onChanged={onChanged} />}
       <FilterList filters={filters} onChanged={onChanged} />
       <ForwardersCard isAdmin={isAdmin} />
       <AutoReplyCard isAdmin={isAdmin} />

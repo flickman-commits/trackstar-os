@@ -50,6 +50,7 @@ export interface TaggableOrder {
   timeFromName?: string | null
   isExpedited?: boolean
   waitingOnCustomerSince?: string | null
+  customerRepliedAt?: string | null
   isBigSpender?: boolean
   oldDesign?: boolean
   newDesign?: boolean
@@ -156,6 +157,12 @@ export function getOrderTags(o: TaggableOrder): OrderTag[] {
     tags.push({ key: 'waiting-customer', label: 'Waiting on customer', sublabel: days < 1 ? 'today' : `${days}d`,
       tone: days >= 3 ? 'amber' : 'gray', weight: days >= 3 ? 0.5 : 1.5,
       title: `We emailed the customer ${days < 1 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`} and they have not replied. It clears when they reply or the conversation is closed in Support.` })
+  }
+
+  // A custom order's customer wrote to their designer in Support: an answer is owed.
+  if (o.customerRepliedAt && o.status !== 'completed') {
+    tags.push({ key: 'customer-replied', label: '💬 Customer replied', tone: 'amber', weight: -1.5,
+      title: 'The customer wrote back in Support and is waiting on an answer. Open the conversation from the order.' })
   }
 
   // Photo add-on changes the artwork, so it ranks above ordinary flags.

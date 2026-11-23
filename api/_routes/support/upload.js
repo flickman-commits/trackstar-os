@@ -14,8 +14,8 @@ const SAFE = /^(Only images|That file is over)/
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'POST, OPTIONS' })) return
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
-  // Designers attach files to Email customer on custom orders too.
-  const user = await requireAnyCapability(req, res, ['support', 'orders.message_customer'])
+  // Designers attach files to Email customer on custom orders, and to replies on their own conversations, too.
+  const user = await requireAnyCapability(req, res, ['support', 'support.own', 'orders.message_customer'])
   if (!user) return
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {}

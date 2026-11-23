@@ -9,7 +9,9 @@
  * included, which can carry script) only as a download.
  */
 import { setCors } from '../../_lib/auth.js'
-import { requireCapability } from '../../_lib/users.js'
+import { requireSupport } from '../../_lib/users.js'
+import { assertMessageAccess } from '../../../server/domain/support/access.js'
+import { isUserError } from '../../../server/domain/support/errors.js'
 import { messageAttachment } from '../../../server/domain/support/mailbox.js'
 
 const INLINE = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif', 'image/avif'])
@@ -17,12 +19,14 @@ const INLINE = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'im
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, OPTIONS' })) return
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
-  const user = await requireCapability(req, res, 'support')
+  const user = await requireSupport(req, res)
   if (!user) return
   const messageId = String(req.query?.message || '')
   const index = Number(req.query?.i)
   if (!messageId || !Number.isInteger(index) || index < 0) return res.status(400).json({ error: 'message and i are required' })
   try {
+    // A designer (support.own): files on their own conversations only.
+    await assertMessageAccess(user, messageId)
     const a = await messageAttachment(messageId, index)
     if (!a) return res.status(404).json({ error: 'No such attachment' })
     const mime = String(a.mimeType || '').toLowerCase()
@@ -36,6 +40,7 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'private, max-age=86400')
     return res.status(200).send(a.bytes)
   } catch (err) {
+    if (isUserError(err)) return res.status(err.status || 403).json({ error: err.message })
     console.error('[support/attachment]', err)
     return res.status(500).json({ error: 'Could not load that file from Gmail' })
   }

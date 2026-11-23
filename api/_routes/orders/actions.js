@@ -530,8 +530,8 @@ async function handleNotifyCustomDelay({ orderNumber, daysLate }, res, actor) {
     if (await customerMailReady()) {
       await sendOrderEmail({
         order: existing, subject: delaySubject, html: emailHtml, text: delayText, actor, waiting: false,
+        // No order note: the order's delay banner says it was sent.
         event: `Delay notice emailed for ${displayNum} (${days} day${days === 1 ? '' : 's'} late)`,
-        comment: `Delay notice emailed to the customer from fast@ (${days} day${days === 1 ? '' : 's'})`,
       })
     } else {
       await sendEmail({ from: fromEmail, to: [existing.customerEmail], replyTo: 'fast@trackstar.art', subject: delaySubject, html: emailHtml, text: delayText })
@@ -616,7 +616,6 @@ async function handleMessageCustomer({ orderId, body }, res, actor) {
       await sendOrderEmail({
         order: existing, subject: questionSubject, html: emailHtml, text: questionText, actor, waiting: true,
         event: `Designer question emailed for ${displayNum}: "${text.slice(0, 120)}"`,
-        comment: `Designer question emailed to the customer from fast@: "${text.slice(0, 160)}"`,
       })
     } else {
       await sendEmail({ from: fromEmail, to: [existing.customerEmail], replyTo: 'fast@trackstar.art', subject: questionSubject, html: emailHtml, text: questionText })

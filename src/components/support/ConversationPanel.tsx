@@ -18,16 +18,16 @@ import { chip } from '@/lib/ui'
  * (compose.js threadWaiting); it shows with the open ones. Not waiting
  * undoes a wrong guess, Mark waiting covers a request with no question mark.
  */
-export default function ConversationPanel({ orderId, enabled, onChanged }: { orderId: string; enabled: boolean; onChanged?: () => void }) {
+export default function ConversationPanel({ orderId, enabled, onChanged, onLoaded }: { orderId: string; enabled: boolean; onChanged?: () => void; /** The conversations, once read: the order view shows the design brief again while one is open. */ onLoaded?: (threads: OrderConversation[]) => void }) {
   const [threads, setThreads] = useState<OrderConversation[] | null>(null)
   const [showClosed, setShowClosed] = useState(false)
   useEffect(() => {
     if (!enabled) return
     let live = true
     setThreads(null); setShowClosed(false)
-    supportApi.orderConversations(orderId, true).then(r => { if (live) setThreads(r.threads) }).catch(() => { if (live) setThreads([]) })
+    supportApi.orderConversations(orderId, true).then(r => { if (live) { setThreads(r.threads); onLoaded?.(r.threads) } }).catch(() => { if (live) { setThreads([]); onLoaded?.([]) } })
     return () => { live = false }
-  }, [orderId, enabled])
+  }, [orderId, enabled]) // eslint-disable-line react-hooks/exhaustive-deps
   const [marking, setMarking] = useState<string | null>(null)
   const markWaiting = async (id: string) => {
     setMarking(id)

@@ -7,7 +7,7 @@ export type InboxSort = 'waiting' | 'newest' | 'oldest' | 'priority'
 /** Where the conversation happens: the fast@ mailbox, or a DM to @trackstar_art. */
 export type Channel = 'email' | 'instagram'
 
-export interface Teammate { id: string; firstName: string; lastName: string }
+export interface Teammate { id: string; firstName: string; lastName: string; /** Sees only the conversations assigned to them (a designer, support.own). */ ownOnly?: boolean }
 
 export interface ThreadRow {
   id: string
@@ -197,6 +197,8 @@ export interface DamageReport {
 }
 
 export interface ThreadDetail extends ThreadRow {
+  /** Opened by a designer who sees only their own conversations: no other orders, conversations or team. */
+  ownOnly?: boolean
   gmailThreadId: string | null
   createdAt: string
   damage?: DamageReport | null

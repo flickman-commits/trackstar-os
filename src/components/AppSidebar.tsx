@@ -333,7 +333,8 @@ function useFulfillmentReturn() {
 function railItems(can: (c: Capability) => boolean, fulfillmentTo = '/'): Item[] {
   return [
     { id: 'fulfillment', label: 'Fulfillment', icon: Package, to: fulfillmentTo, title: 'Orders to personalize, custom designs and partners' },
-    ...(can('support') ? [{ id: 'support', label: 'Support', icon: Inbox, to: '/support', title: 'The shared inbox for fast@trackstar.art' } as Item] : []),
+    ...(can('support') ? [{ id: 'support', label: 'Support', icon: Inbox, to: '/support', title: 'The shared inbox for fast@trackstar.art' } as Item]
+      : can('support.own') ? [{ id: 'support', label: 'Support', icon: Inbox, to: '/support', title: 'Your conversations with the customers on your custom orders' } as Item] : []),
     // Creators is admin-only, same as the route behind it. Sales is for anyone
     // on the Attio workspace; the API says no to everyone else.
     ...(can('creators') ? [{ id: 'creators', label: 'Creators', icon: Users, to: '/creators', title: 'The creator programme' } as Item] : []),

@@ -27,7 +27,7 @@ function ViewRow({ row, active, onClick }: { row: Row; active: boolean; onClick:
   )
 }
 
-export default function ViewsColumn({ view, counts, team, me, onView, onMacros, onSettings, onRequestFeature, onHours, onHelp }: {
+export default function ViewsColumn({ view, counts, team, me, onView, onMacros, onSettings, onRequestFeature, onHours, onHelp, ownOnly = false }: {
   view: InboxView
   counts: InboxCounts | null
   team: Teammate[]
@@ -39,6 +39,8 @@ export default function ViewsColumn({ view, counts, team, me, onView, onMacros, 
   /** Log and submit your own hours (people with the hours capability). */
   onHours?: () => void
   onHelp?: () => void
+  /** A designer who sees only their own conversations: My Inbox, and nothing of the team's. */
+  ownOnly?: boolean
 }) {
   const c = counts
   const top: Row[] = [
@@ -46,6 +48,23 @@ export default function ViewsColumn({ view, counts, team, me, onView, onMacros, 
     { id: 'all', label: 'All open', icon: Layers, count: c?.all },
     { id: 'inbox', label: 'Your inbox', icon: Inbox, count: c?.inbox },
   ]
+  if (ownOnly) {
+    return (
+      <nav className="hidden lg:flex w-[168px] xl:w-[184px] shrink-0 flex-col border-r border-border-gray bg-subtle-gray/60 min-h-0 overflow-y-auto">
+        <div className="px-2 pt-3 pb-1 space-y-0.5">
+          <ViewRow row={{ id: 'inbox', label: 'My Inbox', icon: Inbox, count: c?.inbox }} active onClick={() => onView('inbox')} />
+        </div>
+        <p className="px-5 pt-2 text-[11px] leading-snug text-off-black/45">The customers on your custom orders. Anything else goes to Support.</p>
+        {onHours && (
+          <div className="mt-auto px-2 py-3 border-t border-border-gray">
+            <button onClick={onHours} className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] text-off-black/70 hover:bg-off-black/[0.04] hover:text-off-black transition-colors">
+              <Clock className="w-4 h-4 text-off-black/45" /><span className="flex-1 text-left">Hours</span>
+            </button>
+          </div>
+        )}
+      </nav>
+    )
+  }
   const states: Row[] = [
     { id: 'waiting', label: 'Waiting on customer', icon: Clock, count: c?.waiting },
     { id: 'escalated', label: 'Escalated', icon: AlertTriangle, count: c?.escalated },

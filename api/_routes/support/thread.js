@@ -24,7 +24,7 @@
  */
 import { seesMoney } from '../../_lib/money.js'
 import { setCors } from '../../_lib/auth.js'
-import { requireCapability, recordAudit } from '../../_lib/users.js'
+import { requireSupport, recordAudit } from '../../_lib/users.js'
 import { getThread, assign, setStatus, snooze, setPriority, setTags, addNote, deleteNote, markRead, markUnread, noteRow, setProposal, linkOrder, unlinkOrder, setNotWaiting } from '../../../server/domain/support/threads.js'
 import { setDamage } from '../../../server/domain/support/damage.js'
 import { escalate } from '../../../server/domain/support/actions.js'
@@ -32,25 +32,33 @@ import { draftThread } from '../../../server/domain/support/draft.js'
 import { listMockups } from '../../../server/domain/support/mockups.js'
 import { mergeThreads } from '../../../server/domain/support/merge.js'
 import { publicMessage, publicStatus, isUserError } from '../../../server/domain/support/errors.js'
+import { isOwnOnly, assertThreadAccess, assertOwnAssign, narrowThreadForOwn, OWN_THREAD_ACTIONS } from '../../../server/domain/support/access.js'
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, POST, OPTIONS' })) return
-  const user = await requireCapability(req, res, 'support')
+  const user = await requireSupport(req, res)
   if (!user) return
   try {
     if (req.method === 'GET') {
       const id = String(req.query?.id || '')
       if (!id) return res.status(400).json({ error: 'id is required' })
+      await assertThreadAccess(user, id)
       const t = await getThread(id, { userId: user.id, money: seesMoney(user) })
       if (!t) return res.status(404).json({ error: 'No such thread' })
       await markRead(id, user.id)
-      return res.status(200).json({ ...t, unread: false })
+      return res.status(200).json({ ...(isOwnOnly(user) ? await narrowThreadForOwn(t, user.id) : t), unread: false })
     }
 
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {}
     const id = String(body.id || '')
     if (!id) return res.status(400).json({ error: 'id is required' })
+    // A designer (support.own): only their own conversations, and only the actions in OWN_THREAD_ACTIONS.
+    if (isOwnOnly(user)) {
+      if (!OWN_THREAD_ACTIONS.has(body.action)) return res.status(403).json({ error: 'That is not part of your role. Ask Matt if you need it.', code: 'not_allowed' })
+      await assertThreadAccess(user, id)
+      if (body.action === 'assign') assertOwnAssign(user, body.assigneeId ? String(body.assigneeId) : null)
+    }
     const audit = (summary, detail) => recordAudit({ action: `support.${body.action}`, summary, detail: { threadId: id, ...detail }, actor: user })
 
     switch (body.action) {

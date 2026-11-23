@@ -22,6 +22,7 @@ import { stripQuoted } from './mailbox.js'
 import { can } from '../../../api/_lib/roles.js'
 import { replyWindow } from './instagram.js'
 import { UserError } from './errors.js'
+import { ownInboxWhere } from './access.js'
 import { customerRaceName } from '../../scrapers/raceNameNormalization.js'
 import { getOrderTotalUsd, BIG_SPENDER_THRESHOLD_USD } from '../../lib/orderValue.js'
 import { replacementsFor } from './replacements.js'
@@ -125,6 +126,29 @@ export async function listThreads({ view = 'all', userId, q = '', sort = 'waitin
   }
 }
 
+/**
+ * The inbox for someone who sees only their own conversations (access.js):
+ * every conversation assigned to them that is not closed, the ones where the
+ * customer wrote last first, then the ones waiting on the customer. Snoozed
+ * ones are in it too: they have no other list to find them in. The counts
+ * carry only theirs; every other view reads zero.
+ */
+export async function listOwnThreads({ userId, q = '', sort = 'waiting', limit = 150 } = {}) {
+  const where = { AND: [{ filtered: false, NOT: AUTOMATION_ONLY }, ownInboxWhere(userId), searchWhere(q)] }
+  const [threads, inbox] = await Promise.all([
+    prisma.supportThread.findMany({ where, orderBy: orderBy(SORTS.includes(sort) ? sort : 'waiting'), take: limit, include: { assignee: { select: TEAM_SELECT } } }),
+    prisma.supportThread.count({ where: { AND: [{ filtered: false, NOT: AUTOMATION_ONLY }, ownInboxWhere(userId), NEEDS_US] } }),
+  ])
+  const needsThem = t => NEEDS_US.status.in.includes(t.status)
+  threads.sort((a, b) => Number(needsThem(b)) - Number(needsThem(a)))
+  const reads = threads.length ? await prisma.supportRead.findMany({ where: { userId, threadId: { in: threads.map(t => t.id) } } }) : []
+  const readAt = new Map(reads.map(r => [r.threadId, r.readAt]))
+  return {
+    threads: threads.map(t => row(t, readAt.get(t.id))),
+    counts: { inbox, mentions: 0, unassigned: 0, all: 0, waiting: 0, escalated: 0, snoozed: 0, byAssignee: {} },
+  }
+}
+
 function row(t, readAt) {
   return {
     id: t.id,
@@ -152,11 +176,19 @@ function row(t, readAt) {
   }
 }
 
-/** Who can work the inbox: active people whose role includes Support (admins always). */
+/**
+ * Who can work the inbox: active people whose role includes Support (admins
+ * always), and the designers who see only their own conversations
+ * (`ownOnly`), so Support can hand a customer's email to the designer on
+ * their custom order.
+ */
 export async function team() {
   const users = await prisma.user.findMany({ where: { isActive: true }, orderBy: { firstName: 'asc' }, select: { ...TEAM_SELECT, role: true, extraRoles: true, extraCaps: true, deniedCaps: true } })
   const out = []
-  for (const u of users) if (await can(u, 'support')) out.push({ id: u.id, firstName: u.firstName, lastName: u.lastName })
+  for (const u of users) {
+    if (await can(u, 'support')) out.push({ id: u.id, firstName: u.firstName, lastName: u.lastName })
+    else if (await can(u, 'support.own')) out.push({ id: u.id, firstName: u.firstName, lastName: u.lastName, ownOnly: true })
+  }
   return out
 }
 
