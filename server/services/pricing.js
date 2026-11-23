@@ -239,3 +239,43 @@ export async function buildPricingGrid({ quantity = 1, shippingDestination = 'US
 
   return rows
 }
+
+/**
+ * A channel quote off grid rows, the same arithmetic as the Pricing
+ * Calculator (src/components/PricingCalculator.tsx), for callers with no
+ * screen (the MCP's pricing_quote). Keep the two in step.
+ *
+ *   retail     one print per order: the shopper's flat shipping under the
+ *              free-shipping line counts as ours, branding is carried, Shopify fee.
+ *   wholesale  one consignment of `quantity` (or a parcel to each runner):
+ *              retail less the discount, whole dollars, no branding, Stripe fee.
+ *
+ * `rows` come from buildPricingGrid at `quantity`; `singleRows` (key ->
+ * qty-1 order shipping) only for individual shipping. Dollars in, dollars out.
+ */
+export function quoteRows(rows, { channel = 'retail', quantity = 1, discountPct = 0, includePhoto = false, shipMode = 'consignment', shippingTotal = null, singleRows = null } = {}) {
+  const qty = channel === 'retail' ? 1 : Math.max(1, quantity)
+  const feePercent = channel === 'retail' ? SHOPIFY_FEE_PERCENT : STRIPE_FEE_PERCENT
+  const feeFixed = channel === 'retail' ? SHOPIFY_FEE_FIXED : STRIPE_FEE_FIXED
+  return rows.filter(r => !r.error).map(r => {
+    const base = r.retailPrice ?? 0
+    const offSheet = channel === 'wholesale' && WHOLESALE_EXCLUDED_SIZES.includes(r.sizeLabel)
+    const price = channel === 'retail' ? base : roundHalfUp(base * (1 - discountPct / 100))
+    const unitShipping = channel === 'retail' ? r.orderShipping / qty
+      : shipMode === 'individual' ? (singleRows?.[r.key] ?? r.orderShipping / qty)
+      : (shippingTotal != null ? shippingTotal : r.orderShipping) / qty
+    const unitBranding = channel === 'retail' ? r.brandingCost / qty : 0
+    const unitCost = r.productionCost + unitShipping + unitBranding + (includePhoto ? PHOTO_ADDON_COST : 0)
+    const unitPrice = price + (includePhoto ? PHOTO_ADDON_PRICE : 0)
+    const shippingCharged = channel === 'retail' && FREE_SHIPPING_OVER > 0 && unitPrice < FREE_SHIPPING_OVER ? RETAIL_SHIPPING_CHARGE : 0
+    const revenue = unitPrice + shippingCharged
+    const unitFee = revenue * feePercent + feeFixed / qty
+    const gp = revenue - unitCost - unitFee
+    return {
+      key: r.key, sizeLabel: r.sizeLabel, frame: r.frame, frameLabel: r.frameLabel, offSheet,
+      listPrice: round(base + (includePhoto ? PHOTO_ADDON_PRICE : 0)), unitPrice: round(unitPrice), shippingCharged, revenue: round(revenue),
+      productionCost: round(r.productionCost), unitShipping: round(unitShipping), unitBranding: round(unitBranding), unitCost: round(unitCost), unitFee: round(unitFee),
+      grossProfit: round(gp), grossMarginPct: revenue > 0 ? round((gp / revenue) * 100, 1) : null,
+    }
+  })
+}
