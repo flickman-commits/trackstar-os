@@ -275,7 +275,7 @@ export default async function handler(req, res) {
     // not tell a future race from a missing result, and new orders for a race
     // not yet run read "Needs research" until research happened to run. Also
     // what the render pipeline can do right now, for the pipeline status.
-    const { raceFor, templateKeys, gaps, workerOnline } = await loadPipelineContext()
+    const { raceForOrder, templateKeys, gaps, workerOnline } = await loadPipelineContext()
 
     // Transform orders to include flattened research data
     const transformedOrders = orders.map(order => {
@@ -285,7 +285,8 @@ export default async function handler(req, res) {
       // Compute effective values (override if present, else original)
       const effectiveRaceYear = order.yearOverride ?? order.raceYear
       const effectiveRaceName = order.raceNameOverride ?? order.raceName
-      const race = research?.race || raceFor(effectiveRaceName, effectiveRaceYear)
+      // Date and weather from the distance's own row when it runs on another day (races/eventRaces.js).
+      const race = raceForOrder(order, research)
       const effectiveRunnerName = order.runnerNameOverride ?? order.runnerName
 
       // Check if any overrides are present
@@ -545,7 +546,7 @@ export default async function handler(req, res) {
       const o = byId.get(t.id)
       if (!o || o.trackstarOrderType !== 'standard') continue
       const research = pickResearch(o.runnerResearch, o.raceNameOverride ?? o.raceName, o.yearOverride ?? o.raceYear, getCanonicalRaceName)
-      const race = research?.race || raceFor(o.raceNameOverride ?? o.raceName, o.yearOverride ?? o.raceYear)
+      const race = raceForOrder(o, research)
       t.pipeline = pipelineFor({ order: o, research, race, render: o.renderJobs?.find(j => !j.spec?.altSize) || null, hasScraper: t.hasScraperAvailable, templates: templateKeys, noTimeGaps: gaps, photoUnpaid: t.photoUnpaid, photoMissing: t.photoMissing, workerOnline, waitingOnCustomer: t.waitingOnCustomerSince || null, emailBounced: t.emailBouncedAt || null })
     }
 

@@ -4,6 +4,7 @@
  * Update order override fields (manual corrections)
  */
 
+import { weatherWindowClosed } from '../../../server/domain/races/weatherWindow.js'
 import prisma from '../../_lib/prisma.js'
 import { setCors, requireAdmin } from '../../_lib/auth.js'
 import { withoutRawOrderData } from '../../_lib/money.js'
@@ -80,7 +81,10 @@ export default async function handler(req, res) {
       if (weatherTouched) {
         updateFields.weatherFetchedAt = new Date()
         updateFields.weatherDetails = JSON.stringify({ method: 'Entered by hand', by: actor?.email || 'manual', at: new Date().toISOString() })
-        updateFields.weatherConfirmedAt = new Date(); updateFields.weatherConfirmedBy = actor?.email || 'manual'
+        // Typed in before the race (for a print made before race day): never confirmed,
+        // so it prints only on a render-before-race order (races/weatherWindow.js).
+        const early = !weatherWindowClosed(before.raceDate)
+        updateFields.weatherConfirmedAt = early ? null : new Date(); updateFields.weatherConfirmedBy = early ? null : (actor?.email || 'manual')
         try {
           await noteWeatherChange({ raceId, before: { weatherTemp: before.weatherTemp, weatherCondition: before.weatherCondition }, after: { weatherTemp: updateFields.weatherTemp ?? before.weatherTemp, weatherCondition: updateFields.weatherCondition ?? before.weatherCondition }, by: actor?.email || 'manual', reason: raceData?.reason, actor })
         } catch (e) { return res.status(400).json({ error: e.message }) }
@@ -259,7 +263,10 @@ export default async function handler(req, res) {
       if (Object.keys(raceUpdate).length) {
         raceUpdate.weatherFetchedAt = new Date()
         raceUpdate.weatherDetails = JSON.stringify({ method: 'Entered by hand', by: actor?.email || 'manual', at: new Date().toISOString() })
-        raceUpdate.weatherConfirmedAt = new Date(); raceUpdate.weatherConfirmedBy = actor?.email || 'manual'
+        // Typed in before the race (for a print made before race day): never confirmed,
+        // so it prints only on a render-before-race order (races/weatherWindow.js).
+        const early = !weatherWindowClosed(before?.raceDate)
+        raceUpdate.weatherConfirmedAt = early ? null : new Date(); raceUpdate.weatherConfirmedBy = early ? null : (actor?.email || 'manual')
         try {
           await noteWeatherChange({ raceId, before: { weatherTemp: before?.weatherTemp, weatherCondition: before?.weatherCondition }, after: { weatherTemp: raceUpdate.weatherTemp ?? before?.weatherTemp, weatherCondition: raceUpdate.weatherCondition ?? before?.weatherCondition }, by: actor?.email || 'manual', reason: req.body.reason, actor })
         } catch (e) { return res.status(400).json({ error: e.message }) }

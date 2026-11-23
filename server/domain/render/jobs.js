@@ -10,7 +10,9 @@ import prisma from '../../db.js'
 import { buildSpec, SPEC_SELECT, SIZES, TRI_TEMPLATE } from './spec.js'
 import { isTriathlon } from '../orders/triathlon.js'
 import { availableTemplateKeys, noTimeGaps, onlineWorkers as onlineWorkersList } from './templates.js'
-import { getCanonicalRaceName } from '../../scrapers/index.js'
+import { getCanonicalRaceName, separateDayEvents } from '../../scrapers/index.js'
+import { ensureEventRaceRows } from '../races/eventRaces.js'
+import { computeRaceWeather, weatherSetEarly, weatherWindowClosed } from '../races/verification.js'
 import { storage as sharedStorage, storedSince } from '../../lib/storage.js'
 import { isConnectionOn } from '../../lib/connections.js'
 import { printedDiffers } from './printed.js'
@@ -54,13 +56,21 @@ export async function checkOrder(orderId, ctx = {}) {
   const order = ctx.order || await prisma.order.findUnique({ where: { id: String(orderId) }, select: SPEC_SELECT })
   if (!order) throw new Error('Order not found')
   const templates = ctx.templates || await availableTemplates()
-  const result = buildSpec(order, templates, await raceRowFor(order, ctx.raceCache), ctx.gaps || await noTimeGaps(), { allowUnpaidPhoto: Boolean(ctx.allowUnpaidPhoto) })
+  const raceRow = await raceRowFor(order, ctx.raceCache)
+  const eventRows = await eventRowsFor(order, raceRow, ctx.raceCache)
+  const raceLookup = (name, year) => eventRows.find(r => r.raceName === name && r.year === year) || null
+  const result = buildSpec(order, templates, raceRow, ctx.gaps || await noTimeGaps(), { allowUnpaidPhoto: Boolean(ctx.allowUnpaidPhoto), raceLookup })
   if (!result.ok && !templates.length) result.reasons.unshift('No render worker has checked in for 30 days')
   return { order, ...result }
 }
 
 /** The Race row by name and year, trying the canonical name too. */
 async function raceRowFor(order, cache) {
+  const row = await raceRowForInner(order, cache)
+  return await refreshEarlyWeather(row, cache)
+}
+
+async function raceRowForInner(order, cache) {
   const name = order.raceNameOverride ?? order.raceName, year = order.yearOverride ?? order.raceYear
   if (!name || !year) return null
   const key = `${name}|${year}`
@@ -68,6 +78,37 @@ async function raceRowFor(order, cache) {
   const row = await raceRowLookup(name, year)
   cache?.set(key, row)
   return row
+}
+
+/**
+ * The race year's rows for distances run on their own day (races/eventRaces.js),
+ * made on first need. Weather typed in before the race is recalculated here
+ * once race day's window has closed, so the year does not sit on it.
+ */
+/**
+ * Weather typed in before the race (for a print made early) is recalculated
+ * from race day as soon as the window has closed. A person still confirms it.
+ */
+async function refreshEarlyWeather(row, cache) {
+  if (!row?.id || !weatherSetEarly(row) || !weatherWindowClosed(row.raceDate)) return row
+  const key = `early|${row.id}`
+  if (cache?.has(key)) return cache.get(key)
+  let out = row
+  try { out = await computeRaceWeather(row.id, { by: 'system', reason: 'Weather had been typed in before the race; recalculated from race day' }) }
+  catch (err) { console.warn(`[render] recalculating early weather for ${row.raceName} ${row.year}: ${err.message}`) }
+  cache?.set(key, out)
+  return out
+}
+
+async function eventRowsFor(order, raceRow, cache) {
+  const name = raceRow?.raceName || (order.raceNameOverride ?? order.raceName), year = raceRow?.year || (order.yearOverride ?? order.raceYear)
+  if (!name || !year || !separateDayEvents(name, year).length) return []
+  const key = `events|${name}|${year}`
+  if (cache?.has(key)) return cache.get(key)
+  let rows = []
+  try { rows = await ensureEventRaceRows(name, year, { mainRace: raceRow }) } catch (err) { console.warn(`[render] event rows for ${name} ${year}: ${err.message}`) }
+  cache?.set(key, rows)
+  return rows
 }
 
 async function raceRowLookup(name, year) {

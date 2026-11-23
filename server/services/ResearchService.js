@@ -11,8 +11,10 @@
  */
 import { paceFromTypedTime } from '../domain/research/customerPace.js'
 import prisma from '../db.js'
-import { getScraperForRace, hasScraperForRace, getCanonicalRaceName, namedEventsFor, isRacePublicSafe, onlyEventFor } from '../scrapers/index.js'
+import { getScraperForRace, hasScraperForRace, getCanonicalRaceName, namedEventsFor, isRacePublicSafe, onlyEventFor, eventTypesFor } from '../scrapers/index.js'
 import { ensureOverridesLoaded } from '../scrapers/scraperOverrides.js'
+import { computeRaceWeather, weatherSetEarly, weatherWindowClosed } from '../domain/races/verification.js'
+import { ensureEventRaceRows } from '../domain/races/eventRaces.js'
 import WeatherService from './WeatherService.js'
 import { firstNamesEquivalent } from '../scrapers/nicknames.js'
 import { yearUnknown, YearUnknownError } from '../domain/orders/yearUnknown.js'
@@ -416,12 +418,34 @@ export class ResearchService {
       })
     }
 
+    // Which distance they ran. Said at checkout, or the race has only one
+    // (Santa Barbara is a half, and 2:05 over 26.2 printed 4:46, 9207). A race
+    // with several and none said (Philadelphia 2026: three halves typed with no
+    // distance printed as marathons at 4:30, 5:58 and 6:35 a mile): the official
+    // results say which one. That lookup only names the distance; their time
+    // is still what prints. Not found there, nothing is guessed: the order
+    // waits for a person to set the distance.
+    const severalDistances = eventTypesFor(effectiveRaceName).length > 1
+    let distance = order.customerEventType || onlyEventFor(effectiveRaceName) || (severalDistances ? null : 'Marathon')
+    let distanceNote = null
+    if (!distance && order.customerFinishTime && hasScraperForRace(effectiveRaceName)) {
+      try {
+        const r = await this.findRunner(effectiveRaceName, effectiveRaceYear, effectiveRunnerName, { bib: order.customerBib || null, skipLastNameFallback: true })
+        const theirBib = !order.customerBib || String(r?.bibNumber || '').replace(/^0+/, '').toLowerCase() === String(order.customerBib).trim().replace(/^0+/, '').toLowerCase()
+        if (r?.found && r.eventType && theirBib) {
+          distance = r.eventType
+          distanceNote = `They gave no distance; the official results have ${r.runnerName || effectiveRunnerName}${r.bibNumber ? ` (bib ${r.bibNumber})` : ''} in the ${r.eventType}, so the pace is worked out over that distance.`
+        }
+      } catch (err) {
+        console.warn(`[ResearchService] Distance lookup for ${orderNumber} failed: ${err.message}`)
+      }
+      if (!distance) distanceNote = 'They gave a time but no distance, and the official results did not settle which one they ran. Set the distance under Runner > Edit so the pace and the design match.'
+    }
+
     // A customer who typed a time but no pace gets the pace worked out from
-    // their time and the event's distance (customerPace.js). Their time is
-    // used exactly as given; only the missing pace is filled in.
-    // No event on the order means a marathon, unless the race has only one
-    // distance: Santa Barbara is a half, and 2:05 over 26.2 printed 4:46 (9207).
-    const derivedPace = order.customerPace ? null : paceFromTypedTime(order.customerFinishTime, order.customerEventType || onlyEventFor(effectiveRaceName))
+    // their time and that distance (customerPace.js). Their time is used
+    // exactly as given; only the missing pace is filled in.
+    const derivedPace = order.customerPace || !distance ? null : paceFromTypedTime(order.customerFinishTime, distance)
 
     // A bib and no time (Portland 2026, 9203; Austin 2025, 8938): the print
     // still needs a time, and only the official results have it. Look the
@@ -449,7 +473,7 @@ export class ResearchService {
       bibNumber: order.customerBib || null,
       officialTime: order.customerFinishTime || official?.officialTime || null,
       officialPace: order.customerPace || derivedPace || official?.officialPace || null,
-      eventType: order.customerEventType || official?.eventType || null,
+      eventType: order.customerEventType || official?.eventType || (order.customerFinishTime ? distance : null) || null,
       yearFound: effectiveRaceYear,
       researchStatus: 'found',
       source: verified ? 'customer_verified' : 'customer_supplied',
@@ -457,7 +481,7 @@ export class ResearchService {
         ? 'Customer-confirmed via Instant Lookup (matched official results)'
         : official
           ? `The customer gave bib ${order.customerBib} and no time; time ${official.officialTime} and pace from the official results row for that bib.`
-          : `Entered by the customer at checkout, not matched against official results. Their numbers, used as given.${derivedPace ? ` Pace ${derivedPace} calculated from their time.` : ''}`,
+          : `Entered by the customer at checkout, not matched against official results. Their numbers, used as given.${derivedPace ? ` Pace ${derivedPace} calculated from their time.` : ''}${distanceNote ? ` ${distanceNote}` : ''}`,
       // The runner's own page when the timing site has one, else the race's results list.
       resultsUrl: ownPage || race.resultsUrl || null,
       possibleMatches: null,
@@ -596,57 +620,39 @@ export class ResearchService {
       console.log(`[ResearchService] Created race record: ${race.id}`)
     }
 
-    // Automatically fetch weather if not already cached
-    if (!race.weatherFetchedAt && race.raceDate && race.location) {
-      console.log(`[ResearchService] Auto-fetching weather for race ${race.id}`)
-      race = await this.fetchWeatherForRace(race.id)
+    // Weather by our calculation (7am to 1pm average, with its breakdown), only
+    // once race day's window has closed, and again when what is on the row was
+    // typed in before the race (races/weatherWindow.js). A person confirms it.
+    if (race.raceDate && race.location && (!race.weatherFetchedAt || weatherSetEarly(race)) && weatherWindowClosed(race.raceDate)) {
+      console.log(`[ResearchService] Computing weather for race ${race.id}`)
+      try { race = await computeRaceWeather(race.id, { by: 'system', reason: 'Weather had been typed in before the race; recalculated from race day' }) }
+      catch (err) { console.warn(`[ResearchService] Weather for race ${race.id}: ${err.message}`) }
     }
+
+    // Distances run on their own day get their own row, date and weather (races/eventRaces.js).
+    try { await ensureEventRaceRows(race.raceName, race.year, { mainRace: race }) }
+    catch (err) { console.warn(`[ResearchService] Event rows for ${race.raceName} ${race.year}: ${err.message}`) }
 
     return race
   }
 
   /**
-   * Fetch weather data for a race (if not already fetched)
-   * Uses historical weather API based on race date and location
+   * Weather for a race year, by our calculation (computeRaceWeather: the 7am
+   * to 1pm average with its breakdown), only once race day's window has
+   * closed. A row that has weather keeps it, unless it was typed in before the
+   * race. A person confirms it before it prints.
    * @param {number} raceId
-   * @returns {Promise<Object>} Updated race with weather
+   * @returns {Promise<Object>} the race row
    */
   async fetchWeatherForRace(raceId) {
-    const race = await prisma.race.findUnique({
-      where: { id: raceId }
-    })
-
-    if (!race) {
-      throw new Error(`Race not found: ${raceId}`)
-    }
-
-    // Skip if weather already fetched
-    if (race.weatherFetchedAt) {
-      console.log(`[ResearchService] Weather already cached for race ${raceId}`)
-      return race
-    }
-
-    // Skip if we don't have date/location
-    if (!race.raceDate || !race.location) {
-      console.log(`[ResearchService] Cannot fetch weather - missing date or location`)
-      return race
-    }
-
-    console.log(`[ResearchService] Fetching weather for ${race.raceName} ${race.year}`)
-
+    const race = await prisma.race.findUnique({ where: { id: raceId } })
+    if (!race) throw new Error(`Race not found: ${raceId}`)
+    if (race.weatherFetchedAt && !weatherSetEarly(race)) return race
+    if (!race.raceDate || !race.location || !weatherWindowClosed(race.raceDate)) return race
     try {
-      const weather = await this.getHistoricalWeather(race.raceDate, race.location)
-
-      return await prisma.race.update({
-        where: { id: raceId },
-        data: {
-          weatherTemp: weather.temp,
-          weatherCondition: weather.condition,
-          weatherFetchedAt: new Date()
-        }
-      })
+      return await computeRaceWeather(race.id, { by: 'system', reason: 'Weather had been typed in before the race; recalculated from race day' })
     } catch (error) {
-      console.error(`[ResearchService] Weather fetch failed:`, error.message)
+      console.error(`[ResearchService] Weather for race ${raceId}:`, error.message)
       return race
     }
   }

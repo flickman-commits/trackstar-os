@@ -18,6 +18,8 @@
 import prisma from '../../db.js'
 import { recordAudit } from '../../../api/_lib/users.js'
 import { WeatherService } from '../../services/WeatherService.js'
+import { weatherWindowClosesAt, weatherWindowClosed, breakdownTimezone } from './weatherWindow.js'
+import { eventRaceName } from './eventRaceName.js'
 
 export const VERIFIED_SOURCES = ['config', 'manual', 'researched']
 
@@ -29,13 +31,32 @@ export function dateVerified(race) {
   return Boolean(race.raceDateSourceUrl || race.raceDateEvidence)
 }
 
+export { weatherWindowClosesAt, weatherWindowClosed } from './weatherWindow.js'
+
 /**
- * Weather is fit to print when it exists for a verified date. setRaceDate
- * clears the weather whenever the date changes, so weather on a row is
- * always the current date's weather.
+ * Weather saved or confirmed before the race-morning window closed: typed in
+ * for a print made before race day (Philadelphia and CIM 2026 were entered on
+ * Nov 12 and 13 for a creator's early print, and confirmed for every order of
+ * the year). Only a render-before-race print may use it; every other print
+ * waits until it is calculated from the race day.
+ */
+export function weatherSetEarly(race) {
+  const at = weatherWindowClosesAt(race?.raceDate, breakdownTimezone(race?.weatherDetails))
+  if (!at || !race?.weatherTemp) return false
+  const early = d => d && new Date(d).getTime() < at.getTime()
+  return Boolean(early(race.weatherFetchedAt) || early(race.weatherConfirmedAt))
+}
+
+export const WEATHER_SET_EARLY = 'Weather was set before the race was over: recalculate it from race day'
+
+/**
+ * Weather is fit to print when it exists for a verified date, was set after
+ * the race, and a person confirmed it. setRaceDate clears the weather
+ * whenever the date changes, so weather on a row is always the current
+ * date's weather.
  */
 export function weatherReady(race) {
-  return Boolean(race?.weatherTemp && race?.weatherCondition && dateVerified(race) && race?.weatherConfirmedAt)
+  return Boolean(race?.weatherTemp && race?.weatherCondition && dateVerified(race) && race?.weatherConfirmedAt && !weatherSetEarly(race))
 }
 
 /** The reasons a race year cannot print yet, in plain words. Empty means it can. */
@@ -47,6 +68,7 @@ export function printBlockers(race) {
   else if (new Date(race.raceDate).getTime() > Date.now()) out.push('Race has not happened yet')
   if (!race.location) out.push('Race has no location, so weather cannot be computed')
   if (!race.weatherTemp || !race.weatherCondition) { if (race.raceDate && new Date(race.raceDate).getTime() <= Date.now()) out.push('Weather has not been computed') }
+  else if (weatherSetEarly(race)) out.push(WEATHER_SET_EARLY)
   else if (!race.weatherConfirmedAt) out.push('Weather is calculated but not confirmed yet')
   return out
 }
@@ -117,14 +139,16 @@ export async function computeRaceWeather(raceId, { by = 'system', reason, actor 
   if (!race) throw new Error('Race not found')
   if (!dateVerified(race)) throw new Error('Verify the date before computing weather')
   if (!race.location) throw new Error('The race needs a location before weather can be computed')
-  if (race.raceDate.getTime() > Date.now()) throw new Error('The race has not happened yet, so there is no weather to calculate')
+  if (!weatherWindowClosed(race.raceDate)) throw new Error('The race has not happened yet (its 7am to 1pm weather window has not closed), so there is no weather to calculate')
   let previous = null; try { previous = race.weatherDetails ? JSON.parse(race.weatherDetails) : null } catch { previous = null }
   const result = await new WeatherService().calculateRaceWeather(race.raceDate.toISOString().slice(0, 10), race.location, previous)
   if (!result?.temp || !result?.condition) throw new Error(result?.error || 'Could not compute weather for that date and place')
   const before = { weatherTemp: race.weatherTemp, weatherCondition: race.weatherCondition }
   const after = { weatherTemp: result.temp, weatherCondition: result.condition }
   if (before.weatherTemp) await noteWeatherChange({ raceId: race.id, before, after, by, reason, actor })
-  const changed = (before.weatherTemp || '') !== after.weatherTemp || String(before.weatherCondition || '').toLowerCase() !== String(after.weatherCondition).toLowerCase()
+  // Weather set before the race (typed in for an early print) is never kept as
+  // confirmed, even when race day comes out the same: a person checks it again.
+  const changed = weatherSetEarly(race) || (before.weatherTemp || '') !== after.weatherTemp || String(before.weatherCondition || '').toLowerCase() !== String(after.weatherCondition).toLowerCase()
   return prisma.race.update({
     where: { id: race.id },
     data: { ...after, weatherFetchedAt: new Date(), weatherDetails: JSON.stringify(result.breakdown), ...(changed ? { weatherConfirmedAt: null, weatherConfirmedBy: null } : {}) },
@@ -143,10 +167,15 @@ export async function markRacePrinted(raceId) {
 export async function verificationOverview() {
   const open = await prisma.order.findMany({
     where: { trackstarOrderType: 'standard', status: { notIn: ['completed'] } },
-    select: { raceName: true, raceNameOverride: true, raceYear: true, yearOverride: true },
+    select: { raceName: true, raceNameOverride: true, raceYear: true, yearOverride: true, runnerResearch: { orderBy: { id: 'desc' }, take: 1, select: { eventType: true } } },
   })
   const counts = {}
-  for (const o of open) { const k = `${o.raceNameOverride ?? o.raceName}|${o.yearOverride ?? o.raceYear}`; counts[k] = (counts[k] || 0) + 1 }
+  for (const o of open) {
+    const name = o.raceNameOverride ?? o.raceName, year = o.yearOverride ?? o.raceYear
+    // A distance run on its own day counts toward its own row (eventRaces.js).
+    const k = `${eventRaceName(name, year, o.runnerResearch?.[0]?.eventType) || name}|${year}`
+    counts[k] = (counts[k] || 0) + 1
+  }
   const races = await prisma.race.findMany({ orderBy: [{ year: 'desc' }, { raceName: 'asc' }] })
   const rows = races.map(r => {
     const blockers = printBlockers(r)
@@ -189,7 +218,8 @@ export async function confirmWeather({ raceId, user }) {
   const race = await prisma.race.findUnique({ where: { id: Number(raceId) } })
   if (!race) throw new Error('Race not found')
   if (!race.weatherTemp || !race.weatherCondition) throw new Error('There is no weather to confirm')
-  if (race.raceDate && race.raceDate.getTime() > Date.now()) throw new Error('The race has not happened yet')
+  if (!race.raceDate || !weatherWindowClosed(race.raceDate)) throw new Error('The race has not happened yet')
+  if (weatherSetEarly(race)) throw new Error('This weather was set before the race was over. Recalculate it from race day, then confirm.')
   const by = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'unknown'
   const updated = await prisma.race.update({ where: { id: race.id }, data: { weatherConfirmedAt: new Date(), weatherConfirmedBy: by } })
   await recordAudit({ action: 'race.weather-confirm', summary: `${race.raceName} ${race.year}: confirmed weather ${race.weatherCondition} ${race.weatherTemp}`, detail: { raceId: race.id }, actor: user })

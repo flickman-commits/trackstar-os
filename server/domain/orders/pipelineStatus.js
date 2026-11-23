@@ -12,6 +12,7 @@ import { noTimeGaps, onlineWorkers } from '../render/templates.js'
 import { getCanonicalRaceName, hasScraperForRace } from '../../scrapers/index.js'
 import { ensureOverridesLoaded } from '../../scrapers/scraperOverrides.js'
 import { pickResearch } from '../research/pickResearch.js'
+import { raceForEvent } from '../races/eventRaces.js'
 
 /** Race rows, checked production files, NO TIME gaps, and whether a render worker is on. */
 export async function loadPipelineContext() {
@@ -26,7 +27,14 @@ export async function loadPipelineContext() {
     if (!name || !year) return null
     return raceByKey.get(`${name}|${year}`) || raceByKey.get(`${getCanonicalRaceName(name) || name}|${year}`) || null
   }
-  return { raceFor, templateKeys: new Set(okTemplates.map(t => t.key)), gaps, workerOnline: workers.length > 0 }
+  // The row an order prints its date and weather from: its distance's own row
+  // when that distance runs on another day (races/eventRaces.js).
+  const raceForOrder = (o, research) => raceForEvent(
+    research?.race || raceFor(o.raceNameOverride ?? o.raceName, o.yearOverride ?? o.raceYear),
+    research?.eventType,
+    (name, year) => raceByKey.get(`${name}|${year}`) || null,
+  )
+  return { raceFor, raceForOrder, templateKeys: new Set(okTemplates.map(t => t.key)), gaps, workerOnline: workers.length > 0 }
 }
 
 /**
@@ -87,7 +95,7 @@ export async function pipelinesFor(ids) {
   for (const o of orders) {
     // Only research for the order's own race and year (pickResearch.js), as the render does.
     const research = pickResearch(o.runnerResearch, o.raceNameOverride ?? o.raceName, o.yearOverride ?? o.raceYear, getCanonicalRaceName)
-    const race = research?.race || ctx.raceFor(o.raceNameOverride ?? o.raceName, o.yearOverride ?? o.raceYear)
+    const race = ctx.raceForOrder(o, research)
     out.set(o.id, pipelineFor({
       order: o, research, race, render: o.renderJobs?.[0] || null,
       hasScraper: hasScraperForRace(o.raceNameOverride ?? o.raceName),

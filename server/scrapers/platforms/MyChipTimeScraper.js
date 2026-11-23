@@ -185,7 +185,15 @@ export class MyChipTimeScraper extends BaseScraper {
       answers.push({ result, label: eventLabel })
     }
 
-    return poolEventAnswers(this, runnerName, answers) || this._notFound()
+    const pooled = poolEventAnswers(this, runnerName, answers)
+    if (pooled) return pooled
+    // No match anywhere, but a distance could not be searched: the site was
+    // down for it, so "not found" would be a guess.
+    const down = answers.find(a => a.result?.researchStatus === 'upstream_error')
+    if (down) return down.result
+    // Surnames matched but no first name did: the closest rows from every distance, for a person.
+    const near = answers.flatMap(a => (a.result?.possibleMatches || []).map(m => ({ ...m, eventType: a.label })))
+    return this._notFound(null, near.length ? near.slice(0, 15) : null)
   }
 
   /**
@@ -227,6 +235,7 @@ export class MyChipTimeScraper extends BaseScraper {
       }
 
       const rows = parseMode === 'columns' ? this._parseColumnsHtml(html) : this._parseSimpleHtml(html)
+      if (!rows.length && !/results returned/i.test(html)) return this.upstreamErrorResult('MyChipTime sent a page with no results on it')
       const match = rows.find(r => this.bibsEqual(r.bib, wanted))
       if (!match) continue
 
@@ -245,6 +254,16 @@ export class MyChipTimeScraper extends BaseScraper {
       const nameParts = runnerName.trim().split(/\s+/)
       const firstName = nameParts.length > 1 ? nameParts[0] : ''
       const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0]
+      // The site filters on what it is sent, so the query is the surname
+      // alone: its last word, without a suffix or an initial. First names
+      // (Mike for Michael, Zachary for Zach, Becky for Rebecca) and middle
+      // initials ("Anthony R. Rodriguez") are matched here, by the shared
+      // name rules, against everyone with that surname. Sending the first
+      // name as typed missed five Philadelphia 2026 finishers.
+      const surnameWords = nameParts.slice(nameParts.length > 1 ? 1 : 0)
+        .map(w => w.replace(/[.,]/g, ''))
+        .filter(w => w && !/^(jr|sr|ii|iii|iv|v)$/i.test(w) && w.length > 1)
+      const surnameQuery = surnameWords.length ? surnameWords[surnameWords.length - 1] : lastName
 
       const parseMode = this.config.parseMode || 'columns'
 
@@ -255,8 +274,8 @@ export class MyChipTimeScraper extends BaseScraper {
         // and Philadelphia (5 col, single time)
         const params = new URLSearchParams({
           eID: eventId,
-          fname: firstName,
-          lname: lastName,
+          fname: '',
+          lname: surnameQuery,
         })
         searchUrl = `${this.baseUrl}/searchResultGen.php?${params.toString()}`
       } else {
@@ -279,9 +298,19 @@ export class MyChipTimeScraper extends BaseScraper {
       })
 
       console.log(`[${this.tag}] Response status: ${response.status}`)
-      if (!response.ok) return this._notFound(`HTTP error: ${response.status}`)
+      // A refused request is the site down, never "runner not found".
+      if (!response.ok) return this.upstreamErrorResult(`MyChipTime returned HTTP ${response.status}`)
 
       html = await response.text()
+
+      // Busy, MyChipTime answers a normal-looking "0 results returned" (Philadelphia
+      // race night 2026: a half with ten Brennans came back empty, then full a few
+      // seconds later). An empty answer is asked once more before it counts.
+      if (/(^|\D)0 results returned/i.test(html)) {
+        await new Promise(r => setTimeout(r, this.retryDelayMs ?? 2500))
+        const again = await fetchWithTimeout(searchUrl, { headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', Referer: `https://www.mychiptime.com/searchevent.php?id=${eventId}` } })
+        if (again.ok) html = await again.text()
+      }
 
       // Parse results based on mode
       const results = parseMode === 'columns'
@@ -292,7 +321,12 @@ export class MyChipTimeScraper extends BaseScraper {
 
       console.log(`[${this.tag}] Found ${results.length} results`)
 
-      if (results.length === 0) return this._notFound()
+      if (results.length === 0) {
+        // A real search page says how many it found ("0 results returned").
+        // A page without that line is the site refusing or failing us.
+        if (!/results returned/i.test(html)) return this.upstreamErrorResult('MyChipTime sent a page with no results on it')
+        return this._notFound()
+      }
 
       // Filter for name matches
       const matches = this.filterNameMatches(runnerName, results,
@@ -336,7 +370,7 @@ export class MyChipTimeScraper extends BaseScraper {
 
     } catch (error) {
       console.error(`[${this.tag}] Error searching:`, error.message)
-      return this._notFound(error.message)
+      return this.upstreamErrorResult(error.message)
     }
   }
 
@@ -368,7 +402,8 @@ export class MyChipTimeScraper extends BaseScraper {
     const $ = cheerio.load(html)
     const results = []
 
-    if (html.includes('0 results returned')) {
+    // "0 results returned", not the end of "10 results returned" (which read as empty).
+    if (/(^|[^\d])0 results returned/.test(html)) {
       console.log(`[${this.tag}] MyChipTime returned 0 results`)
       return results
     }
@@ -425,7 +460,8 @@ export class MyChipTimeScraper extends BaseScraper {
     const $ = cheerio.load(html)
     const results = []
 
-    if (html.includes('0 results returned')) {
+    // "0 results returned", not the end of "10 results returned" (which read as empty).
+    if (/(^|[^\d])0 results returned/.test(html)) {
       console.log(`[${this.tag}] MyChipTime returned 0 results`)
       return results
     }

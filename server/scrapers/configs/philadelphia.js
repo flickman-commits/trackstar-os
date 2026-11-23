@@ -100,6 +100,22 @@ export default {
     2025: 'PhiladelphiaMarathon.com race info + RunHive event listing',
     2026: 'PhiladelphiaMarathon.com race info + RunHive event listing',
   },
+  // The half and 8K run on the Saturday, the marathon on the Sunday. Each
+  // distance listed here has its own Race row ("Philadelphia Marathon / Half
+  // Marathon") with its own date and weather (server/domain/races/eventRaces.js);
+  // raceDates above is the marathon's. 2025 is left out on purpose: World
+  // Athletics lists the half on Sun Nov 23, 2025 while MyChipTime dates every
+  // 2025 distance Nov 22, so a person settles it before it is pinned.
+  eventDates: {
+    2023: { halfMarathon: '2023-11-18', eightK: '2023-11-18' },
+    2024: { halfMarathon: '2024-11-23', eightK: '2024-11-23' },
+    2026: { halfMarathon: '2026-11-21', eightK: '2026-11-21' },
+  },
+  eventDateSources: {
+    2023: { evidence: 'KYW Newsradio and Runner\'s Gazette race reports: the Dietz & Watson Half Marathon opened race weekend on Saturday, November 18, 2023 (12,986 finishers); the 8K runs the same Saturday', url: 'https://runnersgazette.com/2023/11/22/koech-and-kwambai-win-aacr-philadelphia-marathon/' },
+    2024: { evidence: 'MyChipTime dates each 2024 distance separately: "Half Marathon 2024" 11/23/2024 (16164), "8K 2024" 11/23/2024 (16166), "Marathon 2024" 11/24/2024 (16165)', url: 'https://www.mychiptime.com/searchevent.php?id=16124' },
+    2026: { evidence: 'philadelphiamarathon.com race pages: Half Marathon "RACE DATE: NOVEMBER 21, 2026", 8K "RACE DATE: NOVEMBER 21, 2026" (the marathon is November 22)', url: 'https://www.philadelphiamarathon.com/races/half-marathon/' },
+  },
   eventTypes: ['Marathon', 'Half Marathon', '8K'],
   eventSearchOrder: ['marathon', 'halfMarathon', 'eightK'],
   eventLabels: {

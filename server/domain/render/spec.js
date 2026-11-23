@@ -12,7 +12,8 @@
 import { formatRaceDate, formatTemp, formatTime, formatPace, formatCondition } from '../../lib/printFormat.js'
 import { unpaidPhotoRows, paidPhotoMissing } from '../orders/photoPayment.js'
 import { awaitingLaterPhoto } from '../orders/photoLaterState.js'
-import { printBlockers } from '../races/verification.js'
+import { printBlockers, WEATHER_SET_EARLY } from '../races/verification.js'
+import { raceForEvent } from '../races/eventRaces.js'
 import { isMainEvent, getCanonicalRaceName, namedEventsFor, triathlonTitleFor } from '../../scrapers/index.js'
 import { isTriathlon, TRI_FIELDS } from '../orders/triathlon.js'
 import { pickResearch } from '../research/pickResearch.js'
@@ -125,12 +126,13 @@ export const SPEC_SELECT = {
  * @param order  an order loaded with SPEC_SELECT
  * @param templates  race names some online worker has a template for
  * @param noTimeGaps  "template|size" pairs that cannot print a no-time order yet (templates.js noTimeGaps)
+ * @param opts.raceLookup  (name, year) => a loaded Race row or null, for a distance's own row (races/eventRaces.js)
  * @param raceRow  the Race row for this order's race and year, for orders that were never
  *                 researched (Instant Lookup verified them at checkout) and so have no
  *                 research record to reach the race through
  * @returns {{ ok: boolean, reasons: string[], spec: object|null }}
  */
-export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = new Set(), { allowUnpaidPhoto = false } = {}) {
+export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = new Set(), { allowUnpaidPhoto = false, raceLookup = () => null } = {}) {
   const reasons = []
   const raceName = order.raceNameOverride ?? order.raceName
   const raceYear = order.yearOverride ?? order.raceYear
@@ -153,7 +155,8 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
   if (!name) reasons.push('No runner name')
 
   const research = research0
-  const race = research?.race || raceRow
+  // A distance run on its own day (Philadelphia's Saturday half and 8K) prints its own date and weather (races/eventRaces.js).
+  const race = raceForEvent(research?.race || raceRow, research?.eventType, raceLookup)
   // The research record is the only source of a result (customerResults.js).
   const bib = research?.bibNumber || null
   const time = formatTime(research?.officialTime)
@@ -180,7 +183,8 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
   const temp = formatTemp(race?.weatherTemp)
   // Hard gate: a date prints only with evidence on file, and weather only when computed for that date.
   // Render before race day, set by hand (a creator's print): only the "not happened" gate lifts.
-  for (const b of printBlockers(race)) if (!(order.renderBeforeRace && b === 'Race has not happened yet')) reasons.push(b)
+  // Weather typed in before the race is for exactly these prints and no other (races/weatherWindow.js).
+  for (const b of printBlockers(race)) if (!(order.renderBeforeRace && (b === 'Race has not happened yet' || b === WEATHER_SET_EARLY))) reasons.push(b)
   if (order.renderBeforeRace && (!condition || !temp)) reasons.push('Weather has not been computed')
 
   // Paid at checkout for a photo they upload after the race (orders/photoLater.js).

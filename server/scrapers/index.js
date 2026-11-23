@@ -587,6 +587,25 @@ export function onlyEventFor(raceName) {
   return types.length === 1 ? types[0] : null
 }
 
+/**
+ * The distances of a race weekend that run on another day than the race's
+ * main event, for one year (Philadelphia: the half and 8K on Saturday, the
+ * marathon on Sunday), from the config's `eventDates`:
+ * [{ label: 'Half Marathon', date: '2026-11-21', raceName, evidence, url }].
+ * Each one has its own Race row, "<race> / <label>", with its own date and
+ * weather (server/domain/races/eventRaces.js). [] for a race whose distances
+ * all run the same day.
+ */
+export function separateDayEvents(raceName, year) {
+  const config = raceName && year ? findConfigForRace(raceName) : null
+  const days = config?.eventDates?.[year]
+  if (!days) return []
+  const source = config.eventDateSources?.[year] || {}
+  return Object.entries(days)
+    .filter(([, date]) => /^\d{4}-\d{2}-\d{2}$/.test(String(date)))
+    .map(([key, date]) => ({ key, label: config.eventLabels?.[key] || key, date: String(date), raceName: config.raceName, location: config.location || null, evidence: source.evidence || null, url: source.url || null }))
+}
+
 /** Every event the race's config lists (["Marathon", "Half Marathon"]), or [] with no config. */
 export function eventTypesFor(raceName) {
   return findConfigForRace(raceName)?.eventTypes || []

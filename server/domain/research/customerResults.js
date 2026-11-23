@@ -16,7 +16,7 @@
 import prisma from '../../db.js'
 import { ResearchService } from '../../services/ResearchService.js'
 import { paceFromTypedTime } from './customerPace.js'
-import { onlyEventFor } from '../../scrapers/index.js'
+import { onlyEventFor, eventTypesFor } from '../../scrapers/index.js'
 
 export async function ordersMissingCustomerResult(limit = 500) {
   return prisma.order.findMany({
@@ -75,7 +75,12 @@ export async function fillCustomerPace({ dryRun = false, limit = 500, log = () =
   })
   const out = { checked: rows.length, filled: 0, rows: [] }
   for (const r of rows) {
-    const pace = paceFromTypedTime(r.officialTime, r.eventType || r.order?.customerEventType || onlyEventFor(r.order?.raceNameOverride ?? r.order?.raceName))
+    const race = r.order?.raceNameOverride ?? r.order?.raceName
+    const distance = r.eventType || r.order?.customerEventType || onlyEventFor(race)
+    // A race with several distances and none known: never assume the marathon
+    // (ResearchService.applyVerifiedResult looks the distance up, or leaves it to a person).
+    if (!distance && eventTypesFor(race).length > 1) continue
+    const pace = paceFromTypedTime(r.officialTime, distance)
     if (!pace) continue
     out.rows.push({ orderNumber: r.order?.orderNumber, time: r.officialTime, pace })
     log(`${dryRun ? 'would fill' : 'filled'} ${r.order?.orderNumber}: ${r.officialTime} -> ${pace}/mi`)

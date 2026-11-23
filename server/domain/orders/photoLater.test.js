@@ -42,7 +42,7 @@ test('nothing is owed once the photo is in, it closed, or the order is complete'
 test('the pipeline holds a ready print as Waiting on photo, and lets it go once the photo is in', () => {
   const order = { ...waiting, raceName: 'Test Marathon', raceYear: 2026, productSize: '12x18', hadNoTime: false, trackstarOrderType: 'standard' }
   const research = { researchStatus: 'found', bibNumber: '123', officialTime: '3:30:00', officialPace: '8:00', eventType: 'Marathon' }
-  const raceRow = { raceDate: race, raceDateSource: 'manual', raceDateVerifiedAt: race, raceDateSourceUrl: 'https://example.com', location: 'Test City', weatherCondition: 'Sunny', weatherTemp: 50, weatherConfirmedAt: race }
+  const raceRow = { raceDate: race, raceDateSource: 'manual', raceDateVerifiedAt: race, raceDateSourceUrl: 'https://example.com', location: 'Test City', weatherCondition: 'Sunny', weatherTemp: 50, weatherConfirmedAt: new Date(race.getTime() + DAY) }
   const args = { research, race: raceRow, render: null, hasScraper: true, templates: new Set(['Test Marathon']), noTimeGaps: new Set(), photoUnpaid: false, workerOnline: true }
   const held = pipelineFor({ ...args, order })
   assert.equal(held.stage, 'waiting')

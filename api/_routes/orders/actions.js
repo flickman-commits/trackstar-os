@@ -29,7 +29,7 @@ import { createRacePartnerOrder } from '../../../server/domain/orders/racePartne
 import crypto from 'crypto'
 import { unpaidPhotoRows } from '../../../server/domain/orders/photoPayment.js'
 import { completeOrder, CompleteError } from '../../../server/domain/orders/complete.js'
-import { noteWeatherChange } from '../../../server/domain/races/verification.js'
+import { noteWeatherChange, weatherSetEarly } from '../../../server/domain/races/verification.js'
 import { acceptMatch, AcceptMatchError } from '../../../server/domain/research/acceptMatch.js'
 import prisma from '../../_lib/prisma.js'
 import { ensureApprovalToken } from '../../_lib/approvalToken.js'
@@ -804,7 +804,7 @@ async function handleCalculateWeather({ raceId, city, date, reason }, res, actor
   if (raceId) {
     // Logged like every weather change, and refused without a reason once a
     // print of this race year has been approved (verification.js).
-    const before = await prisma.race.findUnique({ where: { id: parseInt(raceId, 10) }, select: { weatherTemp: true, weatherCondition: true } })
+    const before = await prisma.race.findUnique({ where: { id: parseInt(raceId, 10) }, select: { weatherTemp: true, weatherCondition: true, raceDate: true, weatherFetchedAt: true, weatherConfirmedAt: true, weatherDetails: true } })
     try {
       await noteWeatherChange({ raceId, before, after: { weatherTemp: result.temp, weatherCondition: result.condition }, by: actor?.email || 'calculator', reason: reason || null, actor })
     } catch (err) {
@@ -819,7 +819,8 @@ async function handleCalculateWeather({ raceId, city, date, reason }, res, actor
           weatherFetchedAt: new Date(),
           weatherDetails: JSON.stringify(result.breakdown),
           // New numbers need a person's check again; the same numbers keep it.
-          ...((before?.weatherTemp || '') !== result.temp || String(before?.weatherCondition || '').toLowerCase() !== String(result.condition).toLowerCase() ? { weatherConfirmedAt: null, weatherConfirmedBy: null } : {}),
+          // Weather typed in before the race is never kept as confirmed (races/weatherWindow.js).
+          ...(weatherSetEarly(before) || (before?.weatherTemp || '') !== result.temp || String(before?.weatherCondition || '').toLowerCase() !== String(result.condition).toLowerCase() ? { weatherConfirmedAt: null, weatherConfirmedBy: null } : {}),
         },
       })
     } catch (err) {

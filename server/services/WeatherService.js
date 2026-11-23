@@ -1,3 +1,4 @@
+import { weatherWindowClosesAt } from '../domain/races/weatherWindow.js'
 import { fetchWithTimeout } from '../lib/fetchWithTimeout.js'
 /**
  * WeatherService - Fetch historical weather data for races
@@ -75,7 +76,7 @@ export class WeatherService {
         return null
       }
       console.log(`[WeatherService] Geocoded to: ${result.name}, ${result.admin1 || ''}, ${result.country_code} (${result.latitude}, ${result.longitude})`)
-      return { lat: result.latitude, lon: result.longitude, name: [result.name, result.admin1, result.country_code].filter(Boolean).join(', ') }
+      return { lat: result.latitude, lon: result.longitude, name: [result.name, result.admin1, result.country_code].filter(Boolean).join(', '), timezone: result.timezone || null }
     } catch (error) {
       console.error(`[WeatherService] Geocoding error:`, error.message)
       return null
@@ -188,13 +189,15 @@ export class WeatherService {
    */
   async calculateRaceWeather(dateStr, location, previous = null) {
     // A race that has not happened has no weather. Never a forecast on a print.
-    if (String(dateStr) > new Date().toISOString().slice(0, 10)) {
-      return { temp: null, condition: null, breakdown: null, error: 'The race has not happened yet, so there is no weather to calculate' }
-    }
+    const notYet = { temp: null, condition: null, breakdown: null, error: 'The race has not happened yet (its 7am to 1pm weather window has not closed), so there is no weather to calculate' }
+    if (String(dateStr) > new Date().toISOString().slice(0, 10)) return notYet
     const coords = await this.geocodeLocation(location)
     if (!coords) {
       return { temp: null, condition: null, breakdown: null, error: `Couldn't find "${location}"` }
     }
+    // Not before 1pm where the race is: until then the window is still a forecast.
+    const closes = weatherWindowClosesAt(dateStr, coords.timezone)
+    if (!closes || Date.now() < closes.getTime()) return notYet
     if (previous && previous.source === 'archive' && previous.date === dateStr && previous.place === coords.name && previous.avgTempF != null && previous.condition) {
       return { temp: `${previous.avgTempF}°F`, condition: previous.condition, breakdown: previous, unchanged: true }
     }
@@ -246,6 +249,9 @@ export class WeatherService {
       // archive = the settled historical record. forecast = the model's numbers for a day the
       // archive does not have yet (the last ~5 days); those are replaced when the archive catches up.
       source: hourly._source || 'archive',
+      // The race's timezone, so anyone can tell when its 7am to 1pm window closed (races/verification.js).
+      timezone: coords.timezone || null,
+      calculatedAt: new Date().toISOString(),
     }
 
     return { temp: `${avgTempF}°F`, condition, breakdown }
