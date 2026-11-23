@@ -238,7 +238,8 @@ export const DESIGN_STATUS_CONFIG: Record<DesignStatus, { dot: string; label: st
   awaiting_review: { dot: 'bg-amber-500', label: 'Awaiting Review', short: 'Proofs out', color: 'text-amber-700', bgColor: 'bg-amber-50' },
   in_revision: { dot: 'bg-orange-500', label: 'In Revision', short: 'Revision', color: 'text-orange-700', bgColor: 'bg-orange-50' },
   approved_by_customer: { dot: 'bg-purple-500', label: 'Approved by Customer', short: 'Approved', color: 'text-purple-700', bgColor: 'bg-purple-50' },
-  final_pdf_uploaded: { dot: 'bg-[#4600D6]', label: 'Attach in Artelo', short: 'Attach', color: 'text-[#4600D6]', bgColor: 'bg-[#4600D6]/[0.06]' },
+  // The tool attaches and sends it to Artelo on its own now; a person only steps in when it is held or refused.
+  final_pdf_uploaded: { dot: 'bg-[#4600D6]', label: 'Final Uploaded', short: 'Final in', color: 'text-[#4600D6]', bgColor: 'bg-[#4600D6]/[0.06]' },
   sent_to_production: { dot: 'bg-emerald-500', label: 'Sent to Production', short: 'Sent', color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
 }
 

@@ -466,6 +466,7 @@ export default function OrderDetail({
   // Comments state for custom orders
   const [orderComments, setOrderComments] = useState<OrderComment[]>([])
   const [showActivity, setShowActivity] = useState(false)
+  const [showOldNotes, setShowOldNotes] = useState(false)
   // Open Support conversations on the open order (ConversationPanel), and whether the design brief was asked for after it stepped aside.
   const [openConvos, setOpenConvos] = useState<{ orderId: string; open: number } | null>(null)
   const [briefShown, setBriefShown] = useState<string | null>(null)
@@ -1310,13 +1311,33 @@ Thank you!`
   // instructions on a custom one. Notes that only record what the order
   // already shows (proofs emailed, an email to the customer) are activity,
   // folded into one quiet line under it (src/lib/orderNotes.ts).
-  const commentsCallout = ({ activity: withActivity = true }: { activity?: boolean } = {}) => {
-    const notes = orderComments.filter(c => c.imageUrl || !isActivityNote(c.text))
+  const commentsCallout = ({ activity: withActivity = true, foldBefore = null }: { activity?: boolean; foldBefore?: string | null } = {}) => {
+    const allNotes = orderComments.filter(c => c.imageUrl || !isActivityNote(c.text))
+    // Late in a custom order, notes from before the design was approved were about making it: they fold.
+    const folded = foldBefore ? allNotes.filter(c => new Date(c.createdAt) < new Date(foldBefore)) : []
+    const notes = allNotes.filter(c => !folded.includes(c))
     // A custom order's stage layout drops them: the proofs and the timeline already show them.
     const activity = withActivity ? orderComments.filter(c => !c.imageUrl && isActivityNote(c.text)) : []
-    if (!notes.length && !activity.length) return null
+    if (!notes.length && !activity.length && !folded.length) return null
     return (
       <div className="space-y-1.5">
+        {folded.length > 0 && (
+          <div className="px-1">
+            <button type="button" onClick={() => setShowOldNotes(v => !v)} className="inline-flex items-center gap-1.5 text-[12px] text-off-black/45 hover:text-off-black">
+              <MessageSquareText className="w-3.5 h-3.5" />{folded.length} note{folded.length === 1 ? '' : 's'} from before approval<span className="font-medium text-off-black/55 hover:underline">{showOldNotes ? 'Hide' : 'Show'}</span>
+            </button>
+            {showOldNotes && (
+              <ul className="mt-1.5 space-y-1.5 pl-5">
+                {folded.map(c => (
+                  <li key={c.id} className="text-[12px] text-off-black/60">
+                    {c.text && <NoteText text={c.text} author={c.authorName} />}
+                    <span className="text-off-black/35"> · {c.authorName ? `${c.authorName}, ` : ''}{new Date(c.createdAt).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' })}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         {notes.length > 0 && (
                     <div className="bg-amber-50 border border-amber-300 rounded-md px-3 py-2">
                       <div className="flex items-center gap-1.5 mb-1">
@@ -1633,7 +1654,7 @@ Thank you!`
                         {/* Something needs you: a customer waiting, a team note, an unpaid photo, a late design. Nothing shows when nothing is true. */}
                         <ConversationPanel orderId={selectedOrder.id} openOnly enabled={!!selectedOrder.customerEmail && (can('support') || can('support.own'))} onChanged={() => { fetchOrders() }}
                           onLoaded={list => setOpenConvos({ orderId: selectedOrder.id, open: list.filter(t => t.status !== 'closed' || t.waiting).length })} />
-                        {commentsCallout({ activity: false })}
+                        {commentsCallout({ activity: false, foldBefore: ['final', 'sent'].includes(stage) ? approved?.updatedAt || null : null })}
                         {selectedOrder.photoUnpaid && stage !== 'sent' && (
                           <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-800"><span className="font-semibold mr-1.5">Photo not paid.</span>The customer has not paid the Photo Add-On yet. Hold the final until the Shopify order reads paid.</div>
                         )}
@@ -1734,7 +1755,8 @@ Thank you!`
 
                         {stage === 'final' && (
                           <>
-                            <StageCard title="Final PDF uploaded" sub="It goes to production on its own unless someone holds it.">
+                            {/* The send state (going at 2:30, held, Artelo refused it) is the card's one status line; no subtitle to contradict it. */}
+                            <StageCard title="Final PDF uploaded">
                               <div className="flex gap-4 items-start">
                                 {approved && <ProofImage proof={approved} className="w-24" badge={<ApprovedBadge />} />}
                                 <div className="flex-1 min-w-0">
@@ -1750,9 +1772,8 @@ Thank you!`
                                   />
                                 </div>
                               </div>
+                              <div className="pt-2 border-t border-border-gray empty:hidden"><FeatureStar orderId={selectedOrder.id} /></div>
                             </StageCard>
-                            <FeatureStar orderId={selectedOrder.id} />
-                            {replyOpen && brief(true)}
                           </>
                         )}
 
@@ -1899,7 +1920,8 @@ Thank you!`
 
                   {/* Ordered, design due, final due (admin), sent and rush, as tags. */}
                   {selectedOrder.trackstarOrderType !== 'race_partner' && (
-                    <div>
+                    // Nothing to tag (a custom order once its final is up and not yet sent): no empty heading.
+                    <div className="has-[span,button,form]:block hidden">
                       <h4 className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1.5">Tags</h4>
                       <div className="flex flex-wrap items-center gap-1.5">
                       {selectedOrder.orderPlacedAt && selectedOrder.trackstarOrderType !== 'custom' && (
