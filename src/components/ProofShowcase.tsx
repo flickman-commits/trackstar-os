@@ -48,7 +48,8 @@ export default function ProofShowcase({ orderId, empty = null }: { orderId: stri
           index={open}
           onIndexChange={setOpen}
           onClose={() => setOpen(null)}
-          counterLabel={`${label(sorted[open].status)} · ${open + 1} of ${sorted.length}`}
+          counterLabel={`${open + 1} of ${sorted.length}`}
+          badge={<span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold ${tone(sorted[open].status)}`}>{label(sorted[open].status)}</span>}
         />
       )}
     </div>

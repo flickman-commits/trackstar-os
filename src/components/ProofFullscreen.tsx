@@ -44,6 +44,7 @@ export default function ProofFullscreen({
   onClose,
   counterLabel,
   footer,
+  badge,
 }: {
   proofs: FullscreenProof[]
   index: number
@@ -53,6 +54,8 @@ export default function ProofFullscreen({
   counterLabel?: string
   /** An action for the design on screen, pinned under it (Design Survey's vote). */
   footer?: ReactNode
+  /** A tag for the design on screen, e.g. its status in color ("Approved"). Beside the counter. */
+  badge?: ReactNode
 }) {
   // One view: scale and the pan, in screen pixels from the centred position.
   const [view, setView] = useState<{ s: number; x: number; y: number }>({ s: 1, x: 0, y: 0 })
@@ -293,16 +296,26 @@ export default function ProofFullscreen({
   const label = counterLabel || (many ? `${index + 1} of ${proofs.length}` : 'Your design')
   const pdf = isPdf(proof.imageUrl)
 
+  const heading = (
+    <span className="inline-flex items-center gap-2 min-w-0">
+      {badge}
+      <span className="text-[13px] font-medium truncate" style={{ color: '#FFFFFF' }}>{label}</span>
+    </span>
+  )
   return (
     <div className="fixed inset-0 z-[60] flex flex-col" style={{ backgroundColor: '#0B0B0B' }}>
+      {/* On a phone, which design this is sits at the top, in full; the controls are at the bottom. */}
+      <div className="md:hidden flex items-center px-4 pb-2.5 pt-[calc(env(safe-area-inset-top)+10px)] shrink-0 border-b border-white/10" style={{ backgroundColor: '#141414' }}>
+        {heading}
+      </div>
       {/* The bar: which design, zoom, close. Kept out of the image area so it never covers the artwork.
           At the top on a desk; at the very bottom on a phone, under the thumb, so closing is one reach. */}
       <div
         className="order-last md:order-first flex items-center justify-between gap-3 px-3 pt-2 md:py-2.5 shrink-0 border-t md:border-t-0 md:border-b border-white/10 pb-[calc(env(safe-area-inset-bottom)+8px)]"
         style={{ backgroundColor: '#141414' }}
       >
-        <span className="text-[13px] font-medium truncate" style={{ color: '#FFFFFF' }}>{label}</span>
-        <div className="flex items-center gap-1">
+        <span className="hidden md:inline-flex min-w-0">{heading}</span>
+        <div className="flex items-center gap-1 w-full md:w-auto justify-start md:justify-end">
           {!pdf && (
             <>
               {/* Separate in and out, rather than one toggle that only knew two
@@ -337,7 +350,7 @@ export default function ProofFullscreen({
           )}
           <button
             onClick={onClose}
-            className="flex items-center justify-center gap-1.5 min-w-11 h-11 md:h-auto md:min-w-0 px-2.5 md:py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/10"
+            className="ml-auto md:ml-0 flex items-center justify-center gap-1.5 min-w-11 h-11 md:h-auto md:min-w-0 px-2.5 md:py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/10"
             style={{ color: '#FFFFFF' }}
             title="Close full screen (Esc)"
             aria-label="Close full screen"
