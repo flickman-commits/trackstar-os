@@ -151,6 +151,53 @@ export const getStatusDisplay = (order: Order) => {
   return { icon: '', ...STAGE_TONE.waiting, label: 'Needs research' }
 }
 
+/**
+ * A standard order's status in a word or two, for a phone's list row and
+ * order header, where "Needs a scraper: research by hand" pushes everything
+ * else off the line. The full label stays on the desk and in the hover.
+ */
+const SHORT_STATUS: Record<string, string> = {
+  'Ready for review': 'Review',
+  'Ready: result on file': 'Ready',
+  'Needs a production file': 'Needs file',
+  'Not sent in Artelo': 'Not sent',
+  'Results not posted yet': 'Not posted',
+  'Results not online': 'Not online',
+  'Results not online for this year': 'Not online',
+  'Waiting for the renderer': 'Renderer',
+  'Waiting on customer': 'Waiting',
+  'Waiting on photo': 'Photo',
+  'Photo paid, none sent': 'No photo',
+  'Photo not paid': 'Unpaid photo',
+  'Needs NO TIME layer': 'No-time layer',
+  'Needs manual research': 'Research',
+  'Needs research': 'Research',
+  'Research by hand': 'Research',
+  'Before 2020: research by hand': 'Research',
+  'Runner found, time needs manual entry': 'Enter time',
+  'Not found, look up by hand': 'Not found',
+  'Runner not found': 'Not found',
+  'Timing site down': 'Site down',
+  'Timing site down, retry': 'Site down',
+  'Confirm race date': 'Race date',
+  'Needs race date': 'Race date',
+  'Confirm weather': 'Weather',
+  'Needs race data': 'Race data',
+  'Missing Designs': 'No design',
+  'No personalization': 'No details',
+  'Race not run yet': 'Not run yet',
+  'Waiting on the customer': 'Waiting',
+}
+export const shortStatus = (label: string): string => {
+  const l = String(label || '').trim()
+  if (SHORT_STATUS[l]) return SHORT_STATUS[l]
+  if (/^Needs a scraper/.test(l)) return 'Needs scraper'
+  const moved = /^Moved to (.+)$/.exec(l)
+  if (moved) return moved[1]
+  // Anything else: the part before a colon or comma, which is how the long ones are written.
+  return l.split(/[:,]/)[0].trim() || l
+}
+
 // Generate race shorthand for filename
 export const getRaceShorthand = (raceName: string, raceShorthands: Record<string, string>): string => {
   if (!raceName) return 'Race'

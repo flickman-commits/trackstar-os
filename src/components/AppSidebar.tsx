@@ -239,8 +239,14 @@ function SalesTile({ item, active }: { item: Item; active: boolean }) {
  * screen and the menu stays out of the way until it is wanted. Same dark
  * card and white current tile as the desktop rail.
  */
-/** Above the home indicator, and above the order view's bottom bar when one is up (--phone-bar-h, set by OrderDetail). */
-const SQUARE_BOTTOM = 'calc(env(safe-area-inset-bottom) + 12px + var(--phone-bar-h, -8px) + 8px)'
+/**
+ * Low in the corner: on an iPhone it sits into the home-indicator strip
+ * (safe area less 10px, never under 12px), where it used to float a full
+ * safe area plus 12px up. When the order view's bottom bar is up
+ * (--phone-bar-h, set by OrderDetail) it sits 8px above that instead; the
+ * fallback makes that second term lose when there is no bar.
+ */
+const SQUARE_BOTTOM = 'max(max(calc(env(safe-area-inset-bottom) - 10px), 12px), calc(env(safe-area-inset-bottom) + 20px + var(--phone-bar-h, -200px)))'
 
 export function MobileToolBar({
   can,
@@ -282,7 +288,7 @@ export function MobileToolBar({
         <nav
           aria-label="Pages"
           className="fixed right-3 z-[45] w-56 p-1.5 rounded-[22px] bg-dark-fill shadow-[0_8px_30px_rgba(0,0,0,0.3)]"
-          style={{ bottom: `calc(${SQUARE_BOTTOM} + 56px + 8px)` }}
+          style={{ bottom: `calc(${SQUARE_BOTTOM} + 64px + 8px)` }}
         >
           {items.map(item => {
             const Icon = item.icon
@@ -299,11 +305,11 @@ export function MobileToolBar({
         aria-label={open ? 'Close menu' : `Menu: on ${current.label}`}
         aria-expanded={open}
         // White while it floats, so it sits lightly over the page; dark while open, like the menu it opened.
-        className={`fixed right-3 z-[45] w-14 h-14 rounded-[18px] flex flex-col items-center justify-center gap-0.5 active:scale-95 transition-all ${open ? 'bg-dark-fill text-white shadow-[0_4px_16px_rgba(0,0,0,0.25)]' : 'bg-white text-dark-fill border border-border-gray shadow-[0_4px_16px_rgba(0,0,0,0.14)]'}`}
+        className={`fixed right-3 z-[45] w-16 h-16 rounded-[20px] flex flex-col items-center justify-center gap-1 active:scale-95 transition-all ${open ? 'bg-dark-fill text-white shadow-[0_4px_16px_rgba(0,0,0,0.25)]' : 'bg-white text-dark-fill border border-border-gray shadow-[0_4px_16px_rgba(0,0,0,0.14)]'}`}
         style={{ bottom: SQUARE_BOTTOM }}
       >
-        {open ? <X className="w-5 h-5" /> : <CurrentIcon className="w-5 h-5" />}
-        <span className="text-[9px] font-semibold leading-none max-w-[50px] truncate">{open ? 'Close' : current.label}</span>
+        {open ? <X className="w-6 h-6" /> : <CurrentIcon className="w-6 h-6" />}
+        <span className="text-[10px] font-semibold leading-none max-w-[58px] truncate">{open ? 'Close' : current.label}</span>
       </button>
     </div>
   )

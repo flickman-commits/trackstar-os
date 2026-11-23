@@ -22,10 +22,10 @@ import StatusPill from '@/components/orders/StatusPill'
 import DesignStatusPicker from '@/components/orders/DesignStatusPicker'
 import {
   type ActiveView, type DesignStatus, type EditValues, type Order, type PossibleMatch,
-  DESIGN_STATUS_CONFIG, designLabel, mapOrder, orderRefOf,
+  DESIGN_STATUS_CONFIG, designLabel, designShort, mapOrder, orderRefOf,
 } from '@/components/orders/orderModel'
 import {
-  formatDueDate, isDueDateUrgent, dueIsLive, workableSince, orderAge, getStatusDisplay,
+  formatDueDate, isDueDateUrgent, dueIsLive, workableSince, orderAge, getStatusDisplay, shortStatus,
   orderItemCount, orderItemPosition,
   designDueDate, customerDueShort,
 } from '@/components/orders/orderFormat'
@@ -1580,7 +1580,7 @@ export default function Dashboard() {
                             <span className="text-off-black/50 truncate min-w-0">{order.effectiveRaceName || order.raceName} {order.effectiveRaceYear || order.raceYear}</span>
                             <span className="text-off-black/25 shrink-0">·</span>
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDisplay.dot || 'bg-off-black/25'}`} />
-                            <span className="text-off-black/65 truncate min-w-0">{statusDisplay.label}</span>
+                            <span className="text-off-black/65 truncate min-w-0" title={statusDisplay.label}>{shortStatus(statusDisplay.label)}</span>
                           </div>
                         </div>
                         </Fragment>
@@ -1718,7 +1718,7 @@ export default function Dashboard() {
                                 <div className="flex items-center gap-2 min-w-0">
                                   <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${designConfig.bgColor} ${designConfig.color}`}>
                                     <span className={`w-2 h-2 rounded-full shrink-0 ${designConfig.dot}`} aria-hidden />
-                                    {designLabel(order.designStatus, order.trackstarOrderType)}
+                                    {designShort(order.designStatus)}
                                   </span>
                                   <span className="text-sm font-medium text-off-black">{order.displayOrderNumber}</span>
                                   {itemCount > 1 && (

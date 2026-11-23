@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react'
-import { DESIGN_STATUS_CONFIG, designLabel, selectableDesignStatuses, type DesignStatus } from '@/components/orders/orderModel'
+import { DESIGN_STATUS_CONFIG, designLabel, designShort, selectableDesignStatuses, type DesignStatus } from '@/components/orders/orderModel'
 
 /**
  * A custom or partner order's design status as a tinted pill that is also
@@ -25,7 +25,9 @@ export default function DesignStatusPicker({ status, orderType, onChange, size =
       title="Change the design status"
     >
       <span className={`w-2 h-2 rounded-full shrink-0 ${cfg.dot}`} aria-hidden />
-      {designLabel(cur, orderType)}
+      {/* A phone gets the short word ("Approved"); the full label crowded the order number. */}
+      <span className="md:hidden">{designShort(cur)}</span>
+      <span className="hidden md:inline">{designLabel(cur, orderType)}</span>
       <ChevronDown className="w-3 h-3 opacity-60" />
       <select
         value={cur}

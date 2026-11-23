@@ -3,7 +3,7 @@ import DesignStatusPicker from '@/components/orders/DesignStatusPicker'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
-import { History, Plus, CalendarClock, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ChevronRight, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff, Ruler, Flag, CheckCircle2 } from 'lucide-react'
+import { History, Plus, CalendarClock, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff, Ruler, Flag, CheckCircle2 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { shrinkImage } from '@/lib/shrinkImage'
@@ -43,7 +43,7 @@ import {
   DESIGN_STATUS_CONFIG, mapOrder,
 } from '@/components/orders/orderModel'
 import {
-  TZ, formatDueDate, isDueDateUrgent, dueIsLive, orderAge, formatOrderPlacedAt, getStatusDisplay,
+  TZ, formatDueDate, isDueDateUrgent, dueIsLive, orderAge, formatOrderPlacedAt, getStatusDisplay, shortStatus,
   generateFilename as filenameFor, orderItemCount, orderItemPosition,
   designDueDate, customerDueShort,
 } from '@/components/orders/orderFormat'
@@ -1465,7 +1465,7 @@ Thank you!`
                         {selectedOrder.trackstarOrderType === 'standard' && <span className={`shrink-0 ${age.cls}`}>{age.label}</span>}
                         {selectedOrder.trackstarOrderType === 'standard' && <span className="text-off-black/25">·</span>}
                         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${st.dot || 'bg-off-black/25'}`} />
-                        <span className="text-off-black/60 truncate">{st.label}</span>
+                        <span className="text-off-black/60 truncate" title={st.label}>{shortStatus(st.label)}</span>
                       </div>
                     )
                   })()}
@@ -1795,23 +1795,21 @@ Thank you!`
                       </button>
                       {inlineDetail && currentOrderIndex >= 0 && (() => {
                         // Flip through the work: the arrows skip orders with no designs yet (75 of 105 had none).
-                        const designed = navList.filter(o => (o.proofCount ?? 0) > 0)
                         const prev = [...navList.slice(0, currentOrderIndex)].reverse().find(o => (o.proofCount ?? 0) > 0)
                         const next = navList.slice(currentOrderIndex + 1).find(o => (o.proofCount ?? 0) > 0)
-                        const at = designed.findIndex(o => o.id === selectedOrder.id)
                         const go = (o?: Order) => { if (o && goToOrder) goToOrder(o) }
                         return (
                           <div ref={phoneBarRef} className="fixed inset-x-0 z-40 px-3" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
                             <div className="flex items-stretch gap-1.5 rounded-[18px] border border-border-gray bg-white/95 backdrop-blur p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
                               <button onClick={() => go(prev)} disabled={!prev} aria-label="Previous order with designs" className="shrink-0 w-12 h-12 rounded-xl border border-border-gray text-off-black/60 disabled:opacity-30 inline-flex items-center justify-center">
-                                <ChevronLeft className="w-5 h-5" />
+                                <ChevronUp className="w-5 h-5" />
                               </button>
                               <div className="flex-1 min-w-0 flex flex-col justify-center text-center leading-tight">
                                 <span className="text-[13px] font-semibold text-off-black truncate">#{selectedOrder.displayOrderNumber || selectedOrder.orderNumber}{(selectedOrder.effectiveRunnerName || selectedOrder.runnerName) ? ` · ${selectedOrder.effectiveRunnerName || selectedOrder.runnerName}` : ''}</span>
-                                <span className="text-[11px] text-off-black/50 truncate">{selectedOrder.effectiveRaceName || selectedOrder.raceName || 'Custom'}{designed.length ? ` · ${at >= 0 ? `${at + 1} of ${designed.length}` : `${designed.length}`} with designs` : ''}</span>
+                                <span className="text-[11px] text-off-black/50 truncate">{selectedOrder.effectiveRaceName || selectedOrder.raceName || 'Custom'}</span>
                               </div>
                               <button onClick={() => go(next)} disabled={!next} aria-label="Next order with designs" className="shrink-0 w-12 h-12 rounded-xl border border-border-gray text-off-black/60 disabled:opacity-30 inline-flex items-center justify-center">
-                                <ChevronRight className="w-5 h-5" />
+                                <ChevronDownIcon className="w-5 h-5" />
                               </button>
                             </div>
                           </div>
