@@ -1164,6 +1164,13 @@ export default function Dashboard() {
     setIsEditing(false)
     setEditValues({ runnerNameOverride: '', bibNumber: '', officialTime: '', officialPace: '' })
   }, [currentOrderIndex, navigableOrders])
+  // The phone's custom order bar jumps between orders that have designs (OrderDetail).
+  const goToOrder = useCallback((o: Order) => {
+    replaceNextUrl.current = true
+    setSelectedOrder(o)
+    setIsEditing(false)
+    setEditValues({ runnerNameOverride: '', bibNumber: '', officialTime: '', officialPace: '' })
+  }, [])
 
   useEffect(() => {
     if (!selectedOrder) return
@@ -2315,7 +2322,7 @@ export default function Dashboard() {
           possibleMatches={possibleMatchesMap}
           setPossibleMatches={setPossibleMatchesMap}
           edit={{ isEditing, setIsEditing, values: editValues, setValues: setEditValues }}
-          nav={{ inline: inlineDetail, index: currentOrderIndex, total: navigableOrders.length, go: navigateOrder, close: closeModal }}
+          nav={{ inline: inlineDetail, index: currentOrderIndex, total: navigableOrders.length, go: navigateOrder, close: closeModal, list: navigableOrders, goTo: goToOrder }}
           actions={{ setOrders, setSelectedOrder, fetchOrders, loadTeam, setToast, markAsCompleted, assignOrder, emailCustomer: (order, preset) => setEmailing({ order, preset }) }}
         />
 

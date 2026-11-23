@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { apiFetch } from '@/lib/api'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -9,7 +9,7 @@ type Proof = { id: string; imageUrl: string; thumbnailUrl: string | null; status
  * swiped side to side. This is what gets shown to people ("look at this one").
  * The full proof manager stays below, behind Details.
  */
-export default function ProofShowcase({ orderId }: { orderId: string }) {
+export default function ProofShowcase({ orderId, empty = null }: { orderId: string; /** What shows when the order has no designs yet. */ empty?: ReactNode }) {
   const [proofs, setProofs] = useState<Proof[] | null>(null)
   useEffect(() => {
     let live = true
@@ -20,7 +20,7 @@ export default function ProofShowcase({ orderId }: { orderId: string }) {
     return () => { live = false }
   }, [orderId])
   if (proofs === null) return <div className="aspect-[4/5] rounded-lg bg-off-black/5 animate-pulse" />
-  if (!proofs.length) return null
+  if (!proofs.length) return <>{empty}</>
   // Newest first (the current batch is what to show); an approved one leads.
   const sorted = [...proofs]
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())

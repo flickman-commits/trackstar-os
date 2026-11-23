@@ -42,8 +42,8 @@ export function CopyableField({ label, value, aside }: { label: React.ReactNode;
   }
 
   return (
-    <div className="flex justify-between items-center">
-      <span className="text-body-sm text-off-black/60">{label}</span>
+    <div className={`flex items-center ${label === '' ? '' : 'justify-between'}`}>
+      {label !== '' && <span className="text-body-sm text-off-black/60">{label}</span>}
       <div className="flex items-center gap-2">
         {aside}
         <span className="text-body-sm font-medium text-off-black">{value}</span>

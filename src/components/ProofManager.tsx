@@ -758,7 +758,7 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
           the proofs makes the link; there is nothing to generate by hand. */}
       <div className="flex items-center justify-between gap-2 -mb-1.5">
         {heading}
-        {approvalUrl && stage !== 'designing' && (
+        {approvalUrl && stage !== 'designing' && stage !== 'proofs' && (
           <div className="flex items-center gap-1">
             <button
               onClick={copyLink}
@@ -884,7 +884,10 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
                 <div className="space-y-2">
                   {latest.map(p => (
                     <div key={p.id} className="grid grid-cols-[6rem_minmax(0,1fr)] gap-3 items-start">
-                      {renderThumbnail(p, true)}
+                      {/* The proof they meant, to look at: no delete or status controls here. */}
+                      <button type="button" onClick={() => setLightboxUrl(p.imageUrl)} className="block" title="Enlarge">
+                        <img src={p.imageUrl} alt={`Proof v${p.version}`} className="w-24 h-auto rounded-md border border-border-gray bg-white hover:opacity-95" />
+                      </button>
                       <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5">
                         <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider mb-1">On v{p.version}, they wrote</p>
                         <p className="text-[15px] leading-snug text-amber-950 whitespace-pre-wrap">{p.customerFeedback}</p>

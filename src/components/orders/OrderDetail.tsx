@@ -3,7 +3,7 @@ import DesignStatusPicker from '@/components/orders/DesignStatusPicker'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
-import { History, Plus, CalendarClock, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff, Ruler, Flag, CheckCircle2 } from 'lucide-react'
+import { History, Plus, CalendarClock, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ChevronRight, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff, Ruler, Flag, CheckCircle2 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { shrinkImage } from '@/lib/shrinkImage'
@@ -84,6 +84,9 @@ export interface OrderDetailProps {
     total: number
     go: (direction: 'next' | 'prev') => void
     close: () => void
+    /** The orders the arrows move through, and a jump to any one of them (the phone's custom order bar). */
+    list?: Order[]
+    goTo?: (o: Order) => void
   }
   /** What the detail view changes on the page around it. */
   actions: {
@@ -109,7 +112,7 @@ export default function OrderDetail({
   order: selectedOrder, orders, activeView: _activeView, design, raceShorthands, team, myId,
   possibleMatches: possibleMatchesMap, setPossibleMatches: setPossibleMatchesMap,
   edit: { isEditing, setIsEditing, values: editValues, setValues: setEditValues },
-  nav: { inline: inlineDetail, index: currentOrderIndex, total: navTotal, go: navigateOrder, close: closeModal },
+  nav: { inline: inlineDetail, index: currentOrderIndex, total: navTotal, go: navigateOrder, close: closeModal, list: navList = [], goTo: goToOrder },
   actions: { setOrders, setSelectedOrder, fetchOrders, loadTeam, setToast, markAsCompleted, assignOrder, emailCustomer: setEmailingOrder },
 }: OrderDetailProps) {
   const { isAdmin, can, user } = useAuth()
@@ -1780,14 +1783,40 @@ Thank you!`
                   <div className="space-y-4">
                   {/* On the phone, lead with the work: the proofs, big. Everything
                       else waits behind Details (customDetailsOpen). */}
+                  {/* The phone is for showing the work: the designs, big, and a bar at the bottom to
+                      move through the orders. Everything else (the stage, the brief, the actions) is
+                      behind Details. */}
                   {selectedOrder.trackstarOrderType === 'custom' && (
                     <div className="md:hidden space-y-3">
-                      <ProofShowcase orderId={selectedOrder.id} />
-                      <div className="flex items-center justify-end gap-2">
-                        <button type="button" onClick={() => setCustomDetailsOpen(v => !v)} className="inline-flex items-center gap-1 text-xs font-medium text-[#4600D6]">
-                          {customDetailsOpen ? 'Hide details' : 'Details'} <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${customDetailsOpen ? 'rotate-180' : ''}`} />
-                        </button>
-                      </div>
+                      <ProofShowcase orderId={selectedOrder.id} empty={<div className="rounded-lg border border-dashed border-border-gray px-4 py-10 text-center text-sm text-off-black/50">No designs on this order yet</div>} />
+                      <button type="button" onClick={() => setCustomDetailsOpen(v => !v)} className="w-full inline-flex items-center justify-between rounded-lg border border-border-gray bg-white px-3 py-2.5 text-sm font-medium text-off-black">
+                        <span>{customDetailsOpen ? 'Hide details' : 'Details and actions'}</span>
+                        <ChevronDownIcon className={`w-4 h-4 text-off-black/50 transition-transform ${customDetailsOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {inlineDetail && currentOrderIndex >= 0 && (() => {
+                        // Flip through the work: the arrows skip orders with no designs yet (75 of 105 had none).
+                        const designed = navList.filter(o => (o.proofCount ?? 0) > 0)
+                        const prev = [...navList.slice(0, currentOrderIndex)].reverse().find(o => (o.proofCount ?? 0) > 0)
+                        const next = navList.slice(currentOrderIndex + 1).find(o => (o.proofCount ?? 0) > 0)
+                        const at = designed.findIndex(o => o.id === selectedOrder.id)
+                        const go = (o?: Order) => { if (o && goToOrder) goToOrder(o) }
+                        return (
+                          <div ref={phoneBarRef} className="fixed inset-x-0 z-40 px-3" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
+                            <div className="flex items-stretch gap-1.5 rounded-[18px] border border-border-gray bg-white/95 backdrop-blur p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
+                              <button onClick={() => go(prev)} disabled={!prev} aria-label="Previous order with designs" className="shrink-0 w-12 h-12 rounded-xl border border-border-gray text-off-black/60 disabled:opacity-30 inline-flex items-center justify-center">
+                                <ChevronLeft className="w-5 h-5" />
+                              </button>
+                              <div className="flex-1 min-w-0 flex flex-col justify-center text-center leading-tight">
+                                <span className="text-[13px] font-semibold text-off-black truncate">#{selectedOrder.displayOrderNumber || selectedOrder.orderNumber}{(selectedOrder.effectiveRunnerName || selectedOrder.runnerName) ? ` · ${selectedOrder.effectiveRunnerName || selectedOrder.runnerName}` : ''}</span>
+                                <span className="text-[11px] text-off-black/50 truncate">{selectedOrder.effectiveRaceName || selectedOrder.raceName || 'Custom'}{designed.length ? ` · ${at >= 0 ? `${at + 1} of ${designed.length}` : `${designed.length}`} with designs` : ''}</span>
+                              </div>
+                              <button onClick={() => go(next)} disabled={!next} aria-label="Next order with designs" className="shrink-0 w-12 h-12 rounded-xl border border-border-gray text-off-black/60 disabled:opacity-30 inline-flex items-center justify-center">
+                                <ChevronRight className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })()}
                     </div>
                   )}
                   {/* Same shape as a standard order: the work on the left, and a
