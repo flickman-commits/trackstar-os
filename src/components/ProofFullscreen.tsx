@@ -295,10 +295,11 @@ export default function ProofFullscreen({
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col" style={{ backgroundColor: '#0B0B0B' }}>
-      {/* Top bar. Kept out of the image area so it never covers the artwork. */}
+      {/* The bar: which design, zoom, close. Kept out of the image area so it never covers the artwork.
+          At the top on a desk; at the very bottom on a phone, under the thumb, so closing is one reach. */}
       <div
-        className="flex items-center justify-between gap-3 px-3 py-2.5 shrink-0"
-        style={{ backgroundColor: '#141414', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+        className="order-last md:order-first flex items-center justify-between gap-3 px-3 pt-2 md:py-2.5 shrink-0 border-t md:border-t-0 md:border-b border-white/10 pb-[calc(env(safe-area-inset-bottom)+8px)]"
+        style={{ backgroundColor: '#141414' }}
       >
         <span className="text-[13px] font-medium truncate" style={{ color: '#FFFFFF' }}>{label}</span>
         <div className="flex items-center gap-1">
@@ -309,7 +310,7 @@ export default function ProofFullscreen({
               <button
                 onClick={() => zoomAt(scale / 1.4)}
                 disabled={scale <= MIN_SCALE}
-                className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-white/10 disabled:opacity-30"
+                className="flex items-center justify-center w-11 h-11 md:w-8 md:h-8 rounded-lg transition-colors hover:bg-white/10 disabled:opacity-30"
                 style={{ color: '#FFFFFF' }}
                 title="Zoom out (minus key)"
               >
@@ -326,7 +327,7 @@ export default function ProofFullscreen({
               <button
                 onClick={() => zoomAt(scale === 1 ? STEP_SCALE : scale * 1.4)}
                 disabled={scale >= MAX_SCALE}
-                className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-white/10 disabled:opacity-30"
+                className="flex items-center justify-center w-11 h-11 md:w-8 md:h-8 rounded-lg transition-colors hover:bg-white/10 disabled:opacity-30"
                 style={{ color: '#FFFFFF' }}
                 title="Zoom in (plus key)"
               >
@@ -336,11 +337,12 @@ export default function ProofFullscreen({
           )}
           <button
             onClick={onClose}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/10"
+            className="flex items-center justify-center gap-1.5 min-w-11 h-11 md:h-auto md:min-w-0 px-2.5 md:py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-white/10"
             style={{ color: '#FFFFFF' }}
             title="Close full screen (Esc)"
+            aria-label="Close full screen"
           >
-            <X className="w-4 h-4" />
+            <X className="w-6 h-6 md:w-4 md:h-4" />
             <span className="hidden sm:inline">Close</span>
           </button>
         </div>
@@ -439,7 +441,7 @@ export default function ProofFullscreen({
       )}
 
       {footer && (
-        <div className="px-4 pt-1 shrink-0" style={{ backgroundColor: '#141414', paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
+        <div className="px-4 pt-1 shrink-0 pb-3 md:pb-[calc(env(safe-area-inset-bottom)+12px)]" style={{ backgroundColor: '#141414' }}>
           {footer}
         </div>
       )}
