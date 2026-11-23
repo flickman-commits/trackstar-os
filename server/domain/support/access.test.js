@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { isOwnOnly, ownInboxWhere, OWN_THREAD_ACTIONS, assertThreadAccess, assertOwnAssign, narrowThreadForOwn, designerCustomers, isTheirConversation, NOT_YOURS } from './access.js'
+import { isOwnOnly, ownInboxWhere, OWN_THREAD_ACTIONS, assertThreadAccess, assertOwnAssign, narrowThreadForOwn, designerCustomers, isTheirConversation, NOT_YOURS, ANOTHER_DESIGNERS } from './access.js'
 
 const dan = { id: 'dan', supportScope: 'own' }
 const dani = { id: 'dani', supportScope: 'all' }
@@ -91,4 +91,22 @@ test("a designer sees only their own custom orders on the customer, and none of 
   assert.equal(out.customer.conversations, 1)
   assert.equal(out.context.bigSpender, false)
   assert.equal(out.ownOnly, true)
+})
+
+test("the Head of Design opens every designer's customers; a junior is told a conversation exists, not that there is none", async () => {
+  // buyer@x.com is Dan's, creeds@x.com is Creed's.
+  const since = new Date('2026-11-01T00:00:00Z')
+  const customersOf = async (userId, { all = false } = {}) => [
+    ...(all || userId === 'dan' ? [{ email: 'buyer@x.com', since }] : []),
+    ...(all || userId === 'creed' ? [{ email: 'creeds@x.com', since }] : []),
+  ]
+  const t = { id: 'held', status: 'open', assigneeId: 'dani', mergedIntoId: null, customerEmail: 'creeds@x.com', lastMessageAt: new Date('2026-11-20T00:00:00Z') }
+  const opts = { load: async () => t, customers: customersOf }
+  assert.equal(await assertThreadAccess({ id: 'lead', supportScope: 'own', leadsCustoms: true }, 'held', opts), t)
+  await assert.rejects(assertThreadAccess({ id: 'dan', supportScope: 'own', leadsCustoms: false }, 'held', opts), e => e.message === ANOTHER_DESIGNERS && e.status === 403)
+  // A customer with no custom order, or a conversation already closed: still refused, without that warning.
+  await assert.rejects(assertThreadAccess({ id: 'lead', supportScope: 'own', leadsCustoms: true }, 'x', { ...opts, load: async () => ({ ...t, customerEmail: 'stranger@x.com' }) }), e => e.message === NOT_YOURS)
+  await assert.rejects(assertThreadAccess({ id: 'dan', supportScope: 'own' }, 'x', { ...opts, load: async () => ({ ...t, status: 'closed' }) }), e => e.message === NOT_YOURS)
+  // Nobody's conversation is not "assigned to nobody": no one gets in on an empty id.
+  assert.equal(isTheirConversation({ assigneeId: null, customerEmail: '', lastMessageAt: since }, null, []), false)
 })

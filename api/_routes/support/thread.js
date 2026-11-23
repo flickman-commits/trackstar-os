@@ -46,7 +46,7 @@ export default async function handler(req, res) {
       const t = await getThread(id, { userId: user.id, money: seesMoney(user) })
       if (!t) return res.status(404).json({ error: 'No such thread' })
       await markRead(id, user.id)
-      return res.status(200).json({ ...(isOwnOnly(user) ? await narrowThreadForOwn(t, user.id) : t), unread: false })
+      return res.status(200).json({ ...(isOwnOnly(user) ? await narrowThreadForOwn(t, user.id, { all: user.leadsCustoms }) : t), unread: false })
     }
 
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })

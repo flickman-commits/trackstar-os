@@ -240,8 +240,8 @@ export async function bouncedCustomers(emails) {
  * not closed), for the order view in TrackstarOS. Matched on the
  * order's email; filtered and merged-away threads never show.
  */
-export async function conversationsForOrder(orderId, { all = false, ownerId = null } = {}) {
-  const order = await prisma.order.findUnique({ where: { id: String(orderId || '') }, select: { customerEmail: true, shopifyOrderData: true, parentOrderNumber: true, orderNumber: true, assigneeId: true, createdAt: true } })
+export async function conversationsForOrder(orderId, { all = false, ownerId = null, leads = false } = {}) {
+  const order = await prisma.order.findUnique({ where: { id: String(orderId || '') }, select: { customerEmail: true, shopifyOrderData: true, parentOrderNumber: true, orderNumber: true, assigneeId: true, trackstarOrderType: true, createdAt: true } })
   const email = String(order?.customerEmail || '').trim().toLowerCase()
   // Addresses this order was linked to by hand (they wrote in from another email).
   const linked = order ? await prisma.supportLinkedOrder.findMany({ where: { orderNumber: customerOrderNumber(order) }, select: { customerKey: true } }) : []
@@ -250,7 +250,7 @@ export async function conversationsForOrder(orderId, { all = false, ownerId = nu
   // all: closed ones too, for the order's Conversation panel ("Show closed").
   const rows = await prisma.supportThread.findMany({
     // ownerId: a designer sees the ones assigned to them, and all of this customer's since the order when it is theirs (access.js).
-    where: { customerEmail: { in: emails, mode: 'insensitive' }, mergedIntoId: null, filtered: false, ...(all ? {} : { status: { not: 'closed' } }), ...(ownerId ? { OR: [{ assigneeId: ownerId }, ...(order?.assigneeId === ownerId ? [{ lastMessageAt: { gte: order.createdAt } }] : [])] } : {}) },
+    where: { customerEmail: { in: emails, mode: 'insensitive' }, mergedIntoId: null, filtered: false, ...(all ? {} : { status: { not: 'closed' } }), ...(ownerId ? { OR: [{ assigneeId: ownerId }, ...(order?.assigneeId === ownerId || (leads && order?.trackstarOrderType === 'custom') ? [{ lastMessageAt: { gte: order.createdAt } }] : [])] } : {}) },
     orderBy: { lastMessageAt: 'desc' },
     take: all ? 25 : 5,
     select: { id: true, subject: true, status: true, snippet: true, lastMessageAt: true, lastInboundAt: true, lastOutboundAt: true, bouncedAt: true, messageCount: true, snoozedUntil: true, notWaitingAt: true, channel: true, assignee: { select: { firstName: true } } },

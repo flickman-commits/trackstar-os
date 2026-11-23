@@ -33,6 +33,7 @@
 import prisma from '../../db.js'
 import { call, uploadApprovedToArtelo } from './artelo.js'
 import { recordAudit } from '../../../api/_lib/users.js'
+import { hasRole } from '../../../api/_lib/roles.js'
 import { completeOrder, describeOrder } from '../orders/complete.js'
 import { setDesignStatus } from '../orders/designStatus.js'
 import { unpaidPhotoRows } from '../orders/photoPayment.js'
@@ -160,6 +161,13 @@ export async function holdForCustomer({ orderId, actor }) {
   return prisma.renderJob.update({ where: { id: job.id }, data: { sendHeldAt: new Date(), sendHeldBy: `${personName(actor)}, waiting on the customer's approval`, sendAfter: null } })
 }
 
+/** Whether the person sending is an admin, read fresh; a call with no person is not. */
+async function isAdminActor(actor) {
+  if (!actor?.id) return false
+  const u = await prisma.user.findUnique({ where: { id: actor.id }, select: { isActive: true, role: true, extraRoles: true } })
+  return Boolean(u?.isActive && hasRole(u, 'admin'))
+}
+
 /**
  * Send now: for a held order, one approved before Approve sent things, or one
  * Artelo refused and a person has since fixed. Tries again from the start
@@ -168,7 +176,7 @@ export async function holdForCustomer({ orderId, actor }) {
  * Claimed the way sendDue claims a job, so the sender never sends it twice.
  */
 export async function sendNow({ orderId, actor }) {
-  const order = await prisma.order.findUnique({ where: { id: String(orderId || '') }, select: { id: true, trackstarOrderType: true, status: true, orderNumber: true, runnerName: true, raceName: true, raceYear: true } })
+  const order = await prisma.order.findUnique({ where: { id: String(orderId || '') }, select: { id: true, trackstarOrderType: true, status: true, orderNumber: true, parentOrderNumber: true, customerEmail: true, shopifyOrderData: true, etsyOrderData: true, arteloOrderData: true, createdAt: true, runnerName: true, raceName: true, raceYear: true } })
   if (!order) throw new SendError('Order not found', 404)
   if (!SEND_TYPES.includes(order.trackstarOrderType)) throw new SendError('Only standard and custom orders are sent from here')
   if (order.status === 'completed') throw new SendError('This order is already complete')
@@ -176,6 +184,12 @@ export async function sendNow({ orderId, actor }) {
   const job = await sendableJob(order.id)
   if (!job) throw new SendError('This order has no approved print')
   if (job.arteloSentAt) throw new SendError('This order was already sent to production')
+  // A custom order the customer is still talking to us about is usually a change to the
+  // design: sending it past the conversation is an admin's call, however it is reached
+  // (Send anyway, or the status set to Sent to Production).
+  if (order.trackstarOrderType === 'custom' && !(await isAdminActor(actor)) && await openConversationFor(order, { after: sentAnywayAt(job) })) {
+    throw new SendError('The customer has an open conversation about this order. Answer and close it, or ask an admin to send it anyway.', 403)
+  }
   const now = new Date()
   // A person's Send now also overrides an open Support conversation (support/holdsPrint.js),
   // until the customer writes again.

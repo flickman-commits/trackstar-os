@@ -15,7 +15,7 @@ import { putUpload } from '../lib/putUpload'
  * admin sends it from here or attaches it in Artelo by hand and marks it
  * complete; Mark complete shows once Attach has been opened.
  */
-type Send = { state: 'queued' | 'held' | 'support' | 'waiting' | 'blocked' | 'manual' | 'sent'; at?: string | null; by?: string | null; reason?: string; next?: string | null; inHold?: boolean; threadId?: string | null }
+type Send = { state: 'queued' | 'held' | 'support' | 'waiting' | 'blocked' | 'manual' | 'sent'; at?: string | null; by?: string | null; reason?: string; next?: string | null; inHold?: boolean; threadId?: string | null; canOpenThread?: boolean; threadWith?: string | null }
 type FinalPdf = {
   id: string; fileName: string; uploadedAt: string; pdfUrl: string | null
   driveUrl: string | null; driveError: string | null; inArtelo: boolean; arteloError: string | null
@@ -195,6 +195,12 @@ export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, 
     )
   }
   // Held, or Artelo would not take it: say so, and (for whoever can) Send to production.
+  // The conversation holding it: a link for whoever may open it, else who to ask (server/domain/support/access.js).
+  const heldConversation = send?.state === 'support' && send.threadId
+    ? (send.canOpenThread
+      ? <> <a href={`/support?thread=${encodeURIComponent(send.threadId)}`} className="underline font-semibold">Open the conversation</a></>
+      : <> <span className="font-semibold">{send.threadWith ? `${send.threadWith} is talking to this customer.` : 'Support has this conversation.'}</span></>)
+    : null
   const sendBar = send && (send.state === 'manual' ? (
     <div className="rounded-md border-2 border-red-300 bg-red-50 px-3 py-2.5 text-[13px] leading-snug text-red-800">
       <span className="font-semibold mr-1.5">Attached in Artelo, not sent yet.</span>
@@ -204,11 +210,12 @@ export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, 
     <div className="space-y-2">
       <div className={`rounded-md border px-3 py-2.5 text-[13px] leading-snug ${send.state === 'blocked' ? 'border-red-200 bg-red-50 text-red-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
         <span className="font-semibold mr-1.5">{send.state === 'blocked' ? 'Artelo would not take it.' : send.state === 'support' ? 'Support conversation open.' : 'Held.'}</span>
-        {send.state === 'blocked' ? `${send.reason}.${send.next ? ' The tool tries again on its own.' : ''}` : send.state === 'support' ? <>Held from production while the customer's conversation is open. Closing it releases the print within 15 minutes.{send.threadId && <> <a href={`/support?thread=${encodeURIComponent(send.threadId)}`} className="underline font-semibold">Open the conversation</a></>}</> : `Held${send.by ? ` by ${send.by}` : ''} ${clock(send.at)}. It does not go to production until someone sends it.`}
+        {send.state === 'blocked' ? `${send.reason}.${send.next ? ' The tool tries again on its own.' : ''}` : send.state === 'support' ? <>Held from production while the customer's conversation is open. Do not send it yet: closing the conversation releases the print within 15 minutes.{heldConversation}</> : `Held${send.by ? ` by ${send.by}` : ''} ${clock(send.at)}. It does not go to production until someone sends it.`}
       </div>
-      <button onClick={() => sendAction('send-now')} disabled={busy !== null} className="w-full inline-flex items-center justify-center gap-2 py-4 text-base rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors">
+      {/* Past an open conversation is an admin's call (sendNow refuses anyone else). */}
+      {(send.state !== 'support' || canAttach) && <button onClick={() => sendAction('send-now')} disabled={busy !== null} className="w-full inline-flex items-center justify-center gap-2 py-4 text-base rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors">
         {busy === 'send' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} {send.state === 'blocked' ? 'Try sending again' : send.state === 'support' ? 'Send anyway' : 'Send to production'}
-      </button>
+      </button>}
     </div>
   ))
 
@@ -244,7 +251,7 @@ export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, 
     : 'Ready to send'
   const body = st === 'manual' ? 'Change the shipping to UPS Next Day Air Saver (under $40), then send it to production in Artelo. It completes here on its own.'
     : st === 'blocked' ? `${String(send?.reason || 'Artelo refused it').replace(/\.$/, '')}.${send?.next ? ' The tool tries again on its own.' : ''}`
-    : st === 'support' ? <>Held from production while the customer&apos;s conversation is open. Closing it releases the print within 15 minutes.{send?.threadId && <> <a href={`/support?thread=${encodeURIComponent(send.threadId)}`} className="underline font-semibold">Open the conversation</a></>}</>
+    : st === 'support' ? <>Held from production while the customer&apos;s conversation is open. Closing it releases the print within 15 minutes.{heldConversation}</>
     : st === 'held' ? `${clock(send?.at)}. It does not go to production until someone sends it.`
     : <>Send to production attaches <span className="font-mono">{finalPdf.fileName}</span> to Artelo order <span className="font-semibold">{orderNo}</span> and sends it.</>
   const link = 'inline-flex items-center gap-1 text-sm font-medium text-[#4600D6] hover:underline underline-offset-2 disabled:opacity-50'

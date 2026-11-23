@@ -17,7 +17,7 @@
 import { setCors } from '../../_lib/auth.js'
 import { requireAnyCapability, recordAudit } from '../../_lib/users.js'
 import prisma from '../../_lib/prisma.js'
-import { can } from '../../_lib/roles.js'
+import { can, hasRole } from '../../_lib/roles.js'
 import { emailCustomer, conversationsForOrder } from '../../../server/domain/support/compose.js'
 import { listMockups } from '../../../server/domain/support/mockups.js'
 import { shipToForOrder } from '../../../server/domain/support/threads.js'
@@ -39,7 +39,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const orderId = String(req.query?.orderId || '')
-      const [threads, mockups, shipTo] = await Promise.all([conversationsForOrder(orderId, { all: req.query?.all === '1', ownerId: support ? null : user.id }), orderId ? listMockups([orderId]).catch(() => []) : [], shipToForOrder(orderId).catch(() => null)])
+      const [threads, mockups, shipTo] = await Promise.all([conversationsForOrder(orderId, { all: req.query?.all === '1', ownerId: support ? null : user.id, leads: !support && hasRole(user, 'head_designer') }), orderId ? listMockups([orderId]).catch(() => []) : [], shipToForOrder(orderId).catch(() => null)])
       return res.status(200).json({ threads: support || await can(user, 'support.own') ? threads : [], mockups, shipTo })
     } catch (error) {
       console.error('[API /support/compose GET]', error)

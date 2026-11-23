@@ -10,10 +10,20 @@
  *   POST { action: 'retry', orderId }       Drive and Artelo again, for one that failed
  */
 import { setCors, requireAdmin } from '../../_lib/auth.js'
-import { recordAudit } from '../../_lib/users.js'
+import { recordAudit, loadActiveUser, withSupportScope } from '../../_lib/users.js'
+import { threadForViewer } from '../../../server/domain/support/access.js'
 import prisma from '../../_lib/prisma.js'
 import { finalPdfUploadUrl, recordFinalPdf, finalPdfStatus, retryFinalPdf } from '../../../server/domain/orders/customFinal.js'
 import { sendPublicError } from '../../../server/lib/publicError.js'
+
+/** A print held by a conversation: whether this person may open it, and who has it. */
+async function forViewer(out, actor) {
+  const threadId = out?.finalPdf?.send?.threadId
+  if (!threadId) return out
+  const user = await loadActiveUser(actor)
+  const thread = user ? await threadForViewer(await withSupportScope(user), threadId) : { canOpen: false, with: null }
+  return { ...out, finalPdf: { ...out.finalPdf, send: { ...out.finalPdf.send, canOpenThread: thread.canOpen, threadWith: thread.with } } }
+}
 
 export default async function handler(req, res) {
   if (setCors(req, res, { methods: 'GET, POST, OPTIONS' })) return
@@ -23,7 +33,7 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       if (!req.query.orderId) return res.status(400).json({ error: 'orderId is required' })
-      return res.status(200).json(await finalPdfStatus(String(req.query.orderId)))
+      return res.status(200).json(await forViewer(await finalPdfStatus(String(req.query.orderId)), actor))
     }
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
@@ -41,10 +51,10 @@ export default async function handler(req, res) {
         detail: { orderId: body.orderId, fileName: out.finalPdf?.fileName, drive: Boolean(out.finalPdf?.driveUrl), artelo: Boolean(out.finalPdf?.inArtelo) },
         actor,
       })
-      return res.status(200).json(out)
+      return res.status(200).json(await forViewer(out, actor))
     }
 
-    if (body.action === 'retry') return res.status(200).json(await retryFinalPdf({ orderId: body.orderId }))
+    if (body.action === 'retry') return res.status(200).json(await forViewer(await retryFinalPdf({ orderId: body.orderId }), actor))
 
     return res.status(400).json({ error: 'Unknown action' })
   } catch (error) {

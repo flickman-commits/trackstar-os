@@ -15,7 +15,7 @@
 import crypto from 'crypto'
 import prisma from './prisma.js'
 import { requireAdmin } from './auth.js'
-import { ROLE_LABEL, normalizeRole, can } from './roles.js'
+import { ROLE_LABEL, normalizeRole, can, hasRole } from './roles.js'
 import { inBackground } from '../../server/lib/background.js'
 
 const SEEN_EVERY_MS = 5 * 60_000
@@ -184,7 +184,17 @@ export async function requireAnyCapability(req, res, capabilities) {
 export async function requireSupport(req, res) {
   const user = await requireAnyCapability(req, res, ['support', 'support.own'])
   if (!user) return null
-  return Object.assign(user, { supportScope: user.has.has('support') ? 'all' : 'own' })
+  return withSupportScope(user)
+}
+
+/**
+ * How much of Support this person has ('all', 'own' or null), and whether
+ * they lead the custom orders (server/domain/support/access.js): the Head of
+ * Design role itself, not 'orders.assign_custom', which juniors can hold too.
+ */
+export async function withSupportScope(user) {
+  const scope = user.isSystem || await can(user, 'support') ? 'all' : await can(user, 'support.own') ? 'own' : null
+  return Object.assign(user, { supportScope: scope, leadsCustoms: scope === 'own' && hasRole(user, 'head_designer') })
 }
 
 /**
