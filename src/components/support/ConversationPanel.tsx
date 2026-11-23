@@ -18,7 +18,7 @@ import { chip } from '@/lib/ui'
  * (compose.js threadWaiting); it shows with the open ones. Not waiting
  * undoes a wrong guess, Mark waiting covers a request with no question mark.
  */
-export default function ConversationPanel({ orderId, enabled, onChanged, onLoaded }: { orderId: string; enabled: boolean; onChanged?: () => void; /** The conversations, once read: the order view shows the design brief again while one is open. */ onLoaded?: (threads: OrderConversation[]) => void }) {
+export default function ConversationPanel({ orderId, enabled, onChanged, onLoaded, openOnly = false }: { orderId: string; enabled: boolean; onChanged?: () => void; /** The conversations, once read: the order view shows the design brief again while one is open. */ onLoaded?: (threads: OrderConversation[]) => void; /** A custom order's stage layout: only live conversations; the closed ones are in Support. */ openOnly?: boolean }) {
   const [threads, setThreads] = useState<OrderConversation[] | null>(null)
   const [showClosed, setShowClosed] = useState(false)
   useEffect(() => {
@@ -57,6 +57,7 @@ export default function ConversationPanel({ orderId, enabled, onChanged, onLoade
   const tone = bounced ? { box: 'bg-red-50 border-red-300', head: 'text-red-800', line: 'border-red-200 hover:border-red-400' }
     : owed ? { box: 'bg-amber-50 border-amber-300', head: 'text-amber-800', line: 'border-amber-200 hover:border-amber-400' } : { box: 'bg-white border-border-gray', head: 'text-off-black/50', line: 'border-border-gray hover:border-off-black/30' }
   if (!shown.length && !closed.length) return null
+  if (openOnly && !open.length) return null
   // All closed and folded: one quiet line, no card. Nothing is owed, so nothing should pull the eye.
   if (!open.length && !showClosed) {
     return (
@@ -73,7 +74,7 @@ export default function ConversationPanel({ orderId, enabled, onChanged, onLoade
         <div className={`text-[11px] font-semibold uppercase tracking-wider inline-flex items-center gap-1.5 ${tone.head}`}>
           <Inbox className="w-3.5 h-3.5" />Conversation{open.length !== 1 ? 's' : ''}{open.length ? ` · ${open.length} open` : ''}{bounced ? ' · our email bounced' : owed ? ' · the customer is waiting on us' : ''}
         </div>
-        {closed.length > 0 && (
+        {closed.length > 0 && !openOnly && (
           <button type="button" onClick={() => setShowClosed(v => !v)} className="text-[11px] font-medium text-off-black/50 hover:text-off-black">
             {showClosed ? 'Hide closed' : `Show closed (${closed.length})`}
           </button>

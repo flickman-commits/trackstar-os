@@ -63,6 +63,12 @@ interface ProofManagerProps {
   // The section heading. The approval link's Copy / Open / Regenerate sit on
   // its right; the link itself is not shown.
   heading?: ReactNode
+  // A custom order's stage (src/components/orders/customStages.tsx) shapes what
+  // shows: designing is upload and send; proofs-out is what the customer is
+  // looking at, with Resend and the link, and a new version one click away;
+  // revision leads with their feedback next to the proof they meant. Earlier
+  // rounds fold away. Without it (partner orders) everything shows as before.
+  stage?: 'designing' | 'proofs' | 'revision'
 }
 
 export type ProofActions = { resend: (() => void) | null; resending: boolean; openMessages: () => void; newReply: boolean; messageCount: number }
@@ -121,7 +127,10 @@ function LabelPicker({ value, options, onChange, disabled, className = '' }: {
   )
 }
 
-export default function ProofManager({ orderId, designStatus, customerEmail, onDesignStatusChange, onLatestFeedback, disableEmail, allowGroups, onActions, heading }: ProofManagerProps) {
+export default function ProofManager({ orderId, designStatus, customerEmail, onDesignStatusChange, onLatestFeedback, disableEmail, allowGroups, onActions, heading, stage }: ProofManagerProps) {
+  // Stage mode: a new version while proofs are out, and earlier rounds, open on a click.
+  const [addingVersion, setAddingVersion] = useState(false)
+  const [roundsOpen, setRoundsOpen] = useState(false)
   const [proofs, setProofs] = useState<Proof[]>([])
   const [approvalToken, setApprovalToken] = useState<ApprovalToken | null>(null)
   const [approvalUrl, setApprovalUrl] = useState<string | null>(null)
@@ -749,7 +758,7 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
           the proofs makes the link; there is nothing to generate by hand. */}
       <div className="flex items-center justify-between gap-2 -mb-1.5">
         {heading}
-        {approvalUrl && (
+        {approvalUrl && stage !== 'designing' && (
           <div className="flex items-center gap-1">
             <button
               onClick={copyLink}
@@ -865,10 +874,31 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
 
         return (
           <>
+            {/* Changes requested: their words next to the proof they meant, first. */}
+            {stage === 'revision' && (() => {
+              const asked = proofs.filter(p => p.status === 'revision_requested' && p.customerFeedback)
+              const lastBatch = asked.length ? Math.max(...asked.map(p => p.batch || 1)) : 0
+              const latest = asked.filter(p => (p.batch || 1) === lastBatch)
+              if (!latest.length) return null
+              return (
+                <div className="space-y-2">
+                  {latest.map(p => (
+                    <div key={p.id} className="grid grid-cols-[6rem_minmax(0,1fr)] gap-3 items-start">
+                      {renderThumbnail(p, true)}
+                      <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5">
+                        <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider mb-1">On v{p.version}, they wrote</p>
+                        <p className="text-[15px] leading-snug text-amber-950 whitespace-pre-wrap">{p.customerFeedback}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
+
             {/* Current batch */}
             {currentBatch.length > 0 && (
               <div>
-                <p className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1.5">Current batch ({currentBatch.length})</p>
+                <p className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1.5">{stage === 'proofs' ? `What the customer is looking at (${currentBatch.length})` : stage === 'revision' ? `Revised proofs (${currentBatch.length})` : `Current batch (${currentBatch.length})`}</p>
                 {allowGroups && currentBatch.some(p => p.groupLabel) ? (
                   <div className="space-y-2">
                     {(() => {
@@ -920,10 +950,38 @@ export default function ProofManager({ orderId, designStatus, customerEmail, onD
               </div>
             )}
 
-            {uploadBlock}
+            {/* Proofs out: Resend and the link, and a new version one click away. */}
+            {stage === 'proofs' && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                {showResendButton && (
+                  <button onClick={sendToCustomer} disabled={isSending} className="inline-flex items-center gap-1 font-medium text-[#4600D6] hover:underline underline-offset-2 disabled:opacity-50">
+                    {isSending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />} Resend proofs
+                  </button>
+                )}
+                {approvalUrl && (
+                  <button onClick={copyLink} className="inline-flex items-center gap-1 font-medium text-[#4600D6] hover:underline underline-offset-2">
+                    {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} {copied ? 'Copied' : 'Copy approval link'}
+                  </button>
+                )}
+                {!addingVersion && (
+                  <button onClick={() => setAddingVersion(true)} className="ml-auto inline-flex items-center gap-1 text-off-black/55 hover:text-off-black">
+                    <ImagePlus className="w-3 h-3" /> Upload a new version
+                  </button>
+                )}
+              </div>
+            )}
 
-            {/* Previous batches — grouped by round */}
-            {sortedBatches.map(([batchNum, batchProofs]) => {
+            {(stage !== 'proofs' || addingVersion) && uploadBlock}
+
+            {/* Earlier rounds: folded in a stage, open everywhere else. */}
+            {stage && sortedBatches.length > 0 && (
+              <button type="button" onClick={() => setRoundsOpen(v => !v)} className="inline-flex items-center gap-1.5 px-1 text-[12px] text-off-black/50 hover:text-off-black">
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${roundsOpen ? '' : '-rotate-90'}`} />
+                {sortedBatches.length === 1 ? `Round ${sortedBatches[0][0]}` : `${sortedBatches.length} earlier rounds`}{sortedBatches.length === 1 && sortedBatches[0][1][0]?.createdAt ? ` · ${new Date(sortedBatches[0][1][0].createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+                <span className="font-medium text-off-black/60 hover:underline">{roundsOpen ? 'Hide' : 'Show'}</span>
+              </button>
+            )}
+            {(!stage || roundsOpen) && sortedBatches.map(([batchNum, batchProofs]) => {
               const feedback = [...batchProofs].reverse().find(p => p.customerFeedback)
               const batchDate = batchProofs[0]?.createdAt
                 ? new Date(batchProofs[0].createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })

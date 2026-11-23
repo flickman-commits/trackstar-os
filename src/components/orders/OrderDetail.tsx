@@ -3,7 +3,7 @@ import DesignStatusPicker from '@/components/orders/DesignStatusPicker'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
-import { FileText, History, Plus, CalendarClock, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff, Ruler, Flag, CheckCircle2 } from 'lucide-react'
+import { History, Plus, CalendarClock, Copy, Loader2, FlaskConical, Pencil, Check, X, ChevronDown as ChevronDownIcon, ChevronUp, ChevronLeft, ImagePlus, MessageSquareText, Send, CloudSun, Download, ArrowUpRight, Mail, Shuffle, Clock, RotateCcw, TimerOff, Ruler, Flag, CheckCircle2 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { useAuth } from '@/lib/auth'
 import { shrinkImage } from '@/lib/shrinkImage'
@@ -30,6 +30,8 @@ import PhotoCropper from '@/components/PhotoCropper'
 import OrderProduction from '@/components/orders/OrderProduction'
 import OrderSupportActions from '@/components/orders/OrderSupportActions'
 import { isActivityNote } from '@/lib/orderNotes'
+import { StageCard, Fold, ProofImage, ApprovedBadge, EarlierVersions, SentRecord } from '@/components/orders/customStages'
+import { customStage, approvedProof, useOrderProofs, day as stageDay } from '@/components/orders/customStage'
 import { BulkSendLine, BulkAddressAction } from '@/components/orders/BulkRunnerSend'
 import ConvertToCustomModal from '@/components/orders/ConvertToCustomModal'
 import FeatureStar from '@/components/orders/FeatureStar'
@@ -464,6 +466,9 @@ export default function OrderDetail({
   // Open Support conversations on the open order (ConversationPanel), and whether the design brief was asked for after it stepped aside.
   const [openConvos, setOpenConvos] = useState<{ orderId: string; open: number } | null>(null)
   const [briefShown, setBriefShown] = useState<string | null>(null)
+  const [earlierOpen, setEarlierOpen] = useState(false)
+  // After approval a custom order's stages show the approved proof large (customStages.tsx).
+  const stageProofs = useOrderProofs(selectedOrder?.id || '', !!selectedOrder && selectedOrder.trackstarOrderType === 'custom' && ['approved_by_customer', 'final_pdf_uploaded', 'sent_to_production'].includes(selectedOrder.designStatus || ''))
   const [isLoadingComments, setIsLoadingComments] = useState(false)
   const [newCommentText, setNewCommentText] = useState('')
   // Comment composer stays collapsed until asked for. Auto-opens when the
@@ -1302,9 +1307,10 @@ Thank you!`
   // instructions on a custom one. Notes that only record what the order
   // already shows (proofs emailed, an email to the customer) are activity,
   // folded into one quiet line under it (src/lib/orderNotes.ts).
-  const commentsCallout = () => {
+  const commentsCallout = ({ activity: withActivity = true }: { activity?: boolean } = {}) => {
     const notes = orderComments.filter(c => c.imageUrl || !isActivityNote(c.text))
-    const activity = orderComments.filter(c => !c.imageUrl && isActivityNote(c.text))
+    // A custom order's stage layout drops them: the proofs and the timeline already show them.
+    const activity = withActivity ? orderComments.filter(c => !c.imageUrl && isActivityNote(c.text)) : []
     if (!notes.length && !activity.length) return null
     return (
       <div className="space-y-1.5">
@@ -1539,10 +1545,235 @@ Thank you!`
                     // Stage-based collapse logic
                     const ds = selectedOrder.designStatus as DesignStatus
                     const isProductionStage = ['final_pdf_uploaded', 'sent_to_production'].includes(ds)
-                    // The design brief is for making the design: not started, designing, or revising. After that it
-                    // only matters again if the customer is talking to us (an open conversation is usually a change).
-                    const briefNeeded = ['not_started', 'in_progress', 'in_revision'].includes(ds || 'not_started')
-                      || (openConvos?.orderId === selectedOrder.id && openConvos.open > 0)
+                    // The custom order's stage (customStages.tsx): one job, one main action, only what it needs.
+                    const stage = customStage(ds)
+                    const replyOpen = openConvos?.orderId === selectedOrder.id && openConvos.open > 0
+                    const designDue = designDueDate(selectedOrder)
+                    const dueLive = dueIsLive(selectedOrder)
+                    const daysToDue = designDue ? Math.ceil((new Date(designDue).getTime() - Date.now()) / 86400000) : null
+                    const overdue = stage === 'designing' && dueLive && daysToDue !== null && daysToDue < 0
+                    const approved = approvedProof(stageProofs)
+                    const earlier = (stageProofs || []).filter(p => p.id !== approved?.id)
+                    const proofsSentDays = selectedOrder.proofSentAt ? Math.floor((Date.now() - new Date(selectedOrder.proofSentAt).getTime()) / 86400000) : null
+                    const art = (
+                      <span className="inline-flex flex-wrap items-center gap-1.5">
+                        {selectedOrder.productSize && <span className="inline-flex items-center px-2 py-1 bg-white border border-border-gray rounded text-xs font-semibold text-off-black" title="Artboard size">{selectedOrder.productSize}</span>}
+                        {selectedOrder.frameType && (() => { const { label, chip } = frameChip(selectedOrder.frameType); return <span className={chip} title="The frame they ordered">{label}</span> })()}
+                        {selectedOrder.photoPath && <span className="inline-flex items-center px-2 py-1 rounded border text-xs font-semibold bg-[#4600D6]/10 text-[#4600D6] border-[#4600D6]/25">Photo on print</span>}
+                      </span>
+                    )
+                    // What the customer asked for, and their photo. Full size while designing, compact once it is a reference.
+                    const brief = (compact: boolean) => (
+                      <div className={`grid gap-3 ${selectedOrder.photoPath && !compact ? 'md:grid-cols-[minmax(0,1fr)_minmax(0,18rem)]' : ''}`}>
+                        <div className={`bg-purple-50 border border-purple-200 rounded-md ${compact ? 'p-3' : 'p-4'}`}>
+                          <p className="text-[10px] font-semibold text-purple-600 uppercase tracking-wider mb-1">Creative Direction</p>
+                          <p className={`${compact ? 'text-xs' : 'text-body-sm'} text-purple-800 whitespace-pre-wrap`}>{selectedOrder.creativeDirection?.trim() || "They didn't give any - do your thing!"}</p>
+                        </div>
+                        {selectedOrder.photoPath && (
+                          <div className={`bg-[#4600D6]/5 border border-[#4600D6]/30 rounded-md flex gap-3 ${compact ? 'p-3 items-center' : 'p-4'}`}>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[10px] font-semibold text-[#4600D6] uppercase tracking-wider mb-1">Customer Photo</p>
+                              {!compact && <p className="text-xs text-[#4600D6]/80">For the photo window on the design.</p>}
+                              <button type="button" onClick={() => downloadPersonalizationPhoto(selectedOrder)} disabled={!photoUrl}
+                                className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded bg-dark-fill text-white hover:opacity-90 disabled:opacity-40">
+                                <Download className="w-3 h-3" /> Download
+                              </button>
+                            </div>
+                            {photoUrl && (
+                              <a href={photoUrl} target="_blank" rel="noopener noreferrer" className="shrink-0" title="Open full size">
+                                <img src={photoUrl} alt="Customer photo" className={`${compact ? 'h-14 w-14' : 'h-28 w-28'} object-cover rounded border border-border-gray`} />
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                    // What goes on the print, with Edit: the designer types these into the design.
+                    const printDetails = (
+                      <div>
+                        <h4 className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1.5">What goes on the print</h4>
+                        <div className="bg-subtle-gray border border-border-gray rounded-md p-3 space-y-2">
+                          {!selectedOrder.timeCustomer && (
+                            <p className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5">No finish time on the order yet. Ask the customer, or add it with Edit details once you have it.</p>
+                          )}
+                          <CustomDetailsFields
+                            key={selectedOrder.orderNumber}
+                            order={selectedOrder}
+                            onToast={setToast}
+                            onSaved={async () => {
+                              await fetchOrders()
+                              const refreshed = await apiFetch(`/api/orders?number=${encodeURIComponent(selectedOrder.parentOrderNumber)}`).then(r => r.json())
+                              const updated = refreshed.orders?.find((o: { orderNumber: string }) => o.orderNumber === selectedOrder.orderNumber)
+                              if (updated) setSelectedOrder(prev => prev && prev.orderNumber === updated.orderNumber ? mapOrder(updated) : prev)
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )
+                    const proofManager = (pmStage: 'designing' | 'proofs' | 'revision') => (
+                      <ProofManager
+                        key={selectedOrder.id}
+                        orderId={selectedOrder.id}
+                        orderNumber={selectedOrder.orderNumber}
+                        displayOrderNumber={selectedOrder.displayOrderNumber}
+                        designStatus={selectedOrder.designStatus}
+                        customerEmail={selectedOrder.customerEmail}
+                        onDesignStatusChange={(s) => updateDesignStatus(selectedOrder.orderNumber, s as DesignStatus)}
+                        onLatestFeedback={setLatestFeedback}
+                        onActions={setProofActions}
+                        stage={pmStage}
+                      />
+                    )
+                    const customWork = (
+                      <>
+                        {/* Something needs you: a customer waiting, a team note, an unpaid photo, a late design. Nothing shows when nothing is true. */}
+                        <ConversationPanel orderId={selectedOrder.id} openOnly enabled={!!selectedOrder.customerEmail && (can('support') || can('support.own'))} onChanged={() => { fetchOrders() }}
+                          onLoaded={list => setOpenConvos({ orderId: selectedOrder.id, open: list.filter(t => t.status !== 'closed' || t.waiting).length })} />
+                        {commentsCallout({ activity: false })}
+                        {selectedOrder.photoUnpaid && stage !== 'sent' && (
+                          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-800"><span className="font-semibold mr-1.5">Photo not paid.</span>The customer has not paid the Photo Add-On yet. Hold the final until the Shopify order reads paid.</div>
+                        )}
+                        {overdue && (
+                          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-800 flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span><span className="font-semibold mr-1.5">First proofs are late.</span>They were due {formatDueDate(designDue, false)}.</span>
+                            {selectedOrder.customerEmail && !selectedOrder.delayNoticeSentAt && <button onClick={openDelayDialog} className="font-semibold underline underline-offset-2">Notify the customer of a delay</button>}
+                          </div>
+                        )}
+                        {selectedOrder.delayNoticeSentAt && (stage === 'designing' || stage === 'revision') && (
+                          <div className="bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-xs text-amber-900">
+                            <span className="font-medium">Delay notice sent {new Date(selectedOrder.delayNoticeSentAt).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' })}</span>: {selectedOrder.delayNoticeDaysLate ?? '?'} day{selectedOrder.delayNoticeDaysLate === 1 ? '' : 's'} later than promised.
+                          </div>
+                        )}
+
+                        {stage === 'designing' && (
+                          <>
+                            <StageCard title="Make the first proofs" sub={designDue ? `Design due ${formatDueDate(designDue, false)}${daysToDue !== null && daysToDue >= 0 ? ` · ${daysToDue === 0 ? 'today' : `in ${daysToDue} day${daysToDue === 1 ? '' : 's'}`}` : ''}` : undefined}>
+                              <div className="flex items-center gap-2 text-xs text-off-black/55">Build to {art}</div>
+                              {proofManager('designing')}
+                            </StageCard>
+                            {brief(false)}
+                            {printDetails}
+                          </>
+                        )}
+
+                        {stage === 'proofs' && (
+                          <>
+                            <StageCard
+                              title="Waiting on the customer"
+                              sub={selectedOrder.proofSentAt ? `Sent ${stageDay(selectedOrder.proofSentAt)}${proofsSentDays ? ` · ${proofsSentDays} day${proofsSentDays === 1 ? '' : 's'}, no answer` : ' · today'}` : undefined}
+                            >
+                              {proofsSentDays !== null && proofsSentDays >= 3 && (
+                                <button onClick={() => sendFollowUp(selectedOrder.id)} disabled={isSendingFollowUp}
+                                  className="w-full py-3 text-sm font-semibold text-white bg-dark-fill hover:opacity-90 rounded-md flex items-center justify-center gap-2 disabled:opacity-50">
+                                  {isSendingFollowUp ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</> : <><Send className="w-4 h-4" /> Send follow-up</>}
+                                </button>
+                              )}
+                              {proofManager('proofs')}
+                            </StageCard>
+                            {replyOpen ? <>{brief(true)}{printDetails}</> : (
+                              <Fold label="Creative direction and what goes on the print" open={briefShown === selectedOrder.id} onToggle={() => setBriefShown(v => v === selectedOrder.id ? null : selectedOrder.id)}>
+                                <div className="space-y-3">{brief(true)}{printDetails}</div>
+                              </Fold>
+                            )}
+                          </>
+                        )}
+
+                        {stage === 'revision' && (
+                          <>
+                            <StageCard title="Make their change and send it back">
+                              {proofManager('revision')}
+                            </StageCard>
+                            {brief(true)}
+                            {printDetails}
+                          </>
+                        )}
+
+                        {stage === 'approved' && (
+                          <>
+                            <StageCard title="Customer approved. Upload the final PDF" sub={approved ? `Approved ${stageDay(approved.updatedAt)}${approved.customerFeedback ? ` · “${approved.customerFeedback}”` : ''}` : undefined}>
+                              <div className="grid gap-4 sm:grid-cols-[13rem_minmax(0,1fr)]">
+                                {stageProofs === null
+                                  ? <div className="aspect-[3/4] rounded-md bg-subtle-gray flex items-center justify-center"><Loader2 className="w-4 h-4 animate-spin text-off-black/30" /></div>
+                                  : approved ? <ProofImage proof={approved} className="w-full" badge={<ApprovedBadge />} />
+                                  : <div className="aspect-[3/4] rounded-md border border-dashed border-border-gray flex items-center justify-center text-xs text-off-black/45 text-center px-3">No approved proof on file</div>}
+                                <div className="min-w-0 space-y-3">
+                                  <div>
+                                    <p className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1">Export as</p>
+                                    <CopyableField label="" value={generateFilename(selectedOrder)} />
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1">Size and frame</p>
+                                    {art}
+                                  </div>
+                                </div>
+                              </div>
+                              <CustomFinalPdf
+                                bare
+                                orderId={selectedOrder.id}
+                                displayOrderNumber={selectedOrder.displayOrderNumber || selectedOrder.orderNumber}
+                                fileName={generateFilename(selectedOrder).replace(/\.pdf$/i, '')}
+                                designStatus={ds}
+                                arteloOrderUrl={selectedOrder.arteloUrl}
+                                canAttach={isAdmin}
+                                onUploaded={() => {
+                                  setSelectedOrder(prev => prev && prev.id === selectedOrder.id ? { ...prev, designStatus: 'final_pdf_uploaded' } : prev)
+                                  setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, designStatus: 'final_pdf_uploaded' } : o))
+                                  fetchOrders()
+                                }}
+                                onComplete={() => updateDesignStatus(selectedOrder.orderNumber, 'sent_to_production')}
+                              />
+                            </StageCard>
+                            <EarlierVersions proofs={earlier} open={earlierOpen} onToggle={() => setEarlierOpen(v => !v)} />
+                            {replyOpen && brief(true)}
+                          </>
+                        )}
+
+                        {stage === 'final' && (
+                          <>
+                            <StageCard title="Final PDF uploaded" sub="It goes to production on its own unless someone holds it.">
+                              <div className="flex gap-4 items-start">
+                                {approved && <ProofImage proof={approved} className="w-24" badge={<ApprovedBadge />} />}
+                                <div className="flex-1 min-w-0">
+                                  <CustomFinalPdf
+                                    orderId={selectedOrder.id}
+                                    displayOrderNumber={selectedOrder.displayOrderNumber || selectedOrder.orderNumber}
+                                    fileName={generateFilename(selectedOrder).replace(/\.pdf$/i, '')}
+                                    designStatus={ds}
+                                    arteloOrderUrl={selectedOrder.arteloUrl}
+                                    canAttach={isAdmin}
+                                    onUploaded={() => { fetchOrders() }}
+                                    onComplete={() => updateDesignStatus(selectedOrder.orderNumber, 'sent_to_production')}
+                                  />
+                                </div>
+                              </div>
+                            </StageCard>
+                            <FeatureStar orderId={selectedOrder.id} />
+                            {replyOpen && brief(true)}
+                          </>
+                        )}
+
+                        {stage === 'sent' && (
+                          <SentRecord
+                            orderId={selectedOrder.id}
+                            proofs={stageProofs}
+                            rows={[
+                              ['Runner', selectedOrder.effectiveRunnerName || selectedOrder.runnerName || 'Unknown'],
+                              ['Race', `${selectedOrder.effectiveRaceName || selectedOrder.raceName || 'Custom'} ${selectedOrder.effectiveRaceYear || selectedOrder.raceYear || ''}`.trim()],
+                              ...(selectedOrder.bibNumberCustomer || selectedOrder.timeCustomer ? [['Bib · time', [selectedOrder.bibNumberCustomer, selectedOrder.timeCustomer].filter(Boolean).join(' · ')] as [string, string]] : []),
+                              ['Size · frame', [selectedOrder.productSize, selectedOrder.frameType ? frameChip(selectedOrder.frameType).label : null].filter(Boolean).join(' · ') || 'N/A'],
+                              ['Photo', selectedOrder.photoPath ? (photoUrl ? <a href={photoUrl} target="_blank" rel="noopener noreferrer" className="text-[#4600D6] hover:underline">On the print</a> : 'On the print') : 'None'],
+                              ['File', generateFilename(selectedOrder)],
+                            ]}
+                            footer={
+                              <div className="flex flex-wrap items-center gap-4">
+                                <FeatureStar orderId={selectedOrder.id} />
+                                <Fold label="Creative direction" open={briefShown === selectedOrder.id} onToggle={() => setBriefShown(v => v === selectedOrder.id ? null : selectedOrder.id)}>{brief(true)}</Fold>
+                              </div>
+                            }
+                          />
+                        )}
+                      </>
+                    )
 
 
                     return (
@@ -1595,9 +1826,9 @@ Thank you!`
                       </div>
                     )}
                     {/* The file's name and where approval emails go, with what is being made. */}
-                    {selectedOrder.trackstarOrderType === 'custom' && (
+                    {/* Where approval emails go, while proofs are going back and forth. The filename lives in the Approved card, where it is used. */}
+                    {selectedOrder.trackstarOrderType === 'custom' && ['designing', 'proofs', 'revision'].includes(stage) && (
                       <div className="mt-3 pt-2 border-t border-border-gray space-y-1">
-                        <CopyableField label="Filename" value={generateFilename(selectedOrder)} />
                         {selectedOrder.trackstarOrderType === 'custom' ? (
                           <ApprovalEmailField
                             order={selectedOrder}
@@ -1643,7 +1874,7 @@ Thank you!`
                     <div>
                       <h4 className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1.5">Tags</h4>
                       <div className="flex flex-wrap items-center gap-1.5">
-                      {selectedOrder.orderPlacedAt && (
+                      {selectedOrder.orderPlacedAt && selectedOrder.trackstarOrderType !== 'custom' && (
                         <span
                           className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-border-gray rounded text-sm text-off-black/60"
                           title={`Ordered on ${new Date(selectedOrder.orderPlacedAt).toLocaleString('en-US', { timeZone: TZ })}`}
@@ -1652,7 +1883,7 @@ Thank you!`
                           <span>Ordered {formatOrderPlacedAt(selectedOrder.orderPlacedAt)}</span>
                         </span>
                       )}
-                      {!isProductionStage && <span className={`inline-flex items-center gap-1 px-2.5 py-1 bg-white border rounded text-sm ${isDueDateUrgent(designDueDate(selectedOrder), dueIsLive(selectedOrder)) ? 'border-red-200 text-red-600 font-medium' : 'border-border-gray text-off-black/70'}`}>
+                      {!isProductionStage && <span title={selectedOrder.orderPlacedAt ? `Ordered ${formatOrderPlacedAt(selectedOrder.orderPlacedAt)}` : undefined} className={`inline-flex items-center gap-1 px-2.5 py-1 bg-white border rounded text-sm ${isDueDateUrgent(designDueDate(selectedOrder), dueIsLive(selectedOrder)) ? 'border-red-200 text-red-600 font-medium' : selectedOrder.trackstarOrderType === 'custom' && stage === 'approved' ? 'border-border-gray text-off-black/45' : 'border-border-gray text-off-black/70'}`}>
                         <span>⏳</span>
                         <span>{selectedOrder.trackstarOrderType === 'custom' ? 'Design Due Date' : 'Due'} {formatDueDate(designDueDate(selectedOrder), dueIsLive(selectedOrder))}</span>
                       </span>}
@@ -1725,15 +1956,10 @@ Thank you!`
                   <div>
                     <h4 className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1.5">Actions</h4>
                     <div className="flex flex-col items-stretch gap-1.5">
-                      {selectedOrder.trackstarOrderType === 'custom' && !isProductionStage && (
+                      {/* A custom order's actions follow its stage (customStages.tsx). */}
+                      {selectedOrder.trackstarOrderType === 'custom' && stage !== 'sent' && (
                         <button onClick={() => setShowCommentBox(true)} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2">
                           <Plus className="w-3.5 h-3.5" /> Add comment
-                        </button>
-                      )}
-                      {/* From the proofs (ProofManager onActions): send the proof email again, and the proof Q&A with the customer. */}
-                      {selectedOrder.trackstarOrderType === 'custom' && proofActions?.resend && (
-                        <button onClick={proofActions.resend} disabled={proofActions.resending} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2 disabled:opacity-50">
-                          {proofActions.resending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Re-send proofs to customer
                         </button>
                       )}
                       {/* The portal Q&A is retired: an order that used it keeps its history here. New questions go from Email customer from Support. */}
@@ -1746,13 +1972,13 @@ Thank you!`
                         </button>
                       )}
                       {/* Designers too: the conversation opens in Support assigned to them (support.own), so the reply comes back to their My Inbox. */}
-                      {selectedOrder.customerEmail && (can('support') || can('orders.message_customer')) && (
+                      {selectedOrder.customerEmail && (can('support') || can('orders.message_customer')) && !(selectedOrder.trackstarOrderType === 'custom' && stage === 'final') && (
                         <button onClick={() => setEmailingOrder(selectedOrder)} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2" title={`Email ${selectedOrder.customerEmail} from fast@ (opens a Support conversation; replies come into Support)`}>
                           <Mail className="w-3.5 h-3.5" /> Email customer from Support
                         </button>
                       )}
                       {/* A customer emails a photo after ordering: it goes on the order for the designer. */}
-                      {selectedOrder.trackstarOrderType === 'custom' && (isAdmin || rolesOf(user).some(r => r === 'head_designer' || r === 'designer')) && !isProductionStage && (
+                      {selectedOrder.trackstarOrderType === 'custom' && (isAdmin || rolesOf(user).some(r => r === 'head_designer' || r === 'designer')) && (stage === 'designing' || stage === 'revision') && (
                         <AddPhotoPanel
                           custom
                           replace={!!selectedOrder.photoPath}
@@ -1763,8 +1989,8 @@ Thank you!`
                           onDone={() => { fetchOrders(); setToast({ message: selectedOrder.photoPath ? 'Photo replaced.' : 'Photo added. It shows at the top of the order.', type: 'success' }) }}
                         />
                       )}
-                      {/* Emergency delay notice: findable, not the main action. */}
-                      {selectedOrder.trackstarOrderType === 'custom' && selectedOrder.customerEmail && !isProductionStage && (
+                      {/* Emergency delay notice: only once the first proofs are near due or late, or while revising. */}
+                      {selectedOrder.trackstarOrderType === 'custom' && selectedOrder.customerEmail && ((stage === 'designing' && daysToDue !== null && daysToDue <= 2) || stage === 'revision') && (
                         <button onClick={openDelayDialog} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2">
                           <Clock className="w-3.5 h-3.5" /> Notify customer of a delay
                         </button>
@@ -1783,41 +2009,7 @@ Thank you!`
 
                   {/* The work: notes from the team, the step it is on, the proofs, and what the customer asked for. */}
                   <div className="order-1 md:order-none md:col-start-1 md:row-start-1 min-w-0 flex flex-col gap-4">
-                  {/* What the customer gave the designer, first: what they asked for, and their photo beside it.
-                      Only while the design is being made. Once proofs are out or approved it steps aside
-                      (Upload final PDF is the job then), unless a conversation with the customer is open,
-                      which is usually a change to the design; a link brings it back. */}
-                  {selectedOrder.trackstarOrderType === 'custom' && !isProductionStage && !briefNeeded && briefShown !== selectedOrder.id && (
-                    <button type="button" onClick={() => setBriefShown(selectedOrder.id)} className="self-start inline-flex items-center gap-1.5 px-1 text-[12px] text-off-black/45 hover:text-off-black">
-                      <FileText className="w-3.5 h-3.5" />Creative direction{selectedOrder.photoPath ? ' and customer photo' : ''}<span className="font-medium text-off-black/55 hover:underline">Show</span>
-                    </button>
-                  )}
-                  {selectedOrder.trackstarOrderType === 'custom' && !isProductionStage && (briefNeeded || briefShown === selectedOrder.id) && (
-                    <div className={`grid gap-3 ${selectedOrder.photoPath ? 'md:grid-cols-2' : ''}`}>
-                      <div className="bg-purple-50 border border-purple-200 rounded-md p-4">
-                        <p className="text-[10px] font-semibold text-purple-600 uppercase tracking-wider mb-1">Creative Direction</p>
-                        <p className="text-body-sm text-purple-800 whitespace-pre-wrap">{selectedOrder.creativeDirection?.trim() || "They didn't give any - do your thing!"}</p>
-                      </div>
-                      {selectedOrder.photoPath && (
-                        <div className="bg-[#4600D6]/5 border border-[#4600D6]/30 rounded-md p-4 flex gap-3">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[10px] font-semibold text-[#4600D6] uppercase tracking-wider mb-1">Customer Photo</p>
-                            <p className="text-xs text-[#4600D6]/80">For the photo window on the design.</p>
-                            <button type="button" onClick={() => downloadPersonalizationPhoto(selectedOrder)} disabled={!photoUrl}
-                              className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded bg-dark-fill text-white hover:opacity-90 disabled:opacity-40">
-                              <Download className="w-3 h-3" /> Download
-                            </button>
-                          </div>
-                          {photoUrl && (
-                            <a href={photoUrl} target="_blank" rel="noopener noreferrer" className="shrink-0" title="Open full size">
-                              <img src={photoUrl} alt="Customer photo" className="h-28 w-28 object-cover rounded border border-border-gray" />
-                            </a>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {selectedOrder.trackstarOrderType === 'custom' && commentsCallout()}
+                  {selectedOrder.trackstarOrderType === 'custom' ? customWork : (<>
 
                   {/* Delay-notice banner — shown when Dan has emailed the customer
                       warning them about a delay. The due date itself isn't changed
@@ -1844,33 +2036,8 @@ Thank you!`
 
                   {/* ═══ STAGE-SPECIFIC PRIMARY ACTION — always at the top ═══ */}
 
-                  {/* Customer approved: the designer uploads the custom order's final PDF here
-                      (Drive + Artelo library, Slack ping to Matt); an admin attaches it in Artelo
-                      and marks it complete. */}
-                  {(ds === 'approved_by_customer' || ds === 'final_pdf_uploaded') && selectedOrder.trackstarOrderType === 'custom' && (
-                    <CustomFinalPdf
-                      orderId={selectedOrder.id}
-                      displayOrderNumber={selectedOrder.displayOrderNumber || selectedOrder.orderNumber}
-                      fileName={generateFilename(selectedOrder).replace(/\.pdf$/i, '')}
-                      designStatus={ds}
-                      arteloOrderUrl={selectedOrder.arteloUrl}
-                      canAttach={isAdmin}
-                      onUploaded={() => {
-                        setSelectedOrder(prev => prev && prev.id === selectedOrder.id ? { ...prev, designStatus: 'final_pdf_uploaded' } : prev)
-                        setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, designStatus: 'final_pdf_uploaded' } : o))
-                        fetchOrders()
-                      }}
-                      onComplete={() => updateDesignStatus(selectedOrder.orderNumber, 'sent_to_production')}
-                    />
-                  )}
-
-                  {/* Approved custom: star it for the site gallery (Settings > Site Gallery). */}
-                  {['approved_by_customer', 'final_pdf_uploaded', 'sent_to_production'].includes(ds) && selectedOrder.trackstarOrderType === 'custom' && (
-                    <FeatureStar orderId={selectedOrder.id} />
-                  )}
-
                   {/* Partner order approved: upload the production file + photo to Drive and notify Eli */}
-                  {(ds === 'approved_by_customer' || ds === 'final_pdf_uploaded') && selectedOrder.trackstarOrderType !== 'custom' && (
+                  {(ds === 'approved_by_customer' || ds === 'final_pdf_uploaded') && (
                     <PostApprovalChecklist
                       orderId={selectedOrder.id}
                       orderNumber={selectedOrder.orderNumber}
@@ -1963,13 +2130,13 @@ Thank you!`
                         onLatestFeedback={setLatestFeedback}
                         disableEmail={selectedOrder.trackstarOrderType === 'race_partner'}
                         allowGroups={selectedOrder.trackstarOrderType === 'race_partner'}
-                        onActions={selectedOrder.trackstarOrderType === 'custom' ? setProofActions : undefined}
                       />
                     </div>
                   )}
 
                   {/* What goes on the print, to check the proofs against. */}
-                  {!(isProductionStage && selectedOrder.trackstarOrderType === 'custom') && (
+                  {(
+
                     <div>
                       <h4 className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1.5">{selectedOrder.trackstarOrderType === 'race_partner' ? 'Partner Info' : 'Design Details'}</h4>
                       <div className="bg-subtle-gray border border-border-gray rounded-md p-3 space-y-2">
@@ -2003,7 +2170,7 @@ Thank you!`
                   )}
 
 
-                  {selectedOrder.trackstarOrderType !== 'custom' && photoCard}
+                  {photoCard}
 
                   {selectedOrder.notes && !isProductionStage && (
                     <div>
@@ -2056,6 +2223,7 @@ Thank you!`
                       )}
                     </CollapsibleSection>
                   )}
+                  </>)}
 
                   </div>
                   </div>

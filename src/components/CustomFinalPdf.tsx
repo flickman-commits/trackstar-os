@@ -29,7 +29,7 @@ const openedKey = (id: string) => `custom-final-attach:${id}`
 function readOpened(id: string) { try { return localStorage.getItem(openedKey(id)) === '1' } catch { return false } }
 function writeOpened(id: string) { try { localStorage.setItem(openedKey(id), '1') } catch { /* per visit only */ } }
 
-export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, designStatus, arteloOrderUrl, canAttach, onUploaded, onComplete }: {
+export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, designStatus, arteloOrderUrl, canAttach, onUploaded, onComplete, bare = false }: {
   orderId: string
   displayOrderNumber: string
   /** The shop's filename for this print, without .pdf */
@@ -38,6 +38,8 @@ export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, 
   arteloOrderUrl?: string | null
   /** Admins attach in Artelo and complete; a designer's part ends at the upload. */
   canAttach: boolean
+  /** Inside the Approved stage card, which already says what to do and shows the filename: just the button. */
+  bare?: boolean
   onUploaded: () => void
   onComplete: () => void
 }) {
@@ -128,10 +130,10 @@ export default function CustomFinalPdf({ orderId, displayOrderNumber, fileName, 
     return (
       <div className="space-y-2">
         {picker}
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[13px] leading-snug text-off-black">
+        {(!bare || replacing) && <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[13px] leading-snug text-off-black">
           <span className="font-semibold text-emerald-700 mr-1.5">{replacing ? 'Upload a different PDF.' : 'Customer approved. Upload the final PDF.'}</span>
           Export the print-ready PDF and upload it here. It is saved to the Drive Orders folder and the Artelo library as <span className="font-mono">{fileName}.pdf</span>.
-        </div>
+        </div>}
         <button onClick={() => input.current?.click()} disabled={busy !== null}
           className="w-full flex items-center justify-center gap-2 py-4 text-base rounded-md bg-dark-fill text-white font-semibold hover:opacity-90 transition-opacity disabled:opacity-50">
           {busy === 'upload' ? <><Loader2 className="w-5 h-5 animate-spin" /> Uploading, then saving to Drive and Artelo…</> : <><Upload className="w-5 h-5" /> Upload final PDF</>}

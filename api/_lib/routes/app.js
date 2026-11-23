@@ -39,6 +39,7 @@ export default {
   'orders/research-runner': () => import('../../_routes/orders/research-runner.js'),
   'orders/rush': () => import('../../_routes/orders/rush.js'),
   'orders/same-runner': () => import('../../_routes/orders/same-runner.js'),
+  'orders/timeline': () => import('../../_routes/orders/timeline.js'),
   'orders/update': () => import('../../_routes/orders/update.js'),
   'products/artelo-costs': () => import('../../_routes/products/artelo-costs.js'),
   'products/bulk-edit': () => import('../../_routes/products/bulk-edit.js'),
