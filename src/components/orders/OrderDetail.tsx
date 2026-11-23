@@ -1878,6 +1878,8 @@ Thank you!`
                     {/* Where approval emails go, while proofs are going back and forth. The filename lives in the Approved card, where it is used. */}
                     {selectedOrder.trackstarOrderType === 'custom' && ['designing', 'proofs', 'revision'].includes(stage) && (
                       <div className="mt-3 pt-2 border-t border-border-gray space-y-1">
+                        {/* The file's name too while the design is being made and revised; at Approved it moves into the card. */}
+                        <CopyableField label="Filename" value={generateFilename(selectedOrder)} />
                         {selectedOrder.trackstarOrderType === 'custom' ? (
                           <ApprovalEmailField
                             order={selectedOrder}

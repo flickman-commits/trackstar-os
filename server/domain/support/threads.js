@@ -22,7 +22,7 @@ import { stripQuoted } from './mailbox.js'
 import { can } from '../../../api/_lib/roles.js'
 import { replyWindow } from './instagram.js'
 import { UserError } from './errors.js'
-import { ownInboxWhere } from './access.js'
+import { ownInboxWhere, designerCustomers } from './access.js'
 import { customerRaceName } from '../../scrapers/raceNameNormalization.js'
 import { getOrderTotalUsd, BIG_SPENDER_THRESHOLD_USD } from '../../lib/orderValue.js'
 import { replacementsFor } from './replacements.js'
@@ -128,16 +128,18 @@ export async function listThreads({ view = 'all', userId, q = '', sort = 'waitin
 
 /**
  * The inbox for someone who sees only their own conversations (access.js):
- * every conversation assigned to them that is not closed, the ones where the
+ * every conversation of theirs (assigned to them, or with a customer on their
+ * custom order) that is not closed, the ones where the
  * customer wrote last first, then the ones waiting on the customer. Snoozed
  * ones are in it too: they have no other list to find them in. The counts
  * carry only theirs; every other view reads zero.
  */
 export async function listOwnThreads({ userId, q = '', sort = 'waiting', limit = 150 } = {}) {
-  const where = { AND: [{ filtered: false, NOT: AUTOMATION_ONLY }, ownInboxWhere(userId), searchWhere(q)] }
+  const mine = ownInboxWhere(userId, await designerCustomers(userId))
+  const where = { AND: [{ filtered: false, NOT: AUTOMATION_ONLY }, mine, searchWhere(q)] }
   const [threads, inbox] = await Promise.all([
     prisma.supportThread.findMany({ where, orderBy: orderBy(SORTS.includes(sort) ? sort : 'waiting'), take: limit, include: { assignee: { select: TEAM_SELECT } } }),
-    prisma.supportThread.count({ where: { AND: [{ filtered: false, NOT: AUTOMATION_ONLY }, ownInboxWhere(userId), NEEDS_US] } }),
+    prisma.supportThread.count({ where: { AND: [{ filtered: false, NOT: AUTOMATION_ONLY }, mine, NEEDS_US] } }),
   ])
   const needsThem = t => NEEDS_US.status.in.includes(t.status)
   threads.sort((a, b) => Number(needsThem(b)) - Number(needsThem(a)))

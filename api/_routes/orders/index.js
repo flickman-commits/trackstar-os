@@ -540,7 +540,7 @@ export default async function handler(req, res) {
       }
       // A custom order's customer wrote to their designer and is owed an answer.
       const customs = open.filter(o => o.trackstarOrderType === 'custom' && o.assigneeId)
-      const replied = await customerRepliedTo(customs.map(o => ({ email: o.customerEmail, assigneeId: o.assigneeId })))
+      const replied = await customerRepliedTo(customs.map(o => ({ email: o.customerEmail, assigneeId: o.assigneeId, since: o.createdAt })))
       for (const o of customs) {
         const at = replied.get(`${String(o.customerEmail).trim().toLowerCase()}|${o.assigneeId}`)
         if (at) o.customerRepliedAt = at

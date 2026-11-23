@@ -56,8 +56,8 @@ export default async function handler(req, res) {
     // A designer (support.own): only their own conversations, and only the actions in OWN_THREAD_ACTIONS.
     if (isOwnOnly(user)) {
       if (!OWN_THREAD_ACTIONS.has(body.action)) return res.status(403).json({ error: 'That is not part of your role. Ask Matt if you need it.', code: 'not_allowed' })
-      await assertThreadAccess(user, id)
-      if (body.action === 'assign') assertOwnAssign(user, body.assigneeId ? String(body.assigneeId) : null)
+      const t = await assertThreadAccess(user, id)
+      if (body.action === 'assign') assertOwnAssign(user, body.assigneeId ? String(body.assigneeId) : null, t?.assigneeId || null)
     }
     const audit = (summary, detail) => recordAudit({ action: `support.${body.action}`, summary, detail: { threadId: id, ...detail }, actor: user })
 

@@ -249,12 +249,15 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
   }
   const assign = (assigneeId: string | null) => thread && run(async () => {
     const prev = thread
-    // A designer sending it back to Support: it is no longer theirs to see, so it leaves the pane and the list.
+    // A designer sending it back to Support. If it is still with a customer of one of their orders they keep
+    // seeing it (the server decides); if not, it leaves the pane and the list.
     if (ownOnly && !assigneeId) {
       await supportApi.assign(thread.id, null)
-      setSelectedId(null); setThread(null)
-      setInbox(p => p ? { ...p, threads: p.threads.filter(r => r.id !== prev.id) } : p)
       toast.success('Sent to Support')
+      await loadInbox(true)
+      const still = await supportApi.thread(prev.id).catch(() => null)
+      if (still) setThread(still)
+      else { setSelectedId(null); setThread(null) }
       return
     }
     patchRow(await supportApi.assign(thread.id, assigneeId)); await refreshThread(thread.id)

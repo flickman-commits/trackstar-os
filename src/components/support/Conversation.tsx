@@ -530,9 +530,13 @@ export default function Conversation({ thread, team, me, isAdmin, busy, macros, 
             <button onClick={onMarkUnread} disabled={busy} className={`${btnGhost} px-1.5`} title="Mark unread (u)">
               <Mail className="w-4 h-4 text-off-black/40" />
             </button>
-            {/* A designer cannot hand a conversation to a teammate; they can give it back to Support. */}
+            {/* A designer cannot hand a conversation to a teammate: theirs goes back to Support, one nobody has they can take, one a teammate has just says whose. */}
             {thread.ownOnly
-              ? <button onClick={() => onAssign(null)} disabled={busy} className={`${btnSecondary} text-xs whitespace-nowrap`} title="Unassign it so Support picks it up. It leaves your inbox.">Send to Support</button>
+              ? (thread.assignee?.id === me.id
+                ? <button onClick={() => onAssign(null)} disabled={busy} className={`${btnSecondary} text-xs whitespace-nowrap`} title="Unassign it so Support picks it up.">Send to Support</button>
+                : thread.assignee
+                  ? <span className="text-xs text-off-black/50 whitespace-nowrap px-1" title="A teammate has this conversation. You can still answer it.">With {thread.assignee.firstName}</span>
+                  : <button onClick={() => onAssign(me.id)} disabled={busy} className={`${btnSecondary} text-xs whitespace-nowrap`} title="Make it yours, so the replies are yours to answer.">Take it</button>)
               : <AssigneePicker team={team} value={thread.assignee?.id || null} meId={me.id} onChange={onAssign} firstNameOnly />}
           </div>
         </div>

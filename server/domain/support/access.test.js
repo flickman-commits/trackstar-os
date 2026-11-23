@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { isOwnOnly, ownInboxWhere, OWN_THREAD_ACTIONS, assertThreadAccess, assertOwnAssign, narrowThreadForOwn, NOT_YOURS } from './access.js'
+import { isOwnOnly, ownInboxWhere, OWN_THREAD_ACTIONS, assertThreadAccess, assertOwnAssign, narrowThreadForOwn, designerCustomers, isTheirConversation, NOT_YOURS } from './access.js'
 
 const dan = { id: 'dan', supportScope: 'own' }
 const dani = { id: 'dani', supportScope: 'all' }
@@ -11,13 +11,37 @@ const threads = {
   foldedIntoMine: { id: 'foldedIntoMine', assigneeId: 'dani', mergedIntoId: 'mine' },
 }
 const load = id => threads[id] || null
+// Dan has one custom order: buyer@x.com, placed Nov 1.
+const customers = async () => [{ email: 'buyer@x.com', since: new Date('2026-11-01T00:00:00Z') }]
+Object.assign(threads, {
+  freshEmail: { id: 'freshEmail', assigneeId: 'dani', mergedIntoId: null, customerEmail: 'Buyer@X.com', lastMessageAt: new Date('2026-11-20T00:00:00Z') },
+  beforeOrder: { id: 'beforeOrder', assigneeId: null, mergedIntoId: null, customerEmail: 'buyer@x.com', lastMessageAt: new Date('2026-09-20T00:00:00Z') },
+  stranger: { id: 'stranger', assigneeId: null, mergedIntoId: null, customerEmail: 'other@x.com', lastMessageAt: new Date('2026-11-20T00:00:00Z') },
+})
 
-test('a designer opens only the conversations assigned to them', async () => {
-  await assertThreadAccess(dan, 'mine', { load })
-  await assertThreadAccess(dan, 'foldedIntoMine', { load })
-  for (const id of ['theirs', 'unassigned', 'missing']) {
-    await assert.rejects(assertThreadAccess(dan, id, { load }), e => e.message === NOT_YOURS && e.status === 403)
+test("a designer opens the conversations assigned to them and their orders' customers'", async () => {
+  await assertThreadAccess(dan, 'mine', { load, customers })
+  await assertThreadAccess(dan, 'foldedIntoMine', { load, customers })
+  // The case that failed for Creed: a customer wrote in fresh and Support has it.
+  await assertThreadAccess(dan, 'freshEmail', { load, customers })
+  for (const id of ['theirs', 'unassigned', 'missing', 'beforeOrder', 'stranger']) {
+    await assert.rejects(assertThreadAccess(dan, id, { load, customers }), e => e.message === NOT_YOURS && e.status === 403, id)
   }
+})
+
+test("the customers a designer may talk to are their custom orders', by the order's email and any linked address", async () => {
+  const out = await designerCustomers('dan', {
+    orders: async () => [
+      { customerEmail: 'Buyer@x.com', createdAt: '2026-11-05T00:00:00Z', shopifyOrderData: { name: '#4947' } },
+      { customerEmail: 'buyer@x.com', createdAt: '2026-11-01T00:00:00Z', shopifyOrderData: { name: '#4900' } },
+      { customerEmail: '', createdAt: '2026-11-02T00:00:00Z', parentOrderNumber: '77' },
+    ],
+    linked: async () => [{ customerKey: 'work@x.com', orderNumber: '4947' }, { customerKey: 'ig:123', orderNumber: '4900' }],
+  })
+  assert.deepEqual(out.map(c => c.email).sort(), ['buyer@x.com', 'work@x.com'])
+  // The earliest order decides how far back their conversations count.
+  assert.equal(out.find(c => c.email === 'buyer@x.com').since.toISOString(), '2026-11-01T00:00:00.000Z')
+  assert.equal(isTheirConversation({ assigneeId: null, customerEmail: 'buyer@x.com', lastMessageAt: '2026-11-10T00:00:00Z' }, 'dan', out), true)
 })
 
 test('Support opens every conversation, without a lookup', async () => {
@@ -26,8 +50,12 @@ test('Support opens every conversation, without a lookup', async () => {
   assert.equal(isOwnOnly(dan), true)
 })
 
-test("a designer's inbox is theirs and not closed", () => {
-  assert.deepEqual(ownInboxWhere('dan'), { assigneeId: 'dan', mergedIntoId: null, status: { not: 'closed' } })
+test("a designer's inbox is theirs, their customers' included, and not closed", () => {
+  const since = new Date('2026-11-01T00:00:00Z')
+  assert.deepEqual(ownInboxWhere('dan', [{ email: 'buyer@x.com', since }]), {
+    mergedIntoId: null, status: { not: 'closed' },
+    OR: [{ assigneeId: 'dan' }, { customerEmail: { equals: 'buyer@x.com', mode: 'insensitive' }, lastMessageAt: { gte: since } }],
+  })
 })
 
 test('a designer can answer, note, close and send back, but not merge, link orders or approve refunds', () => {
@@ -39,6 +67,11 @@ test('a designer can send a conversation back to Support, not to a teammate', ()
   assertOwnAssign(dan, null)
   assertOwnAssign(dan, 'dan')
   assert.throws(() => assertOwnAssign(dan, 'dani'), e => e.status === 403)
+  // Nobody has it: they may take it. A teammate has it: they may not take it off them, or hand it back.
+  assertOwnAssign(dan, 'dan', null)
+  assertOwnAssign(dan, null, 'dan')
+  assert.throws(() => assertOwnAssign(dan, 'dan', 'dani'), e => e.status === 403)
+  assert.throws(() => assertOwnAssign(dan, null, 'dani'), e => e.status === 403)
   assertOwnAssign(dani, 'dan')
 })
 

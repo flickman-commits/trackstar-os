@@ -11,7 +11,8 @@
  * Designers (orders.message_customer, no full Support access) may use it on
  * a custom order: the email starts a new Support conversation assigned to
  * them when they have 'support.own', so the reply comes back to their My
- * Inbox. GET shows them only the conversations assigned to them.
+ * Inbox. GET shows them the conversations with the customer of an order of
+ * theirs, and any assigned to them (server/domain/support/access.js).
  */
 import { setCors } from '../../_lib/auth.js'
 import { requireAnyCapability, recordAudit } from '../../_lib/users.js'
@@ -38,7 +39,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const orderId = String(req.query?.orderId || '')
-      const [threads, mockups, shipTo] = await Promise.all([conversationsForOrder(orderId, { all: req.query?.all === '1', assigneeId: support ? null : user.id }), orderId ? listMockups([orderId]).catch(() => []) : [], shipToForOrder(orderId).catch(() => null)])
+      const [threads, mockups, shipTo] = await Promise.all([conversationsForOrder(orderId, { all: req.query?.all === '1', ownerId: support ? null : user.id }), orderId ? listMockups([orderId]).catch(() => []) : [], shipToForOrder(orderId).catch(() => null)])
       return res.status(200).json({ threads: support || await can(user, 'support.own') ? threads : [], mockups, shipTo })
     } catch (error) {
       console.error('[API /support/compose GET]', error)
