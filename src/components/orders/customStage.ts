@@ -13,8 +13,9 @@ import { apiFetch } from '@/lib/api'
  *   approved   Approved by customer: export and upload the final PDF
  *   final      Final PDF uploaded: nothing for the designer; it goes on its own
  *   sent       Sent to production: a record to come back to when something went wrong
+ *   ended      Canceled at the shop, or closed by hand: nothing to make (customEnded)
  */
-export type CustomStage = 'designing' | 'proofs' | 'revision' | 'approved' | 'final' | 'sent'
+export type CustomStage = 'designing' | 'proofs' | 'revision' | 'approved' | 'final' | 'sent' | 'ended'
 
 export function customStage(designStatus?: string | null): CustomStage {
   switch (designStatus) {

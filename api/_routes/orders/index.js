@@ -21,6 +21,7 @@ import { pipelineFor } from '../../../server/domain/orders/pipeline.js'
 import { usesOldDesign, usesNewDesign } from '../../../server/domain/render/designSwitch.js'
 import { loadPipelineContext } from '../../../server/domain/orders/pipelineStatus.js'
 import { sendPublicError } from '../../../server/lib/publicError.js'
+import { isShopCanceled, shopCanceledAt } from '../../../server/domain/orders/customOpen.js'
 import { waitingOnCustomers, bouncedCustomers, customerRepliedTo } from '../../../server/domain/support/compose.js'
 import { notReadyFrom, sendStateOf } from '../../../server/domain/bulk/send.js'
 import { addressComplete } from '../../../server/domain/bulk/bulkOrders.js'
@@ -48,6 +49,7 @@ export async function rawSlice(ids) {
         'id', "shopifyOrderData"::jsonb->'id',
         'name', "shopifyOrderData"::jsonb->'name',
         'created_at', "shopifyOrderData"::jsonb->'created_at',
+        'cancelled_at', "shopifyOrderData"::jsonb->'cancelled_at',
         'financial_status', "shopifyOrderData"::jsonb->'financial_status',
         'total_price', "shopifyOrderData"::jsonb->'total_price',
         'current_total_price', "shopifyOrderData"::jsonb->'current_total_price',
@@ -62,6 +64,7 @@ export async function rawSlice(ids) {
             THEN "shopifyOrderData"::jsonb->'line_items' ELSE '[]'::jsonb END) WITH ORDINALITY AS t(l, n))) END AS s,
       CASE WHEN "etsyOrderData" IS NULL THEN NULL ELSE jsonb_build_object(
         'create_timestamp', "etsyOrderData"::jsonb->'create_timestamp',
+        'status', "etsyOrderData"::jsonb->'status',
         'grandtotal', "etsyOrderData"::jsonb->'grandtotal',
         'total', "etsyOrderData"::jsonb->'total',
         'total_price', "etsyOrderData"::jsonb->'total_price',
@@ -426,6 +429,9 @@ export default async function handler(req, res) {
         // get their link by hand, which is why proofSentAt is null on every
         // partner row).
         proofCount: order._count?.proofs || 0,
+        // Canceled at the shop, for the custom view (a canceled custom's design status never moves).
+        shopCanceled: isShopCanceled(order),
+        shopCanceledAt: shopCanceledAt(order),
         // When proofs were last sent (for follow-up tracking)
         proofSentAt: order.proofSentAt,
         // Delay-notice tracking (custom orders) — drives the "delay notice sent" badge

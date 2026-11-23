@@ -177,6 +177,9 @@ export interface Order {
   assigneeId?: string | null
   assigneeName?: string | null
   proofCount?: number
+  /** Canceled at the shop (Shopify or Etsy), and when (Shopify says). */
+  shopCanceled?: boolean
+  shopCanceledAt?: string | null
   proofSentAt?: string | null
   delayNoticeSentAt?: string | null
   delayNoticeDaysLate?: number | null
@@ -243,10 +246,24 @@ export const DESIGN_STATUS_CONFIG: Record<DesignStatus, { dot: string; label: st
   sent_to_production: { dot: 'bg-emerald-500', label: 'Sent to Production', short: 'Sent', color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
 }
 
+/** How a canceled or closed custom order's status looks. */
+export const ENDED_STATUS = { dot: 'bg-red-500', color: 'text-red-700', bgColor: 'bg-red-50' }
+
 /** Partner orders are approved by the partner, not a customer. Same status, different word. */
 export function designLabel(status: string | null | undefined, orderType?: string | null) {
   const cfg = DESIGN_STATUS_CONFIG[(status || 'not_started') as DesignStatus] || DESIGN_STATUS_CONFIG.not_started
   return orderType === 'race_partner' ? cfg.label.replace('Customer', 'Partner') : cfg.label
+}
+
+/**
+ * A custom order that ended without being sent: 'Canceled' at the shop, or
+ * 'Closed' by hand. Null while it is live, or once it was sent. Its design
+ * status is wherever it stopped, so it says nothing about this.
+ */
+export function customEnded(o: Pick<Order, 'trackstarOrderType' | 'status' | 'designStatus' | 'shopCanceled'>): 'Canceled' | 'Closed' | null {
+  if (o.trackstarOrderType !== 'custom' || o.designStatus === 'sent_to_production') return null
+  if (o.shopCanceled) return 'Canceled'
+  return o.status === 'completed' ? 'Closed' : null
 }
 
 /** The short word for a design status, for a phone. */
@@ -417,6 +434,8 @@ export function mapOrder(order: Record<string, unknown>): Order {
     assigneeId: (order.assigneeId as string | null | undefined) ?? null,
     assigneeName: (order.assigneeName as string | null | undefined) ?? null,
     proofCount: order.proofCount as number | undefined,
+    shopCanceled: order.shopCanceled as boolean | undefined,
+    shopCanceledAt: order.shopCanceledAt as string | null | undefined,
     proofSentAt: order.proofSentAt as string | null | undefined,
   }
 }

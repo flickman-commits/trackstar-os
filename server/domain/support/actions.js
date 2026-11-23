@@ -510,7 +510,12 @@ export async function cancelAndRefund({ order: o, why, by, actor = null }) {
   const rows = o.rows || []
   const note = `Canceled and refunded ${money(o.availableCents)} ${actor ? 'by support' : 'by the customer from Manage your order'}: ${why}.`
   if (rows.length) {
-    await prisma.order.updateMany({ where: { id: { in: rows.map(r => r.id) } }, data: { status: 'completed' } })
+    // Completed, and marked canceled: a custom order's view says so (orders/customOpen.js).
+    const stored = await prisma.order.findMany({ where: { id: { in: rows.map(r => r.id) } }, select: { id: true, shopifyOrderData: true } })
+    const cancelledAt = new Date().toISOString()
+    for (const r of stored) {
+      await prisma.order.update({ where: { id: r.id }, data: { status: 'completed', ...(r.shopifyOrderData ? { shopifyOrderData: { ...r.shopifyOrderData, cancelled_at: cancelledAt } } : {}) } })
+    }
     await prisma.orderComment.createMany({ data: rows.map(r => ({ orderId: r.id, text: note, authorId: actor?.id || null, authorName: actor ? actorName(actor) : 'Customer' })) })
   }
   return { number: o.name, cents: o.availableCents, display: money(o.availableCents), arteloUrl: arteloOrderUrl(rows[0]?.arteloOrderData?.id) || null }

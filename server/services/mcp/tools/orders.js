@@ -9,6 +9,7 @@ import { ToolError } from '../server.js'
 import { can } from '../../../../api/_lib/roles.js'
 import { approvalUrl, shopifyAdminUrl } from '../../../lib/links.js'
 import { rosterFor } from '../../../domain/orders/assignment.js'
+import { OPEN_CUSTOM } from '../../../domain/orders/customOpen.js'
 import { pipelinesFor } from '../../../domain/orders/pipelineStatus.js'
 
 export const ORDER_TYPES = ['standard', 'custom', 'race_partner']
@@ -17,7 +18,7 @@ export const DESIGN_STATUSES = ['not_started', 'in_progress', 'awaiting_review',
 
 /** Open means the dashboard still lists it. */
 export function openWhere(type) {
-  if (type === 'custom') return { trackstarOrderType: 'custom', designStatus: { not: 'sent_to_production' } }
+  if (type === 'custom') return { ...OPEN_CUSTOM }
   if (type === 'race_partner') return { trackstarOrderType: 'race_partner', designStatus: { notIn: ['sent_to_production', 'approved_by_customer'] } }
   return { trackstarOrderType: 'standard', status: { not: 'completed' } }
 }

@@ -42,14 +42,15 @@ export function CopyableField({ label, value, aside }: { label: React.ReactNode;
   }
 
   return (
-    <div className={`flex items-center ${label === '' ? '' : 'justify-between'}`}>
-      {label !== '' && <span className="text-body-sm text-off-black/60">{label}</span>}
-      <div className="flex items-center gap-2">
+    <div className={`flex items-center gap-3 ${label === '' ? '' : 'justify-between'}`}>
+      {label !== '' && <span className="shrink-0 text-body-sm text-off-black/60">{label}</span>}
+      <div className="flex items-center gap-2 min-w-0">
         {aside}
-        <span className="text-body-sm font-medium text-off-black">{value}</span>
+        {/* A long one (a filename) wraps rather than running out of the panel. */}
+        <span className="min-w-0 [overflow-wrap:anywhere] text-body-sm font-medium text-off-black">{value}</span>
         <button
           onClick={handleCopy}
-          className="p-1.5 hover:bg-off-black/10 rounded-sm transition-colors"
+          className="shrink-0 p-1.5 hover:bg-off-black/10 rounded-sm transition-colors"
           title="Copy to clipboard"
         >
           {copied ? (

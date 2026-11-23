@@ -25,6 +25,7 @@
  *   - monday-pipeline: Vercel cron — sends Monday morning Slack summary to Dan
  */
 
+import { OPEN_CUSTOM } from '../../../server/domain/orders/customOpen.js'
 import { createRacePartnerOrder } from '../../../server/domain/orders/racePartner.js'
 import crypto from 'crypto'
 import { unpaidPhotoRows } from '../../../server/domain/orders/photoPayment.js'
@@ -901,10 +902,7 @@ async function handleFeatureRequest({ type, description }, res) {
 async function handleMondayPipeline(res) {
   try {
     const pipelineOrders = await prisma.order.findMany({
-      where: {
-        trackstarOrderType: 'custom',
-        designStatus: { not: 'sent_to_production' }
-      },
+      where: OPEN_CUSTOM,
       select: {
         id: true,
         dueDate: true,
@@ -979,7 +977,7 @@ async function handleDailyDesignUpdate(res) {
     // surface it anymore.
     const customOrders = await prisma.order.findMany({
       where: {
-        trackstarOrderType: 'custom',
+        ...OPEN_CUSTOM,
         designStatus: { in: ['not_started', 'in_progress'] },
       },
       select: {

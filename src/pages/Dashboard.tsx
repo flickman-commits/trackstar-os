@@ -22,7 +22,7 @@ import StatusPill from '@/components/orders/StatusPill'
 import DesignStatusPicker from '@/components/orders/DesignStatusPicker'
 import {
   type ActiveView, type DesignStatus, type EditValues, type Order, type PossibleMatch,
-  DESIGN_STATUS_CONFIG, designLabel, designShort, mapOrder, orderRefOf,
+  DESIGN_STATUS_CONFIG, ENDED_STATUS, customEnded, designLabel, designShort, mapOrder, orderRefOf,
 } from '@/components/orders/orderModel'
 import {
   formatDueDate, isDueDateUrgent, dueIsLive, workableSince, orderAge, getStatusDisplay, shortStatus,
@@ -846,7 +846,7 @@ export default function Dashboard() {
 
   // Designs to be personalized
   // Standard view: pending + flagged + ready + missing_year, sorted newest first
-  // Custom view: all items where designStatus !== 'sent_to_production', sorted oldest first (by due date)
+  // Custom view: all items not sent to production, canceled or closed, sorted oldest first (by due date)
   // Mine only applies to the two queues people actually work: standard and custom.
   const scoped = activeView === 'standard' || activeView === 'custom'
   const sortView: 'standard' | 'custom' = activeView === 'custom' ? 'custom' : 'standard'
@@ -922,7 +922,8 @@ export default function Dashboard() {
       // Design-driven views: show all non-done items, sorted by most recent first for race_partner
       // (custom uses due date; race_partner has no due date so we fall back to createdAt)
       // A partner's design work ends at Approved by Partner, so that is done.
-      const isDone = (o: Order) => o.designStatus === 'sent_to_production' || (activeView === 'race_partner' && o.designStatus === 'approved_by_customer')
+      // A canceled (or hand-closed) custom is done too: its design status never moves.
+      const isDone = (o: Order) => o.designStatus === 'sent_to_production' || !!customEnded(o) || (activeView === 'race_partner' && o.designStatus === 'approved_by_customer')
       const activeOrders = typeFiltered.filter(o => !isDone(o))
       if (activeView === 'race_partner') {
         return activeOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -974,7 +975,7 @@ export default function Dashboard() {
       return typeFiltered.filter(o => o.designStatus === 'sent_to_production' || o.designStatus === 'approved_by_customer')
     }
     if (activeView === 'custom') {
-      return typeFiltered.filter(o => o.designStatus === 'sent_to_production')
+      return typeFiltered.filter(o => o.designStatus === 'sent_to_production' || !!customEnded(o))
     }
     // Standard: the search's matches from the server; otherwise the completed pages.
     const done = typeFiltered.filter(o => o.status === 'completed')
@@ -1706,7 +1707,8 @@ export default function Dashboard() {
                           <span className="text-xs font-semibold text-off-black/40 uppercase tracking-wider">{doneHeading}</span>
                         </div>
                         {filteredCompletedOrders.map((order) => {
-                          const designConfig = DESIGN_STATUS_CONFIG[order.designStatus as DesignStatus] || DESIGN_STATUS_CONFIG.sent_to_production
+                          const ended = customEnded(order)
+                          const designConfig = ended ? ENDED_STATUS : DESIGN_STATUS_CONFIG[order.designStatus as DesignStatus] || DESIGN_STATUS_CONFIG.sent_to_production
                           const itemCount = getOrderItemCount(order.parentOrderNumber)
                           return (
                             <div
@@ -1718,7 +1720,7 @@ export default function Dashboard() {
                                 <div className="flex items-center gap-2 min-w-0">
                                   <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${designConfig.bgColor} ${designConfig.color}`}>
                                     <span className={`w-2 h-2 rounded-full shrink-0 ${designConfig.dot}`} aria-hidden />
-                                    {designShort(order.designStatus)}
+                                    {ended || designShort(order.designStatus)}
                                   </span>
                                   <span className="text-sm font-medium text-off-black">{order.displayOrderNumber}</span>
                                   {itemCount > 1 && (
@@ -2059,7 +2061,8 @@ export default function Dashboard() {
                             </td>
                           </tr>
                           {filteredCompletedOrders.map((order, index) => {
-                            const designConfig = DESIGN_STATUS_CONFIG[order.designStatus as DesignStatus] || DESIGN_STATUS_CONFIG.sent_to_production
+                            const ended = customEnded(order)
+                            const designConfig = ended ? ENDED_STATUS : DESIGN_STATUS_CONFIG[order.designStatus as DesignStatus] || DESIGN_STATUS_CONFIG.sent_to_production
                             const itemCount = getOrderItemCount(order.parentOrderNumber)
                             return (
                               <tr
@@ -2088,7 +2091,7 @@ export default function Dashboard() {
                                 <td className="px-3 py-4">
                                   <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${designConfig.bgColor} ${designConfig.color}`}>
                                     <span className={`w-2 h-2 rounded-full shrink-0 ${designConfig.dot}`} aria-hidden />
-                                    {designLabel(order.designStatus, order.trackstarOrderType)}
+                                    {ended || designLabel(order.designStatus, order.trackstarOrderType)}
                                   </span>
                                 </td>
                                 <td className="px-3 py-4">

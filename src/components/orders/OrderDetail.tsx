@@ -40,8 +40,9 @@ import OrderTags, { HoverTip } from '@/components/OrderTags'
 import type { ToastMessage } from '@/components/orders/Toast'
 import {
   type ActiveView, type DesignStatus, type EditValues, type Order, type OrderComment, type PossibleMatch,
-  DESIGN_STATUS_CONFIG, mapOrder,
+  DESIGN_STATUS_CONFIG, ENDED_STATUS, customEnded, mapOrder,
 } from '@/components/orders/orderModel'
+import StatusPill from '@/components/orders/StatusPill'
 import {
   TZ, formatDueDate, isDueDateUrgent, dueIsLive, orderAge, formatOrderPlacedAt, getStatusDisplay, shortStatus,
   generateFilename as filenameFor, orderItemCount, orderItemPosition,
@@ -472,7 +473,7 @@ export default function OrderDetail({
   const [briefShown, setBriefShown] = useState<string | null>(null)
   const [earlierOpen, setEarlierOpen] = useState(false)
   // After approval a custom order's stages show the approved proof large (customStages.tsx).
-  const stageProofs = useOrderProofs(selectedOrder?.id || '', !!selectedOrder && selectedOrder.trackstarOrderType === 'custom' && ['approved_by_customer', 'final_pdf_uploaded', 'sent_to_production'].includes(selectedOrder.designStatus || ''))
+  const stageProofs = useOrderProofs(selectedOrder?.id || '', !!selectedOrder && selectedOrder.trackstarOrderType === 'custom' && (!!customEnded(selectedOrder) || ['approved_by_customer', 'final_pdf_uploaded', 'sent_to_production'].includes(selectedOrder.designStatus || '')))
   const [isLoadingComments, setIsLoadingComments] = useState(false)
   const [newCommentText, setNewCommentText] = useState('')
   // Comment composer stays collapsed until asked for. Auto-opens when the
@@ -1464,7 +1465,9 @@ Thank you!`
                   </button>
                 )}
                 {(selectedOrder.trackstarOrderType === 'custom' || selectedOrder.trackstarOrderType === 'race_partner')
-                  ? <span className="order-last md:order-none shrink-0"><DesignStatusPicker status={selectedOrder.designStatus} orderType={selectedOrder.trackstarOrderType} onChange={st => updateDesignStatus(selectedOrder.orderNumber, st)} /></span>
+                  ? customEnded(selectedOrder)
+                    ? <span className="order-last md:order-none shrink-0"><StatusPill label={customEnded(selectedOrder) as string} dot={ENDED_STATUS.dot} color={ENDED_STATUS.color} bg={ENDED_STATUS.bgColor} /></span>
+                    : <span className="order-last md:order-none shrink-0"><DesignStatusPicker status={selectedOrder.designStatus} orderType={selectedOrder.trackstarOrderType} onChange={st => updateDesignStatus(selectedOrder.orderNumber, st)} /></span>
                   : (() => { const d = getStatusDisplay(selectedOrder); return (
                       <span className="hidden md:inline-flex shrink-0 items-center gap-1.5 px-2 py-0.5 rounded-full border border-border-gray bg-white text-xs text-off-black/70 whitespace-nowrap" title={selectedOrder.pipeline?.fix || d.label}>
                         <span className={`w-2 h-2 rounded-full ${d.dot || 'bg-off-black/25'}`} />{d.label}
@@ -1569,9 +1572,11 @@ Thank you!`
                   {(() => {
                     // Stage-based collapse logic
                     const ds = selectedOrder.designStatus as DesignStatus
-                    const isProductionStage = ['final_pdf_uploaded', 'sent_to_production'].includes(ds)
+                    // Canceled at the shop or closed by hand: there is nothing to make, whatever the design status says.
+                    const ended = customEnded(selectedOrder)
+                    const isProductionStage = !!ended || ['final_pdf_uploaded', 'sent_to_production'].includes(ds)
                     // The custom order's stage (customStages.tsx): one job, one main action, only what it needs.
-                    const stage = customStage(ds)
+                    const stage = ended ? 'ended' as const : customStage(ds)
                     const replyOpen = openConvos?.orderId === selectedOrder.id && openConvos.open > 0
                     const designDue = designDueDate(selectedOrder)
                     const dueLive = dueIsLive(selectedOrder)
@@ -1655,7 +1660,7 @@ Thank you!`
                         <ConversationPanel orderId={selectedOrder.id} openOnly enabled={!!selectedOrder.customerEmail && (can('support') || can('support.own'))} onChanged={() => { fetchOrders() }}
                           onLoaded={list => setOpenConvos({ orderId: selectedOrder.id, open: list.filter(t => t.status !== 'closed' || t.waiting).length })} />
                         {commentsCallout({ activity: false, foldBefore: ['final', 'sent'].includes(stage) ? approved?.updatedAt || null : null })}
-                        {selectedOrder.photoUnpaid && stage !== 'sent' && (
+                        {selectedOrder.photoUnpaid && stage !== 'sent' && stage !== 'ended' && (
                           <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-800"><span className="font-semibold mr-1.5">Photo not paid.</span>The customer has not paid the Photo Add-On yet. Hold the final until the Shopify order reads paid.</div>
                         )}
                         {overdue && (
@@ -1668,6 +1673,18 @@ Thank you!`
                           <div className="bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-xs text-amber-900">
                             <span className="font-medium">Delay notice sent {new Date(selectedOrder.delayNoticeSentAt).toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' })}</span>: {selectedOrder.delayNoticeDaysLate ?? '?'} day{selectedOrder.delayNoticeDaysLate === 1 ? '' : 's'} later than promised.
                           </div>
+                        )}
+
+                        {stage === 'ended' && (
+                          <>
+                            <StageCard
+                              title={ended === 'Canceled' ? `Order canceled${selectedOrder.shopCanceledAt ? ` ${stageDay(selectedOrder.shopCanceledAt)}` : ''}` : 'Order closed'}
+                              sub={ended === 'Canceled' ? 'It was canceled at the shop. Nothing to design, and nothing goes to Artelo.' : 'It was closed by hand without being sent. Nothing to design.'}
+                            >
+                              {approved && <ProofImage proof={approved} className="w-44" badge={<ApprovedBadge />} />}
+                            </StageCard>
+                            <EarlierVersions proofs={earlier} open={earlierOpen} onToggle={() => setEarlierOpen(v => !v)} />
+                          </>
                         )}
 
                         {stage === 'designing' && (
@@ -1945,7 +1962,7 @@ Thank you!`
                         </span>
                       )}
                       {/* Once sent, the dates that matter: ordered, and sent to production. */}
-                      {isProductionStage && selectedOrder.completedAt && (
+                      {isProductionStage && !ended && selectedOrder.completedAt && (
                         <span
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded border text-sm bg-emerald-50 text-emerald-700 border-emerald-200"
                           title={`Sent to production ${new Date(selectedOrder.completedAt).toLocaleString('en-US', { timeZone: TZ })}`}
@@ -2009,7 +2026,7 @@ Thank you!`
                     <h4 className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1.5">Actions</h4>
                     <div className="flex flex-col items-stretch gap-1.5">
                       {/* A custom order's actions follow its stage (customStages.tsx). */}
-                      {selectedOrder.trackstarOrderType === 'custom' && stage !== 'sent' && (
+                      {selectedOrder.trackstarOrderType === 'custom' && stage !== 'sent' && stage !== 'ended' && (
                         <button onClick={() => setShowCommentBox(true)} className="self-start inline-flex items-center gap-1.5 text-xs font-medium text-[#4600D6] hover:underline underline-offset-2">
                           <Plus className="w-3.5 h-3.5" /> Add comment
                         </button>
