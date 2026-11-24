@@ -17,6 +17,7 @@ export default {
   'admin/stats': () => import('../../_routes/admin/stats.js'),
   'admin/support-closes': () => import('../../_routes/admin/support-closes.js'),
   'admin/support-stats': () => import('../../_routes/admin/support-stats.js'),
+  'admin/team-output': () => import('../../_routes/admin/team-output.js'),
   'admin/users': () => import('../../_routes/admin/users.js'),
   'admin/view-as': () => import('../../_routes/admin/view-as.js'),
   'auth/accept-invite': () => import('../../_routes/auth/accept-invite.js'),

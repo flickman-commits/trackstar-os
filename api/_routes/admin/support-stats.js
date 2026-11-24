@@ -2,7 +2,7 @@
  * GET /api/admin/support-stats?range=today|yesterday|7d|30d|90d
  *
  * Admin only. Email tickets in and closed, the share of orders whose customer
- * wrote in, who closed what, and replacement spend, for the Stats page's
+ * wrote in, and replacement spend, for the Stats page's
  * window (server/domain/support/supportStats.js). Same ranges as /api/admin/stats.
  */
 import { setCors } from '../../_lib/auth.js'

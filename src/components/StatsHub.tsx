@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { segment, segmentGroup, btnGhost } from '@/lib/ui'
 import { usd } from '@/lib/financeApi'
+import TeamByDay from '@/components/TeamByDay'
 
 /**
  * Settings > Stats (admin only): every number on one page of cards, the way
@@ -13,8 +14,8 @@ import { usd } from '@/lib/financeApi'
  * Every period is fetched when the page opens, the one on screen first, so
  * switching periods shows numbers at once. Two reads per period:
  * /api/admin/stats (order speed and the Shopify numbers) and
- * /api/admin/support-stats (email tickets, orders with a ticket, who closed
- * what, replacement spend). Its old addresses (/settings/support_closes,
+ * /api/admin/support-stats (email tickets, orders with a ticket, replacement
+ * spend). The Team by day card loads its 90 days once (TeamByDay.tsx). Its old addresses (/settings/support_closes,
  * /settings/support_stats) open it too.
  */
 
@@ -36,7 +37,6 @@ type Support = {
   days: number
   email: { received: number; closed: number; byDay: { day: string; received: number; closed: number }[] }
   rate: { windowDays: number; orders: number; withTicket: number; pct: number | null; stillCounting: boolean; partial: boolean }
-  closers: { id: string; name: string; closed: number }[]
   replacements: { count: number; cents: number }
   damage?: { windowDays: number; orders: number; damaged: number; pct: number | null; reports: number; stillCounting: boolean; partial: boolean }
 }
@@ -121,14 +121,6 @@ function cardsFor(p: Period, label: string): Card[] {
         facts: [{ k: 'Damaged', v: `${dm.damaged} of ${dm.orders}` }, { k: 'Reported this period', v: String(dm.reports) }],
         title: `Orders placed ${label.toLowerCase()} (one per Shopify or Etsy order) whose customer told Support within ${dm.windowDays} days that a print arrived broken or damaged. An order counts once, however many times they write about it. Claude reads each conversation; a person can mark or unmark one from the conversation (Damaged).`,
         note: dm.partial ? 'Starts before the inbox was tracked, so it reads low.' : dm.stillCounting ? `Still counting: damage shows up after delivery, so these orders have up to ${dm.windowDays} days.` : null,
-      })
-    }
-    const allClosed = sp.closers.reduce((n, c) => n + c.closed, 0)
-    for (const c of sp.closers) {
-      out.push({
-        key: `closer-${c.id}`, line: `${c.name} closed`, tag: 'Team', value: String(c.closed),
-        facts: [{ k: 'A day', v: sp.days > 1 ? (c.closed / sp.days).toFixed(1) : String(c.closed) }, { k: 'Share of closes', v: allClosed ? `${Math.round((c.closed / allClosed) * 100)}%` : '–' }],
-        title: 'Support conversations this person closed, email and Instagram, credited to whoever clicked Close.',
       })
     }
     out.push({
@@ -223,6 +215,7 @@ export default function StatsHub(_props: { initial?: string }) {
   const [range, setRange] = useState<RangeKey>('30d')
   const [periods, setPeriods] = useState<Partial<Record<RangeKey, Period>>>({})
   const [refreshing, setRefreshing] = useState(false)
+  const [reload, setReload] = useState(0)
   const order = useRef<RangeKey[]>([])
 
   const loadOne = useCallback(async (key: RangeKey) => {
@@ -242,7 +235,7 @@ export default function StatsHub(_props: { initial?: string }) {
   }, [loadOne])
   useEffect(() => { void loadAll('30d') }, [loadAll])
 
-  const refresh = async () => { setRefreshing(true); try { setPeriods({}); setEntered(false); await loadAll(range) } finally { setRefreshing(false) } }
+  const refresh = async () => { setRefreshing(true); setReload(n => n + 1); try { setPeriods({}); setEntered(false); await loadAll(range) } finally { setRefreshing(false) } }
 
   const p = periods[range]
   // The cards fade in once, when the first period lands; after that a switch
@@ -267,7 +260,8 @@ export default function StatsHub(_props: { initial?: string }) {
         </button>
       </div>
 
-      <div className="rounded-[18px] bg-[#F6F5F2] p-2 sm:p-3">
+      <div className="rounded-[18px] bg-[#F6F5F2] p-2 sm:p-3 space-y-2 sm:space-y-3">
+        <TeamByDay range={range} tagClass={TAGS.Team} reload={reload} />
         {p?.error ? <p className="p-4 text-sm text-red-600">{p.error}</p> : (
           // Cards fade in once; a period switch updates them in place, instantly.
           <div key={p ? 'ready' : 'loading'} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">

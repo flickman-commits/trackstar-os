@@ -15,8 +15,6 @@
  *            address within 60 days. Instagram conversations carry no
  *            email, so they cannot be matched and are not in it. Before the
  *            inbox mirror's first message there is nothing to match.
- *   closers  conversations each person closed, credited to whoever clicked
- *            Close (closeCounter.js counts the same way, by day).
  *   replacements  what we paid Artelo for replacements made in the window
  *            (finance/replacements.js), cancelled and paid-back ones left out.
  *   damage   the share of orders placed in the window whose customer reported
@@ -32,7 +30,7 @@ const cents = r => r.billedCents ?? r.quotedCents ?? 0
 
 /** @param {{ since: Date, until: Date }} w */
 export async function supportStats({ since, until }) {
-  const [received, closed, closers, rate, first, reps, damage] = await Promise.all([
+  const [received, closed, rate, first, reps, damage] = await Promise.all([
     prisma.$queryRaw`
       SELECT to_char(m."sentAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York', 'YYYY-MM-DD') AS day, count(*)::int AS n
       FROM "SupportMessage" m JOIN "SupportThread" t ON t.id = m."threadId"
@@ -48,11 +46,6 @@ export async function supportStats({ since, until }) {
       WHERE nt.kind = 'event' AND nt.body LIKE ${CLOSED} AND nt."createdAt" >= ${since} AND nt."createdAt" < ${until}
         AND t.channel = 'email' AND t.filtered = false AND t."mergedIntoId" IS NULL
       GROUP BY 1`,
-    prisma.$queryRaw`
-      SELECT nt."authorId" AS id, count(DISTINCT (nt."threadId", to_char(nt."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York', 'YYYY-MM-DD')))::int AS n
-      FROM "SupportNote" nt
-      WHERE nt.kind = 'event' AND nt.body LIKE ${CLOSED} AND nt."authorId" IS NOT NULL AND nt."createdAt" >= ${since} AND nt."createdAt" < ${until}
-      GROUP BY 1 ORDER BY 2 DESC`,
     prisma.$queryRaw`
       WITH orders AS (
         SELECT o.source, o."parentOrderNumber", min(o."createdAt") AS placed, lower(min(o."customerEmail")) AS email
@@ -74,8 +67,6 @@ export async function supportStats({ since, until }) {
     damageStats({ since, until }),
   ])
 
-  const users = await prisma.user.findMany({ where: { id: { in: closers.map(c => c.id) } }, select: { id: true, firstName: true, lastName: true } })
-  const nameOf = new Map(users.map(u => [u.id, [u.firstName, u.lastName].filter(Boolean).join(' ') || 'Someone']))
   const days = Math.max(1, (until.getTime() - since.getTime()) / 86_400_000)
   const trackedFrom = first[0]?.at ? new Date(first[0].at) : null
   const r = rate[0] || { orders: 0, withTicket: 0 }
@@ -99,7 +90,6 @@ export async function supportStats({ since, until }) {
       stillCounting: until.getTime() > Date.now() - WINDOW_DAYS * 86_400_000,
       partial: !trackedFrom || trackedFrom > since,
     },
-    closers: closers.map(c => ({ id: c.id, name: nameOf.get(c.id) || 'Someone', closed: c.n })),
     replacements: { count: reps.length, cents: reps.reduce((s, x) => s + cents(x), 0) },
     damage,
   }
