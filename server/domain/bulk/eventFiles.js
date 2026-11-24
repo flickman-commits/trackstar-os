@@ -33,13 +33,13 @@ export function eventFilesNeeded({ raceName, events }, runnerEvents = [], upload
 export async function eventFiles(run) {
   const base = templateKey(run.raceName, run.number)
   const [rows, runners] = await Promise.all([
-    prisma.printTemplate.findMany({ where: { OR: [{ key: base }, { key: { startsWith: `${base} / ` } }] }, select: { key: true, fileVersion: true, lastCheckAt: true, lastCheckOk: true, lastCheckReport: true } }),
+    prisma.printTemplate.findMany({ where: { OR: [{ key: base }, { key: { startsWith: `${base} / ` } }] }, select: { key: true, enabled: true, fileVersion: true, lastCheckAt: true, lastCheckOk: true, lastCheckReport: true } }),
     prisma.order.findMany({ where: { bulkOrderId: run.id, bulkDnfAt: null }, select: { runnerResearch: { where: { researchStatus: 'found' }, select: { eventType: true }, take: 1, orderBy: { id: 'desc' } } } }),
   ])
   const eventOf = key => (key === base ? null : key.slice(base.length + 3))
   const ran = runners.map(r => r.runnerResearch[0]?.eventType).filter(Boolean)
-  return eventFilesNeeded(run, ran, rows.map(r => eventOf(r.key))).map(f => {
-    const t = rows.find(r => eventOf(r.key) === f.event)
+  return eventFilesNeeded(run, ran, rows.filter(r => r.enabled).map(r => eventOf(r.key))).map(f => {
+    const t = rows.find(r => r.enabled && eventOf(r.key) === f.event)
     return { ...f, file: t ? { uploadedAt: t.fileVersion, checkedAt: t.lastCheckAt, ok: t.lastCheckOk, problems: t.lastCheckReport?.problems || [] } : null }
   })
 }

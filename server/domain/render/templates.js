@@ -6,6 +6,7 @@
  */
 import prisma from '../../db.js'
 import { storage } from '../../lib/storage.js'
+import { boardsByEvent } from './cobrandedBoards.js'
 
 const ONLINE_MS = 90_000
 export async function onlineWorkers() {
@@ -85,7 +86,14 @@ export async function saveUploadedTemplate({ raceName, runNumber, event, path, n
   const key = templateKey(raceName, edition)
   const data = {
     raceName, edition, file: `Uploaded / ${edition.replace(' / ', ' ')}.ai`, storagePath: String(path), fileVersion: new Date().toISOString(),
-    lastCheckAt: null, lastCheckOk: null, lastCheckReport: null, lastCheckMtime: null, ...(notes ? { notes } : {}),
+    // The artboard rules belonged to the old file; the check sets them again (splitDistances).
+    rules: null, lastCheckAt: null, lastCheckOk: null, lastCheckReport: null, lastCheckMtime: null, ...(notes ? { notes } : {}),
+  }
+  // The distances that shared the replaced file follow the new one: they wait
+  // (no print from the old artwork) until its check says which artboard is theirs.
+  if (!event) {
+    const old = await prisma.printTemplate.findUnique({ where: { key }, select: { storagePath: true } })
+    if (old?.storagePath) await prisma.printTemplate.updateMany({ where: { storagePath: old.storagePath, key: { startsWith: `${key} / ` } }, data: { enabled: false } })
   }
   return prisma.printTemplate.upsert({ where: { key }, update: { ...data, enabled: true }, create: { key, ...data, enabled: true } })
 }
@@ -167,10 +175,33 @@ export async function recheckTemplate(key) {
 
 /** A worker checked a file. Keep the verdict and the mtime it applies to. */
 export async function recordCheck({ key, mtime, ok, report, workerId }) {
-  return prisma.printTemplate.update({
+  const t = await prisma.printTemplate.update({
     where: { key: String(key) },
     data: { lastCheckAt: new Date(), lastCheckOk: Boolean(ok), lastCheckReport: report || null, lastCheckMtime: mtime ? String(mtime) : null, lastCheckWorker: workerId ? String(workerId) : null },
   })
+  return (await splitDistances(t)) || t
+}
+
+/**
+ * A co-branded upload with every distance on its own artboard: the main row
+ * takes its artboard, and each other event gets a row on the same file with
+ * its own. All are checked again, with the artboard named. An event that has
+ * a file of its own keeps it.
+ */
+async function splitDistances(t) {
+  if (t.lastCheckOk !== false || t.rules?.artboard || !t.storagePath || !/^BULK-\d+$/.test(t.edition || '')) return null
+  const named = Object.values(t.lastCheckReport?.choices || {})
+  const boards = named.length === 1 ? boardsByEvent(t.raceName, named[0]) : null
+  if (!boards) return null
+  const fresh = { storagePath: t.storagePath, fileVersion: t.fileVersion, enabled: true, lastCheckAt: null, lastCheckOk: null, lastCheckReport: null, lastCheckMtime: null }
+  for (const { event, artboard } of boards.filter(b => b.event)) {
+    const key = `${t.key} / ${event}`
+    const own = await prisma.printTemplate.findUnique({ where: { key }, select: { enabled: true } })
+    if (own?.enabled) continue
+    const data = { ...fresh, raceName: t.raceName, edition: `${t.edition} / ${event}`, file: t.file, rules: { artboard } }
+    await prisma.printTemplate.upsert({ where: { key }, update: data, create: { key, ...data } })
+  }
+  return prisma.printTemplate.update({ where: { key: t.key }, data: { ...fresh, rules: { artboard: boards.find(b => !b.event).artboard } } })
 }
 
 /** One-time import of worker/templates.json into the table. Existing keys are left alone. */

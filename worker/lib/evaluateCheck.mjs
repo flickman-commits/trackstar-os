@@ -16,6 +16,8 @@ export const MIN_IMAGE_PPI = 250
 
 export function evaluateCheck(r, { sizes: need = SIZES, cobranded = false } = {}) {
   const problems = [], warnings = [], sizes = {}
+  // Sizes where more than one artboard fits the rules, with their names: a co-branded file with every distance in it (cobrandedBoards.js).
+  const choices = {}
   if (!r || r.error) return { ok: false, problems: [r?.error || 'no report'], warnings, sizes }
   // A linked image whose file is not on this Mac renders as Illustrator's low-res preview: never print that.
   for (const img of r.images || []) {
@@ -36,7 +38,7 @@ export function evaluateCheck(r, { sizes: need = SIZES, cobranded = false } = {}
     if (!boards.length) { problems.push(`${size}: no artboard`); continue }
     // Every artboard the rules allow, not only the one picked: the render takes the last of them, which may be the wrong design.
     const allowed = (r.artboards || []).filter(a => a.candidate && a.size === size && !a.photoVariant)
-    if (boards.length > 1 || allowed.length > 1) { const list = allowed.length > 1 ? allowed : boards; problems.push(`${size}: ${list.length} artboards match (${list.map(b => b.name).join(', ')}); set "artboard" or "artboardExclude" to pick one`); continue }
+    if (boards.length > 1 || allowed.length > 1) { const list = allowed.length > 1 ? allowed : boards; choices[size] = list.map(b => b.name); problems.push(`${size}: ${list.length} artboards match (${list.map(b => b.name).join(', ')}); set "artboard" or "artboardExclude" to pick one`); continue }
     const b = boards[0], fields = b.fields || {}
     if (r.key && !halfKey && /half/i.test(b.name)) { problems.push(`${size}: prints the "${b.name}" artboard, a half marathon design, for ${r.key}; set "artboardExclude": "Half", and map the half to "${r.key} / Half Marathon"`); continue }
     const have = Object.keys(fields)
@@ -72,5 +74,5 @@ export function evaluateCheck(r, { sizes: need = SIZES, cobranded = false } = {}
     }
   }
   const extra = [...new Set(chosen.filter(a => !SIZES.includes(a.size)).map(a => a.size))]
-  return { ok: problems.length === 0, problems, warnings, sizes, extraSizes: extra, colorSpace: String(r.colorSpace || '').replace('DocumentColorSpace.', '') }
+  return { ok: problems.length === 0, problems, warnings, sizes, choices, extraSizes: extra, colorSpace: String(r.colorSpace || '').replace('DocumentColorSpace.', '') }
 }
