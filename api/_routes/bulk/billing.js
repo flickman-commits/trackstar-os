@@ -41,7 +41,7 @@ export default async function handler(req, res) {
       if (req.query?.catalog) return res.status(200).json({ products: await publicPrintCatalog() })
       if (req.query?.designs) return res.status(200).json({ designs: await openRacePartnerOrders() })
       if (req.query?.options) return res.status(200).json({ events: EVENT_OPTIONS, sizes: SIZE_OPTIONS, frames: FRAME_OPTIONS, printKinds: PRINT_KINDS })
-      if (req.query?.template) return res.status(200).json(await productionFileDownload(req.query.id))
+      if (req.query?.template) return res.status(200).json(await productionFileDownload(req.query.id, req.query.event))
       if (req.query?.quote) {
         if (!money) return res.status(403).json({ error: 'Prices are for admins.' })
         return res.status(200).json(await quote(req.query.id))
@@ -66,7 +66,7 @@ export default async function handler(req, res) {
       case 'template-upload':
         return res.status(200).json(await productionFileUpload(body.id, body.fileName))
       case 'template-saved': {
-        const t = await productionFileSaved(body.id, body.path)
+        const t = await productionFileSaved(body.id, body.path, body.event)
         await recordAudit({ action: 'bulk.template_upload', summary: `Uploaded the co-branded production file for ${t.edition}`, detail: { key: t.key }, actor })
         return res.status(200).json({ ok: true, key: t.key })
       }

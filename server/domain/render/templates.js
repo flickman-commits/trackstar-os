@@ -28,6 +28,9 @@ export async function listTemplates() {
   return prisma.printTemplate.findMany({ orderBy: [{ raceName: 'asc' }, { edition: 'asc' }] })
 }
 
+// The bulk run a template belongs to: its edition is "BULK-0005" or "BULK-0005 / Half Marathon".
+const runOf = t => String(t.edition || '').split(' / ')[0]
+
 /**
  * What the worker needs to render and to check: enabled templates with their
  * files and rules. An uploaded file (storagePath) comes with a download link
@@ -38,9 +41,9 @@ export async function templatesForWorker() {
   const rows = await prisma.printTemplate.findMany({ where: { enabled: true }, orderBy: { key: 'asc' } })
   // A co-branded bulk file only has to cover its run's size (the worker's check reads rules.sizes).
   const runs = rows.filter(t => /^BULK-/.test(t.edition || ''))
-  const sizeOf = new Map(runs.length ? (await prisma.bulkOrder.findMany({ where: { number: { in: runs.map(t => t.edition) } }, select: { number: true, productSize: true } })).map(b => [b.number, b.productSize]) : [])
+  const sizeOf = new Map(runs.length ? (await prisma.bulkOrder.findMany({ where: { number: { in: runs.map(runOf) } }, select: { number: true, productSize: true } })).map(b => [b.number, b.productSize]) : [])
   return Promise.all(rows.map(async t => ({
-    key: t.key, file: t.file, rules: { ...(t.rules || {}), ...(sizeOf.get(t.edition) ? { sizes: [String(sizeOf.get(t.edition)).replace(/^x/, '')] } : {}) }, lastCheckMtime: t.lastCheckMtime, lastCheckOk: t.lastCheckOk,
+    key: t.key, file: t.file, rules: { ...(t.rules || {}), ...(sizeOf.get(runOf(t)) ? { sizes: [String(sizeOf.get(runOf(t))).replace(/^x/, '')] } : {}) }, lastCheckMtime: t.lastCheckMtime, lastCheckOk: t.lastCheckOk,
     ...(t.storagePath ? { url: await templateDownloadUrl(t.storagePath), version: t.fileVersion } : {}),
   })))
 }
@@ -77,10 +80,11 @@ export async function uploadTemplateUrl(runNumber, fileName) {
 }
 
 /** The uploaded file is in place: point the run's template at it and have it checked again. */
-export async function saveUploadedTemplate({ raceName, runNumber, path, notes }) {
-  const key = templateKey(raceName, runNumber)
+export async function saveUploadedTemplate({ raceName, runNumber, event, path, notes }) {
+  const edition = [runNumber, event].filter(Boolean).join(' / ')
+  const key = templateKey(raceName, edition)
   const data = {
-    raceName, edition: runNumber, file: `Uploaded / ${runNumber}.ai`, storagePath: String(path), fileVersion: new Date().toISOString(),
+    raceName, edition, file: `Uploaded / ${edition.replace(' / ', ' ')}.ai`, storagePath: String(path), fileVersion: new Date().toISOString(),
     lastCheckAt: null, lastCheckOk: null, lastCheckReport: null, lastCheckMtime: null, ...(notes ? { notes } : {}),
   }
   return prisma.printTemplate.upsert({ where: { key }, update: { ...data, enabled: true }, create: { key, ...data, enabled: true } })

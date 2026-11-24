@@ -18,6 +18,8 @@ import prisma from '../../db.js'
 import { Prisma } from '@prisma/client'
 import { shopifyAdminUrl, shopifyDraftAdminUrl } from '../../lib/links.js'
 import { shopifyGraphQL } from '../../services/shopifyAuth.js'
+import { eventFiles } from './eventFiles.js'
+import { eventPart } from '../render/spec.js'
 import { getCanonicalRaceName } from '../../scrapers/index.js'
 import { nextNumber, dueDateFor, verifiedRaceDate, FRAME_OPTIONS, SIZE_OPTIONS } from './bulkOrders.js'
 import { defaultAssigneeFor } from '../orders/assignment.js'
@@ -179,8 +181,7 @@ export async function loadBilling(id) {
   // Where to see the invoice ourselves: the draft (or the paid order) in Shopify admin. invoiceUrl is the customer's checkout.
   order.adminUrl = order.shopifyOrderId ? shopifyAdminUrl(String(order.shopifyOrderId).split('/').pop()) : shopifyDraftAdminUrl(order.shopifyDraftId)
   if (order.printKind !== 'cobranded') return order
-  const t = await prisma.printTemplate.findUnique({ where: { key: templateKey(order.raceName, order.number) }, select: { fileVersion: true, lastCheckAt: true, lastCheckOk: true, lastCheckReport: true } })
-  return { ...order, template: t ? { uploadedAt: t.fileVersion, checkedAt: t.lastCheckAt, ok: t.lastCheckOk, problems: t.lastCheckReport?.problems || [] } : null }
+  return { ...order, files: await eventFiles(order) }
 }
 
 /**
@@ -213,20 +214,29 @@ export async function productionFileUpload(id, fileName) {
   return uploadTemplateUrl(order.number, fileName)
 }
 
-export async function productionFileSaved(id, path) {
+/** An event's file label as the keys spell it, or null for the main event. */
+function fileEvent(raceName, event) {
+  const e = String(event || '').trim()
+  if (!e) return null
+  if (e.length > 40 || !/^[A-Za-z0-9 .&'-]+$/.test(e)) throw new BulkError('That is not a distance')
+  return eventPart(raceName, e)
+}
+
+export async function productionFileSaved(id, path, event = null) {
   const order = await prisma.bulkOrder.findUnique({ where: { id: String(id || '') }, select: { number: true, raceName: true } })
   if (!order) throw new BulkError('Bulk order not found', 404)
   if (!String(path || '').startsWith(`cobranded/${order.number}/`)) throw new BulkError('That upload is not for this order')
-  return saveUploadedTemplate({ raceName: order.raceName, runNumber: order.number, path })
+  return saveUploadedTemplate({ raceName: order.raceName, runNumber: order.number, event: fileEvent(order.raceName, event), path })
 }
 
 /** A five-minute link that downloads the order's uploaded production file, named for the order. */
-export async function productionFileDownload(id) {
+export async function productionFileDownload(id, event = null) {
   const order = await prisma.bulkOrder.findUnique({ where: { id: String(id || '') }, select: { number: true, raceName: true, raceYear: true } })
   if (!order) throw new BulkError('Bulk order not found', 404)
-  const t = await prisma.printTemplate.findUnique({ where: { key: templateKey(order.raceName, order.number) }, select: { storagePath: true } })
+  const ev = fileEvent(order.raceName, event)
+  const t = await prisma.printTemplate.findUnique({ where: { key: templateKey(order.raceName, [order.number, ev].filter(Boolean).join(' / ')) }, select: { storagePath: true } })
   if (!t?.storagePath) throw new BulkError('This order has no uploaded production file', 404)
-  const name = `${order.raceName} ${order.raceYear} ${order.number}.ai`.replace(/[^A-Za-z0-9 .-]/g, '')
+  const name = `${order.raceName} ${order.raceYear} ${order.number}${ev ? ` ${ev}` : ''}.ai`.replace(/[^A-Za-z0-9 .-]/g, '')
   const url = await templateDownloadUrl(t.storagePath, { ttl: 300, downloadAs: name })
   if (!url) throw new BulkError('Could not make a download link for the file', 502)
   return { url }

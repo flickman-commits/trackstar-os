@@ -64,6 +64,23 @@ export function eventLabel(eventType) {
   return e
 }
 
+/** The event in a template key: null for the race's main event. */
+export function eventPart(raceName, eventType) {
+  if (!eventType || isMainEvent(raceName, eventType)) return null
+  // A named event (Detroit's International / Motor City halves) keeps its own name, so each gets its own file.
+  return namedEventsFor(raceName).some(e => e.label === eventType) ? eventType : eventLabel(eventType)
+}
+
+/** Whether a co-branded runner's design was made from another event's file. */
+export function wrongEventFile(order, template) {
+  if (!isBulkCobranded(order) || !template) return false
+  const raceName = order.raceNameOverride ?? order.raceName
+  const research = pickResearch(order.runnerResearch, raceName, order.yearOverride ?? order.raceYear, getCanonicalRaceName)
+  if (!research?.eventType) return false
+  const suffix = t => t.slice(t.indexOf(' / '))
+  return suffix(template) !== suffix(templateFor(order, raceName, research.eventType))
+}
+
 /**
  * Which production file a print uses. A race's main event (the marathon, or
  * the event a race is named for) is "<race>"; any other event at the race has
@@ -95,12 +112,12 @@ function baseTemplate(order, raceName, eventType, has) {
 }
 
 export function templateFor(order, raceName, eventType) {
-  // A co-branded bulk line renders from its own uploaded file, keyed by its run (templates.js).
-  if (isBulkCobranded(order)) return templateKey(raceName, order.bulkOrder.number)
+  const ev = eventPart(raceName, eventType)
+  // A co-branded bulk line renders from its own uploaded file, keyed by its run and, off the
+  // main event, the runner's event: "Philadelphia Marathon / BULK-0005 / Half Marathon"
+  // (templates.js). No file for that event holds the print; the main file never stands in.
+  if (isBulkCobranded(order)) return templateKey(raceName, [order.bulkOrder.number, ev].filter(Boolean).join(' / '))
   const edition = editionOf(order)
-  // A named event (Detroit's International / Motor City halves) keeps its own name, so each gets its own file.
-  const named = namedEventsFor(raceName).some(e => e.label === eventType)
-  const ev = eventType && !isMainEvent(raceName, eventType) ? (named ? eventType : eventLabel(eventType)) : null
   return templateKey(raceName, [edition, ev].filter(Boolean).join(' / ') || null)
 }
 
@@ -151,7 +168,7 @@ export function buildSpec(order, templates = [], raceRow = null, noTimeGaps = ne
   const triathlon = isTriathlon(order)
   const template = triathlon ? TRI_TEMPLATE : resolveTemplate(order, raceName, research0?.eventType, k => templates.includes(k))
   const eventTag = template.includes(' / ') && !edition && !isBulkCobranded(order) ? eventLabel(research0?.eventType) : null
-  if (!templates.includes(template)) reasons.push(isBulkCobranded(order) ? `No checked co-branded production file for ${order.bulkOrder.number} yet` : `No prepared template for ${template}`)
+  if (!templates.includes(template)) reasons.push(isBulkCobranded(order) ? `No checked co-branded production file for ${template.split(' / ').slice(1).join(' ')} yet` : `No prepared template for ${template}`)
   if (!name) reasons.push('No runner name')
 
   const research = research0

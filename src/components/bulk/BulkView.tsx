@@ -598,8 +598,8 @@ function BulkDetail({ id, onBack, onOpenRunner, refreshRunners, team, meId }: { 
       <div className="order-1 md:order-none md:col-start-1 md:row-start-1 min-w-0 flex flex-col gap-4">
         {billing?.printKind === 'cobranded' && !submitted && (
           <div className="border border-border-gray rounded-md p-4 space-y-1.5">
-            <div className={label}>Co-branded production file</div>
-            <p className="text-[11px] text-off-black/50">The Illustrator file, built like a race template (same layers and artboards). The render worker checks it, then makes every runner's print from it.</p>
+            <div className={label}>Co-branded production files</div>
+            <p className="text-[11px] text-off-black/50">One Illustrator file per distance, built like a race template (same layers and artboards). The render worker checks each, then makes every runner's print from the file for the distance they ran.</p>
             <ProductionFile order={billing} onChanged={load} />
           </div>
         )}

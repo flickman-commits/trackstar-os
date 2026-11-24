@@ -10,7 +10,7 @@
  */
 import prisma from '../../db.js'
 import { addressComplete, orgShipTo, researchPending } from './bulkOrders.js'
-import { templateKey } from '../render/templates.js'
+import { eventFiles } from './eventFiles.js'
 import { slackTo, slackText } from '../../lib/slack.js'
 
 const DAY = 864e5
@@ -32,7 +32,6 @@ export async function bulkNeedingAttention(now = new Date()) {
     select: { bulkOrderId: true, shippingAddress: true, researchedAt: true, productionFileUrl: true, status: true, bulkSentAt: true, renderJobs: { where: { review: 'approved' }, select: { id: true }, take: 1 }, runnerResearch: { select: { researchStatus: true }, take: 1, orderBy: { createdAt: 'desc' } } },
   })
   const designs = await prisma.order.findMany({ where: { id: { in: runs.map(r => r.partnerOrderId).filter(Boolean) } }, select: { id: true, designStatus: true } })
-  const templates = await prisma.printTemplate.findMany({ where: { key: { in: runs.map(r => templateKey(r.raceName, r.number)) } }, select: { key: true, lastCheckOk: true } })
 
   const out = []
   for (const run of runs) {
@@ -53,9 +52,10 @@ export async function bulkNeedingAttention(now = new Date()) {
       if (!d || !APPROVED.includes(d.designStatus)) blockers.push(d?.designStatus === 'in_revision' ? 'design in revision' : 'design not approved')
     }
     if (run.printKind === 'cobranded') {
-      const t = templates.find(x => x.key === templateKey(run.raceName, run.number))
-      if (!t) blockers.push('no co-branded production file')
-      else if (t.lastCheckOk === false) blockers.push('production file failed its check')
+      const need = await eventFiles(run)
+      const none = need.filter(f => !f.file), bad = need.filter(f => f.file?.ok === false)
+      if (none.length) blockers.push(need.length === 1 ? 'no co-branded production file' : `no co-branded file for ${none.map(f => f.label).join(', ')}`)
+      if (bad.length) blockers.push(`production file failed its check${need.length > 1 ? ` (${bad.map(f => f.label).join(', ')})` : ''}`)
     }
     if (raced) {
       if (researched < rs.length) blockers.push(`${rs.length - researched} not researched yet`)

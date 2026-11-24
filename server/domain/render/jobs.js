@@ -7,7 +7,7 @@
  * offer "Create Design" at all.
  */
 import prisma from '../../db.js'
-import { buildSpec, SPEC_SELECT, SIZES, TRI_TEMPLATE } from './spec.js'
+import { buildSpec, SPEC_SELECT, SIZES, TRI_TEMPLATE, wrongEventFile } from './spec.js'
 import { isTriathlon } from '../orders/triathlon.js'
 import { availableTemplateKeys, noTimeGaps, onlineWorkers as onlineWorkersList } from './templates.js'
 import { getCanonicalRaceName, separateDayEvents } from '../../scrapers/index.js'
@@ -369,6 +369,7 @@ export async function autoQueueRenders({ limit = 25 } = {}) {
     await createJob({ orderId: o.id, requestedBy: 'system' })
     queued++
   }
+  await closeWrongEventDesigns()
   const again = await rerenderChanged({ limit })
   return { queued, skipped, rerendered: again.queued }
 }
@@ -395,6 +396,26 @@ export async function closeOutdatedDesigns(orderId, note) {
   if (!stale.length) return 0
   await prisma.renderJob.updateMany({ where: { id: { in: stale.map(j => j.id) }, arteloSentAt: null }, data: { review: 'closed', reviewNote: note, reviewedAt: new Date(), sendAfter: null } })
   return stale.length
+}
+
+/**
+ * A co-branded runner's unsent design made from another event's file (a half
+ * runner's from the marathon file, BULK-0005) is closed, so it cannot be
+ * approved. rerenderChanged makes the right one once that event's file is in.
+ */
+export async function closeWrongEventDesigns() {
+  const jobs = await prisma.renderJob.findMany({
+    where: {
+      status: 'done', review: { in: ['pending', 'approved'] }, arteloSentAt: null,
+      order: { trackstarOrderType: 'bulk', status: { not: 'completed' }, bulkSentAt: null, bulkOrder: { printKind: 'cobranded' } },
+    },
+    select: { id: true, orderId: true, spec: true, order: { select: SPEC_SELECT } },
+  })
+  const wrong = jobs.filter(j => wrongEventFile(j.order, j.spec?.template))
+  if (!wrong.length) return 0
+  const out = await prisma.renderJob.updateMany({ where: { id: { in: wrong.map(j => j.id) }, arteloSentAt: null, order: { bulkSentAt: null } }, data: { review: 'closed', reviewNote: "Made from another distance's production file", reviewedAt: new Date(), sendAfter: null } })
+  await prisma.order.updateMany({ where: { id: { in: wrong.map(j => j.orderId) }, bulkSentAt: null }, data: { bulkSendAfter: null } })
+  return out.count
 }
 
 /**

@@ -34,6 +34,7 @@ const PARTNER_TYPES: { key: PartnerType; label: string; line: string; icon: type
 
 const blankLine = (prev?: Line): Line => ({ raceName: prev?.raceName || '', raceYear: prev?.raceYear || String(new Date().getFullYear()), eventNote: '', quantity: '', productSize: prev?.productSize || '8x10', frameType: prev?.frameType || 'Unframed' })
 
+type EventFile = { event: string | null; label: string; runners: number | null; file: { uploadedAt: string | null; checkedAt: string | null; ok: boolean | null; problems: string[] } | null }
 export type Billing = {
   id: string; number: string; partnerName: string; contactName: string | null; contactEmail: string | null; contactPhone: string | null
   raceName: string; raceYear: number; events: string | null; quantity: number; productSize: string; frameType: string; dueDate: string | null
@@ -41,8 +42,8 @@ export type Billing = {
   discountNote: string | null; shipping: 'runner' | 'organization'; shipToAddress: Address | null
   shopifyDraftId: string | null; shopifyDraftName: string | null; invoiceUrl: string | null; invoiceSentAt: string | null
   shopifyOrderName: string | null; paidAt: string | null; adminUrl?: string | null; notes: string | null
-  /** Co-branded: the order's uploaded production file and its check. */
-  template?: { uploadedAt: string | null; checkedAt: string | null; ok: boolean | null; problems: string[] } | null
+  /** Co-branded: a production file per distance and its check. event null is the main event. */
+  files?: EventFile[]
 }
 type PastDetails = {
   partnerName: string; contactName: string | null; contactEmail: string | null; contactPhone: string | null; billingAddress: Address | null
@@ -301,30 +302,35 @@ export function OrderModal({ order, onClose, onCreated }: { order?: Billing; onC
   )
 }
 
-/** A co-branded order's production file: upload or replace it, and what the worker's check said. */
+/** A co-branded order's production files, one per distance. */
 export function ProductionFile({ order, onChanged }: { order: Billing; onChanged: () => void }) {
+  return <div className="space-y-3">{(order.files || []).map(f => <EventFileRow key={f.event || ''} order={order} entry={f} onChanged={onChanged} />)}</div>
+}
+
+/** One distance's file: upload or replace it, and what the worker's check said. */
+function EventFileRow({ order, entry, onChanged }: { order: Billing; entry: EventFile; onChanged: () => void }) {
   const [busy, setBusy] = useState(false)
-  const t = order.template
+  const t = entry.file
   const upload = async (file: File) => {
     setBusy(true)
     try {
       const { path, uploadUrl } = await billingApi<{ path: string; uploadUrl: string }>({ action: 'template-upload', id: order.id, fileName: file.name })
       const res = await putUpload(uploadUrl, { headers: { 'Content-Type': 'application/postscript', 'x-upsert': 'true' }, body: file })
       if (!res.ok) throw new Error(`The upload failed (${res.status})`)
-      await billingApi({ action: 'template-saved', id: order.id, path })
+      await billingApi({ action: 'template-saved', id: order.id, path, event: entry.event })
       toast.success('Uploaded. The render worker checks it on its next check-in.')
       onChanged()
     } catch (err) { toast.error((err as Error).message) } finally { setBusy(false) }
   }
   const download = async () => {
     try {
-      const r = await apiFetch(`${API_BASE}/api/bulk/billing?id=${encodeURIComponent(order.id)}&template=1`)
+      const r = await apiFetch(`${API_BASE}/api/bulk/billing?id=${encodeURIComponent(order.id)}&template=1${entry.event ? `&event=${encodeURIComponent(entry.event)}` : ''}`)
       const out = await r.json().catch(() => ({}))
       if (!r.ok || !out.url) throw new Error(out.error || 'Could not get the file')
       window.location.href = out.url
     } catch (err) { toast.error((err as Error).message) }
   }
-  const status = !t ? { text: 'No file yet', cls: 'text-off-black/45' }
+  const status = !t ? entry.runners ? { text: 'No file yet, prints wait for it', cls: 'text-red-600 font-medium' } : { text: 'No file yet', cls: 'text-off-black/45' }
     : t.ok === null || !t.checkedAt ? { text: 'Waiting for the worker to check it', cls: 'text-amber-700' }
     : t.ok ? { text: 'Checked, ready to render', cls: 'text-emerald-700' }
     : { text: 'Check found problems (above)', cls: 'text-red-600 font-medium' }
@@ -347,8 +353,8 @@ export function ProductionFile({ order, onChanged }: { order: Billing; onChanged
       </div>
     )}
     <div className="flex items-center gap-2 text-xs">
-      <span className="font-medium text-off-black min-w-0 truncate">{order.raceName} {order.raceYear}</span>
-      <span className="font-mono text-[11px] text-off-black/40">{order.number}</span>
+      <span className="font-medium text-off-black min-w-0 truncate">{entry.label}</span>
+      {entry.runners !== null && <span className="text-[11px] text-off-black/45 whitespace-nowrap">{entry.runners} {entry.runners === 1 ? 'runner' : 'runners'}</span>}
       <span className={`flex-1 min-w-0 truncate ${status.cls}`} title={status.text}>{status.text}</span>
       {t && <button type="button" onClick={download} className={`${btnSecondary} shrink-0`}><Download className="w-3.5 h-3.5" />Download .ai</button>}
       <label className={`${btnSecondary} cursor-pointer shrink-0 ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
