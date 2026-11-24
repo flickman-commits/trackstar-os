@@ -201,7 +201,7 @@ export function excerpt(body, terms) {
 // ---------------------------------------------------------------------------
 
 // The buttons an answer may name, as the actions panel and the order view label them.
-const ASK_BUTTONS = 'Change size or frame, Fix name or year, Edit shipping address, Cancel and refund, Refund, Send invoice, Discounts & Gift Cards, Create Artelo ticket (Damaged in shipping, Lost in transit, Address change), New Artelo order (including Frame only), Note for fulfillment, Attach mockup, Insert Artelo tracking link, Insert approval link, Convert to custom order, Slack Matt, and Add comment, Add customer photo and Re-Open Order on the order'
+const ASK_BUTTONS = 'Change size or frame, Fix name or year, Edit shipping address, Cancel and refund, Refund, Send invoice, Discounts & Gift Cards, Create Artelo ticket (Arrived damaged, Lost in transit, More photos, Address change), New Artelo order (including Frame only), Note for fulfillment, Attach mockup, Insert Artelo tracking link, Insert approval link, Convert to custom order, Slack Matt, and Add comment, Add customer photo and Re-Open Order on the order'
 
 const ASK_SYSTEM = `You answer questions from Trackstar's customer support reps. Trackstar sells personalized race prints, printed and framed by our partner Artelo. Reps work in TrackstarOS (Support inbox, actions panel), Shopify and Artelo. The rep has a customer waiting and wants to know what to do and what to say. They will not read an essay.
 

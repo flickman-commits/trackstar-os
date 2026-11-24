@@ -835,29 +835,33 @@ export async function sendReply({ userId, thread, html, text, attachments = [], 
  * tool's "Email customer" (we need a bib number, a last name). Read back
  * and stored like any sent mail, so the conversation is in Support at once,
  * waiting on the customer, and their reply lands in it.
+ *
+ * `replyOn` ({ threadId, gmailThreadId, inReplyTo }) sends it on a conversation
+ * we already have instead, for one email of several in a merged conversation,
+ * where "the last message" (sendReply) would answer the wrong one.
  */
-export async function sendNew({ userId, to: given, subject, html, text, attachments = [] }) {
+export async function sendNew({ userId, to: given, subject, html, text, attachments = [], replyOn = null }) {
   const to = currentAddress(given)
   const gmail = await client()
   const mailbox = mailboxEmail()
   const messageId = newMessageId()
-  const raw = base64url(buildMime({ to, subject, html, text, messageId, attachments }))
+  const raw = base64url(buildMime({ to, subject, html, text, inReplyTo: replyOn?.inReplyTo || undefined, messageId, attachments }))
   let sent
   try {
-    sent = await gmail.users.messages.send({ userId: 'me', requestBody: { raw } })
+    sent = await gmail.users.messages.send({ userId: 'me', requestBody: { raw, ...(replyOn?.gmailThreadId ? { threadId: replyOn.gmailThreadId } : {}) } })
   } catch (err) {
     await onGmailError(err)
   }
   try {
     const full = await gmail.users.messages.get({ userId: 'me', id: sent.data.id, format: 'full' })
-    return await importMessage(parseMessage(full.data, mailbox), { sentById: userId, mailbox })
+    return await importMessage(parseMessage(full.data, mailbox), { sentById: userId, mailbox, threadId: replyOn?.threadId || null })
   } catch (err) {
     console.warn(`[support] sent ${sent.data.id} but could not read it back: ${err.message}`)
     return importMessage({
-      gmailMessageId: sent.data.id, gmailThreadId: sent.data.threadId, rfcMessageId: messageId, inReplyTo: null,
+      gmailMessageId: sent.data.id, gmailThreadId: sent.data.threadId, rfcMessageId: messageId, inReplyTo: replyOn?.inReplyTo || null,
       direction: 'out', fromEmail: mailbox, fromName: 'Trackstar', toEmails: to, ccEmails: '', subject, bodyText: text, bodyHtml: html,
       attachments: [], sentAt: new Date(), labels: ['SENT'],
-    }, { sentById: userId, mailbox })
+    }, { sentById: userId, mailbox, threadId: replyOn?.threadId || null })
   }
 }
 

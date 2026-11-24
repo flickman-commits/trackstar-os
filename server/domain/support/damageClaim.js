@@ -11,6 +11,12 @@
  * has the ticket (a "-R" order, 4341-R), where a New Artelo order
  * (arteloOrder.js) is billed. The ticket starts its own Support conversation,
  * so Artelo's answer lands there.
+ *
+ * "More photos" is for the photos a customer sends after we filed: it goes as
+ * a reply on the ticket we already sent, so Artelo does not read it as a
+ * second claim (reps were sending it as a new damage ticket). With no ticket
+ * from here on the order (it was filed in Artelo's chat), it is a new email
+ * that says so.
  */
 import prisma from '../../db.js'
 import { UserError } from './errors.js'
@@ -80,6 +86,9 @@ export const TICKET_KINDS = [
   { value: 'missing', label: 'Missing from the box', sub: 'An item or part did not come', photos: true,
     subject: f => `Missing item: order ${f.ids}`,
     body: f => [`${f.ref} arrived with something missing.`, '', 'What is missing: ', '', `Please send it${f.shipTo ? ` to the same address: ${f.shipTo}` : ''}.`] },
+  { value: 'photos', label: 'More photos', sub: 'For a ticket we already sent: the shipping label, the damage', photos: true, needsPhotos: true,
+    subject: f => (f.claim ? `Re: ${f.claim.subject}` : `Photos for an existing claim: order ${f.ids}`),
+    body: f => [`Here are the customer's photos for the claim we already filed on ${f.ref}.`, '', 'Please add them to the same report. This is not a new claim.'] },
   { value: 'address', label: 'Address change', sub: 'Before it ships', photos: false,
     subject: f => `Address change: order ${f.ids}`,
     body: f => [`Please ship ${f.ref} to this address instead:`, '', '', f.shipTo ? `It was going to: ${f.shipTo}.` : ''] },
@@ -88,6 +97,53 @@ export const TICKET_KINDS = [
     body: f => [`About ${f.ref}:`, '', ''] },
 ]
 export const CLAIM_KINDS = TICKET_KINDS.map(k => k.value)
+
+const bareSubject = s => String(s || '').replace(/^(\s*re:\s*)+/i, '').trim()
+
+/**
+ * Pure: which of the order's past tickets (newest first) more photos belong
+ * to. A claim before anything else; "Something else" only when it is all
+ * there is. An address change or an earlier "More photos" is not a claim.
+ * The first damage claims (October 2026) were saved with no kind.
+ */
+export function pickClaim(audits) {
+  const kindOf = a => a.detail?.kind || 'damaged'
+  const sent = (audits || []).filter(a => a.detail?.claimThreadId)
+  return sent.find(a => ['damaged', 'lost', 'wrong', 'missing'].includes(kindOf(a))) || sent.find(a => kindOf(a) === 'other') || null
+}
+
+/** The ticket this order's later photos go on: its conversation, Gmail thread, subject and last message. Null when none was sent from here. */
+async function existingClaim(shopifyOrderId, number) {
+  const audits = await prisma.auditEvent.findMany({
+    where: { action: 'support.artelo_claim', detail: { path: ['shopifyOrderId'], equals: String(shopifyOrderId) } },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: { createdAt: true, detail: true },
+  })
+  const hit = pickClaim(audits)
+  // The ticket's own row keeps its Gmail thread even after someone merges it into another Artelo conversation.
+  const own = hit ? await prisma.supportThread.findUnique({ where: { id: hit.detail.claimThreadId }, select: { id: true, gmailThreadId: true, mergedIntoId: true } }) : null
+  if (!own?.gmailThreadId) return null
+  let home = own
+  for (let hop = 0; home.mergedIntoId && hop < 5; hop++) {
+    const next = await prisma.supportThread.findUnique({ where: { id: home.mergedIntoId }, select: { id: true, mergedIntoId: true } })
+    if (!next) break
+    home = next
+  }
+  const named = new RegExp(`(^|\\D)${number.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\D|$)`)
+  const messages = (await prisma.supportMessage.findMany({
+    where: { threadId: home.id, subject: { contains: number } },
+    orderBy: { sentAt: 'asc' },
+    select: { direction: true, subject: true, sentAt: true, rfcMessageId: true, attachments: true },
+  })).filter(m => named.test(m.subject) && m.sentAt >= new Date(hit.createdAt.getTime() - 10 * 60_000))
+  if (!messages.length) return null
+  const subject = bareSubject(messages[0].subject)
+  const chain = messages.filter(m => bareSubject(m.subject) === subject)
+  const last = chain.filter(m => m.rfcMessageId).pop()
+  // When we last sent them files on it, so photos already passed on do not come up again.
+  const filesAt = chain.filter(m => m.direction === 'out' && Array.isArray(m.attachments) && m.attachments.length).pop()?.sentAt
+  return { threadId: home.id, gmailThreadId: own.gmailThreadId, subject, at: messages[0].sentAt, filesAt: filesAt || messages[0].sentAt, inReplyTo: last?.rfcMessageId || null }
+}
 
 function draftFor(kind, f, actor) {
   const text = [
@@ -107,14 +163,18 @@ function draftFor(kind, f, actor) {
 
 /** What the form starts from: the kinds with a draft each, and the customer's photos in this conversation. */
 export async function claimPrep({ thread, shopifyOrderId, tracking, actor }) {
-  const f = { ...(await orderFacts(shopifyOrderId)), tracking: String(tracking || '').trim() }
+  const facts = await orderFacts(shopifyOrderId)
+  const f = { ...facts, tracking: String(tracking || '').trim(), claim: await existingClaim(shopifyOrderId, facts.number) }
+  // From the order view with no conversation for this customer: no photos of theirs to offer.
+  const photos = thread ? (await claimPhotos(thread.id)).slice(0, 30) : []
   return {
     number: f.number,
     arteloOrderId: f.artelo?.orderId || null,
     to: ARTELO_SUPPORT_EMAIL,
-    kinds: TICKET_KINDS.map(k => ({ value: k.value, label: k.label, sub: k.sub, photos: k.photos, ...draftFor(k, f, actor) })),
-    // From the order view with no conversation for this customer: no photos of theirs to offer.
-    photos: thread ? (await claimPhotos(thread.id)).slice(0, 30) : [],
+    kinds: TICKET_KINDS.map(k => ({ value: k.value, label: k.label, sub: k.sub, photos: k.photos, needsPhotos: Boolean(k.needsPhotos), ...draftFor(k, f, actor) })),
+    photos: photos.map(p => ({ ...p, late: Boolean(f.claim && p.at > f.claim.filesAt) })),
+    // The ticket "More photos" replies on, if we sent one from here.
+    claim: f.claim ? { subject: f.claim.subject, at: f.claim.at } : null,
   }
 }
 
@@ -155,13 +215,22 @@ export async function sendArteloClaim({ thread, shopifyOrderId, kind = 'damaged'
     add(up.bytes, up.contentType, up.filename)
   }
 
-  const sent = await sendNew({ userId: actor?.id || null, to: ARTELO_SUPPORT_EMAIL, subject: subj, html: replyToHtml(text), text: replyToPlain(text), attachments: files })
+  if (k.needsPhotos && !files.length) throw new UserError('Add at least one photo')
+  const claim = k.value === 'photos' ? await existingClaim(shopifyOrderId, f.number) : null
+
+  const sent = await sendNew({ userId: actor?.id || null, to: ARTELO_SUPPORT_EMAIL, subject: subj, html: replyToHtml(text), text: replyToPlain(text), attachments: files, replyOn: claim })
   const by = [actor?.firstName, actor?.lastName].filter(Boolean).join(' ') || 'Someone'
   const withFiles = files.length ? ` with ${files.length} attachment${files.length === 1 ? '' : 's'}` : ''
   const label = k.label.toLowerCase()
+  const more = k.value === 'photos'
+  const count = `${files.length} more photo${files.length === 1 ? '' : 's'}`
+  const event = more
+    ? `${by} sent Artelo ${count} for #${f.number}${claim ? `, on the ticket "${claim.subject}"` : `: "${subj}"`}. Artelo's answer comes into Support as its own conversation.`
+    : `${by} opened an Artelo ticket for #${f.number} (${label})${withFiles}: "${subj}". Artelo's answer comes into Support as its own conversation.`
+  const comment = more ? `Sent Artelo ${count}${claim ? ` on the ticket: ${claim.subject}` : `: ${subj}`}` : `Artelo ticket (${label})${withFiles}: ${subj}`
   await prisma.$transaction([
-    ...(thread ? [prisma.supportNote.create({ data: { threadId: thread.id, kind: 'event', body: `${by} opened an Artelo ticket for #${f.number} (${label})${withFiles}: "${subj}". Artelo's answer comes into Support as its own conversation.`, authorId: actor?.id || null, authorName: by } })] : []),
-    ...f.rows.map(r => prisma.orderComment.create({ data: { orderId: r.id, text: `Artelo ticket (${label})${withFiles}: ${subj}`, authorId: actor?.id || null, authorName: by } })),
+    ...(thread ? [prisma.supportNote.create({ data: { threadId: thread.id, kind: 'event', body: event, authorId: actor?.id || null, authorName: by } })] : []),
+    ...f.rows.map(r => prisma.orderComment.create({ data: { orderId: r.id, text: comment, authorId: actor?.id || null, authorName: by } })),
   ])
-  return { number: f.number, kind, photos: files.length, claimThreadId: sent?.threadId || null, summary: `Opened an Artelo ticket for #${f.number} (${label})${withFiles}` }
+  return { number: f.number, kind, photos: files.length, claimThreadId: sent?.threadId || null, onTicket: Boolean(claim), summary: more ? `Sent Artelo ${count} for #${f.number}` : `Opened an Artelo ticket for #${f.number} (${label})${withFiles}` }
 }

@@ -330,8 +330,8 @@ function CancelForm({ o, thread, onDone, onCancel }: FormProps) {
 }
 
 type Choice = { value: string; label: string }
-type TicketKind = { value: string; label: string; sub: string; photos: boolean; subject: string; body: string }
-type TicketPrep = { number: string; arteloOrderId: string | null; to: string; kinds: TicketKind[]; photos: { messageId: string; index: number; filename: string; at: string }[] }
+type TicketKind = { value: string; label: string; sub: string; photos: boolean; needsPhotos: boolean; subject: string; body: string }
+type TicketPrep = { number: string; arteloOrderId: string | null; to: string; kinds: TicketKind[]; photos: { messageId: string; index: number; filename: string; at: string; late: boolean }[]; claim: { subject: string; at: string } | null }
 
 /** The order's newest tracking, Artelo's first: a link if there is one, else carrier and number. */
 function trackingText(o: FormProps['o']) {
@@ -344,7 +344,9 @@ function trackingText(o: FormProps['o']) {
  * An Artelo ticket: an email to support@artelo.com about this order. Pick
  * what it is about (the pill fills the subject and the body), edit either,
  * attach the customer's photos from this conversation or files from your
- * computer, send. The subject always carries the order number.
+ * computer, send. The subject always carries the order number. When the
+ * customer sent photos after we filed, it opens on More photos with only
+ * those picked, and goes as a reply on the ticket we already sent.
  */
 export function ArteloTicketForm({ o, thread, onDone, onCancel }: FormProps) {
   const [prep, setPrep] = useState<TicketPrep | null>(null)
@@ -358,18 +360,32 @@ export function ArteloTicketForm({ o, thread, onDone, onCancel }: FormProps) {
   const [confirming, setConfirming] = useState(false)
   const [pressKey, setPressKey] = useState('')
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState<{ files: number } | null>(null)
+  const [sent, setSent] = useState<{ files: number; onTicket: boolean } | null>(null)
   const key = (p: { messageId: string; index: number }) => `${p.messageId}:${p.index}`
   useEffect(() => {
     supportApi.arteloOrder<TicketPrep>({ action: 'claimPrep', ...targetOf(thread), shopifyOrderId: o.shopifyOrderId, tracking: trackingText(o) })
-      .then(r => { setPrep(r); const k = r.kinds[0]; setSubject(k.subject); setBody(k.body); setPicked(r.photos.slice(0, 8).map(key)) })
+      .then(r => {
+        setPrep(r)
+        start(r, (r.photos.some(p => p.late) && r.kinds.find(k => k.value === 'photos')) || r.kinds[0])
+      })
       .catch(e => setErr((e as Error).message))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const current = prep?.kinds.find(k => k.value === kind)
-  const pick = (k: TicketKind) => { setKind(k.value); setSubject(k.subject); setBody(k.body); setConfirming(false) }
+  // More photos starts with the ones that came after the ticket, every other kind with all of them.
+  const start = (r: TicketPrep, k: TicketKind) => {
+    setKind(k.value); setSubject(k.subject); setBody(k.body); setConfirming(false)
+    setPicked(r.photos.filter(p => !k.needsPhotos || !r.claim || p.late).slice(0, 8).map(key))
+  }
+  const pick = (k: TicketKind) => {
+    if (!prep || k.value === kind) return
+    // Only a switch to or from More photos changes which photos start picked; between the others a person's picks stay.
+    if (k.needsPhotos || current?.needsPhotos) return start(prep, k)
+    setKind(k.value); setSubject(k.subject); setBody(k.body); setConfirming(false)
+  }
+  const onTicket = current?.value === 'photos' ? prep?.claim || null : null
   const photosToSend = current?.photos ? (prep?.photos || []).filter(p => picked.includes(key(p))) : []
   const n = photosToSend.length + uploads.length
-  const ready = Boolean(subject.trim()) && subject.includes(prep?.number || '\u0000') && Boolean(body.trim())
+  const ready = Boolean(subject.trim()) && subject.includes(prep?.number || '\u0000') && Boolean(body.trim()) && !(current?.needsPhotos && !n)
   const addFiles = async (list: FileList | null) => {
     if (!list?.length) return
     setUploading(true)
@@ -386,22 +402,22 @@ export function ArteloTicketForm({ o, thread, onDone, onCancel }: FormProps) {
     if (!confirming) { setConfirming(true); setPressKey(newIdempotencyKey()); setErr(null); return }
     setBusy(true)
     try {
-      const out = await supportApi.arteloOrder<{ photos: number }>({
+      const out = await supportApi.arteloOrder<{ photos: number; onTicket: boolean }>({
         action: 'claim', ...targetOf(thread), shopifyOrderId: o.shopifyOrderId, kind, subject, body,
         photos: photosToSend.map(p => ({ messageId: p.messageId, index: p.index })), uploads: uploads.map(u => u.ref), idempotencyKey: pressKey,
       })
-      setSent({ files: out.photos })
-      toast.success('Ticket sent to Artelo support')
+      setSent({ files: out.photos, onTicket: out.onTicket })
+      toast.success(kind === 'photos' ? 'Photos sent to Artelo support' : 'Ticket sent to Artelo support')
       onDone()
     } catch (e) { setErr((e as Error).message); toast.error((e as Error).message) }
     finally { setBusy(false); setConfirming(false) }
   }
   if (sent) {
     return (
-      <ActionModal icon={MessageSquareWarning} title="Artelo ticket sent" sub={`#${o.number}`} onClose={onCancel}
+      <ActionModal icon={MessageSquareWarning} title={kind === 'photos' ? 'Photos sent' : 'Artelo ticket sent'} sub={`#${o.number}`} onClose={onCancel}
         footer={<button onClick={onCancel} className={modalPrimary}>Done</button>}>
         <Done title={`Sent to ${prep?.to || 'Artelo support'}${sent.files ? ` with ${sent.files} attachment${sent.files === 1 ? '' : 's'}` : ''}`}>
-          Their answer comes into Support as its own conversation. A free replacement, when it is one, shows under Orders once Artelo makes it.
+          {sent.onTicket ? 'Added to the ticket we already sent. ' : ''}Their answer comes into Support as its own conversation. A free replacement, when it is one, shows under Orders once Artelo makes it.
         </Done>
       </ActionModal>
     )
@@ -458,7 +474,12 @@ export function ArteloTicketForm({ o, thread, onDone, onCancel }: FormProps) {
               </div>
             </Field>
           )}
-          <div className={note}>Emails <b>{prep.to}</b> from the support inbox. Artelo's reply opens its own conversation here.</div>
+          {onTicket
+            ? <div className={note}>Replies on the ticket sent {new Date(onTicket.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: <b>{onTicket.subject}</b></div>
+            : current?.value === 'photos'
+              ? <div className={note}>No ticket was sent from here for this order, so this goes to <b>{prep.to}</b> as a new email.</div>
+              : <div className={note}>Emails <b>{prep.to}</b> from the support inbox. Artelo's reply opens its own conversation here.</div>}
+          {current?.needsPhotos && !n && <div className={warn}>Pick or add at least one photo.</div>}
         </>
       )}
       {err && <div className={bad}>{err}</div>}

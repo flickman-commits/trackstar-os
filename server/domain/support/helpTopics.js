@@ -172,9 +172,10 @@ scenario-1-wheres-my-order-tracking-questions, before-vs-after-production, shipp
   },
   {
     slug: 'topic-arrived-damaged', title: 'Arrived damaged',
-    body: `1. Create Artelo ticket, Damaged in shipping. Attach their photos, ask for double wrap.
+    body: `1. Create Artelo ticket, Arrived damaged. Attach their photos, ask for double wrap.
 2. Reply right away. The replacement doesn't wait for photos.
 3. No tracking after a week? Bump the ticket.
+- More photos or the label came later? Create Artelo ticket, More photos.
 - Only the frame broke? New Artelo order, Frame only. They keep the print.
 - No photos or label? Don't chase it. Tell Artelo to go ahead.
 - Wants a refund, or more than 30 days since delivery? Ask Matt.

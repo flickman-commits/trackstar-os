@@ -6,7 +6,7 @@
  *   POST { action: 'create', id, shopifyOrderId, orderIds, changes?, files?: { [orderId]: 'upload:<path>' }, address, email, instructions, test }
  *   POST { action: 'claimPrep', id, shopifyOrderId, tracking? }  the ticket kinds with a draft each, and the customer's photos here
  *   POST { action: 'claim', id, shopifyOrderId, kind, subject, body, photos?: [{ messageId, index }], uploads?: ['upload:<path>'] }
- *                                                    emails Artelo support (damageClaim.js); the subject must carry the order number
+ *                                                    emails Artelo support (damageClaim.js); the subject must carry the order number; kind 'photos' replies on the ticket already sent
  *
  * id is the Support conversation, and the order has to be its customer's
  * (under their email, or linked to them). `create` carries an idempotencyKey
