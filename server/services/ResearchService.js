@@ -204,6 +204,40 @@ export function bibNameAgrees(orderName, officialName) {
     || (w.length >= 4 && first.length >= 4 && w[0] === first[0] && oneEditApart(w, first)))
 }
 
+/** A bib as typed, for comparing: "#0123" is "123", "F 17963" is "F17963". */
+const bibKey = b => String(b ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^0+(?=.)/, '')
+
+/**
+ * Is the bib somebody typed the bib in the results? Customers copy the corral
+ * letter off the paper ("F 17963", "7505 - GMA") and the results leave it out,
+ * so letters on one side only do not count against it. Two numbers in the box
+ * ("3428 & 3429", a couple's print) are not one bib and never equal one.
+ */
+export function sameBib(a, b) {
+  const x = bibKey(a), y = bibKey(b)
+  if (!x || !y) return false
+  if (x === y) return true
+  if (/[A-Z]/.test(x) && /[A-Z]/.test(y)) return false
+  const digits = v => { const runs = String(v).match(/\d+/g) || []; return runs.length === 1 ? runs[0].replace(/^0+(?=.)/, '') : null }
+  const dx = digits(a), dy = digits(b)
+  return Boolean(dx && dy && dx === dy)
+}
+
+/** Whether this is a bib at all: "none" and "N/A" in the bib box are not. */
+const isBib = b => /\d/.test(String(b ?? ''))
+
+/**
+ * Of the candidates a search returned, the one wearing this bib who is also
+ * this runner. A search that found several people of this name is choosing
+ * among namesakes, so the bib is enough. Any other list can hold the stranger
+ * who wears the bib (findRunner offers them for a person to look at), so the
+ * name has to agree too: Luis Roman (Philadelphia 2026, 10221) typed his Rocky
+ * Run bib, and Brooke Robb's marathon time was saved as his.
+ */
+export function candidateWithBib(search, runnerName, bib) {
+  return (search?.possibleMatches || []).find(c => sameBib(c?.bib, bib) && (search.ambiguous || bibNameAgrees(runnerName, c?.name))) || null
+}
+
 export class ResearchService {
 
   /** The scraper for a race. A method so a test can hand in a stub. */
@@ -214,6 +248,14 @@ export class ResearchService {
   /** Load dashboard event-id overrides. A method so a test can skip the database. */
   loadOverrides() {
     return ensureOverridesLoaded()
+  }
+
+  /** A search result with the runner it found taken out: searched, nobody matched. */
+  _unmatched(results) {
+    return {
+      ...results, found: false, ambiguous: false, researchStatus: 'not_found', matchedByBib: false,
+      bibNumber: null, officialTime: null, officialPace: null, eventType: null, resultsUrl: null, yearFound: null,
+    }
   }
 
   /**
@@ -428,18 +470,23 @@ export class ResearchService {
     const severalDistances = eventTypesFor(effectiveRaceName).length > 1
     let distance = order.customerEventType || onlyEventFor(effectiveRaceName) || (severalDistances ? null : 'Marathon')
     let distanceNote = null
+    let searchNote = null
     if (!distance && order.customerFinishTime && hasScraperForRace(effectiveRaceName)) {
       try {
         const r = await this.findRunner(effectiveRaceName, effectiveRaceYear, effectiveRunnerName, { bib: order.customerBib || null, skipLastNameFallback: true })
-        const theirBib = !order.customerBib || String(r?.bibNumber || '').replace(/^0+/, '').toLowerCase() === String(order.customerBib).trim().replace(/^0+/, '').toLowerCase()
+        const theirBib = !isBib(order.customerBib) || sameBib(r?.bibNumber, order.customerBib)
         if (r?.found && r.eventType && theirBib) {
           distance = r.eventType
           distanceNote = `They gave no distance; the official results have ${r.runnerName || effectiveRunnerName}${r.bibNumber ? ` (bib ${r.bibNumber})` : ''} in the ${r.eventType}, so the pace is worked out over that distance.`
+        } else {
+          // Whose bib it is, when it is somebody else's: the sign that they
+          // ran another race (Rocky Run bibs on Philadelphia prints).
+          searchNote = r?.bibMismatch || null
         }
       } catch (err) {
         console.warn(`[ResearchService] Distance lookup for ${orderNumber} failed: ${err.message}`)
       }
-      if (!distance) distanceNote = 'They gave a time but no distance, and the official results did not settle which one they ran. Set the distance under Runner > Edit so the pace and the design match.'
+      if (!distance) distanceNote = `They gave a time but no distance, and the official results did not settle which one they ran.${searchNote ? ` ${searchNote}` : ''} Set the distance under Runner > Edit so the pace and the design match.`
     }
 
     // A customer who typed a time but no pace gets the pace worked out from
@@ -452,11 +499,12 @@ export class ResearchService {
     // runner up, and take the time only from the row wearing their bib. They
     // typed no time, so nothing of theirs is replaced.
     let official = null
+    let bibNote = null
     if (!order.customerFinishTime && order.customerBib && !order.hadNoTime && hasScraperForRace(effectiveRaceName)) {
       try {
         const r = await this.findRunner(effectiveRaceName, effectiveRaceYear, effectiveRunnerName, { bib: order.customerBib, skipLastNameFallback: true })
-        const sameBib = String(r?.bibNumber || '').replace(/^0+/, '').toLowerCase() === String(order.customerBib).trim().replace(/^0+/, '').toLowerCase()
-        if (r?.found && sameBib && r.officialTime) official = r
+        if (r?.found && sameBib(r.bibNumber, order.customerBib) && r.officialTime) official = r
+        else bibNote = r?.bibMismatch || null
       } catch (err) {
         console.warn(`[ResearchService] Bib lookup for ${orderNumber} failed: ${err.message}`)
       }
@@ -481,7 +529,7 @@ export class ResearchService {
         ? 'Customer-confirmed via Instant Lookup (matched official results)'
         : official
           ? `The customer gave bib ${order.customerBib} and no time; time ${official.officialTime} and pace from the official results row for that bib.`
-          : `Entered by the customer at checkout, not matched against official results. Their numbers, used as given.${derivedPace ? ` Pace ${derivedPace} calculated from their time.` : ''}${distanceNote ? ` ${distanceNote}` : ''}`,
+          : `Entered by the customer at checkout, not matched against official results. Their numbers, used as given.${derivedPace ? ` Pace ${derivedPace} calculated from their time.` : ''}${distanceNote ? ` ${distanceNote}` : ''}${bibNote ? ` ${bibNote}` : ''}`,
       // The runner's own page when the timing site has one, else the race's results list.
       resultsUrl: ownPage || race.resultsUrl || null,
       possibleMatches: null,
@@ -819,6 +867,19 @@ export class ResearchService {
       }
     }
 
+    // The name search found one runner, but a bib is known and theirs is a
+    // different one: a namesake, or a bib from another race (Rocky Run bibs
+    // typed on Philadelphia prints, Nov 2026). Name AND bib have to agree, so
+    // this runner is only a suggestion; a bib typed wrong is one click to
+    // accept. Platforms that list no bib (Berlin) have nothing to compare.
+    let offBib = null
+    if (isBib(bib) && results.found && results.bibNumber && !sameBib(results.bibNumber, bib)) {
+      console.log(`[ResearchService] "${runnerName}" wears bib ${results.bibNumber} in the results, not ${bib}: not used`)
+      offBib = { name: results.runnerName || runnerName, bib: String(results.bibNumber), time: results.officialTime || null, pace: results.officialPace || null, eventType: results.eventType || null, resultsUrl: results.resultsUrl || null }
+      const bibMismatch = `${offBib.name} is in the ${year} results with bib ${offBib.bib}, not ${String(bib).trim()}, so it was not used. Confirm it is them.`
+      results = { ...this._unmatched(results), bibMismatch, researchNotes: bibMismatch, possibleMatches: [offBib] }
+    }
+
     // Bib fallback. A person who could not find the runner by name (a maiden
     // name, a typo, a nickname the timer does not know) can type the bib in
     // by hand, and the bib is the more reliable key anyway. Only when the name
@@ -826,9 +887,10 @@ export class ResearchService {
     // several same-name candidates already wears this bib.
     const wantedBib = bib != null ? String(bib).trim() : ''
     const candidates = results.possibleMatches || results.matches || []
-    const bibAmongCandidates = candidates.some(m => m?.bib != null && String(m.bib).trim() === wantedBib)
+    const bibAmongCandidates = candidates.some(m => sameBib(m?.bib, wantedBib))
+    // MyChipTime's plain no-match carries no status at all.
     const nameSettledNothing = !results.found && (
-      results.researchStatus === 'not_found' || (results.ambiguous && !bibAmongCandidates)
+      (results.researchStatus || (results.ambiguous ? 'ambiguous' : 'not_found')) === 'not_found' || (results.ambiguous && !bibAmongCandidates)
     )
     // Several finishers share the name and one of them wears the bib: the bib
     // says which. Some platforms list same-name candidates with no time
@@ -838,8 +900,14 @@ export class ResearchService {
     const bibPicksAmongNamesakes = !results.found && results.ambiguous && bibAmongCandidates
     if (wantedBib && bibPicksAmongNamesakes && typeof scraper.searchRunnerByBib === 'function') {
       try {
-        const byBib = await scraper.searchRunnerByBib(wantedBib)
-        if (byBib?.found && String(byBib.bibNumber || '').trim() === wantedBib && byBib.officialTime) {
+        // The results' own spelling of the bib ("256" for a typed "I 256").
+        const byBib = await scraper.searchRunnerByBib(String(candidates.find(m => sameBib(m?.bib, wantedBib)).bib).trim())
+        // Where one bib is worn in two of the race's distances, the lookup can
+        // answer with the other distance's runner: the name has to agree.
+        const byBibName = byBib?.runnerName || byBib?.rawData?.name || null
+        const wearer = candidates.find(m => sameBib(m?.bib, wantedBib))?.name || null
+        const namesake = !byBibName || bibNameAgrees(runnerName, byBibName) || nameWords(byBibName).join(' ') === nameWords(wearer).join(' ')
+        if (byBib?.found && sameBib(byBib.bibNumber, wantedBib) && namesake && byBib.officialTime) {
           console.log(`[ResearchService] ${candidates.length} finishers named "${runnerName}"; bib ${wantedBib} picks one`)
           byBib.researchNotes = [`Several finishers are named "${runnerName}"; bib ${wantedBib} says which.`, byBib.researchNotes].filter(Boolean).join(' ')
           results = byBib
@@ -859,23 +927,26 @@ export class ResearchService {
         // not in 2024, and bib 14016 in 2024 was a stranger whose time went to
         // print. A bib row under another name (or no name to check) is a
         // suggestion for a person, with a look at the years either side.
-        if (byBib?.found && String(byBib.bibNumber || '').trim() === wantedBib && !bibNameAgrees(runnerName, officialName)) {
+        if (byBib?.found && sameBib(byBib.bibNumber, wantedBib) && !bibNameAgrees(runnerName, officialName)) {
           console.log(`[ResearchService] Bib ${wantedBib} is "${officialName || 'unnamed'}", not "${runnerName}": not used`)
           const elsewhere = await this.nameInNearbyYears(raceName, year, runnerName)
+          const bibMismatch = officialName
+            ? `Bib ${wantedBib} in the ${year} results belongs to "${officialName}", not "${runnerName}", so it was not used.`
+            : `Bib ${wantedBib} is in the ${year} results with no name to check against "${runnerName}", so it was not used.`
           results = {
             ...results,
             found: false,
             ambiguous: false,
             researchStatus: 'not_found',
+            bibMismatch: [bibMismatch, offBib ? results.bibMismatch : null].filter(Boolean).join(' '),
             researchNotes: [
-              officialName
-                ? `Bib ${wantedBib} in the ${year} results belongs to "${officialName}", not "${runnerName}", so it was not used.`
-                : `Bib ${wantedBib} is in the ${year} results with no name to check against "${runnerName}", so it was not used.`,
+              bibMismatch,
+              offBib ? results.bibMismatch : null,
               elsewhere ? `"${runnerName}" is in the ${elsewhere.year} results${elsewhere.bib ? ` (bib ${elsewhere.bib})` : ''}: check the race year.` : null,
             ].filter(Boolean).join(' '),
-            possibleMatches: [{ name: officialName || `Bib ${wantedBib}`, bib: wantedBib, time: byBib.officialTime || null, pace: byBib.officialPace || null, eventType: byBib.eventType || null, resultsUrl: byBib.resultsUrl || null }],
+            possibleMatches: [{ name: officialName || `Bib ${wantedBib}`, bib: wantedBib, time: byBib.officialTime || null, pace: byBib.officialPace || null, eventType: byBib.eventType || null, resultsUrl: byBib.resultsUrl || null }, ...(offBib ? [offBib] : [])],
           }
-        } else if (byBib?.found && String(byBib.bibNumber || '').trim() === wantedBib) {
+        } else if (byBib?.found && sameBib(byBib.bibNumber, wantedBib)) {
           console.log(`[ResearchService] Matched by bib ${wantedBib}: ${officialName}`)
           byBib.researchNotes = [
             `Matched by bib ${wantedBib} because the name "${runnerName}" did not match`
@@ -981,10 +1052,17 @@ export class ResearchService {
           // Two finishers share the name (MCM 2026 had two Michael Andersons):
           // the search comes back ambiguous, but the bib on the record says which.
           if (fresh && !fresh.found && wantBib) {
-            const m = (fresh.possibleMatches || []).find(c => String(c?.bib || '').trim() === wantBib)
+            const m = candidateWithBib(fresh, runnerName, wantBib)
             if (m) fresh = { found: true, bibNumber: m.bib, officialTime: m.time, officialPace: m.pace, eventType: m.eventType, resultsUrl: fresh.resultsUrl }
           }
-          const sameRunner = !existingResearch.bibNumber || String(fresh?.bibNumber || '') === String(existingResearch.bibNumber)
+          const sameRunner = !existingResearch.bibNumber || sameBib(fresh?.bibNumber, existingResearch.bibNumber)
+          // Their bib is somebody else's: no time is filled, and the order says why.
+          if (!fresh?.found && fresh?.bibMismatch && !String(existingResearch.researchNotes || '').includes(fresh.bibMismatch)) {
+            return prisma.runnerResearch.update({
+              where: { id: existingResearch.id },
+              data: { researchNotes: `${existingResearch.researchNotes || ''} ${fresh.bibMismatch}`.trim() },
+            })
+          }
           if (fresh?.found && fresh.officialTime && sameRunner) {
             console.log(`[ResearchService] Filled the missing time for order ${order.orderNumber}: ${fresh.officialTime}`)
             return prisma.runnerResearch.update({

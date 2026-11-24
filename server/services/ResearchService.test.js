@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
 import { BaseScraper } from '../scrapers/BaseScraper.js'
-import { ResearchService, isFailedSearch, bibNameAgrees } from './ResearchService.js'
+import { ResearchService, isFailedSearch, bibNameAgrees, sameBib, candidateWithBib } from './ResearchService.js'
 
 // A results site that takes the connection and never answers, like the
 // Athlinks search endpoint did for Miami 2025.
@@ -185,4 +185,79 @@ test('a bib under the same name, written another way, is used', async () => {
   assert.equal(bibNameAgrees('Elizabeth Rhoad', 'Elizabeth Vollkommer'), false)
   assert.equal(bibNameAgrees('Matthew DeVenio', 'Anonymous Runner'), false)
   assert.equal(bibNameAgrees('Cori Rotsko', 'Scott Langenburg'), false)
+})
+
+/** A results site: rows of { name, bib, time }, searched by exact name or by bib. */
+class RowsScraper extends BaseScraper {
+  constructor(rows) { super('Philadelphia Marathon', 2026); this.rows = rows }
+  hit(r) { return { ...this.notFoundResult(), found: true, runnerName: r.name, bibNumber: r.bib, officialTime: r.time, officialPace: '9:00', eventType: r.eventType || 'Marathon', researchStatus: 'found' } }
+  async searchRunner(name) {
+    const hits = this.rows.filter(r => r.name === name)
+    if (hits.length > 1) return this.ambiguousResult(hits.map(r => ({ name: r.name, bib: r.bib, time: r.time })))
+    return hits.length ? this.hit(hits[0]) : this.notFoundResult()
+  }
+  async searchRunnerByBib(bib) {
+    const r = this.rows.find(x => x.bib === bib)
+    return r ? this.hit(r) : this.notFoundResult()
+  }
+}
+const search = (rows, name, bib) => serviceWith(new RowsScraper(rows)).findRunner('Philadelphia Marathon', 2026, name, { bib, skipLastNameFallback: true })
+
+test('a Rocky Run bib is not filled with the marathon runner who wore it (Luis Roman, 10221)', async () => {
+  const r = await search([{ name: 'Brooke Robb', bib: '22069', time: '5:56:57' }], 'Luis Roman', '22069')
+  assert.equal(r.found, false)
+  assert.match(r.bibMismatch, /belongs to "Brooke Robb", not "Luis Roman"/)
+  // She is offered for a person to look at, and the late-time fill must not take her.
+  assert.equal(r.possibleMatches[0].bib, '22069')
+  assert.equal(candidateWithBib(r, 'Luis Roman', '22069'), null)
+})
+
+test('several people of the same name: the bib still says which (MCM 2026, two Michael Andersons)', () => {
+  const two = { found: false, ambiguous: true, possibleMatches: [{ name: 'Michael Anderson', bib: '11' }, { name: 'Michael Anderson', bib: '12', time: '4:00:00' }] }
+  assert.equal(candidateWithBib(two, 'Michael Anderson', '12').time, '4:00:00')
+  assert.equal(candidateWithBib(two, 'Michael Anderson', '13'), null)
+})
+
+test('the right name with another bib is a suggestion, not a match', async () => {
+  const r = await search([{ name: 'Anthony Scott', bib: '500', time: '3:10:00' }], 'Anthony Scott', '27920')
+  assert.equal(r.found, false)
+  assert.equal(r.officialTime, null)
+  assert.equal(r.bibNumber, null)
+  assert.equal(r.possibleMatches[0].bib, '500')
+  assert.match(r.bibMismatch, /with bib 500, not 27920/)
+})
+
+test('name on one bib, the typed bib on a stranger: both offered, neither used', async () => {
+  const r = await search([{ name: 'Anthony Scott', bib: '500', time: '3:10:00' }, { name: 'Pat Example', bib: '27920', time: '4:10:00' }], 'Anthony Scott', '27920')
+  assert.equal(r.found, false)
+  assert.equal(r.officialTime, null)
+  assert.deepEqual(r.possibleMatches.map(m => m.name), ['Pat Example', 'Anthony Scott'])
+})
+
+test('name and bib both agree: found, corral letter or not, and a bib box saying none is ignored', async () => {
+  const rows = [{ name: 'Barry McCoy', bib: '17963', time: '4:50:43' }]
+  for (const bib of ['17963', 'F 17963', 'f17963', '#17963', '17963 - GMA', 'N/A', null]) assert.equal((await search(rows, 'Barry McCoy', bib)).found, true, String(bib))
+})
+
+test('namesakes: the bib lookup answering with a stranger from another distance is not used', async () => {
+  const rows = [{ name: 'Pat Example', bib: '77', time: '4:00:00' }, { name: 'Kayla Miller', bib: '77', time: '2:00:00', eventType: 'Half Marathon' }, { name: 'Kayla Miller', bib: '78', time: '2:10:00' }]
+  const r = await search(rows, 'Kayla Miller', '77')
+  assert.equal(r.found, false)
+  assert.equal(r.ambiguous, true)
+})
+
+test('sameBib', () => {
+  assert.equal(sameBib('0123', '123'), true)
+  assert.equal(sameBib('F100', 'M100'), false)
+  assert.equal(sameBib('3428 & 3429', '3428'), false)
+  assert.equal(sameBib('', ''), false)
+  assert.equal(sameBib('13575', '13577'), false)
+})
+
+test('a site that gives no status for "nobody by that name" still has the bib checked (MyChipTime)', async () => {
+  const site = new RowsScraper([{ name: 'Margaret Lin', bib: '23442', time: '5:58:25' }])
+  site.searchRunner = async () => ({ found: false, ambiguous: false, researchNotes: 'Runner not found in results', possibleMatches: null })
+  const r = await serviceWith(site).findRunner('Philadelphia Marathon', 2026, 'Krista Ristano', { bib: '23442', skipLastNameFallback: true })
+  assert.equal(r.found, false)
+  assert.match(r.bibMismatch, /belongs to "Margaret Lin"/)
 })
