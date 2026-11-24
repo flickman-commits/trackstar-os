@@ -1941,7 +1941,7 @@ Thank you!`
                     <div className="has-[span,button,form]:block hidden">
                       <h4 className="text-[10px] font-semibold text-off-black/40 uppercase tracking-wider mb-1.5">Tags</h4>
                       <div className="flex flex-wrap items-center gap-1.5">
-                      {selectedOrder.orderPlacedAt && selectedOrder.trackstarOrderType !== 'custom' && (
+                      {selectedOrder.orderPlacedAt && (
                         <span
                           className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-border-gray rounded text-sm text-off-black/60"
                           title={`Ordered on ${new Date(selectedOrder.orderPlacedAt).toLocaleString('en-US', { timeZone: TZ })}`}
@@ -1950,7 +1950,7 @@ Thank you!`
                           <span>Ordered {formatOrderPlacedAt(selectedOrder.orderPlacedAt)}</span>
                         </span>
                       )}
-                      {!isProductionStage && <span title={selectedOrder.orderPlacedAt ? `Ordered ${formatOrderPlacedAt(selectedOrder.orderPlacedAt)}` : undefined} className={`inline-flex items-center gap-1 px-2.5 py-1 bg-white border rounded text-sm ${isDueDateUrgent(designDueDate(selectedOrder), dueIsLive(selectedOrder)) ? 'border-red-200 text-red-600 font-medium' : selectedOrder.trackstarOrderType === 'custom' && stage === 'approved' ? 'border-border-gray text-off-black/45' : 'border-border-gray text-off-black/70'}`}>
+                      {!isProductionStage && <span className={`inline-flex items-center gap-1 px-2.5 py-1 bg-white border rounded text-sm ${isDueDateUrgent(designDueDate(selectedOrder), dueIsLive(selectedOrder)) ? 'border-red-200 text-red-600 font-medium' : selectedOrder.trackstarOrderType === 'custom' && stage === 'approved' ? 'border-border-gray text-off-black/45' : 'border-border-gray text-off-black/70'}`}>
                         <span>⏳</span>
                         <span>{selectedOrder.trackstarOrderType === 'custom' ? 'Design Due Date' : 'Due'} {formatDueDate(designDueDate(selectedOrder), dueIsLive(selectedOrder))}</span>
                       </span>}
