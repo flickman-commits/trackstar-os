@@ -548,7 +548,7 @@ export default function Support({ active = true }: { active?: boolean } = {}) {
           </div>
         </div>
       )}
-      {helpOpen && <HelpCenter threadId={selectedId} onOpenThread={openThread} onClose={() => setHelpOpen(false)} />}
+      {helpOpen && <HelpCenter thread={thread} rep={me?.firstName || null} onUseReply={t => insertRef.current?.(t)} onOpenThread={openThread} onClose={() => setHelpOpen(false)} />}
       {macrosOpen && <MacrosModal macros={macros} onChanged={loadMacros} onClose={() => setMacrosOpen(false)} />}
       {featureOpen && <RequestFeatureModal onClose={() => setFeatureOpen(false)} />}
       {settingsOpen && <SettingsModal team={inbox?.team || []} unassignedCount={inbox?.counts.unassigned || 0} status={status} instagram={instagram} isAdmin={isAdmin} filters={filters} onChanged={() => { loadStatus(); loadFilters(); loadInbox(true) }} onClose={() => setSettingsOpen(false)} />}

@@ -6,10 +6,15 @@
  *              own page with versions (SupportArticle). Imported once from
  *              the Notion playbook (scripts/import-help-articles.js); Notion
  *              is no longer updated.
- *   ask        a rep's question, answered from the core drafting playbook,
- *              the articles that fit and the closed cases most like it
- *              (cases.js), with where the answer came from. Every question
- *              is logged (SupportQuestion).
+ *   topics     the short cards reps read (helpTopics.js): what to do, what
+ *              to say, with the articles as full details underneath.
+ *   ask        a rep's situation, answered from the conversation they have
+ *              open (the customer, their orders and where each is at Artelo),
+ *              the cards, the core drafting playbook, the articles that fit
+ *              and the closed cases most like it (cases.js). The answer is
+ *              one line, up to three steps and a reply, never an essay: the
+ *              first 34 ran 290 words and reps asked again. Every question is
+ *              logged (SupportQuestion).
  *   not right  the rep writes the right answer; an admin approves it into
  *              the "Answers from the team" article (or dismisses it), so the
  *              help center fills its own gaps one answer at a time.
@@ -22,8 +27,10 @@ import { getPlaybook } from './playbook.js'
 import { getDraftModel } from './draftModel.js'
 import { similarCases, casesBlock, searchTerms } from './cases.js'
 import { stripQuoted } from './mailbox.js'
-import { customerBlock, UNTRUSTED_RULE } from './untrusted.js'
+import { UNTRUSTED_RULE } from './untrusted.js'
 import { UserError } from './errors.js'
+import { topicsText, isTopicSlug, topicDefault, plainTitle, TOPIC_GROUP } from './helpTopics.js'
+import { productionStatus } from '../orders/productionStatus.js'
 
 export const TEAM_ANSWERS_SLUG = 'answers-from-the-team'
 const clip = (s, n) => { const t = String(s || '').trim(); return t.length > n ? `${t.slice(0, n)}…` : t }
@@ -136,7 +143,8 @@ export async function saveArticle({ slug, title, group, body, position, pinned, 
   }
   const article = existing
     ? await prisma.supportArticle.update({ where: { id: existing.id }, data })
-    : await prisma.supportArticle.create({ data: { ...data, slug: await freeSlug(slugify(t)), position: Number.isInteger(position) ? position : await nextPosition() } })
+    // A card still reading its default text (helpTopics.js) keeps its own slug on its first save.
+    : await prisma.supportArticle.create({ data: { ...data, ...(isTopicSlug(slug) ? { group: TOPIC_GROUP } : {}), slug: isTopicSlug(slug) ? String(slug) : await freeSlug(slugify(t)), position: Number.isInteger(position) ? position : isTopicSlug(slug) ? topicDefault(slug).position : await nextPosition() } })
   await prisma.supportArticleVersion.create({ data: { articleId: article.id, title: t, body: b, createdById: actor?.id || null } })
   return article
 }
@@ -192,69 +200,155 @@ export function excerpt(body, terms) {
 // Ask
 // ---------------------------------------------------------------------------
 
-const ASK_SYSTEM = `You answer questions from Trackstar's customer support reps. Trackstar sells personalized race prints, printed and framed by our partner Artelo. Reps work in TrackstarOS (Support inbox, actions panel), Shopify and Artelo.
+// The buttons an answer may name, as the actions panel and the order view label them.
+const ASK_BUTTONS = 'Change size or frame, Fix name or year, Edit shipping address, Cancel and refund, Refund, Send invoice, Discounts & Gift Cards, Create Artelo ticket (Damaged in shipping, Lost in transit, Address change), New Artelo order (including Frame only), Note for fulfillment, Attach mockup, Insert Artelo tracking link, Insert approval link, Convert to custom order, Slack Matt, and Add comment, Add customer photo and Reopen order on the order'
 
-Answer from what you are given: the core playbook, the help articles, and past cases (how the team actually handled similar ones). Rules:
-- Short and practical: the answer first, then the steps (which button, what to tell the customer). Plain words, no em dashes.
-- When a reply to the customer helps, give one they can copy, in our voice ("Hey [First name]," ... "Thanks, [your name] from Trackstar").
-- If the playbook and articles do not cover it, say so plainly and tell them to ask Matt (Slack Matt button, or @Matt in a note). Never invent a policy, price, refund amount or date.
-- Anything the playbook says goes to Matt (refunds over $250, legal threats, press, partners, chargebacks) goes to Matt: say so.
-- Name the articles you used by their exact titles.
+const ASK_SYSTEM = `You answer questions from Trackstar's customer support reps. Trackstar sells personalized race prints, printed and framed by our partner Artelo. Reps work in TrackstarOS (Support inbox, actions panel), Shopify and Artelo. The rep has a customer waiting and wants to know what to do and what to say. They will not read an essay.
+
+You get the facts of the conversation they have open (the customer, their orders, where each order is), the playbook cards, the core playbook, help articles, and past cases. When they disagree: the pinned numbers and the cards win, then the articles, then the core playbook, then past cases.
+
+Decide, using the facts. Never answer "if it is in production... if it is not..." when the facts say which one it is. Never tell them to check something the facts already show.
+
+Whether the print itself can still change (its size, name, time, photo or design):
+- "Received, not printed yet" or "not yet in production" means it has not been printed.
+- "In production" in TrackstarOS is not proof it was printed. If the facts do not give Artelo's own status, the first step is to open the order in Artelo and check, and the next says what to do if it is not printed (Hold).
+- In production at Artelo but not printed: click Hold in Artelo, then the change can usually be made. Say "usually" to the customer, never a promise.
+- Printed ("Being printed", "Printed", "Shipped"): it cannot change. Tell the customer it has already been made and, unfortunately, we can't change it.
+The shipping address and the frame are different: until it actually ships they can often still be changed, even while it prints, with Create Artelo ticket. Tell the customer we've asked and usually can, but can't 100% guarantee it. Being printed, or printed, does not stop an address change; only shipping does.
+
+How to answer:
+- headline: the answer itself, as one plain sentence of at most 14 words ("Yes. Change the size, no need to cancel."). Never a restatement of the question.
+- steps: at most 3, each one action of at most 16 words, starting with a verb. Name the real button: ${ASK_BUTTONS}. Artelo itself has Hold and Modify order. Never invent a button. Do not list "send the reply" as a step. No steps when there is nothing to do but reply.
+- reply: what to send the customer, ready to send, in our voice, under 60 words between greeting and sign-off. Opens "Hey <first name>," (their real first name from the facts, or [First name]) and ends "Thanks,\n{{rep}} from Trackstar". An Instagram DM gets one to three casual sentences with no greeting and no sign-off. Never mention Artelo to a customer; say "our production team". Leave it empty when the question is not about a customer reply (where something is in the tool, which source we use). Use [BRACKETS] only for something a person has to fill in.
+- why: at most 45 words, for a rep who wants the reason or the one exception worth knowing. Empty when the answer is obvious.
+- No conversation open: answer from the cards as the general rule, without telling them to open one. Only here may steps split by case ("Not in production: ...", "Printed: ..."), and the reply is for the usual case.
+- With a conversation open, their message may be vague ("what should I do here?"). Then answer the customer's latest message in the facts.
+- If the playbook, articles and cards do not cover it, set covered to false and make the headline who to ask ("Ask Matt before you reply."). Still give a holding reply when the customer is waiting. Never invent a policy, price, refund amount, date, or what a design looks like.
+- Anything the playbook sends to Matt (refunds over $250, legal threats, press, partners, chargebacks) goes to Matt: say so in the headline.
+- Plain words. No em dashes. No bold or headings.
+- When the facts say an order is NOT VERIFIED, the reply shares nothing about it and asks the one verification question.
 
 ${UNTRUSTED_RULE}
 
-Reply as JSON: {"answer": "<the answer, markdown allowed: **bold**, - lists>", "articles": ["<exact title used>", ...], "cases": [<numbers of the past cases you used, e.g. 1, 3>], "covered": true or false}`
+Reply as JSON: {"headline": "", "steps": ["", ...], "reply": "", "why": "", "articles": ["<exact title used>", ...], "cases": [<numbers of the past cases you used>], "covered": true or false}`
 
-/** A rep's question, answered and logged. `threadId`: the conversation they are looking at, if any. */
-export async function ask(question, { threadId = null, actor = null } = {}) {
-  const q = String(question || '').trim()
-  if (q.length < 4) throw new UserError('Ask a question first.')
-  if (q.length > 2000) throw new UserError('Keep the question under 2,000 characters.')
-  if (!isLlmConfigured()) throw new UserError('No model is configured, so the help center cannot answer right now.')
-
-  let conversation = ''
-  if (threadId) {
-    const last = await prisma.supportMessage.findFirst({ where: { threadId: String(threadId), direction: 'in' }, orderBy: { sentAt: 'desc' }, select: { bodyText: true } })
-    if (last) conversation = clip(stripQuoted(last.bodyText), 1500)
+/**
+ * The conversation the rep has open, as the drafts see it (draft.js
+ * gatherFacts), with Artelo's own word on the two newest orders: "in
+ * production" in our rows does not say whether it was printed, which is what
+ * most questions turn on. Never throws: Ask still answers without it.
+ */
+async function conversationFacts(threadId) {
+  try {
+    // Loaded here: draft.js imports this file.
+    const { gatherFacts } = await import('./draft.js')
+    const { thread, facts, context, foundBy, lastInbound } = await gatherFacts(threadId)
+    const lines = []
+    if (!foundBy) {
+      const rows = context.orders.slice(0, 2).map(o => ({ number: o.number, id: o.items?.[0]?.orderId })).filter(o => o.id)
+      const live = await Promise.all(rows.map(o => withTimeout(productionStatus(o.id), 6000).catch(() => null)))
+      live.forEach((p, i) => { if (p?.stage && p.production?.status) lines.push(`Order #${rows[i].number} at Artelo right now: ${p.production.itemStatus || p.production.status}. Overall: ${p.stage}.`) })
+    }
+    return {
+      text: `${facts}${lines.length ? `\n\nLIVE FROM ARTELO:\n${lines.join('\n')}` : ''}`,
+      search: `${thread.subject || ''} ${clip(stripQuoted(lastInbound?.bodyText || ''), 1500)}`,
+      channel: thread.channel,
+    }
+  } catch (err) {
+    console.warn(`[support.help] facts for ${threadId}: ${err.message}`)
+    return null
   }
-  const searchText = `${q} ${conversation}`
-  const [{ text: playbook }, articles, cases] = await Promise.all([
+}
+
+function withTimeout(promise, ms) {
+  let timer
+  return Promise.race([promise, new Promise((_, no) => { timer = setTimeout(() => no(new Error('timed out')), ms) })]).finally(() => clearTimeout(timer))
+}
+
+const tidy = s => noDash(String(s || '').replace(/\*\*/g, '').trim())
+
+/** The model's answer, held to the shape the panel shows. Pure. */
+export function cleanAnswer(json, { repName = '' } = {}) {
+  const j = json || {}
+  const steps = (Array.isArray(j.steps) ? j.steps : []).map(s => tidy(s).replace(/^\d+[.)]\s*/, '')).filter(Boolean).slice(0, 4)
+  const sign = String(repName || '').trim() || '[Your name]'
+  return {
+    headline: clip(tidy(j.headline), 200),
+    steps,
+    reply: tidy(j.reply).replaceAll('{{rep}}', sign),
+    why: clip(tidy(j.why), 500),
+  }
+}
+
+/** The answer as one piece of text, for the question log. Pure. */
+export function answerText({ headline, steps = [], reply, why }) {
+  return [headline, steps.map((s, i) => `${i + 1}. ${s}`).join('\n'), reply ? reply.split('\n').map(l => `> ${l}`).join('\n') : '', why].filter(Boolean).join('\n\n')
+}
+
+/** Everything one Ask reads: the prompt, and the articles and cases behind it. Exported to try the prompt on real questions. */
+export async function askRequest(q, { threadId = null, previousId = null, actor = null } = {}) {
+  const [facts, previous] = await Promise.all([
+    threadId ? conversationFacts(String(threadId)) : null,
+    previousId ? prisma.supportQuestion.findFirst({ where: { id: String(previousId), askedById: actor?.id || null } }) : null,
+  ])
+  const searchText = `${previous ? `${previous.question} ` : ''}${q} ${facts?.search || ''}`
+  const [{ text: playbook }, cards, articles, cases] = await Promise.all([
     getPlaybook(),
+    topicsText(),
     searchArticles(searchText, { limit: 5 }),
     similarCases(searchText, { limit: 4, excludeThreadId: threadId }),
   ])
   // The pinned articles (current policies and numbers) and the team's approved answers go with every question.
   const always = await prisma.supportArticle.findMany({ where: { OR: [{ pinned: true }, { slug: TEAM_ANSWERS_SLUG }] }, select: { slug: true, title: true, body: true } })
-  const used = [...always.filter(a => !articles.some(x => x.slug === a.slug)), ...articles]
+  const used = [...always.filter(a => !articles.some(x => x.slug === a.slug)), ...articles].filter(a => a.group !== TOPIC_GROUP)
+  const prompt = [
+    `CORE PLAYBOOK:\n${clip(playbook, 30000)}`,
+    `PLAYBOOK CARDS:\n${cards}`,
+    used.length ? `HELP ARTICLES:\n${used.map(a => `### ${a.title}\n${clip(a.body, 5000)}`).join('\n\n')}` : 'HELP ARTICLES: none matched.',
+    cases.length ? `PAST CASES:\n${casesBlock(cases)}` : 'PAST CASES: none matched.',
+    facts ? `FACTS OF THE CONVERSATION THE REP HAS OPEN:\n${facts.text}` : 'The rep has no conversation open, so there are no order facts.',
+    previous ? `EARLIER, THE REP ASKED:\n${previous.question}\nAND YOU ANSWERED:\n${clip(previous.answer, 2000)}\nThey are following up, so answer only what is new.` : '',
+    `THE REP'S MESSAGE:\n${q}`,
+  ].filter(Boolean).join('\n\n')
+  return { system: ASK_SYSTEM, prompt, used, cases }
+}
 
+/**
+ * A rep's situation, answered and logged. `threadId`: the conversation they
+ * have open, if any. `previousId`: the question this one follows up on.
+ * `dryRun` answers without logging it.
+ */
+export async function ask(question, { threadId = null, previousId = null, actor = null, dryRun = false } = {}) {
+  const q = String(question || '').trim()
+  if (q.length < 4) throw new UserError('Explain the situation first.')
+  if (q.length > 2000) throw new UserError('Keep it under 2,000 characters.')
+  if (!isLlmConfigured()) throw new UserError('No model is configured, so the help center cannot answer right now.')
+
+  const { system, prompt, used, cases } = await askRequest(q, { threadId, previousId, actor })
   const out = await complete({
-    system: ASK_SYSTEM,
+    system,
     cacheSystem: true,
-    prompt: [
-      `CORE PLAYBOOK:\n${clip(playbook, 30000)}`,
-      used.length ? `HELP ARTICLES:\n${used.map(a => `### ${a.title}\n${clip(a.body, 5000)}`).join('\n\n')}` : 'HELP ARTICLES: none matched.',
-      cases.length ? `PAST CASES:\n${casesBlock(cases)}` : 'PAST CASES: none matched.',
-      conversation ? `THE CUSTOMER'S LATEST MESSAGE in the conversation the rep has open:\n${customerBlock(conversation)}` : '',
-      `THE REP'S QUESTION:\n${q}`,
-    ].filter(Boolean).join('\n\n'),
+    prompt,
     json: true,
-    maxTokens: 1500,
+    maxTokens: 2500,
     effort: 'low',
     model: llmInfo().provider === 'anthropic' ? await getDraftModel() : undefined,
     purpose: 'support.ask',
     timeoutMs: 90_000,
   })
-  const answer = noDash(String(out.json?.answer || out.text || '').trim()) || 'I could not put an answer together. Ask Matt.'
+  const parts = cleanAnswer(out.json, { repName: actor?.firstName })
+  if (!parts.headline) throw new UserError('That did not come back with an answer. Try again, or ask Matt.')
   const titles = new Set((Array.isArray(out.json?.articles) ? out.json.articles : []).map(String))
-  const usedArticles = used.filter(a => titles.has(a.title)).map(a => ({ slug: a.slug, title: a.title }))
+  const usedArticles = used.filter(a => titles.has(a.title)).map(a => ({ slug: a.slug, title: plainTitle(a.title) }))
   const caseNums = new Set((Array.isArray(out.json?.cases) ? out.json.cases : []).map(Number))
   const usedCases = cases.filter((_, i) => caseNums.has(i + 1)).map(c => ({ id: c.id, summary: c.summary, typeLabel: c.typeLabel, outcomeLabel: c.outcomeLabel }))
   const covered = out.json?.covered !== false
 
+  if (dryRun) return { id: null, ...parts, articles: usedArticles, cases: usedCases, covered }
   const row = await prisma.supportQuestion.create({
-    data: { askedById: actor?.id || null, askedByName: personName(actor), threadId: threadId ? String(threadId) : null, question: q, answer, sources: { articles: usedArticles, cases: usedCases, covered } },
+    data: { askedById: actor?.id || null, askedByName: personName(actor), threadId: threadId ? String(threadId) : null, question: q, answer: answerText(parts), sources: { articles: usedArticles, cases: usedCases, covered } },
   })
-  return { id: row.id, answer, articles: usedArticles, cases: usedCases, covered }
+  return { id: row.id, ...parts, articles: usedArticles, cases: usedCases, covered }
 }
 
 /** "Helpful", or "Not right" with the right answer (which waits for an admin). */

@@ -4,11 +4,12 @@
  *
  * Anyone on Support (capability "support"):
  *   GET                                   the article list
+ *   GET  ?topics=1                        the short playbook cards (helpTopics.js)
  *   GET  ?slug=                           one article, with its versions
  *   GET  ?search=                         articles that match, best first, with an excerpt
  *   GET  ?log=1                           recent questions and the corrections waiting
  *   GET  ?case=<threadId>                 a conversation's case tag, and the choices
- *   POST { action:'ask', question, threadId? }            answer a question (logged)
+ *   POST { action:'ask', question, threadId?, previousId? }  answer a question (logged)
  *   POST { action:'feedback', id, helpful?, correction? } Helpful, or Not right with the right answer
  *   POST { action:'case', threadId, type?, outcome?, summary? }  correct a case tag
  * Admins:
@@ -21,6 +22,7 @@
 import { setCors } from '../../_lib/auth.js'
 import { requireCapability, recordAudit } from '../../_lib/users.js'
 import { listArticles, getArticle, searchArticles, saveArticle, markReviewed, restoreArticleVersion, deleteArticle, ask, feedback, reviewCorrection, questionLog } from '../../../server/domain/support/helpCenter.js'
+import { listTopics } from '../../../server/domain/support/helpTopics.js'
 import { setCase, CASE_TYPES, CASE_OUTCOMES, CASE_SELECT } from '../../../server/domain/support/cases.js'
 import { publicMessage, publicStatus } from '../../../server/domain/support/errors.js'
 import prisma from '../../_lib/prisma.js'
@@ -34,6 +36,7 @@ export default async function handler(req, res) {
     if (!user) return
     if (req.method === 'GET') {
       const q = req.query || {}
+      if (q.topics) return res.status(200).json({ topics: await listTopics(), isAdmin: user.role === 'admin' })
       if (q.slug) return res.status(200).json({ article: await getArticle(q.slug) })
       if (q.search) return res.status(200).json({ results: (await searchArticles(String(q.search).slice(0, 300), { limit: 12 })).map(({ body, ...r }) => r) })
       if (q.log) return res.status(200).json(await questionLog())
@@ -47,7 +50,7 @@ export default async function handler(req, res) {
     const b = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {}
     if (ADMIN_ACTIONS.has(b.action) && user.role !== 'admin' && !user.isSystem) return res.status(403).json({ error: 'Only an admin can change the help center.' })
 
-    if (b.action === 'ask') return res.status(200).json(await ask(b.question, { threadId: b.threadId || null, actor: user }))
+    if (b.action === 'ask') return res.status(200).json(await ask(b.question, { threadId: b.threadId || null, previousId: b.previousId || null, actor: user }))
     if (b.action === 'feedback') {
       const row = await feedback(b.id, { helpful: b.helpful === true, correction: b.correction }, { actor: user })
       return res.status(200).json({ question: row })

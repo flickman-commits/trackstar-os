@@ -2,7 +2,8 @@ import '../../services/mcp/testOffline.js'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { cleanTag, searchTerms, casesBlock } from './cases.js'
-import { slugify, excerpt } from './helpCenter.js'
+import { slugify, excerpt, cleanAnswer, answerText } from './helpCenter.js'
+import { DEFAULT_TOPICS, parseCard, plainTitle } from './helpTopics.js'
 import { notionToMarkdown, splitNotionPlaybook } from './notionImport.js'
 
 test('a case tag is checked: known type and outcome, no order numbers or emails, whole cents', () => {
@@ -80,4 +81,39 @@ test('an article says why it may be out of date', async () => {
   // Two months on: overdue too, and a Not right answer that cited it.
   const wrong = [{ createdAt: new Date(Date.UTC(2026, 11, 1)), sources: { articles: [{ slug: 'current' }] } }, { createdAt: new Date(Date.UTC(2026, 11, 2)), sources: { articles: [{ slug: 'other' }] } }]
   assert.deepEqual(staleReasons(a, { now: Date.UTC(2027, 0, 25), wrong }), ['not confirmed in 65 days', 'mentions Dec 13, which has passed', '1 "Not right" answer cited it'])
+})
+
+test('an answer is held to one line, a few steps and a reply signed by the rep', () => {
+  const a = cleanAnswer({ headline: '**Yes.** Change the size — no need to cancel.', steps: ['1. Click Change size or frame.', '', 'b', 'c', 'd', 'e'], reply: 'Hey Bizzy,\n\nDone!\n\nThanks,\n{{rep}} from Trackstar' }, { repName: 'Carolina' })
+  assert.equal(a.headline, 'Yes. Change the size, no need to cancel.')
+  assert.deepEqual(a.steps, ['Click Change size or frame.', 'b', 'c', 'd'])
+  assert.match(a.reply, /Thanks,\nCarolina from Trackstar$/)
+  assert.match(answerText(a), /^Yes\.[^\n]*\n\n1\. Click Change/)
+  assert.deepEqual(cleanAnswer(null), { headline: '', steps: [], reply: '', why: '' })
+})
+
+test('a playbook card reads into steps, exceptions, replies and details', () => {
+  const c = parseCard('1. Do this.\n2. Then that.\n- Only the frame broke? Send Frame only.\n### Reply: First reply\nHey [First name],\n\n1. Not a step\n### Details\na-slug, b-slug')
+  assert.deepEqual(c.steps, ['Do this.', 'Then that.'])
+  assert.deepEqual(c.notes, ['Only the frame broke? Send Frame only.'])
+  assert.equal(c.replies[0].label, 'First reply')
+  assert.match(c.replies[0].text, /1\. Not a step$/)
+  assert.deepEqual(c.details, ['a-slug', 'b-slug'])
+})
+
+test('every card stays one screen: short steps, short replies, nothing a customer should not see', () => {
+  for (const t of DEFAULT_TOPICS) {
+    const c = parseCard(t.body)
+    assert.ok(c.steps.length >= 1 && c.steps.length <= 4, t.title)
+    assert.ok(c.notes.length <= 5, t.title)
+    assert.ok(c.replies.length >= 1 && c.details.length >= 1, t.title)
+    for (const s of [...c.steps, ...c.notes]) assert.ok(s.split(/\s+/).length <= 22, `${t.title}: ${s}`)
+    for (const r of c.replies) { assert.doesNotMatch(r.text, /artelo|[—–]/i, t.title); assert.ok(r.text.split(/\s+/).length <= 80, `${t.title}: ${r.label}`) }
+  }
+})
+
+test('article titles lose their numbering and labels', () => {
+  assert.equal(plainTitle('Scenario 2B: Broken Frame (Shattered in Transit) ⚠️ MOST COMMON'), 'Broken Frame')
+  assert.equal(plainTitle('Scenario 12: Happy Customer: Ask for Review 🌟'), 'Happy Customer: Ask for Review')
+  assert.equal(plainTitle('Shipping'), 'Shipping')
 })
