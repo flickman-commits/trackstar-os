@@ -6,7 +6,7 @@
  *   GET                                              the list (synced first when a couple of minutes old)
  *   POST { action: 'done' | 'undo', id }
  *   POST { action: 'add', title, template?, size?, detail? }
- *   POST { action: 'delete', id }                    a hand-written or rejected one
+ *   POST { action: 'delete', id }                    a hand-written or rejected one; a customer suggestion is dismissed
  *   POST { action: 'sync' }                          look again now
  */
 import { setCors } from '../../_lib/auth.js'
@@ -38,8 +38,8 @@ export default async function handler(req, res) {
         return res.status(200).json({ need })
       }
       case 'delete': {
-        await deleteDesignNeed({ id: body.id })
-        await recordAudit({ action: 'design_need.delete', summary: 'Removed a design need', detail: { id: body.id }, actor: user })
+        const gone = await deleteDesignNeed({ id: body.id, actor: user })
+        await recordAudit({ action: 'design_need.delete', summary: `${gone.dismissed ? 'Dismissed the customer suggestion' : 'Removed the design need'} "${gone.title}"`, detail: { id: body.id }, actor: user })
         return res.status(200).json({ ok: true })
       }
       case 'sync': {

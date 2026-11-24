@@ -3,7 +3,7 @@
  * render script can make a print. Settings > Design Needs lists them, and
  * whoever fixes one checks it off.
  *
- * Three ways in:
+ * Four ways in:
  *   auto    found from the open standard orders the script is stuck on for a
  *           file reason: no production file for the race or event, no NO TIME
  *           layer, no photo window, a render that failed on the file. One
@@ -13,6 +13,10 @@
  *           wrong bib or time is a data problem and never lands here).
  *           Checking one off renders that order again.
  *   manual  written by a person.
+ *   support what a customer said about a design in Support, marked Customer
+ *           suggestion (support/designFeedback.js): something to consider, not
+ *           a to-do. Dismissing one keeps the row, hidden, so it does not come
+ *           back when the next customer says the same.
  *
  * syncDesignNeeds keeps the auto ones current. An open auto need the tool no
  * longer sees closes itself. A checked-off one reopens only when the file was
@@ -37,6 +41,7 @@ export const KINDS = {
   photo_window: 'Photo window',
   file_problem: 'File problem',
   rejected: 'Rejected design',
+  customer_suggestion: 'Customer suggestion',
   other: 'Other',
 }
 
@@ -213,12 +218,13 @@ export async function addDesignNeed({ title, template, size, detail, actor }) {
   })
 }
 
-export async function deleteDesignNeed({ id }) {
+export async function deleteDesignNeed({ id, actor }) {
   const row = await prisma.designNeed.findUnique({ where: { id: String(id || '') } })
   if (!row) throw new DesignNeedError('That design need is gone', 404)
   if (row.source === 'auto') throw new DesignNeedError('The tool found this one; it closes itself once no order is stuck on it. Check it off if it is fixed.')
-  await prisma.designNeed.delete({ where: { id: row.id } })
-  return { ok: true }
+  if (row.source === 'support') await prisma.designNeed.update({ where: { id: row.id }, data: { status: 'dismissed', doneAt: new Date(), doneByName: personName(actor), doneById: actor?.id || null } })
+  else await prisma.designNeed.delete({ where: { id: row.id } })
+  return { ok: true, title: row.title, dismissed: row.source === 'support' }
 }
 
 /** A design rejected as a file problem: the designer's list gets it, with the order and the note. */

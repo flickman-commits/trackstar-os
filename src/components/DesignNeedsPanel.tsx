@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { apiFetch } from '@/lib/api'
 import { btnPrimary, btnSecondary, btnGhost, chip, chipTone, inputBase, sectionLabel } from '@/lib/ui'
 import { useArmed } from '@/lib/useArmed'
+import { useAuth } from '@/lib/auth'
 
 /**
  * Settings > Design Needs: what the designer has to fix in production files
@@ -12,17 +13,19 @@ import { useArmed } from '@/lib/useArmed'
  * The tool adds what the open orders are stuck on and closes those itself once
  * nothing waits on them; a design rejected as a file problem lands here too;
  * anyone can write one. Whoever fixes one checks it off. Checking off a
- * rejected design renders that order again.
+ * rejected design renders that order again. What customers said about a
+ * design in Support sits apart below, marked Customer suggestion: to consider,
+ * not to do.
  */
-type OrderRef = { id: string; number: string }
+type OrderRef = { id: string; number: string; threadId?: string; quote?: string | null; at?: string }
 type Need = {
   id: string; kind: string; title: string; template: string | null; size: string | null; detail: string | null
-  orders: OrderRef[] | null; source: 'auto' | 'reject' | 'manual'; status: 'open' | 'done'; note: string | null
+  orders: OrderRef[] | null; source: 'auto' | 'reject' | 'manual' | 'support'; status: 'open' | 'done'; note: string | null
   createdByName: string | null; doneAt: string | null; doneByName: string | null; createdAt: string
 }
 
 const KIND_TONE: Record<string, keyof typeof chipTone> = {
-  production_file: 'purple', no_time_layer: 'blue', photo_window: 'teal', file_problem: 'amber', rejected: 'red', other: 'slate',
+  production_file: 'purple', no_time_layer: 'blue', photo_window: 'teal', file_problem: 'amber', rejected: 'red', customer_suggestion: 'blue', other: 'slate',
 }
 
 function when(iso: string | null) {
@@ -35,6 +38,7 @@ export default function DesignNeedsPanel() {
   const [kinds, setKinds] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
   const { arm, isArmed } = useArmed()
+  const { can } = useAuth()
   const [showDone, setShowDone] = useState(false)
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState({ title: '', template: '', size: '', detail: '' })
@@ -61,7 +65,7 @@ export default function DesignNeedsPanel() {
     setBusy(n.id)
     try {
       await post({ action: n.status === 'open' ? 'done' : 'undo', id: n.id })
-      if (n.status === 'open') toast.success(n.kind === 'rejected' ? 'Checked off. The order is rendering again.' : 'Checked off')
+      if (n.status === 'open') toast.success(n.source === 'support' ? 'Marked as changed' : n.kind === 'rejected' ? 'Checked off. The order is rendering again.' : 'Checked off')
       await load()
     } catch (e) { toast.error((e as Error).message) } finally { setBusy(null) }
   }
@@ -88,7 +92,40 @@ export default function DesignNeedsPanel() {
 
   if (!open) return <div className="flex items-center gap-2 text-xs text-off-black/50"><Loader2 className="w-3 h-3 animate-spin" /> Loading design needs…</div>
 
+  // A customer suggestion: their words, and no "waiting" or "to do" about it.
+  const suggestion = (n: Need) => {
+    const reports = n.orders || []
+    const links = reports.filter(r => r.number)
+    return (
+      <div key={n.id} className="p-3 flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-sm font-medium ${n.status === 'done' ? 'text-off-black/50' : 'text-off-black'}`}>{n.title}</span>
+            <span className={`${chip} ${chipTone.blue}`}>Customer suggestion</span>
+            {reports.length > 1 && <span className={`${chip} ${chipTone.slate}`}>{reports.length} customers</span>}
+            {busy === n.id && <Loader2 className="w-3 h-3 animate-spin text-off-black/40" />}
+          </div>
+          {reports.filter(r => r.quote).slice(-3).map((r, i) => <p key={i} className="text-xs text-off-black/60 italic mt-1">“{r.quote}”</p>)}
+          <p className="text-[11px] text-off-black/45 mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            {links.slice(-6).map((r, i) => <Link key={i} to={`/orders/${r.number}`} className="text-blue-600 hover:underline">#{r.number}</Link>)}
+            {can('support') && reports.slice(-1).map(r => r.threadId && <Link key={r.threadId} to={`/support?thread=${r.threadId}`} className="text-blue-600 hover:underline">Conversation</Link>)}
+            <span>{n.status === 'done' ? `Changed by ${n.doneByName || 'someone'} ${when(n.doneAt)}` : `From Support ${when(reports[reports.length - 1]?.at || n.createdAt)}`}</span>
+          </p>
+        </div>
+        {n.status === 'open' ? (
+          <div className="flex gap-1 flex-shrink-0">
+            <button onClick={() => toggle(n)} disabled={busy !== null} className={btnGhost} title="The design was changed for this">Changed it</button>
+            <button onClick={() => remove(n)} disabled={busy !== null} className={`${btnGhost}${isArmed(`remove:${n.id}`) ? ' text-red-600' : ''}`} title="Not doing this one">{isArmed(`remove:${n.id}`) ? 'Click again' : 'Dismiss'}</button>
+          </div>
+        ) : <button onClick={() => toggle(n)} disabled={busy !== null} className={`${btnGhost} flex-shrink-0`}>Put back</button>}
+      </div>
+    )
+  }
+  const todo = open.filter(n => n.source !== 'support')
+  const suggestions = open.filter(n => n.source === 'support').reverse()
+
   const row = (n: Need) => {
+    if (n.source === 'support') return suggestion(n)
     const orders = n.orders || []
     return (
       <div key={n.id} className="p-3 flex items-start gap-3">
@@ -150,11 +187,19 @@ export default function DesignNeedsPanel() {
       )}
 
       <div>
-        <h3 className={`${sectionLabel} mb-2`}>To do · {open.length}</h3>
-        {open.length
-          ? <div className="rounded-lg border border-border-gray bg-white divide-y divide-border-gray">{open.map(row)}</div>
+        <h3 className={`${sectionLabel} mb-2`}>To do · {todo.length}</h3>
+        {todo.length
+          ? <div className="rounded-lg border border-border-gray bg-white divide-y divide-border-gray">{todo.map(row)}</div>
           : <p className="text-sm text-off-black/50 rounded-lg border border-border-gray bg-white p-4">Nothing needs the designer right now.</p>}
       </div>
+
+      {suggestions.length > 0 && (
+        <div>
+          <h3 className={`${sectionLabel} mb-1`}>Customer suggestions · {suggestions.length}</h3>
+          <p className="text-xs text-off-black/55 mb-2">What customers said about the designs in Support. Worth a look, not a to-do: change it or dismiss it, your call.</p>
+          <div className="rounded-lg border border-border-gray bg-white divide-y divide-border-gray">{suggestions.map(row)}</div>
+        </div>
+      )}
 
       {done.length > 0 && (
         <div>

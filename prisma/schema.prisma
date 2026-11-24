@@ -1244,16 +1244,16 @@ model DesignNeed {
   id            String    @id @default(cuid())
   // What it is, so the tool finds an auto need again: "notime|<template>|<size>", "reject|<jobId>"...
   key           String    @unique
-  // production_file | no_time_layer | photo_window | file_problem | rejected | other
+  // production_file | no_time_layer | photo_window | file_problem | rejected | customer_suggestion | other
   kind          String
   title         String
   template      String?
   size          String?
   detail        String?
-  // The orders waiting on it: [{ id, number }]
+  // The orders waiting on it: [{ id, number }]. A customer suggestion's are who said it: [{ id, number, threadId, quote, at }]
   orders        Json?
-  source        String // auto | reject | manual
-  status        String    @default("open") // open | done
+  source        String // auto | reject | manual | support
+  status        String    @default("open") // open | done | dismissed (a customer suggestion, hidden)
   // The latest word on it: how it closed, or why it reopened.
   note          String?
   renderJobId   String?
