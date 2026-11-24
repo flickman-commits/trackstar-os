@@ -18,6 +18,7 @@ import { call } from '../render/artelo.js'
 import { slackTo, slackText, slackLink } from '../../lib/slack.js'
 import { orderAppUrl } from '../../lib/links.js'
 import { arteloHoldText } from '../../lib/arteloHolds.js'
+import { pullBack, isPulledBack, tellPulledBack } from '../render/pulledBack.js'
 import { listExcluded, isExcludedLine } from './excludedProducts.js'
 
 const DONE_AT_ARTELO = ['Received', 'InProduction', 'Shipped', 'Delivered', 'Canceled', 'Ignored']
@@ -79,6 +80,8 @@ export async function completedButNotSent({ days = 90, budgetMs = 240_000 } = {}
       orders.push({
         number: String(first.shopifyOrderData?.name || first.orderNumber).replace('#', ''),
         arteloId: id,
+        parentOrderNumber: first.parentOrderNumber,
+        live: { status: live.status, productionStatus: live.productionStatus || null },
         artelo: live.productionStatus || live.status,
         // Every print done here: nothing in the queue will ever move it.
         kind: open.length ? 'waiting on another print' : 'stuck',
@@ -100,6 +103,10 @@ export async function completedButNotSent({ days = 90, budgetMs = 240_000 } = {}
  * its Artelo hold until someone sends it (or clears the hold) in Artelo.
  */
 async function reopenStuck(o, excluded = []) {
+  // A print we did send, back at Artelo: our send is undone, so its design can send again.
+  const pulled = o.parentOrderNumber && isPulledBack(o.live)
+    ? await pullBack({ parentOrderNumber: o.parentOrderNumber, arteloId: o.arteloId, live: o.live }).catch(e => { console.error('[arteloMismatch] pull back', o.number, e.message); return [] })
+    : []
   for (const c of o.completed) {
     const row = await prisma.order.findFirst({ where: { orderNumber: c.orderNumber }, select: { id: true, status: true, raceName: true, shopifyOrderData: true, runnerResearch: { orderBy: { id: 'desc' }, take: 1, select: { researchStatus: true } } } })
     if (!row || row.status !== 'completed') continue
@@ -110,14 +117,19 @@ async function reopenStuck(o, excluded = []) {
     await prisma.order.update({ where: { id: row.id }, data: { status: row.runnerResearch[0]?.researchStatus === 'found' ? 'ready' : 'pending' } })
     await prisma.orderComment.create({ data: { orderId: row.id, authorName: 'Trackstar', text: `Reopened: this was marked complete, but Artelo still has the order as "${o.artelo}", so it never went to production. Sort it out in Artelo (attach the design, check the address), then complete it.` } })
   }
+  return pulled
 }
 
 /** The daily check: stuck orders go back in the queue, and Slack hears about each once. */
 export async function checkCompletedNotSent() {
   const out = await completedButNotSent()
-  const stuck = out.orders.filter(o => o.kind === 'stuck')
+  let stuck = out.orders.filter(o => o.kind === 'stuck')
   const excluded = await listExcluded().catch(() => [])
-  for (const o of stuck) await reopenStuck(o, excluded)
+  // Pulled back after we sent it: told as that, not as never sent.
+  const pulled = [], pulledIds = new Set()
+  for (const o of stuck) { const back = await reopenStuck(o, excluded); if (back.length) { pulled.push(...back); pulledIds.add(o.arteloId) } }
+  await tellPulledBack(pulled)
+  stuck = stuck.filter(o => !pulledIds.has(o.arteloId))
   const row = await prisma.systemConfig.findUnique({ where: { key: STATE_KEY } })
   let told = []
   try { told = JSON.parse(row?.value || '[]') } catch { told = [] }

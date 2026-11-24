@@ -14,6 +14,7 @@ import prisma from '../../db.js'
 import { recordAudit } from '../../../api/_lib/users.js'
 import { unpaidPhotoRows } from './photoPayment.js'
 import { call as arteloCall } from '../render/artelo.js'
+import { markResent } from '../render/pulledBack.js'
 
 export class CompleteError extends Error {
   constructor(code, message) { super(message); this.code = code }
@@ -106,6 +107,8 @@ export async function completeOrder({ orderId, orderNumber, actor = null, via = 
     const { setDesignStatus } = await import('./designStatus.js')
     await setDesignStatus(existing, 'sent_to_production', null, actor, { checkArtelo: false })
   }
+  // Held in Artelo after we sent it, and since sent again there as it was (render/pulledBack.js).
+  if (!override) await markResent(existing.id)
   // A render still waiting for review is moot now.
   const closed = await prisma.renderJob.updateMany({
     where: { orderId: existing.id, review: 'pending', ...(renderJobId ? { id: { not: renderJobId } } : {}) },

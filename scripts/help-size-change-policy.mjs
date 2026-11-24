@@ -18,7 +18,7 @@ const to = a.body.indexOf('**Already in Production (Frame Change):**')
 if (from < 0 || to < from) { console.log('The article no longer has that section; nothing changed.'); process.exit(1) }
 const section = `**In production (size change):** open the order in Artelo first. TrackstarOS can say "in production" before anything is printed.
 
-- **Not printed yet:** click **Hold** in Artelo. That takes it back out of production, and the change can usually be made.
+- **Not printed yet:** click **Hold** in Artelo. That takes it back out of production. Then **Re-Open Order** in TrackstarOS, and the change can usually be made.
 - **Already printed:** it can't be changed. Tell them it has already been made and, unfortunately, we can't change it.
 
 > Hey [First Name],

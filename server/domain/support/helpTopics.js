@@ -30,7 +30,7 @@ export const DEFAULT_TOPICS = [
     slug: 'topic-change-an-order', title: 'Change an order',
     body: `1. Open the order in Artelo first. "In production" here doesn't always mean printed.
 2. Not in production: Change size or frame, Fix name or year, or Edit shipping address.
-3. In production but not printed: click Hold in Artelo, then make the change.
+3. In production but not printed: click Hold in Artelo, Re-Open Order in TrackstarOS, then make the change.
 4. Already printed: we can't change it. Say so and attach the mockup.
 - Frame color, already in production? Create Artelo ticket. It often still works, but don't promise it.
 - Adding a photo? It's a paid add-on. Send the invoice first.

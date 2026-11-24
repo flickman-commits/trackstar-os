@@ -201,7 +201,7 @@ export function excerpt(body, terms) {
 // ---------------------------------------------------------------------------
 
 // The buttons an answer may name, as the actions panel and the order view label them.
-const ASK_BUTTONS = 'Change size or frame, Fix name or year, Edit shipping address, Cancel and refund, Refund, Send invoice, Discounts & Gift Cards, Create Artelo ticket (Damaged in shipping, Lost in transit, Address change), New Artelo order (including Frame only), Note for fulfillment, Attach mockup, Insert Artelo tracking link, Insert approval link, Convert to custom order, Slack Matt, and Add comment, Add customer photo and Reopen order on the order'
+const ASK_BUTTONS = 'Change size or frame, Fix name or year, Edit shipping address, Cancel and refund, Refund, Send invoice, Discounts & Gift Cards, Create Artelo ticket (Damaged in shipping, Lost in transit, Address change), New Artelo order (including Frame only), Note for fulfillment, Attach mockup, Insert Artelo tracking link, Insert approval link, Convert to custom order, Slack Matt, and Add comment, Add customer photo and Re-Open Order on the order'
 
 const ASK_SYSTEM = `You answer questions from Trackstar's customer support reps. Trackstar sells personalized race prints, printed and framed by our partner Artelo. Reps work in TrackstarOS (Support inbox, actions panel), Shopify and Artelo. The rep has a customer waiting and wants to know what to do and what to say. They will not read an essay.
 
@@ -212,7 +212,7 @@ Decide, using the facts. Never answer "if it is in production... if it is not...
 Whether the print itself can still change (its size, name, time, photo or design):
 - "Received, not printed yet" or "not yet in production" means it has not been printed.
 - "In production" in TrackstarOS is not proof it was printed. If the facts do not give Artelo's own status, the first step is to open the order in Artelo and check, and the next says what to do if it is not printed (Hold).
-- In production at Artelo but not printed: click Hold in Artelo, then the change can usually be made. Say "usually" to the customer, never a promise.
+- In production at Artelo but not printed: click Hold in Artelo, then Re-Open Order in TrackstarOS, and the change can usually be made. Say "usually" to the customer, never a promise.
 - Printed ("Being printed", "Printed", "Shipped"): it cannot change. Tell the customer it has already been made and, unfortunately, we can't change it.
 The shipping address and the frame are different: until it actually ships they can often still be changed, even while it prints, with Create Artelo ticket. Tell the customer we've asked and usually can, but can't 100% guarantee it. Being printed, or printed, does not stop an address change; only shipping does.
 

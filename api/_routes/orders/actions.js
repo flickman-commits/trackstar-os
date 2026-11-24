@@ -29,6 +29,7 @@ import { OPEN_CUSTOM } from '../../../server/domain/orders/customOpen.js'
 import { createRacePartnerOrder } from '../../../server/domain/orders/racePartner.js'
 import crypto from 'crypto'
 import { unpaidPhotoRows } from '../../../server/domain/orders/photoPayment.js'
+import { pullBackIfHeld } from '../../../server/domain/render/pulledBack.js'
 import { completeOrder, CompleteError } from '../../../server/domain/orders/complete.js'
 import { noteWeatherChange, weatherSetEarly } from '../../../server/domain/races/verification.js'
 import { acceptMatch, AcceptMatchError } from '../../../server/domain/research/acceptMatch.js'
@@ -420,6 +421,10 @@ async function handleReopen({ orderNumber }, res, actor) {
   if (existing.status !== 'completed') {
     return res.status(400).json({ error: `Order is not completed (current status: ${existing.status})` })
   }
+
+  // Held in Artelo: our send is undone too, so a changed design can send (render/pulledBack.js).
+  const pulled = await pullBackIfHeld(existing.id, { actor })
+  if (pulled) return res.status(200).json({ success: true, pulledBack: pulled.length, message: 'Held in Artelo, so it is open again and its design is held. Make the change, or send it as it is.' })
 
   const research = existing.runnerResearch[0]
   const newStatus = research?.researchStatus === 'found' ? 'ready' : 'pending'

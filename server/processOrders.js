@@ -30,6 +30,7 @@ import { assigneeForNewOrder, isAutoAssignee, endExpiredShifts } from './domain/
 import { requireConnection } from './lib/connections.js'
 import { listExcluded, isExcludedLine } from './domain/orders/excludedProducts.js'
 import { alertArteloHolds, rowsForArteloIds } from './domain/orders/arteloMismatch.js'
+import { pullBackHeld } from './domain/render/pulledBack.js'
 import { arteloOrderUrl, orderAppUrl } from './lib/links.js'
 import { yearUnknown } from './domain/orders/yearUnknown.js'
 import { isStoredPhotoPath } from './lib/photoPath.js'
@@ -677,8 +678,9 @@ export function extractEtsyPersonalization(transaction) {
  */
 /**
  * Orders Artelo still shows as waiting (PendingFulfillmentAction) that are
- * not in `seen` (the newest-100 page) and have no row here. Pages through the
- * waiting list, newest first, up to CATCH_UP_PAGES pages. `statuses` must be
+ * not in `seen` (the newest-100 page): `missed` are those with no row here,
+ * `waiting` all of them. Pages through the waiting list, newest first, up to
+ * CATCH_UP_PAGES pages. `statuses` must be
  * sent as an array; one value is read as a string and refused, so it is sent
  * twice.
  */
@@ -697,11 +699,12 @@ async function missedPendingOrders(prisma, seen) {
     waiting.push(...rows.filter(o => !seenIds.has(String(o.orderId))))
     if (rows.length < 100) break
   }
-  if (!waiting.length) return []
+  if (!waiting.length) return { missed: [], waiting }
   const ids = [...new Set(waiting.map(o => String(o.orderId)))]
   const have = new Set((await prisma.order.findMany({ where: { parentOrderNumber: { in: ids } }, select: { parentOrderNumber: true }, distinct: ['parentOrderNumber'] })).map(o => o.parentOrderNumber))
   // Bulk prints reach Artelo from the Bulk tab and have their own rows; a replacement ("-R1") is not a new order.
-  return waiting.filter(o => !have.has(String(o.orderId)) && !/^BULK-/i.test(String(o.orderId)) && !/-R\d*$/.test(String(o.orderId)) && !o.isTestOrder)
+  const missed = waiting.filter(o => !have.has(String(o.orderId)) && !/^BULK-/i.test(String(o.orderId)) && !/-R\d*$/.test(String(o.orderId)) && !o.isTestOrder)
+  return { missed, waiting }
 }
 
 export async function processOrders(options = {}) {
@@ -788,9 +791,11 @@ export async function processOrders(options = {}) {
     // again: five Etsy orders from Nov 8 sat in Artelo, waiting, for two
     // weeks (Matt, 2026-11-21). So once an hour, and on a manual run, read
     // every order still waiting in Artelo and take the ones we have never seen.
+    let stillWaiting = []
     if (options.catchUp ?? new Date().getMinutes() < 10) {
       try {
-        const missed = await missedPendingOrders(prisma, allOrders)
+        const { missed, waiting } = await missedPendingOrders(prisma, allOrders)
+        stillWaiting = waiting
         if (missed.length) {
           log(`[processOrders] Catch-up: ${missed.length} waiting Artelo order(s) past the newest 100 and not in the tool: ${missed.map(o => o.orderId).join(', ')}`)
           allOrders.push(...missed)
@@ -799,6 +804,10 @@ export async function processOrders(options = {}) {
         log(`[processOrders] Catch-up read failed: ${e.message}`)
       }
     }
+    // Sent by us, and held in Artelo since: open again here (render/pulledBack.js).
+    await pullBackHeld([...allOrders, ...stillWaiting])
+      .then(r => { if (r.pulledBack.length) log(`[processOrders] Held in Artelo after sending: ${r.pulledBack.map(p => p.number).join(', ')}`) })
+      .catch(e => log(`[processOrders] Pull-back check failed: ${e.message}`))
     // Address review, unpaid: Artelo holds these until a person acts there. Tell Slack once.
     await alertArteloHolds(allOrders, { link: arteloOrderUrl }).catch(e => log(`[processOrders] Artelo hold check failed: ${e.message}`))
 

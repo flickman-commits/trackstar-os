@@ -570,7 +570,7 @@ export default function OrderDetail({
   // status='ready' (if research exists) or 'pending' (if it doesn't), so
   // it shows up in the standard view again and can be re-edited / printed.
   const reopenOrder = async (orderNumber: string) => {
-    if (!(await confirm({ title: 'Re-open this order?', body: 'It goes back in the active queue, to be edited and printed again.', action: 'Re-open order' }))) return
+    if (!(await confirm({ title: 'Re-open this order?', body: 'If it is on Hold in Artelo, it can be changed and sent again. If Artelo is already making it, a new design here is a reprint.', action: 'Re-open order' }))) return
     try {
       const response = await apiFetch(`/api/orders/actions`, {
         method: 'POST',
@@ -578,12 +578,10 @@ export default function OrderDetail({
         body: JSON.stringify({ action: 'reopen', orderNumber })
       })
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to re-open order')
-      }
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || 'Failed to re-open order')
 
-      setToast({ message: 'Order re-opened - back in the queue', type: 'success' })
+      setToast({ message: data.message || 'Order re-opened - back in the queue', type: 'success' })
       setSelectedOrder(null)
       await fetchOrders()
     } catch (error) {
