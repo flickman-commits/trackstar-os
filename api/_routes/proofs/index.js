@@ -30,7 +30,7 @@ import fs from 'fs'
 import { sendPublicError } from '../../../server/lib/publicError.js'
 import { storage } from '../../../server/lib/storage.js'
 import { sendEmail } from '../../../server/lib/email.js'
-import { sendOrderEmail, customerMailReady, mirrorPortalReply } from '../../../server/domain/support/customerMail.js'
+import { sendOrderEmail, customerMailReady, closeSupportOnApproval } from '../../../server/domain/support/customerMail.js'
 import { renderCustomerEmail } from '../../../server/lib/customerEmail.js'
 // sharp loaded dynamically in processImage() — top-level import crashes Vercel cold start
 
@@ -427,8 +427,10 @@ export default async function handler(req, res) {
         await slackTo(approval === 'approve' ? 'proofs' : 'alerts',
           `${emoji} <@U04KBDJH5C3> *${slackText(customerName)}* ${action_text} for order *${slackLink(orderAppUrl(displayNum), displayNum)}*${suffix}${feedback ? `\n> _"${slackText(feedback)}"_` : ''}`)
 
-        // The customer's answer, in the Support conversation that sent the proofs.
-        await mirrorPortalReply({ orderId: approvalToken.orderId, kind: approval === 'approve' ? 'approve' : 'revision', text: feedback })
+        // Portal feedback goes to the design team only; Support shows a customer's
+        // side only when they email us. An approval closes the conversation so it
+        // does not hold the print (support/customerMail.js).
+        if (approval === 'approve') await closeSupportOnApproval({ orderId: approvalToken.orderId })
 
         return res.status(200).json({ success: true, proof: updatedProof })
       }
@@ -473,9 +475,6 @@ export default async function handler(req, res) {
       const customerName = approvalToken.order.customerName || 'Customer'
       await slackTo('alerts',
         `💬 <@U04KBDJH5C3> *${slackText(customerName)}* replied to your question on order *${slackLink(orderAppUrl(displayNum), displayNum)}*:\n> _"${slackText(text)}"_`)
-
-      // Their answer, in the Support conversation that asked the question.
-      await mirrorPortalReply({ orderId: approvalToken.orderId, kind: 'reply', text })
 
       return res.status(200).json({ success: true, message })
     }
@@ -585,8 +584,8 @@ export default async function handler(req, res) {
           // Sent closed: the customer answers in the portal, not by email, and
           // any conversation that is not closed holds the order from Artelo
           // (support/holdsPrint.js), so a "waiting" thread held approved
-          // designs. A reply by email, or a change request or reply in the
-          // portal (mirrorPortalReply), opens it again.
+          // designs. A reply by email opens it again; portal feedback does not
+          // touch Support.
           await sendOrderEmail({
             order: { id: orderId, customerEmail: order.customerEmail, customerName: order.customerName },
             subject, html: emailHtml, text: emailText, actor, waiting: false,

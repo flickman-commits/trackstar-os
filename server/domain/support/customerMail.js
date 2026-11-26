@@ -66,65 +66,40 @@ export async function sendOrderEmail({ order, to, subject, html, text, actor, ev
 }
 
 /**
- * What the customer did in the approval portal (answered the designer's
- * question, asked for changes, approved the design), written into the
- * Support conversation that asked them, so the order's Conversation panel
- * and Support show the whole exchange, not only our half. The portal does
- * not email us, so without this the customer's side was only in the portal.
+ * What the customer did in the approval portal, as it touches Support.
  *
- * Goes on the customer's newest conversation about this order. A reply or a
- * change request reopens it (an open conversation also holds the print from
- * production until the designer acts). An approval closes it: the ball is
- * back with us, and leaving it open would hold the approved print. Nothing
- * happens when the customer has no conversation (the email went out through
- * the Resend fallback); Slack still carries the ping.
+ * A change request or a reply in the portal goes straight to the design team
+ * (the order's comments, Slack, the designer's queue), so Support writes
+ * nothing and leaves the conversation as it is. It used to add the customer's
+ * words as a note and reopen the conversation, and the support team took
+ * those for questions they had to answer (Matt, 2026-11-26). The design
+ * going back to the designer already keeps the print from production.
+ *
+ * Support shows the customer's side only when they email us. An approval
+ * writes nothing either, but quietly closes the conversation the proofs went
+ * out on and every other one waiting on this customer: an open
+ * or waiting conversation holds the print (holdsPrint.js), and an approved
+ * print was held that way (6748, 6821, 7190, 7649 in Nov 2026). Open and
+ * escalated ones other than the newest stay: there we still owe the customer
+ * something. Nothing happens when the customer has no conversation.
  */
-export async function mirrorPortalReply({ orderId, kind, text }) {
+export async function closeSupportOnApproval({ orderId }) {
   try {
-    const order = await prisma.order.findUnique({ where: { id: String(orderId || '') }, select: { customerEmail: true, customerName: true, shopifyOrderData: true, parentOrderNumber: true } })
+    const order = await prisma.order.findUnique({ where: { id: String(orderId || '') }, select: { customerEmail: true } })
     const email = String(order?.customerEmail || '').trim()
     if (!email) return null
     const threads = await prisma.supportThread.findMany({
       where: { customerEmail: { equals: email, mode: 'insensitive' }, mergedIntoId: null, filtered: false, channel: 'email' },
       orderBy: { lastMessageAt: 'desc' }, take: 10, select: { id: true, status: true },
     })
-    // The one still going, else the newest.
+    // The one still going (else the newest), and every other one waiting on the customer.
     const thread = threads.find(t => t.status !== 'closed') || threads[0]
     if (!thread) return null
-    const number = String(order.shopifyOrderData?.name || order.parentOrderNumber || '').replace(/^#/, '')
-    const said = String(text || '').trim()
-    const line = kind === 'approve' ? `Approved the design for #${number} in the portal${said ? `: "${said}"` : '.'}`
-      : kind === 'revision' ? `Asked for changes to #${number} in the portal${said ? `: "${said}"` : '.'}`
-      : `Replied in the portal about #${number}: "${said}"`
-    const now = new Date()
-    await prisma.$transaction([
-      prisma.supportNote.create({ data: { threadId: thread.id, kind: 'note', body: line.slice(0, 2000), authorId: null, authorName: order.customerName || 'Customer' } }),
-      prisma.supportThread.update({
-        where: { id: thread.id },
-        data: {
-          status: kind === 'approve' ? 'closed' : 'open', snoozedUntil: null,
-          snippet: line.slice(0, 160), lastMessageAt: now, lastInboundAt: now,
-        },
-      }),
-    ])
-    // An approval answers every conversation that was waiting on this
-    // customer. A revised design goes out as a new email, so the change
-    // request's conversation (reopened, then marked waiting by the team)
-    // stayed waiting after the approval closed the newest one, and held the
-    // approved print from Artelo (6748, 6821, 7190, 7649 in Nov 2026). Open
-    // and escalated ones stay: there we still owe the customer something.
-    if (kind === 'approve') {
-      const waiting = threads.filter(t => t.id !== thread.id && t.status === 'waiting').map(t => t.id)
-      if (waiting.length) {
-        await prisma.$transaction([
-          prisma.supportThread.updateMany({ where: { id: { in: waiting }, status: 'waiting' }, data: { status: 'closed', snoozedUntil: null } }),
-          ...waiting.map(id => prisma.supportNote.create({ data: { threadId: id, kind: 'event', body: `Closed: ${order.customerName || 'the customer'} approved the design for #${number} in the portal`, authorId: null, authorName: 'Trackstar' } })),
-        ])
-      }
-    }
+    const toClose = [thread.id, ...threads.filter(t => t.id !== thread.id && t.status === 'waiting').map(t => t.id)]
+    await prisma.supportThread.updateMany({ where: { id: { in: toClose }, status: { not: 'closed' } }, data: { status: 'closed', snoozedUntil: null } })
     return thread.id
   } catch (err) {
-    console.warn('[customerMail] portal reply not mirrored:', err.message)
+    console.warn('[customerMail] conversations not closed on approval:', err.message)
     return null
   }
 }
