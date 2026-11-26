@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildShopifyMatchMap, carryEditedProperties, isRemovedLineItem } from './lineItemMatching.js'
+import { buildShopifyMatchMap, carryEditedProperties, isFreeLineItem, isRemovedLineItem } from './lineItemMatching.js'
 import { reconcileEditedOrder } from '../processOrders.js'
 
 // Order #4084: an 8x10 unframed print was swapped for 8x10 Black Oak after
@@ -39,6 +39,21 @@ test('the added line takes the removed line\'s personalization', () => {
   assert.equal(out[1], lines[1])
 })
 
+test('a free bonus print never takes the runner\'s personalization', () => {
+  // Black Friday: a $0.00 bonus print sits bare in the cart. An edit that
+  // swaps the paid print must carry to the new paid line, not the gift.
+  const gift = { id: 1004, product_id: 999, title: 'Bonus Print', variant_title: '8x10 / Unframed', price: '0.00', current_quantity: 1, properties: [] }
+  const withGift = [lines[0], gift, { ...lines[2], price: '150.00' }]
+  const out = carryEditedProperties(withGift)
+  assert.equal(out[1], gift)
+  assert.equal(out[2].properties.find(p => p.name === '_carried_from').value, '1001')
+  // Gift before the paid line, or the gift alone: still never the gift.
+  assert.equal(carryEditedProperties([lines[0], gift])[1], gift)
+  assert.equal(isFreeLineItem(gift), true)
+  assert.equal(isFreeLineItem({ price: '150.00' }), false)
+  assert.equal(isFreeLineItem({}), false)
+})
+
 test('an unedited order is left as it is', () => {
   const plain = [{ ...lines[0], current_quantity: 1 }, lines[1]]
   assert.equal(carryEditedProperties(plain), plain)
@@ -69,6 +84,18 @@ test('the old row moves onto the new item and keeps its work', async () => {
   assert.equal(r.runnerName, 'Arya Davachi')
   assert.equal(r.status, 'ready')
   assert.match(db.comments[0].text, /8x10 \/ Unframed became 8x10 \/ Black Oak/)
+})
+
+test('an edited row never moves onto a free bonus print', async () => {
+  // The print was swapped for another product and the gift comes first among
+  // the open items: the row goes to the paid print, not the $0.00 gift.
+  const giftLine = { id: 1005, product_id: 999, title: 'Bonus Print', variant_title: '8x10 / Unframed', price: '0.00', current_quantity: 1, properties: [] }
+  const otherPrint = { ...lines[2], product_id: 777, price: '150.00' }
+  const items = [{ orderItemId: '1005', product: { size: 'x8x10', frameColor: 'Unframed' } }, after[1]]
+  const db = fakePrisma([{ id: 'r0', lineItemIndex: 0, status: 'ready', productSize: '8x10', frameType: 'Unframed', arteloOrderData: { orderItems: before } }])
+  const out = await reconcileEditedOrder(db, { orderId: '4084', orderItems: items }, { shopifyOrderData: { line_items: [lines[0], giftLine, otherPrint] } })
+  assert.deepEqual(out, { moved: 1, flagged: 0 })
+  assert.equal(db.rows[0].lineItemIndex, 1)
 })
 
 test('a print removed with nothing in its place is flagged, not deleted', async () => {

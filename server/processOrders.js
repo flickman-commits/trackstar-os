@@ -24,7 +24,7 @@ import { incrementCustomersServed, syncCustomersServedToShopify, getCountedOrder
 import { isExpeditedShipping } from './lib/shipping.js'
 import { fetchWithTimeout } from './lib/fetchWithTimeout.js'
 import { slackTo, slackDm, slackLink, slackText } from './lib/slack.js'
-import { buildShopifyMatchMap, buildEtsyMatchMap, isRushAddonLineItem, isRemovedLineItem, normalizeShopifyLines } from './lib/lineItemMatching.js'
+import { buildShopifyMatchMap, buildEtsyMatchMap, isRushAddonLineItem, isRemovedLineItem, isFreeLineItem, normalizeShopifyLines } from './lib/lineItemMatching.js'
 import { isBulkShopifyOrder } from './domain/bulk/shopifyBulk.js'
 import { assigneeForNewOrder, isAutoAssignee, endExpiredShifts } from './domain/orders/assignment.js'
 import { requireConnection } from './lib/connections.js'
@@ -350,6 +350,27 @@ function extractShopifyPersonalization(lineItem) {
   return result
 }
 
+/**
+ * The ids of the $0.00 lines (isFreeLineItem) on these Shopify orders, read
+ * 250 orders to a call with only the fields needed. Never throws: on a failed
+ * read it logs and returns what it has, and those lines count as paid.
+ */
+async function freeShopifyLineIds(ids, log = () => {}) {
+  const out = new Set()
+  for (let i = 0; i < ids.length; i += 250) {
+    const chunk = ids.slice(i, i + 250)
+    try {
+      const data = await shopifyFetch(`/orders.json?ids=${chunk.join(',')}&status=any&limit=250&fields=id,line_items`)
+      for (const o of data.orders || []) {
+        for (const li of o.line_items || []) if (isFreeLineItem(li)) out.add(String(li.id))
+      }
+    } catch (err) {
+      log(`[processOrders] Could not read line prices for the customers served count, free prints in ${chunk.length} order(s) will count: ${err.message}`)
+    }
+  }
+  return out
+}
+
 /** Runs per hour at the 10-minute cron; each order is fully re-read once in that many. */
 const FULL_REFRESH_EVERY = 6
 
@@ -470,7 +491,9 @@ export async function reconcileEditedOrder(prisma, order, shopifyData, log = () 
     const open = items
       .map((it, t) => ({ it, t }))
       .filter(({ it, t }) => it?.product && it.orderItemId && !claimed.has(String(it.orderItemId))
-        && !rows.some(r => r.lineItemIndex === t && r.id !== row.id))
+        && !rows.some(r => r.lineItemIndex === t && r.id !== row.id)
+        // A free bonus print has no row of its own and must never take one.
+        && !isFreeLineItem(lineOf(it.orderItemId)))
     const target = open.find(({ it }) => oldLine && String(lineOf(it.orderItemId)?.product_id) === String(oldLine.product_id))
       || open[0]
 
@@ -844,6 +867,7 @@ export async function processOrders(options = {}) {
       // order are not a customer served. Counting every line put the site
       // ~800 high by Nov 2026 (reset to the audited 8,763 then).
       const isPrint = it => /ArtPrint/.test(String(it?.product?.catalogProductId || ''))
+      const toCount = []
       for (const order of allOrders) {
         if (!existingParentIds.has(order.orderId) && !countedOrderIds.has(order.orderId)) {
           // Mark as counted so we don't recount on next import, counted or not
@@ -851,8 +875,19 @@ export async function processOrders(options = {}) {
           const skip = /-R\d*$/.test(String(order.orderId || '')) || order.isTestOrder
             || order.productionStatus === 'Ignored' || order.status === 'Canceled' || order.productionStatus === 'Canceled'
           if (skip) continue
-          allNewOrderCount += (order.orderItems || []).filter(isPrint).reduce((n, it) => n + (Number(it.quantity) || 1), 0)
+          toCount.push(order)
         }
+      }
+      // A free print ($0.00 on Shopify: the Black Friday bonus prints) is a
+      // gift, not a customer served. Artelo's item carries no price, but its
+      // orderItemId is the Shopify line id, so one batched read of the new
+      // orders' line prices tells them apart. If that read fails, they count.
+      const freeLines = await freeShopifyLineIds(
+        toCount.filter(o => determineOrderSource(o) === 'shopify').map(o => String(o.orderId)), log)
+      for (const order of toCount) {
+        allNewOrderCount += (order.orderItems || [])
+          .filter(it => isPrint(it) && !freeLines.has(String(it.orderItemId)))
+          .reduce((n, it) => n + (Number(it.quantity) || 1), 0)
       }
 
       if (allNewOrderCount > 0) {

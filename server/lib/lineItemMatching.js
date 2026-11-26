@@ -68,6 +68,20 @@ export function isRemovedLineItem(lineItem) {
   return lineItem?.current_quantity === 0
 }
 
+/**
+ * A line the customer did not pay for: its unit price is $0.00. The Black
+ * Friday bonus prints are their own $0.00 products, added to the cart by the
+ * theme; they are preset designs Artelo fulfils, not a customer's print.
+ * `price` is the unit price before discounts, so a real print with a 100% off
+ * code (a giveaway winner) is not one. A line without a price (Etsy, older
+ * payloads) is not one either.
+ */
+export function isFreeLineItem(lineItem) {
+  const raw = lineItem?.price
+  if (raw === undefined || raw === null || String(raw).trim() === '') return false
+  return Number(raw) === 0
+}
+
 /** The customer's own answers on a line: any property not starting with "_". */
 function hasPersonalization(lineItem) {
   return (lineItem?.properties || []).some(p => p?.name && !String(p.name).startsWith('_') && String(p.value ?? '').trim())
@@ -83,6 +97,10 @@ function hasPersonalization(lineItem) {
  * product first, each removed line used once, and marks it with
  * `_carried_from` so the hand-over is visible. Returns the same array when
  * there is nothing to carry, and never touches the removed lines themselves.
+ *
+ * A free line ($0.00, the Black Friday bonus prints) never receives: it is
+ * bare by design, and taking the runner's answers would leave the real print
+ * blank.
  */
 export function carryEditedProperties(lineItems) {
   if (!Array.isArray(lineItems)) return lineItems
@@ -90,7 +108,7 @@ export function carryEditedProperties(lineItems) {
   if (!donors.length) return lineItems
   const used = new Set()
   return lineItems.map(li => {
-    if (isRemovedLineItem(li) || isAddonLineItem(li) || hasPersonalization(li)) return li
+    if (isRemovedLineItem(li) || isAddonLineItem(li) || hasPersonalization(li) || isFreeLineItem(li)) return li
     const donor = donors.find(d => !used.has(d) && String(d.product_id) === String(li.product_id))
       || donors.find(d => !used.has(d))
     if (!donor) return li
