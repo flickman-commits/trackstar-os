@@ -29,6 +29,7 @@ import { TrueTimeScraper } from './platforms/TrueTimeScraper.js'
 import { UltraSignupScraper } from './platforms/UltraSignupScraper.js'
 import { HuberTimingScraper } from './platforms/HuberTimingScraper.js'
 import { IronmanScraper } from './platforms/IronmanScraper.js'
+import { DublinMarathonScraper } from './platforms/DublinMarathonScraper.js'
 
 // --- Race configs ---
 import kiawahIslandConfig from './configs/kiawahIsland.js'
@@ -49,6 +50,7 @@ import marinecorpsHistoricHalfConfig from './configs/marinecorpsHistoricHalf.js'
 import cowtownConfig from './configs/cowtown.js'
 import mesaConfig from './configs/mesa.js'
 import londonConfig from './configs/london.js'
+import dublinConfig from './configs/dublin.js'
 import eugeneConfig from './configs/eugene.js'
 import jerseyCityConfig from './configs/jerseyCity.js'
 import berlinConfig from './configs/berlin.js'
@@ -146,6 +148,7 @@ const PLATFORM_MAP = {
   ultrasignup: UltraSignupScraper,
   hubertiming: HuberTimingScraper,
   ironman: IronmanScraper,
+  dublinmarathon: DublinMarathonScraper,
 }
 
 /**
@@ -170,6 +173,7 @@ const ALL_CONFIGS = [
   cowtownConfig,
   mesaConfig,
   londonConfig,
+  dublinConfig,
   eugeneConfig,
   jerseyCityConfig,
   bostonConfig,
