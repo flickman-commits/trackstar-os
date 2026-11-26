@@ -52,7 +52,9 @@ async function main() {
       const gotPace = normalizePace(result.officialPace)
       const wantPace = normalizePace(fx.expectedChipPace)
 
-      if (result.researchStatus === 'upstream_error') {
+      // time_unavailable: the runner was matched but the site's firewall keeps
+      // the time from us (Sydney, MultiSport Australia). Same thing as a block.
+      if (result.researchStatus === 'upstream_error' || result.researchStatus === 'time_unavailable') {
         // The site refused us. Reporting that as a failed fixture teaches
         // people to ignore a red suite, and the skill's own advice is to read
         // the log rather than trust the count - so make the count trustworthy

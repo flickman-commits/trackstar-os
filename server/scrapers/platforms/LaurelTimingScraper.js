@@ -210,6 +210,19 @@ export class LaurelTimingScraper extends BaseScraper {
     })
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
     const html = await resp.text()
+    // One hit and the site skips the list: it redirects to that runner's own
+    // page (?pk=...&search=...; seen Nov 2026 on Portland, "Greensmith"). Read
+    // the one row off it: the pk from the final URL, the name from the
+    // participant heading.
+    const landedPk = String(resp.url || '').match(/[?&]pk=(\d+)/)?.[1]
+    if (landedPk) {
+      const $ = cheerio.load(html)
+      const $h = $('h3.participant-name').first().clone()
+      $h.find('.participant-bib').remove()
+      const fullName = $h.text().replace(/\s+/g, ' ').trim()
+      console.log(`[${this.tag}] Search went straight to pk ${landedPk} (${fullName || 'no name'})`)
+      return fullName ? [{ pk: landedPk, fullName }] : []
+    }
     // The list shows 25 rows a page. A common surname runs past it (St.
     // George 2026 "Anderson": Andrea was on page 2), so when the page offers
     // more than one page, ask again with the list's page size set to All,
